@@ -100,7 +100,7 @@ export type AllCommandName =
   | JavaScriptCommandName;
 
 // Statically analyzable loaders - each import() call is a literal string
-const commandLoaders: LazyCommandDef<string>[] = [
+const commandLoaders: LazyCommandDef<AllCommandName>[] = [
   // Basic I/O
   {
     name: "echo",
@@ -287,6 +287,12 @@ const commandLoaders: LazyCommandDef<string>[] = [
     load: async () => (await import("./rg/rg.js")).rgCommand,
   },
 
+  // Network
+  {
+    name: "curl",
+    load: async () => (await import("./curl/curl.js")).curlCommand,
+  },
+
   // Shell State
   {
     name: "alias",
@@ -409,9 +415,11 @@ export function getNetworkCommandNames(): string[] {
 /**
  * Creates all lazy commands for registration
  */
-export function createLazyCommands(filter?: CommandName[]): Command[] {
+export function createLazyCommands(filter?: AllCommandName[]): Command[] {
   const loaders = filter
-    ? commandLoaders.filter((def) => filter.includes(def.name as CommandName))
+    ? commandLoaders.filter((def) =>
+        filter.includes(def.name as AllCommandName),
+      )
     : commandLoaders;
   return loaders.map(createLazyCommand);
 }

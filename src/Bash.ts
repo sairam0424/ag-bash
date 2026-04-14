@@ -12,7 +12,7 @@ import type { FunctionDefNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
 import {
-  type CommandName,
+  type AllCommandName,
   createJavaScriptCommands,
   createLazyCommands,
   createNetworkCommands,
@@ -142,7 +142,7 @@ export interface BashOptions {
    * If not provided, all built-in commands are available.
    * Use this to restrict which commands can be executed.
    */
-  commands?: CommandName[];
+  commands?: AllCommandName[];
   /**
    * Optional sleep function for the sleep command.
    * If provided, used instead of real setTimeout.
