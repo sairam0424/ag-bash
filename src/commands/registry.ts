@@ -57,8 +57,6 @@ export type CommandName =
   | "tar"
   | "gzip"
   // Logic/Search
-  | "test"
-  | "["
   | "expr"
   | "seq"
   | "find"
@@ -262,14 +260,6 @@ const commandLoaders: LazyCommandDef<AllCommandName>[] = [
   },
 
   // Logic/Search
-  {
-    name: "test",
-    load: async () => (await import("./test/test.js")).testCommand,
-  },
-  {
-    name: "[",
-    load: async () => (await import("./test/test.js")).bracketCommand,
-  },
   {
     name: "expr",
     load: async () => (await import("./expr/expr.js")).exprCommand,
