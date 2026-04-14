@@ -57,8 +57,6 @@ export type CommandName =
   | "tar"
   | "gzip"
   // Logic/Search
-  | "test"
-  | "["
   | "expr"
   | "seq"
   | "find"
@@ -226,11 +224,11 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   // System Info
   {
     name: "whoami",
-    load: async () => (await import("./whoami/whoami.js")).whoamiCommand,
+    load: async () => (await import("./whoami/whoami.js")).whoami,
   },
   {
     name: "hostname",
-    load: async () => (await import("./hostname/hostname.js")).hostnameCommand,
+    load: async () => (await import("./hostname/hostname.js")).hostname,
   },
   {
     name: "env",
@@ -265,14 +263,6 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
 
   // Logic/Search
   {
-    name: "test",
-    load: async () => (await import("./test/test.js")).testCommand,
-  },
-  {
-    name: "[",
-    load: async () => (await import("./test/test.js")).bracketCommand,
-  },
-  {
     name: "expr",
     load: async () => (await import("./expr/expr.js")).exprCommand,
   },
@@ -287,6 +277,12 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   {
     name: "rg",
     load: async () => (await import("./rg/rg.js")).rgCommand,
+  },
+
+  // Network
+  {
+    name: "curl",
+    load: async () => (await import("./curl/curl.js")).curlCommand,
   },
 
   // Shell State
@@ -352,6 +348,24 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     name: "false",
     load: async () => (await import("./true/true.js")).falseCommand,
   },
+
+  // Language Runtimes
+  {
+    name: "python3",
+    load: async () => (await import("./python/python3.js")).python3Command,
+  },
+  {
+    name: "python",
+    load: async () => (await import("./python/python3.js")).pythonCommand,
+  },
+  {
+    name: "js-exec",
+    load: async () => (await import("./js-exec/js-exec.js")).jsExecCommand,
+  },
+  {
+    name: "node",
+    load: async () => (await import("./js-exec/js-exec.js")).nodeStubCommand,
+  },
 ];
 
 // Cache for loaded commands
@@ -393,7 +407,7 @@ export function getNetworkCommandNames(): string[] {
 /**
  * Creates all lazy commands for registration
  */
-export function createLazyCommands(filter?: CommandName[]): Command[] {
+export function createLazyCommands(filter?: AllCommandName[]): Command[] {
   const loaders = filter
     ? commandLoaders.filter((def) => filter.includes(def.name as CommandName))
     ? commandLoaders.filter((def) => filter.includes(def.name))
@@ -417,28 +431,34 @@ export function createNetworkCommands(): Command[] {
  * Gets all python command names
  */
 export function getPythonCommandNames(): string[] {
-  return [];
+  return ["python3", "python"];
 }
 
 /**
  * Creates python commands
  */
 export function createPythonCommands(): Command[] {
-  return [];
+  const pythonDefs = commandLoaders.filter(
+    (def) => def.name === "python" || def.name === "python3",
+  );
+  return pythonDefs.map(createLazyCommand);
 }
 
 /**
  * Gets all javascript command names
  */
 export function getJavaScriptCommandNames(): string[] {
-  return [];
+  return ["js-exec", "node"];
 }
 
 /**
  * Creates javascript commands
  */
 export function createJavaScriptCommands(): Command[] {
-  return [];
+  const jsDefs = commandLoaders.filter(
+    (def) => def.name === "js-exec" || def.name === "node",
+  );
+  return jsDefs.map(createLazyCommand);
 }
 
 /**
