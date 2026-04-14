@@ -30,6 +30,19 @@ export type CommandName =
   // Navigation/Path
   | "pwd"
   | "readlink"
+  // Text Processing
+  | "grep"
+  | "fgrep"
+  | "egrep"
+  | "sed"
+  | "awk"
+  | "sort"
+  | "uniq"
+  | "cut"
+  | "tr"
+  | "head"
+  | "tail"
+  | "wc"
   // Utilities
   | "true"
   | "false";
@@ -112,6 +125,56 @@ const commandLoaders: LazyCommandDef<string>[] = [
   {
     name: "readlink",
     load: async () => (await import("./readlink/readlink.js")).readlinkCommand,
+  },
+
+  // Text Processing
+  {
+    name: "grep",
+    load: async () => (await import("./grep/grep.js")).grepCommand,
+  },
+  {
+    name: "fgrep",
+    load: async () => (await import("./grep/grep.js")).fgrepCommand,
+  },
+  {
+    name: "egrep",
+    load: async () => (await import("./grep/grep.js")).egrepCommand,
+  },
+  {
+    name: "sed",
+    load: async () => (await import("./sed/sed.js")).sedCommand,
+  },
+  {
+    name: "awk",
+    load: async () => (await import("./awk/awk2.js")).awkCommand2,
+  },
+  {
+    name: "sort",
+    load: async () => (await import("./sort/sort.js")).sortCommand,
+  },
+  {
+    name: "uniq",
+    load: async () => (await import("./uniq/uniq.js")).uniqCommand,
+  },
+  {
+    name: "cut",
+    load: async () => (await import("./cut/cut.js")).cutCommand,
+  },
+  {
+    name: "tr",
+    load: async () => (await import("./tr/tr.js")).trCommand,
+  },
+  {
+    name: "head",
+    load: async () => (await import("./head/head.js")).headCommand,
+  },
+  {
+    name: "tail",
+    load: async () => (await import("./tail/tail.js")).tailCommand,
+  },
+  {
+    name: "wc",
+    load: async () => (await import("./wc/wc.js")).wcCommand,
   },
 
   // Utilities
