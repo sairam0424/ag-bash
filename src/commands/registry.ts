@@ -78,6 +78,7 @@ export type CommandName =
   | "time"
   | "timeout"
   // Utilities
+  | "echo"
   | "true"
   | "false";
 
@@ -98,7 +99,8 @@ export type AllCommandName =
   | JavaScriptCommandName;
 
 // Statically analyzable loaders - each import() call is a literal string
-const commandLoaders: LazyCommandDef<AllCommandName>[] = [
+const commandLoaders: LazyCommandDef<string>[] = [
+const commandLoaders: LazyCommandDef<CommandName>[] = [
   // Basic I/O
   {
     name: "echo",
@@ -407,9 +409,8 @@ export function getNetworkCommandNames(): string[] {
  */
 export function createLazyCommands(filter?: AllCommandName[]): Command[] {
   const loaders = filter
-    ? commandLoaders.filter((def) =>
-        filter.includes(def.name as AllCommandName),
-      )
+    ? commandLoaders.filter((def) => filter.includes(def.name as CommandName))
+    ? commandLoaders.filter((def) => filter.includes(def.name))
     : commandLoaders;
   return loaders.map(createLazyCommand);
 }
