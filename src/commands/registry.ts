@@ -13,6 +13,24 @@ interface LazyCommandDef<T extends string = string> {
 
 /** All available built-in command names */
 export type CommandName =
+  // Basic I/O
+  | "echo"
+  | "cat"
+  | "printf"
+  // File operations
+  | "ls"
+  | "mkdir"
+  | "rmdir"
+  | "touch"
+  | "rm"
+  | "cp"
+  | "mv"
+  | "ln"
+  | "chmod"
+  // Navigation/Path
+  | "pwd"
+  | "readlink"
+  // Utilities
   | "echo"
   | "true"
   | "false";
@@ -34,12 +52,71 @@ export type AllCommandName =
   | JavaScriptCommandName;
 
 // Statically analyzable loaders - each import() call is a literal string
+const commandLoaders: LazyCommandDef<string>[] = [
 const commandLoaders: LazyCommandDef<CommandName>[] = [
   // Basic I/O
   {
     name: "echo",
     load: async () => (await import("./echo/echo.js")).echoCommand,
   },
+  {
+    name: "cat",
+    load: async () => (await import("./cat/cat.js")).catCommand,
+  },
+  {
+    name: "printf",
+    load: async () => (await import("./printf/printf.js")).printfCommand,
+  },
+
+  // File operations
+  {
+    name: "ls",
+    load: async () => (await import("./ls/ls.js")).lsCommand,
+  },
+  {
+    name: "mkdir",
+    load: async () => (await import("./mkdir/mkdir.js")).mkdirCommand,
+  },
+  {
+    name: "rmdir",
+    load: async () => (await import("./rmdir/rmdir.js")).rmdirCommand,
+  },
+  {
+    name: "touch",
+    load: async () => (await import("./touch/touch.js")).touchCommand,
+  },
+  {
+    name: "rm",
+    load: async () => (await import("./rm/rm.js")).rmCommand,
+  },
+  {
+    name: "cp",
+    load: async () => (await import("./cp/cp.js")).cpCommand,
+  },
+  {
+    name: "mv",
+    load: async () => (await import("./mv/mv.js")).mvCommand,
+  },
+  {
+    name: "ln",
+    load: async () => (await import("./ln/ln.js")).lnCommand,
+  },
+  {
+    name: "chmod",
+    load: async () => (await import("./chmod/chmod.js")).chmodCommand,
+  },
+
+  // Navigation/Path
+  {
+    name: "pwd",
+    load: async () => (await import("./pwd/pwd.js")).pwdCommand,
+  },
+  {
+    name: "readlink",
+    load: async () => (await import("./readlink/readlink.js")).readlinkCommand,
+  },
+
+  // Utilities
   {
     name: "true",
     load: async () => (await import("./true/true.js")).trueCommand,
@@ -91,6 +168,7 @@ export function getNetworkCommandNames(): string[] {
  */
 export function createLazyCommands(filter?: CommandName[]): Command[] {
   const loaders = filter
+    ? commandLoaders.filter((def) => filter.includes(def.name as CommandName))
     ? commandLoaders.filter((def) => filter.includes(def.name))
     : commandLoaders;
   return loaders.map(createLazyCommand);
