@@ -350,6 +350,24 @@ const commandLoaders: LazyCommandDef<string>[] = [
     name: "false",
     load: async () => (await import("./true/true.js")).falseCommand,
   },
+
+  // Language Runtimes
+  {
+    name: "python3",
+    load: async () => (await import("./python/python3.js")).python3Command,
+  },
+  {
+    name: "python",
+    load: async () => (await import("./python/python3.js")).pythonCommand,
+  },
+  {
+    name: "js-exec",
+    load: async () => (await import("./js-exec/js-exec.js")).jsExecCommand,
+  },
+  {
+    name: "node",
+    load: async () => (await import("./js-exec/js-exec.js")).nodeStubCommand,
+  },
 ];
 
 // Cache for loaded commands
@@ -414,28 +432,34 @@ export function createNetworkCommands(): Command[] {
  * Gets all python command names
  */
 export function getPythonCommandNames(): string[] {
-  return [];
+  return ["python3", "python"];
 }
 
 /**
  * Creates python commands
  */
 export function createPythonCommands(): Command[] {
-  return [];
+  const pythonDefs = commandLoaders.filter(
+    (def) => def.name === "python" || def.name === "python3",
+  );
+  return pythonDefs.map(createLazyCommand);
 }
 
 /**
  * Gets all javascript command names
  */
 export function getJavaScriptCommandNames(): string[] {
-  return [];
+  return ["js-exec", "node"];
 }
 
 /**
  * Creates javascript commands
  */
 export function createJavaScriptCommands(): Command[] {
-  return [];
+  const jsDefs = commandLoaders.filter(
+    (def) => def.name === "js-exec" || def.name === "node",
+  );
+  return jsDefs.map(createLazyCommand);
 }
 
 /**
