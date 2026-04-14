@@ -31,6 +31,7 @@ export type CommandName =
   | "pwd"
   | "readlink"
   // Utilities
+  | "echo"
   | "true"
   | "false";
 
@@ -52,6 +53,7 @@ export type AllCommandName =
 
 // Statically analyzable loaders - each import() call is a literal string
 const commandLoaders: LazyCommandDef<string>[] = [
+const commandLoaders: LazyCommandDef<CommandName>[] = [
   // Basic I/O
   {
     name: "echo",
@@ -167,6 +169,7 @@ export function getNetworkCommandNames(): string[] {
 export function createLazyCommands(filter?: CommandName[]): Command[] {
   const loaders = filter
     ? commandLoaders.filter((def) => filter.includes(def.name as CommandName))
+    ? commandLoaders.filter((def) => filter.includes(def.name))
     : commandLoaders;
   return loaders.map(createLazyCommand);
 }
