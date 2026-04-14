@@ -62,9 +62,19 @@ export type CommandName =
   | "expr"
   | "seq"
   | "find"
+  | "rg"
   // Shell State
   | "alias"
   | "history"
+  // Structured Data
+  | "jq"
+  | "yq"
+  // Comparison
+  | "diff"
+  | "comm"
+  // Security/Encoding
+  | "base64"
+  | "md5sum"
   // Time/Execution
   | "sleep"
   | "time"
@@ -274,6 +284,10 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     name: "find",
     load: async () => (await import("./find/find.js")).findCommand,
   },
+  {
+    name: "rg",
+    load: async () => (await import("./rg/rg.js")).rgCommand,
+  },
 
   // Shell State
   {
@@ -283,6 +297,36 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   {
     name: "history",
     load: async () => (await import("./history/history.js")).historyCommand,
+  },
+
+  // Structured Data
+  {
+    name: "jq",
+    load: async () => (await import("./jq/jq.js")).jqCommand,
+  },
+  {
+    name: "yq",
+    load: async () => (await import("./yq/yq.js")).yqCommand,
+  },
+
+  // Comparison
+  {
+    name: "diff",
+    load: async () => (await import("./diff/diff.js")).diffCommand,
+  },
+  {
+    name: "comm",
+    load: async () => (await import("./comm/comm.js")).commCommand,
+  },
+
+  // Security/Encoding
+  {
+    name: "base64",
+    load: async () => (await import("./base64/base64.js")).base64Command,
+  },
+  {
+    name: "md5sum",
+    load: async () => (await import("./md5sum/md5sum.js")).md5sumCommand,
   },
 
   // Time/Execution
