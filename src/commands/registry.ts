@@ -30,6 +30,8 @@ export type CommandName =
   // Navigation/Path
   | "pwd"
   | "readlink"
+  | "dirname"
+  | "basename"
   // Text Processing
   | "grep"
   | "fgrep"
@@ -49,9 +51,20 @@ export type CommandName =
   | "env"
   | "which"
   | "date"
+  | "stat"
+  | "du"
   // Archiving
   | "tar"
   | "gzip"
+  // Logic/Search
+  | "test"
+  | "["
+  | "expr"
+  | "seq"
+  | "find"
+  // Shell State
+  | "alias"
+  | "history"
   // Time/Execution
   | "sleep"
   | "time"
@@ -141,6 +154,14 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     name: "readlink",
     load: async () => (await import("./readlink/readlink.js")).readlinkCommand,
   },
+  {
+    name: "dirname",
+    load: async () => (await import("./dirname/dirname.js")).dirnameCommand,
+  },
+  {
+    name: "basename",
+    load: async () => (await import("./basename/basename.js")).basenameCommand,
+  },
 
   // Text Processing
   {
@@ -213,6 +234,14 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     name: "date",
     load: async () => (await import("./date/date.js")).dateCommand,
   },
+  {
+    name: "stat",
+    load: async () => (await import("./stat/stat.js")).statCommand,
+  },
+  {
+    name: "du",
+    load: async () => (await import("./du/du.js")).duCommand,
+  },
 
   // Archiving
   {
@@ -222,6 +251,38 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   {
     name: "gzip",
     load: async () => (await import("./gzip/gzip.js")).gzipCommand,
+  },
+
+  // Logic/Search
+  {
+    name: "test",
+    load: async () => (await import("./test/test.js")).testCommand,
+  },
+  {
+    name: "[",
+    load: async () => (await import("./test/test.js")).bracketCommand,
+  },
+  {
+    name: "expr",
+    load: async () => (await import("./expr/expr.js")).exprCommand,
+  },
+  {
+    name: "seq",
+    load: async () => (await import("./seq/seq.js")).seqCommand,
+  },
+  {
+    name: "find",
+    load: async () => (await import("./find/find.js")).findCommand,
+  },
+
+  // Shell State
+  {
+    name: "alias",
+    load: async () => (await import("./alias/alias.js")).aliasCommand,
+  },
+  {
+    name: "history",
+    load: async () => (await import("./history/history.js")).historyCommand,
   },
 
   // Time/Execution
