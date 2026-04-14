@@ -224,11 +224,11 @@ const commandLoaders: LazyCommandDef<AllCommandName>[] = [
   // System Info
   {
     name: "whoami",
-    load: async () => (await import("./whoami/whoami.js")).whoamiCommand,
+    load: async () => (await import("./whoami/whoami.js")).whoami,
   },
   {
     name: "hostname",
-    load: async () => (await import("./hostname/hostname.js")).hostnameCommand,
+    load: async () => (await import("./hostname/hostname.js")).hostname,
   },
   {
     name: "env",
