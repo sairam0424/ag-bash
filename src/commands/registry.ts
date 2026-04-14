@@ -43,6 +43,19 @@ export type CommandName =
   | "head"
   | "tail"
   | "wc"
+  // System Info
+  | "whoami"
+  | "hostname"
+  | "env"
+  | "which"
+  | "date"
+  // Archiving
+  | "tar"
+  | "gzip"
+  // Time/Execution
+  | "sleep"
+  | "time"
+  | "timeout"
   // Utilities
   | "echo"
   | "true"
@@ -179,6 +192,52 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     load: async () => (await import("./wc/wc.js")).wcCommand,
   },
 
+  // System Info
+  {
+    name: "whoami",
+    load: async () => (await import("./whoami/whoami.js")).whoamiCommand,
+  },
+  {
+    name: "hostname",
+    load: async () => (await import("./hostname/hostname.js")).hostnameCommand,
+  },
+  {
+    name: "env",
+    load: async () => (await import("./env/env.js")).envCommand,
+  },
+  {
+    name: "which",
+    load: async () => (await import("./which/which.js")).whichCommand,
+  },
+  {
+    name: "date",
+    load: async () => (await import("./date/date.js")).dateCommand,
+  },
+
+  // Archiving
+  {
+    name: "tar",
+    load: async () => (await import("./tar/tar.js")).tarCommand,
+  },
+  {
+    name: "gzip",
+    load: async () => (await import("./gzip/gzip.js")).gzipCommand,
+  },
+
+  // Time/Execution
+  {
+    name: "sleep",
+    load: async () => (await import("./sleep/sleep.js")).sleepCommand,
+  },
+  {
+    name: "time",
+    load: async () => (await import("./time/time.js")).timeCommand,
+  },
+  {
+    name: "timeout",
+    load: async () => (await import("./timeout/timeout.js")).timeoutCommand,
+  },
+
   // Utilities
   {
     name: "true",
@@ -223,7 +282,7 @@ export function getCommandNames(): string[] {
  * Gets all network command names
  */
 export function getNetworkCommandNames(): string[] {
-  return [];
+  return ["curl"];
 }
 
 /**
@@ -241,7 +300,12 @@ export function createLazyCommands(filter?: CommandName[]): Command[] {
  * Creates network commands (curl, etc.)
  */
 export function createNetworkCommands(): Command[] {
-  return [];
+  return [
+    createLazyCommand({
+      name: "curl",
+      load: async () => (await import("./curl/curl.js")).curlCommand,
+    }),
+  ];
 }
 
 /**
