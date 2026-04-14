@@ -30,8 +30,56 @@ export type CommandName =
   // Navigation/Path
   | "pwd"
   | "readlink"
+  | "dirname"
+  | "basename"
+  // Text Processing
+  | "grep"
+  | "fgrep"
+  | "egrep"
+  | "sed"
+  | "awk"
+  | "sort"
+  | "uniq"
+  | "cut"
+  | "tr"
+  | "head"
+  | "tail"
+  | "wc"
+  // System Info
+  | "whoami"
+  | "hostname"
+  | "env"
+  | "which"
+  | "date"
+  | "stat"
+  | "du"
+  // Archiving
+  | "tar"
+  | "gzip"
+  // Logic/Search
+  | "test"
+  | "["
+  | "expr"
+  | "seq"
+  | "find"
+  | "rg"
+  // Shell State
+  | "alias"
+  | "history"
+  // Structured Data
+  | "jq"
+  | "yq"
+  // Comparison
+  | "diff"
+  | "comm"
+  // Security/Encoding
+  | "base64"
+  | "md5sum"
+  // Time/Execution
+  | "sleep"
+  | "time"
+  | "timeout"
   // Utilities
-  | "echo"
   | "true"
   | "false";
 
@@ -53,7 +101,6 @@ export type AllCommandName =
 
 // Statically analyzable loaders - each import() call is a literal string
 const commandLoaders: LazyCommandDef<string>[] = [
-const commandLoaders: LazyCommandDef<CommandName>[] = [
   // Basic I/O
   {
     name: "echo",
@@ -115,6 +162,184 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     name: "readlink",
     load: async () => (await import("./readlink/readlink.js")).readlinkCommand,
   },
+  {
+    name: "dirname",
+    load: async () => (await import("./dirname/dirname.js")).dirnameCommand,
+  },
+  {
+    name: "basename",
+    load: async () => (await import("./basename/basename.js")).basenameCommand,
+  },
+
+  // Text Processing
+  {
+    name: "grep",
+    load: async () => (await import("./grep/grep.js")).grepCommand,
+  },
+  {
+    name: "fgrep",
+    load: async () => (await import("./grep/grep.js")).fgrepCommand,
+  },
+  {
+    name: "egrep",
+    load: async () => (await import("./grep/grep.js")).egrepCommand,
+  },
+  {
+    name: "sed",
+    load: async () => (await import("./sed/sed.js")).sedCommand,
+  },
+  {
+    name: "awk",
+    load: async () => (await import("./awk/awk2.js")).awkCommand2,
+  },
+  {
+    name: "sort",
+    load: async () => (await import("./sort/sort.js")).sortCommand,
+  },
+  {
+    name: "uniq",
+    load: async () => (await import("./uniq/uniq.js")).uniqCommand,
+  },
+  {
+    name: "cut",
+    load: async () => (await import("./cut/cut.js")).cutCommand,
+  },
+  {
+    name: "tr",
+    load: async () => (await import("./tr/tr.js")).trCommand,
+  },
+  {
+    name: "head",
+    load: async () => (await import("./head/head.js")).headCommand,
+  },
+  {
+    name: "tail",
+    load: async () => (await import("./tail/tail.js")).tailCommand,
+  },
+  {
+    name: "wc",
+    load: async () => (await import("./wc/wc.js")).wcCommand,
+  },
+
+  // System Info
+  {
+    name: "whoami",
+    load: async () => (await import("./whoami/whoami.js")).whoamiCommand,
+  },
+  {
+    name: "hostname",
+    load: async () => (await import("./hostname/hostname.js")).hostnameCommand,
+  },
+  {
+    name: "env",
+    load: async () => (await import("./env/env.js")).envCommand,
+  },
+  {
+    name: "which",
+    load: async () => (await import("./which/which.js")).whichCommand,
+  },
+  {
+    name: "date",
+    load: async () => (await import("./date/date.js")).dateCommand,
+  },
+  {
+    name: "stat",
+    load: async () => (await import("./stat/stat.js")).statCommand,
+  },
+  {
+    name: "du",
+    load: async () => (await import("./du/du.js")).duCommand,
+  },
+
+  // Archiving
+  {
+    name: "tar",
+    load: async () => (await import("./tar/tar.js")).tarCommand,
+  },
+  {
+    name: "gzip",
+    load: async () => (await import("./gzip/gzip.js")).gzipCommand,
+  },
+
+  // Logic/Search
+  {
+    name: "test",
+    load: async () => (await import("./test/test.js")).testCommand,
+  },
+  {
+    name: "[",
+    load: async () => (await import("./test/test.js")).bracketCommand,
+  },
+  {
+    name: "expr",
+    load: async () => (await import("./expr/expr.js")).exprCommand,
+  },
+  {
+    name: "seq",
+    load: async () => (await import("./seq/seq.js")).seqCommand,
+  },
+  {
+    name: "find",
+    load: async () => (await import("./find/find.js")).findCommand,
+  },
+  {
+    name: "rg",
+    load: async () => (await import("./rg/rg.js")).rgCommand,
+  },
+
+  // Shell State
+  {
+    name: "alias",
+    load: async () => (await import("./alias/alias.js")).aliasCommand,
+  },
+  {
+    name: "history",
+    load: async () => (await import("./history/history.js")).historyCommand,
+  },
+
+  // Structured Data
+  {
+    name: "jq",
+    load: async () => (await import("./jq/jq.js")).jqCommand,
+  },
+  {
+    name: "yq",
+    load: async () => (await import("./yq/yq.js")).yqCommand,
+  },
+
+  // Comparison
+  {
+    name: "diff",
+    load: async () => (await import("./diff/diff.js")).diffCommand,
+  },
+  {
+    name: "comm",
+    load: async () => (await import("./comm/comm.js")).commCommand,
+  },
+
+  // Security/Encoding
+  {
+    name: "base64",
+    load: async () => (await import("./base64/base64.js")).base64Command,
+  },
+  {
+    name: "md5sum",
+    load: async () => (await import("./md5sum/md5sum.js")).md5sumCommand,
+  },
+
+  // Time/Execution
+  {
+    name: "sleep",
+    load: async () => (await import("./sleep/sleep.js")).sleepCommand,
+  },
+  {
+    name: "time",
+    load: async () => (await import("./time/time.js")).timeCommand,
+  },
+  {
+    name: "timeout",
+    load: async () => (await import("./timeout/timeout.js")).timeoutCommand,
+  },
 
   // Utilities
   {
@@ -124,6 +349,24 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   {
     name: "false",
     load: async () => (await import("./true/true.js")).falseCommand,
+  },
+
+  // Language Runtimes
+  {
+    name: "python3",
+    load: async () => (await import("./python/python3.js")).python3Command,
+  },
+  {
+    name: "python",
+    load: async () => (await import("./python/python3.js")).pythonCommand,
+  },
+  {
+    name: "js-exec",
+    load: async () => (await import("./js-exec/js-exec.js")).jsExecCommand,
+  },
+  {
+    name: "node",
+    load: async () => (await import("./js-exec/js-exec.js")).nodeStubCommand,
   },
 ];
 
@@ -160,7 +403,7 @@ export function getCommandNames(): string[] {
  * Gets all network command names
  */
 export function getNetworkCommandNames(): string[] {
-  return [];
+  return ["curl"];
 }
 
 /**
@@ -169,7 +412,6 @@ export function getNetworkCommandNames(): string[] {
 export function createLazyCommands(filter?: CommandName[]): Command[] {
   const loaders = filter
     ? commandLoaders.filter((def) => filter.includes(def.name as CommandName))
-    ? commandLoaders.filter((def) => filter.includes(def.name))
     : commandLoaders;
   return loaders.map(createLazyCommand);
 }
@@ -178,35 +420,46 @@ export function createLazyCommands(filter?: CommandName[]): Command[] {
  * Creates network commands (curl, etc.)
  */
 export function createNetworkCommands(): Command[] {
-  return [];
+  return [
+    createLazyCommand({
+      name: "curl",
+      load: async () => (await import("./curl/curl.js")).curlCommand,
+    }),
+  ];
 }
 
 /**
  * Gets all python command names
  */
 export function getPythonCommandNames(): string[] {
-  return [];
+  return ["python3", "python"];
 }
 
 /**
  * Creates python commands
  */
 export function createPythonCommands(): Command[] {
-  return [];
+  const pythonDefs = commandLoaders.filter(
+    (def) => def.name === "python" || def.name === "python3",
+  );
+  return pythonDefs.map(createLazyCommand);
 }
 
 /**
  * Gets all javascript command names
  */
 export function getJavaScriptCommandNames(): string[] {
-  return [];
+  return ["js-exec", "node"];
 }
 
 /**
  * Creates javascript commands
  */
 export function createJavaScriptCommands(): Command[] {
-  return [];
+  const jsDefs = commandLoaders.filter(
+    (def) => def.name === "js-exec" || def.name === "node",
+  );
+  return jsDefs.map(createLazyCommand);
 }
 
 /**
