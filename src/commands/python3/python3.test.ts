@@ -6,16 +6,14 @@ import { Bash } from "../../Bash.js";
 
 describe("python3", () => {
   describe("basic execution", () => {
-    it(
-      "should execute simple print statement",
-      { timeout: 60000 },
-      async () => {
-        const env = new Bash({ python: true });
-        const result = await env.exec('python3 -c "print(1 + 2)"');
-        expect(result.stdout).toBe("3\n");
-        expect(result.exitCode).toBe(0);
-      },
-    );
+    it("should execute simple print statement", {
+      timeout: 60000,
+    }, async () => {
+      const env = new Bash({ python: true });
+      const result = await env.exec('python3 -c "print(1 + 2)"');
+      expect(result.stdout).toBe("3\n");
+      expect(result.exitCode).toBe(0);
+    });
 
     it("should execute arithmetic", async () => {
       const env = new Bash({ python: true });

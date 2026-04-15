@@ -1434,6 +1434,8 @@ function activateDefense(protocolToken: string): void {
       // performance: Excluded because we replaced it above with a ms-precision
       // stub. Defense doesn't need to block it — it's already degraded.
       "performance_timing",
+      // WebAssembly: Required for CPython Emscripten (compiled to WASM).
+      "webassembly",
     ],
     onViolation,
   });

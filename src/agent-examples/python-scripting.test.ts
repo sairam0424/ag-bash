@@ -43,19 +43,17 @@ describe("Agent Scenario: Python Data Analysis", () => {
       cwd: "/data",
     });
 
-  it(
-    "should parse CSV and calculate total revenue per product",
-    { timeout: 60000 },
-    async () => {
-      const env = createDataEnv();
-      const result = await env.exec("python3 /scripts/analyze.py");
-      expect(result.stderr).toBe("");
-      expect(result.stdout).toBe(
-        "Widget A: $989.67\nWidget B: $749.85\nWidget C: $639.68\n",
-      );
-      expect(result.exitCode).toBe(0);
-    },
-  );
+  it("should parse CSV and calculate total revenue per product", {
+    timeout: 60000,
+  }, async () => {
+    const env = createDataEnv();
+    const result = await env.exec("python3 /scripts/analyze.py");
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toBe(
+      "Widget A: $989.67\nWidget B: $749.85\nWidget C: $639.68\n",
+    );
+    expect(result.exitCode).toBe(0);
+  });
 
   it("should analyze JSON data and filter by role", async () => {
     const env = createDataEnv();

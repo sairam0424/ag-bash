@@ -100,9 +100,6 @@ function createContext(
     ]),
     stdin: "",
     ...overrides,
-    params: {
-      ...overrides.params,
-    },
   };
 }
 
