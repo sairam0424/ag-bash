@@ -16,9 +16,7 @@ import { identifier, simpleWord } from "./grammar-generator.js";
 
 const bashExpansionBoost: fc.Arbitrary<string> = fc.oneof(
   // assign_default: ${var:=word}
-  fc
-    .tuple(identifier, simpleWord)
-    .map(([v, w]) => `echo "\${${v}:=${w}}"`),
+  fc.tuple(identifier, simpleWord).map(([v, w]) => `echo "\${${v}:=${w}}"`),
   // error_if_unset: ${var:?msg}
   fc
     .tuple(identifier, simpleWord)

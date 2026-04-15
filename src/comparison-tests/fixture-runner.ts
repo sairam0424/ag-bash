@@ -493,4 +493,4 @@ export async function compareOutputs(
   );
 }
 
-export { path, fs };
+export { fs, path };

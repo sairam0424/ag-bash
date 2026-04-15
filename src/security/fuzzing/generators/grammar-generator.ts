@@ -1903,9 +1903,7 @@ export const jqGrammarCommand: fc.Arbitrary<string> = fc.oneof(
   // Array of objects
   jqFilter.map((f) => `echo '[{"a":1},{"a":2}]' | jq '${f}'`),
   // With file
-  fc
-    .tuple(jqFilter, safePath)
-    .map(([f, p]) => `jq '${f}' ${p}`),
+  fc.tuple(jqFilter, safePath).map(([f, p]) => `jq '${f}' ${p}`),
   // Raw output
   jqFilter.map((f) => `echo '{"a":"test"}' | jq -r '${f}'`),
   // Compact output

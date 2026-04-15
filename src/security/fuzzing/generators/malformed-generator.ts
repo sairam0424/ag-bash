@@ -246,12 +246,12 @@ export const malformedScript: fc.Arbitrary<string> = fc.oneof(
 
 /** Export individual generators for targeted testing */
 export {
-  truncatedScript,
-  unclosedQuote,
-  unclosedParen,
-  missingKeyword,
-  invalidOperator,
   byteInjectedScript,
   degenerateScript,
+  invalidOperator,
+  missingKeyword,
   mutatedCompound,
+  truncatedScript,
+  unclosedParen,
+  unclosedQuote,
 };
