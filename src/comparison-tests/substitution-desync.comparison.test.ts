@@ -56,7 +56,7 @@ describe("substitution boundary desync - Real Bash Comparison", () => {
       throw new Error(
         `marker-state mismatch for comment-like boundary probe\n` +
           `Expected (real bash): ${JSON.stringify(realCheck.stdout)}\n` +
-          `Received (BashEnv):  ${JSON.stringify(virtualCheck.stdout)}`,
+          `Received (Bash):  ${JSON.stringify(virtualCheck.stdout)}`,
       );
     }
   });

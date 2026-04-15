@@ -18,14 +18,14 @@ import { Bash } from "../Bash.js";
 function createEnv(): Bash {
   return new Bash({
     files: {
-      // Main BashEnv implementation
-      "/project/src/BashEnv.ts": `import { VirtualFs } from './fs.js';
+      // Main Bash implementation
+      "/project/src/Bash.ts": `import { VirtualFs } from './fs.js';
 import { Command, CommandContext, ExecResult } from './types.js';
 import { lsCommand } from './commands/ls/ls.js';
 import { findCommand } from './commands/find/find.js';
 import { grepCommand } from './commands/grep/grep.js';
 
-export class BashEnv {
+export class Bash {
   private fs: VirtualFs;
   private cwd: string;
   private commands: Map<string, Command> = new Map();
@@ -127,7 +127,7 @@ export const lsCommand: Command = {
 
       // ls unit tests
       "/project/src/commands/ls/ls.test.ts": `import { describe, it, expect } from 'vitest';
-import { Bash } from '../../BashEnv.js';
+import { Bash } from '../../Bash.js';
 
 describe('ls command', () => {
   it('should list directory contents', async () => {
@@ -235,7 +235,7 @@ describe('ls command - Real Bash Comparison', () => {
     await compareOutputs(env, testDir, 'ls');
   });
 
-  // TODO: ls -a includes . and .. which BashEnv doesn't have
+  // TODO: ls -a includes . and .. which Bash doesn't have
   it.skip('should match -a (show hidden)', async () => {
     const env = await setupFiles(testDir, {
       '.hidden': '',
@@ -244,7 +244,7 @@ describe('ls command - Real Bash Comparison', () => {
     await compareOutputs(env, testDir, 'ls -a');
   });
 
-  // TODO: ls -A output order differs between BashEnv and real bash
+  // TODO: ls -A output order differs between Bash and real bash
   it.skip('should match -A (show hidden except . and ..)', async () => {
     const env = await setupFiles(testDir, {
       '.hidden': '',
@@ -253,7 +253,7 @@ describe('ls command - Real Bash Comparison', () => {
     await compareOutputs(env, testDir, 'ls -A');
   });
 
-  // TODO: ls -R output format differs between BashEnv and real bash
+  // TODO: ls -R output format differs between Bash and real bash
   it.skip('should match -R (recursive)', async () => {
     const env = await setupFiles(testDir, {
       'file.txt': '',
@@ -298,7 +298,7 @@ describe('grep command - Real Bash Comparison', () => {
 `,
 
       // Test helpers
-      "/project/src/comparison-tests/test-helpers.ts": `import { Bash } from '../BashEnv.js';
+      "/project/src/comparison-tests/test-helpers.ts": `import { Bash } from '../Bash.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
@@ -474,7 +474,7 @@ describe("Agent Scenario: Feature Implementation", () => {
     it("should locate command registration", async () => {
       const env = createEnv();
       const result = await env.exec(
-        'grep -n "registerCommand" /project/src/BashEnv.ts',
+        'grep -n "registerCommand" /project/src/Bash.ts',
       );
       expect(result.stdout).toContain("registerCommand");
       expect(result.stdout).toContain("lsCommand");
@@ -483,7 +483,7 @@ describe("Agent Scenario: Feature Implementation", () => {
     it("should find TODO for missing commands", async () => {
       const env = createEnv();
       const result = await env.exec(
-        'grep -n "TODO.*command" /project/src/BashEnv.ts',
+        'grep -n "TODO.*command" /project/src/Bash.ts',
       );
       expect(result.stdout).toContain("true");
       expect(result.stdout).toContain("false");
@@ -586,7 +586,7 @@ describe("Agent Scenario: Feature Implementation", () => {
       const todoFiles = await env.exec('grep -rl "TODO" /project/src');
       expect(todoFiles.stdout).toContain("ls.ts");
       expect(todoFiles.stdout).toContain("fs.ts");
-      expect(todoFiles.stdout).toContain("BashEnv.ts");
+      expect(todoFiles.stdout).toContain("Bash.ts");
     });
   });
 

@@ -245,7 +245,7 @@ export interface CompareOptions {
 }
 
 /**
- * Sets up test files in both real FS and creates a BashEnv
+ * Sets up test files in both real FS and creates a Bash
  */
 export async function setupFiles(
   testDir: string,
@@ -261,7 +261,7 @@ export async function setupFiles(
     await fs.writeFile(fullPath, content);
   }
 
-  // Create equivalent BashEnv with normalized paths
+  // Create equivalent Bash with normalized paths
   const bashEnvFiles: Record<string, string> = Object.create(null);
   for (const [filePath, content] of Object.entries(files)) {
     bashEnvFiles[path.join(testDir, filePath)] = content;
@@ -378,7 +378,7 @@ async function compareOutputsInternal(
   testFile: string,
   options?: CompareOptions,
 ): Promise<void> {
-  // Run BashEnv
+  // Run Bash
   const bashEnvResult = await env.exec(command);
 
   const fixtureId = generateFixtureId(command, files);
@@ -443,7 +443,7 @@ async function compareOutputsInternal(
     throw new Error(
       `stdout mismatch for "${command}"\n` +
         `Expected (recorded bash): ${JSON.stringify(realBashStdout)}\n` +
-        `Received (BashEnv):       ${JSON.stringify(bashEnvResult.stdout)}`,
+        `Received (Bash):       ${JSON.stringify(bashEnvResult.stdout)}`,
     );
   }
 
@@ -452,17 +452,17 @@ async function compareOutputsInternal(
       throw new Error(
         `exitCode mismatch for "${command}"\n` +
           `Expected (recorded bash): ${realBashExitCode}\n` +
-          `Received (BashEnv):       ${bashEnvResult.exitCode}`,
+          `Received (Bash):       ${bashEnvResult.exitCode}`,
       );
     }
   }
 }
 
 /**
- * Compares BashEnv output with recorded bash output (from fixtures)
+ * Compares Bash output with recorded bash output (from fixtures)
  * In record mode, runs real bash and saves the output to fixtures
  *
- * @param env - BashEnv instance
+ * @param env - Bash instance
  * @param testDir - Test directory path
  * @param command - Command to run
  * @param options - Comparison options (optional)

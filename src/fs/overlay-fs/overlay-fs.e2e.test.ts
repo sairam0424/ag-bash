@@ -1,5 +1,5 @@
 /**
- * End-to-end tests for BashEnv with OverlayFs
+ * End-to-end tests for Bash with OverlayFs
  *
  * These tests verify that bash commands work correctly when
  * operating on an OverlayFs-backed filesystem.
@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
 import { OverlayFs } from "./overlay-fs.js";
 
-describe("BashEnv with OverlayFs - E2E", () => {
+describe("Bash with OverlayFs - E2E", () => {
   let tempDir: string;
   let overlay: OverlayFs;
   let env: Bash;

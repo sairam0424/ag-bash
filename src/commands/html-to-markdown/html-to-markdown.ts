@@ -10,11 +10,11 @@ import { hasHelpFlag, showHelp, unknownOption } from "../help.js";
 
 const htmlToMarkdownHelp = {
   name: "html-to-markdown",
-  summary: "convert HTML to Markdown (BashEnv extension)",
+  summary: "convert HTML to Markdown (Bash extension)",
   usage: "html-to-markdown [OPTION]... [FILE]",
   description: [
     "Convert HTML content to Markdown format using the turndown library.",
-    "This is a non-standard BashEnv extension command, not available in regular bash.",
+    "This is a non-standard Bash extension command, not available in regular bash.",
     "",
     "Read HTML from FILE or standard input and output Markdown to standard output.",
     "Commonly used with curl to convert web pages:",

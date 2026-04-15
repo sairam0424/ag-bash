@@ -16,18 +16,10 @@ import {
   DiscoveryService,
   type ProjectBrief,
 } from "../services/DiscoveryService.js";
+import { Theme } from "./theme.js";
 
 // ANSI colors
-const colors = {
-  reset: "\x1b[0m",
-  bold: "\x1b[1m",
-  dim: "\x1b[2m",
-  red: "\x1b[31m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  blue: "\x1b[34m",
-  cyan: "\x1b[36m",
-};
+const colors = Theme.colors;
 
 interface ShellOptions {
   cwd?: string;
@@ -116,7 +108,8 @@ class VirtualShell {
       displayCwd = `~${cwd.slice(home.length)}`;
     }
 
-    return `${colors.cyan}${colors.bold}ag${colors.reset}${colors.dim}@${colors.bold}kernel${colors.reset}:${colors.blue}${colors.bold}${displayCwd}${colors.reset}$ `;
+    const c = Theme.colors;
+    return `${c.cyan(c.bold("ag"))}${c.dim("@")}${c.bold("kernel")}${c.dim(":")}${c.bold(c.cyan(displayCwd))}${c.dim(Theme.chars.prompt)} `;
   }
 
   private async executeCommand(command: string): Promise<void> {
@@ -157,27 +150,24 @@ class VirtualShell {
       }
 
       if (result.stderr) {
-        process.stderr.write(`${colors.red}${result.stderr}${colors.reset}`);
+        process.stderr.write(Theme.colors.red(result.stderr));
       }
     } catch (error) {
-      console.error(
-        `${colors.red}Error: ${getErrorMessage(error)}${colors.reset}`,
-      );
+      console.error(Theme.colors.red(`Error: ${getErrorMessage(error)}`));
     }
   }
 
   private printWelcome(): void {
-    console.log(`
-${colors.cyan}${colors.bold}╔══════════════════════════════════════════════════════════════╗
-║                    AG Unified Shell v1.0                     ║
-║          Agentic Project Intelligence over WASM Bash         ║
-╚══════════════════════════════════════════════════════════════╝${colors.reset}
+    Theme.printHeader("1.0.0");
+    Theme.printBrandManifest();
 
-${colors.dim}Scanning Environment: ${process.cwd()}${colors.reset}
-
-Type ${colors.green}help${colors.reset} for available commands, ${colors.green}exit${colors.reset} to quit.
-System detects: ${colors.yellow}Project Knowledge Layer Active${colors.reset}
-`);
+    const stats = {
+      commands: 100, // Approximate
+      filesystems: 2,
+      python: "Enabled",
+      javascript: "Enabled",
+    };
+    Theme.printSuccess("Node.js", "Interactive Shell", stats);
   }
 
   private prompt(): void {
@@ -197,9 +187,8 @@ System detects: ${colors.yellow}Project Knowledge Layer Active${colors.reset}
       this.printWelcome();
       if (this.projectBrief) {
         console.log(
-          colors.dim +
-            this.discovery.getSummary(this.projectBrief) +
-            colors.reset,
+          Theme.colors.dim(this.discovery.getSummary(this.projectBrief)) +
+            Theme.colors.reset(""),
         );
       }
       this.prompt();

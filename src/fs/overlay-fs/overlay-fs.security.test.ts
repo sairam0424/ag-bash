@@ -636,7 +636,7 @@ describe("OverlayFs Security - Path Traversal Prevention", () => {
     });
   });
 
-  describe("BashEnv integration security", () => {
+  describe("Bash integration security", () => {
     it("should not allow cat to read files outside root", async () => {
       const env = new Bash({ fs: overlay });
       const result = await env.exec(`cat ${outsideFile}`);

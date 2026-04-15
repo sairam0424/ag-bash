@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
 
 /**
- * Tests for shell-like functionality in BashEnv.
+ * Tests for shell-like functionality in Bash.
  * Note: Each exec is a new shell - state (cd, export) does not persist across execs.
  * The actual interactive shell is tested manually.
  */

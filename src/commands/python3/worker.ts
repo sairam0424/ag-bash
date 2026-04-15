@@ -11,7 +11,8 @@
  */
 
 import { createRequire } from "node:module";
-import { dirname } from "node:path";
+import { statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
 import { sanitizeHostErrorMessage } from "../../fs/sanitize-error.js";
 import {
@@ -125,6 +126,42 @@ try {
   /* best-effort */
 }
 
+function checkBinaryHealth(path: string): void {
+  try {
+    const stats = statSync(path);
+    if (stats.size < 1024 * 1024) {
+      // Python WASM should be ~6MB. LFS pointers and HTML error pages are much smaller.
+      throw new Error(
+        `Binary at ${path} is too small (${stats.size} bytes). Likely a Git LFS pointer or corrupted file. Please restore the valid binary.`,
+      );
+    }
+
+    // Check for HTML content (common redirect error)
+    const fs = require("node:fs");
+    const buffer = Buffer.alloc(15);
+    const fd = fs.openSync(path, "r");
+    fs.readSync(fd, buffer, 0, 15, 0);
+    fs.closeSync(fd);
+
+    const firstChars = buffer.toString();
+    if (
+      firstChars.includes("<!DOCTYPE") ||
+      firstChars.includes("<html")
+    ) {
+      throw new Error(
+        `Binary at ${path} contains HTML instead of WebAssembly. This is likely a redirected GitHub error page. Please restore the valid binary.`,
+      );
+    }
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") {
+      throw new Error(
+        `Binary missing at ${path}. Please ensure vendor files are restored.`,
+      );
+    }
+    throw error;
+  }
+}
+
 let cpythonEntryPath: string;
 try {
   cpythonEntryPath = require.resolve(
@@ -137,10 +174,15 @@ try {
     "/../../../vendor/cpython-emscripten/python.cjs";
 }
 assertApprovedPath(cpythonEntryPath, "cpython-entry");
+checkBinaryHealth(cpythonEntryPath);
 
 const cpythonDir = dirname(cpythonEntryPath);
+const wasmPath = join(cpythonDir, "python.wasm");
+checkBinaryHealth(wasmPath);
+
 const stdlibZipPath = `${cpythonDir}/python313.zip`;
 assertApprovedPath(stdlibZipPath, "cpython-stdlib");
+checkBinaryHealth(stdlibZipPath);
 
 // Emscripten module types
 interface EmscriptenModule {

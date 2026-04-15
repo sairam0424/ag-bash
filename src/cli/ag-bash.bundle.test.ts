@@ -11,7 +11,10 @@ async function runBin(
   args: string[],
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
-    const { stdout, stderr } = await execFileAsync("node", [binPath, ...args]);
+    const { stdout, stderr } = await execFileAsync(process.execPath, [
+      binPath,
+      ...args,
+    ]);
     return { stdout, stderr, exitCode: 0 };
   } catch (error: unknown) {
     const e = error as { stdout?: string; stderr?: string; code?: number };

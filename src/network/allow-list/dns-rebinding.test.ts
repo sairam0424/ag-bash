@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DnsLookupResult } from "../types.js";
 import {
-  createBashEnvAdapter,
+  createBashAdapter,
   createMockFetch,
   expectAllowed,
   expectBlockedDnsFailure,
@@ -50,7 +50,7 @@ describe("DNS rebinding SSRF protection", () => {
 
   describe("blocks domains resolving to private IPs", () => {
     it("blocks domain resolving to 127.0.0.1 (loopback)", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -62,7 +62,7 @@ describe("DNS rebinding SSRF protection", () => {
     });
 
     it("blocks domain resolving to 10.x.x.x (private)", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -74,7 +74,7 @@ describe("DNS rebinding SSRF protection", () => {
     });
 
     it("blocks domain resolving to 192.168.x.x (private)", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -86,7 +86,7 @@ describe("DNS rebinding SSRF protection", () => {
     });
 
     it("blocks domain resolving to 172.16.x.x (private)", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -98,7 +98,7 @@ describe("DNS rebinding SSRF protection", () => {
     });
 
     it("blocks domain resolving to ::1 (IPv6 loopback)", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -115,7 +115,7 @@ describe("DNS rebinding SSRF protection", () => {
 
   describe("blocks if ANY resolved address is private", () => {
     it("blocks when one of multiple addresses is private", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -135,7 +135,7 @@ describe("DNS rebinding SSRF protection", () => {
 
   describe("allows domains resolving to public IPs", () => {
     it("allows domain resolving to public IP", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -153,7 +153,7 @@ describe("DNS rebinding SSRF protection", () => {
 
   describe("fail-closed on unexpected DNS errors", () => {
     it("blocks when DNS resolution fails with unexpected error", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -165,7 +165,7 @@ describe("DNS rebinding SSRF protection", () => {
     });
 
     it("allows ENOTFOUND through (domain does not exist)", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -185,7 +185,7 @@ describe("DNS rebinding SSRF protection", () => {
 
   describe("redirect targets are DNS-checked", () => {
     it("blocks redirect to domain resolving to private IP", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,
@@ -213,7 +213,7 @@ describe("DNS rebinding SSRF protection", () => {
   describe("denyPrivateRanges=false skips DNS check", () => {
     it("allows domain resolving to private IP when denyPrivateRanges is off", async () => {
       const resolver = vi.fn();
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: false,
@@ -232,7 +232,7 @@ describe("DNS rebinding SSRF protection", () => {
   describe("lexical check still runs before DNS", () => {
     it("blocks IP literals without DNS lookup", async () => {
       const resolver = vi.fn();
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: {
           dangerouslyAllowFullInternetAccess: true,
           denyPrivateRanges: true,

@@ -2,7 +2,7 @@
  * curl - Transfer data from or to a server
  *
  * This is a simplified implementation of curl that uses the secure fetch wrapper.
- * Network access must be explicitly configured via BashEnvOptions.network.
+ * Network access must be explicitly configured via BashOptions.network.
  */
 
 import { getErrorMessage } from "../../interpreter/helpers/errors.js";

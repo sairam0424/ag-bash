@@ -25,7 +25,7 @@ describe("Sandbox API", () => {
       expect(output.trim()).toBe("hello");
     });
 
-    it("should accept BashEnv-specific maxCallDepth option", async () => {
+    it("should accept Bash-specific maxCallDepth option", async () => {
       const sandbox = await Sandbox.create({ maxCallDepth: 5 });
       // Define and call recursive function in same exec (each exec is a new shell)
       const cmd = await sandbox.runCommand("recurse() { recurse; }; recurse");
@@ -423,14 +423,14 @@ describe("Sandbox API", () => {
   });
 
   describe("sandbox.bashEnvInstance", () => {
-    it("should expose the underlying BashEnv", async () => {
+    it("should expose the underlying Bash", async () => {
       const sandbox = await Sandbox.create();
       const bashEnv = sandbox.bashEnvInstance;
       expect(bashEnv).toBeDefined();
       expect(typeof bashEnv.exec).toBe("function");
     });
 
-    it("should allow direct BashEnv operations", async () => {
+    it("should allow direct Bash operations", async () => {
       const sandbox = await Sandbox.create();
       const result = await sandbox.bashEnvInstance.exec("echo direct");
       expect(result.stdout).toBe("direct\n");

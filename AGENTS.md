@@ -1,6 +1,6 @@
 # Agent instructions
 
-- use `pnpm dev:exec` for evaluating scripts using BashEnv during development. See Debugging info below.
+- use `pnpm dev:exec` for evaluating scripts using Bash during development. See Debugging info below.
 - Install packages via pnpm rather than editing package.json directly
 - Bias towards making new test files that are roughly logically grouped rather than letting test files gets too large. Try to stay below 300 lines. Prefer making a new file when you want to add a `describe()`
 - Prefer asserting the full STDOUT/STDERR output rather than using toContain or not.toContain

@@ -23,7 +23,7 @@ describe("cd command - Real Bash Comparison", () => {
         "subdir/file.txt": "content",
       });
 
-      // Test cd followed by pwd in BashEnv
+      // Test cd followed by pwd in Bash
       const envResult = await env.exec("cd subdir && pwd");
       const realResult = await runRealBash("cd subdir && pwd", testDir);
 

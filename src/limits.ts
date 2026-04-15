@@ -2,7 +2,7 @@
  * Execution Limits Configuration
  *
  * Centralized configuration for all execution limits to prevent runaway compute.
- * These limits can be overridden when creating a BashEnv instance.
+ * These limits can be overridden when creating a Bash instance.
  */
 
 /**

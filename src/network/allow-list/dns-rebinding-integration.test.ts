@@ -9,7 +9,7 @@
 import { lookup } from "node:dns";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  createBashEnvAdapter,
+  createBashAdapter,
   createMockFetch,
   originalFetch,
 } from "./shared.js";
@@ -72,7 +72,7 @@ describe("DNS rebinding integration (real DNS)", () => {
       expect(address).not.toBe("::1");
     }
 
-    const env = createBashEnvAdapter({
+    const env = createBashAdapter({
       network: {
         dangerouslyAllowFullInternetAccess: true,
         denyPrivateRanges: true,
@@ -90,7 +90,7 @@ describe("DNS rebinding integration (real DNS)", () => {
   it("ENOTFOUND domain passes DNS check (no rebinding risk)", async () => {
     // When DNS can't resolve a domain, there's no rebinding risk.
     // The request should proceed and fail at the fetch level naturally.
-    const env = createBashEnvAdapter({
+    const env = createBashAdapter({
       network: {
         allowedUrlPrefixes: [
           "https://this-domain-does-not-exist-xyz123.example",
@@ -111,7 +111,7 @@ describe("DNS rebinding integration (real DNS)", () => {
     // Verify the combination of allow-list + denyPrivateRanges + real DNS
     // doesn't break normal operation. Uses a domain that will ENOTFOUND
     // (passes DNS check) and is in the allow-list.
-    const env = createBashEnvAdapter({
+    const env = createBashAdapter({
       network: {
         allowedUrlPrefixes: ["https://api.example.com"],
         denyPrivateRanges: true,
