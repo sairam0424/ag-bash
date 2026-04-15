@@ -148,27 +148,27 @@ function addImpliedImports(code: string): string {
   const imports: string[] = [];
 
   // Check what's used and add appropriate imports
-  if (code.includes("Bash") && !code.includes('from "ag-bash"')) {
-    imports.push('import { Bash } from "ag-bash";');
+  if (code.includes("Bash") && !code.includes('from "@ag/bash"')) {
+    imports.push('import { Bash } from "@ag/bash";');
   }
-  if (code.includes("defineCommand") && !code.includes('from "ag-bash"')) {
-    imports.push('import { defineCommand } from "ag-bash";');
+  if (code.includes("defineCommand") && !code.includes('from "@ag/bash"')) {
+    imports.push('import { defineCommand } from "@ag/bash";');
   }
-  if (code.includes("Sandbox") && !code.includes('from "ag-bash"')) {
-    imports.push('import { Sandbox } from "ag-bash";');
+  if (code.includes("Sandbox") && !code.includes('from "@ag/bash"')) {
+    imports.push('import { Sandbox } from "@ag/bash";');
   }
   // bash-tool imports are handled via ephemeral type definitions
   if (
     code.includes("OverlayFs") &&
-    !code.includes('from "ag-bash/fs/overlay-fs"')
+    !code.includes('from "@ag/bash/fs/overlay-fs"')
   ) {
-    imports.push('import { OverlayFs } from "ag-bash/fs/overlay-fs";');
+    imports.push('import { OverlayFs } from "@ag/bash/fs/overlay-fs";');
   }
   if (
     code.includes("ReadWriteFs") &&
-    !code.includes('from "ag-bash/fs/read-write-fs"')
+    !code.includes('from "@ag/bash/fs/read-write-fs"')
   ) {
-    imports.push('import { ReadWriteFs } from "ag-bash/fs/read-write-fs";');
+    imports.push('import { ReadWriteFs } from "@ag/bash/fs/read-write-fs";');
   }
   // ai imports are handled via ephemeral type definitions
 
@@ -259,11 +259,11 @@ export function generateText(options: {
         allowSyntheticDefaultImports: true,
         resolveJsonModule: true,
         paths: {
-          "ag-bash": [path.join(import.meta.dirname, "..", "src/index.ts")],
-          "ag-bash/fs/overlay-fs": [
+          "@ag/bash": [path.join(import.meta.dirname, "..", "src/index.ts")],
+          "@ag/bash/fs/overlay-fs": [
             path.join(import.meta.dirname, "..", "src/fs/overlay-fs/index.ts"),
           ],
-          "ag-bash/fs/read-write-fs": [
+          "@ag/bash/fs/read-write-fs": [
             path.join(
               import.meta.dirname,
               "..",
@@ -447,25 +447,23 @@ describe("Documentation TypeScript examples", () => {
     expect(blocks.length).toBeGreaterThan(0);
   });
 
-  it(
-    "should have valid TypeScript syntax in all examples",
-    { timeout: 30000 },
-    () => {
-      const readme = parseReadme();
-      const agents = parseAgents();
-      const transformReadme = parseTransformReadme();
+  it("should have valid TypeScript syntax in all examples", {
+    timeout: 30000,
+  }, () => {
+    const readme = parseReadme();
+    const agents = parseAgents();
+    const transformReadme = parseTransformReadme();
 
-      // Compile all TypeScript blocks from both files in a single tsc run
-      compileTypeScriptBlocks([
-        { source: "README", blocks: extractTypeScriptBlocks(readme) },
-        { source: "AGENTS", blocks: extractTypeScriptBlocks(agents) },
-        {
-          source: "transform-README",
-          blocks: extractTypeScriptBlocks(transformReadme),
-        },
-      ]);
-    },
-  );
+    // Compile all TypeScript blocks from both files in a single tsc run
+    compileTypeScriptBlocks([
+      { source: "README", blocks: extractTypeScriptBlocks(readme) },
+      { source: "AGENTS", blocks: extractTypeScriptBlocks(agents) },
+      {
+        source: "transform-README",
+        blocks: extractTypeScriptBlocks(transformReadme),
+      },
+    ]);
+  });
 });
 
 describe("AGENTS.npm.md Bash examples", () => {
@@ -515,11 +513,11 @@ describe("AGENTS.npm.md Bash examples", () => {
         "/src/app.ts": "// TODO: implement\nexport const x = 1;",
         "/src/lib.ts": "// helper\nexport const y = 2;",
         // Mock type definition files for "Discovering Types" examples
-        "/data/node_modules/ag-bash/dist/index.d.ts":
+        "/data/node_modules/@ag/bash/dist/index.d.ts":
           'export { Bash } from "./Bash";\nexport type { BashOptions } from "./Bash";',
-        "/data/node_modules/ag-bash/dist/Bash.d.ts":
+        "/data/node_modules/@ag/bash/dist/Bash.d.ts":
           "export interface BashOptions {\n  files?: Record<string, string>;\n  cwd?: string;\n  env?: Record<string, string>;\n}\nexport interface ExecResult {\n  stdout: string;\n  stderr: string;\n  exitCode: number;\n}\nexport class Bash {\n  constructor(options?: BashOptions);\n  exec(command: string): Promise<ExecResult>;\n}",
-        "/data/node_modules/ag-bash/dist/ai/index.d.ts":
+        "/data/node_modules/@ag/bash/dist/ai/index.d.ts":
           "export interface CreateBashToolOptions {\n  files?: Record<string, string>;\n  network?: { allowedUrlPrefixes: string[] };\n}\nexport function createBashTool(options?: CreateBashToolOptions): Tool;",
       },
       cwd: "/data",

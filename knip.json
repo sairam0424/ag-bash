@@ -1,9 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/cli/ag-bash.ts"],
+  "entry": ["src/index.ts", "src/browser.ts", "src/cli/ag-bash.ts"],
   "project": ["src/**/*.ts"],
   "ignore": [
-    "src/**/*.test.ts",
     "src/spec-tests/**",
     "src/banned-patterns-test.ts",
     "src/security/fuzzing/**"

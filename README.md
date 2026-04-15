@@ -1,4 +1,4 @@
-# ag-bash
+# @ag/bash
 
 A virtual bash environment with an in-memory filesystem, written in TypeScript and designed for AI agents.
 
@@ -26,7 +26,7 @@ Each `exec()` call gets its own isolated shell state — environment variables, 
 
 ## Custom Commands
 
-Extend ag-bash with your own TypeScript commands using `defineCommand`:
+Extend @ag/bash with your own TypeScript commands using `defineCommand`:
 
 ```typescript
 import { Bash, defineCommand } from "@ag/bash";
@@ -77,7 +77,7 @@ Custom commands receive a `CommandContext` with `fs`, `cwd`, `env`, `stdin`, and
 
 ### Shell Utilities
 
-`alias`, `bash`, `chmod`, `clear`, `date`, `expr`, `false`, `help`, `history`, `seq`, `sh`, `sleep`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`
+`alias`, `bash`, `chmod`, `clear`, `date`, `expr`, `false`, `hello`, `help`, `history`, `seq`, `sh`, `sleep`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`
 
 ### Network
 
@@ -192,7 +192,7 @@ const env = new Bash({ fs: rwfs });
 await env.exec('echo "hello" > file.txt'); // writes to real filesystem
 ```
 
-Keep `ReadWriteFs` pointed at a workspace directory, not at the installed `ag-bash` package or any other trusted runtime code. Guest-writable roots should stay separate from trusted code.
+Keep `ReadWriteFs` pointed at a workspace directory, not at the installed `@ag/bash` package or any other trusted runtime code. Guest-writable roots should stay separate from trusted code.
 
 **MountableFs** - Mount multiple filesystems at different paths. Combines read-only and read-write filesystems into a unified namespace:
 
@@ -416,7 +416,7 @@ See [src/transform/README.md](src/transform/README.md) for the full API, built-i
 
 ### AI SDK Tool
 
-[`bash-tool`](https://github.com/ag-ai/bash-tool) wraps ag-bash as an [AI SDK](https://ai-sdk.dev/) tool:
+[`bash-tool`](https://github.com/ag-ai/bash-tool) wraps @ag/bash as an [AI SDK](https://ai-sdk.dev/) tool:
 
 ```bash
 npm install bash-tool
@@ -441,7 +441,7 @@ See [bash-tool](https://github.com/ag-ai/bash-tool) for more.
 
 ### Secure Sandbox Compatible API
 
-`Sandbox` is a drop-in replacement for standard sandbox APIs — same interface, but runs entirely in-process with the virtual filesystem. Start with ag-bash for development and testing, swap in a real sandbox when you need a full VM.
+`Sandbox` is a drop-in replacement for standard sandbox APIs — same interface, but runs entirely in-process with the virtual filesystem. Start with @ag/bash for development and testing, swap in a real sandbox when you need a full VM.
 
 ```typescript
 import { Sandbox } from "@ag/bash";
@@ -478,19 +478,19 @@ Install globally (`npm install -g @ag/bash`) for a sandboxed CLI:
 
 ```bash
 # Execute inline script
-ag-bash -c 'ls -la && cat package.json | head -5'
+@ag/bash -c 'ls -la && cat package.json | head -5'
 
 # Execute with specific project root
-ag-bash -c 'grep -r "TODO" src/' --root /path/to/project
+@ag/bash -c 'grep -r "TODO" src/' --root /path/to/project
 
 # Pipe script from stdin
-echo 'find . -name "*.ts" | wc -l' | ag-bash
+echo 'find . -name "*.ts" | wc -l' | @ag/bash
 
 # Execute a script file
-ag-bash ./scripts/deploy.sh
+@ag/bash ./scripts/deploy.sh
 
 # Get JSON output for programmatic use
-ag-bash -c 'echo hello' --json
+@ag/bash -c 'echo hello' --json
 # Output: {"stdout":"hello\n","stderr":"","exitCode":0}
 ```
 

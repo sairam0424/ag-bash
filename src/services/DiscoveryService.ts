@@ -16,7 +16,7 @@ export class DiscoveryService {
       type: "Unknown",
       name: "Unnamed Project",
       entryPoints: [],
-      scripts: {},
+      scripts: Object.create(null),
       dependencies: [],
     };
 
@@ -27,16 +27,20 @@ export class DiscoveryService {
         const pkg = JSON.parse(pkgResult.stdout);
         brief.type = "Node.js";
         brief.name = pkg.name || brief.name;
-        brief.scripts = pkg.scripts || {};
-        brief.dependencies = Object.keys(pkg.dependencies || {});
-        
+        brief.scripts = pkg.scripts || Object.create(null);
+        brief.dependencies = Object.keys(
+          pkg.dependencies || Object.create(null),
+        );
+
         // Detect common entry points
         if (pkg.main) brief.entryPoints.push(pkg.main);
         return brief;
       }
 
       // 2. Check for Python
-      const pyResult = await this.bash.exec("ls requirements.txt pyproject.toml");
+      const pyResult = await this.bash.exec(
+        "ls requirements.txt pyproject.toml",
+      );
       if (pyResult.exitCode === 0) {
         brief.type = "Python";
         return brief;
@@ -48,7 +52,7 @@ export class DiscoveryService {
         brief.type = "Rust";
         return brief;
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore scan errors
     }
 

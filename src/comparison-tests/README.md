@@ -1,11 +1,11 @@
 # Comparison Tests
 
-Comparison tests validate that ag-bash produces the same output as real bash. They use a **fixture-based system** that records bash outputs once and replays them during tests, eliminating platform-specific differences.
+Comparison tests validate that @ag/bash produces the same output as real bash. They use a **fixture-based system** that records bash outputs once and replays them during tests, eliminating platform-specific differences.
 
 ## How It Works
 
 1. **Fixtures** are JSON files containing recorded bash outputs (`src/comparison-tests/fixtures/*.fixtures.json`)
-2. **Tests** run commands in ag-bash and compare against the recorded fixtures
+2. **Tests** run commands in @ag/bash and compare against the recorded fixtures
 3. **Record mode** runs real bash and saves outputs to fixtures
 
 ## Running Tests
@@ -136,7 +136,7 @@ const env = await setupFiles(testDir, {
 
 ### `compareOutputs(env, testDir, command, options?)`
 
-Compares ag-bash output against recorded fixture.
+Compares @ag/bash output against recorded fixture.
 
 ```typescript
 // Basic usage

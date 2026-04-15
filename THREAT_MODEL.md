@@ -1,8 +1,8 @@
-# ag-bash Threat Model
+# @ag/bash Threat Model
 
 ## Context
 
-ag-bash is a TypeScript implementation of a bash interpreter with an in-memory virtual filesystem, designed for AI agents needing a secure, sandboxed bash environment. This document defines the full threat model: who the adversaries are, what they can target, what defenses exist, what gaps remain, and residual risks.
+@ag/bash is a TypeScript implementation of a bash interpreter with an in-memory virtual filesystem, designed for AI agents needing a secure, sandboxed bash environment. This document defines the full threat model: who the adversaries are, what they can target, what defenses exist, what gaps remain, and residual risks.
 
 ---
 
@@ -30,10 +30,10 @@ ag-bash is a TypeScript implementation of a bash interpreter with an in-memory v
 
 ## 1.1 Trust Assumptions
 
-The following components are **trusted** and outside the scope of ag-bash's runtime defenses:
+The following components are **trusted** and outside the scope of @ag/bash's runtime defenses:
 
-- **Host-provided `fs`, `fetch`, `customCommands`, and transform plugins**: These are supplied by the embedding application. A compromised or malicious host hook can bypass all sandboxing by design — ag-bash protects untrusted *scripts*, not untrusted *hosts*.
-- **The Node.js runtime and underlying OS**: ag-bash assumes the Node.js binary, V8, and OS kernel are not compromised. Exploits targeting V8 internals or kernel vulnerabilities are out of scope.
+- **Host-provided `fs`, `fetch`, `customCommands`, and transform plugins**: These are supplied by the embedding application. A compromised or malicious host hook can bypass all sandboxing by design — @ag/bash protects untrusted *scripts*, not untrusted *hosts*.
+- **The Node.js runtime and underlying OS**: @ag/bash assumes the Node.js binary, V8, and OS kernel are not compromised. Exploits targeting V8 internals or kernel vulnerabilities are out of scope.
 - **Dependencies**: Supply-chain attacks via npm dependencies are a deployment-level concern (addressed by lockfiles, audits, etc.), not a runtime defense.
 
 ---
@@ -174,7 +174,7 @@ The following components are **trusted** and outside the scope of ag-bash's runt
 | process.channel | IPC channel access | Blocked in **worker contexts only** (WorkerDefenseInDepth); main thread skipped for same reason | `src/security/blocked-globals.ts` |
 | Host PID/UID | Expose process identity | Virtualized (processInfo option, defaults: pid=1, uid=1000) | `src/Bash.ts` |
 | hostname/whoami/uname | System enumeration | Return generic/virtual values | `src/commands/hostname/` |
-| Error messages | Reveal file paths | `sanitizeError()` in FS layers + `sanitizeErrorMessage()` at all error choke points (builtin-dispatch, Bash.ts, CLI, Python bridge) | `src/fs/real-fs-utils.ts`, `src/interpreter/builtin-dispatch.ts`, `src/Bash.ts`, `src/cli/ag-bash.ts` |
+| Error messages | Reveal file paths | `sanitizeError()` in FS layers + `sanitizeErrorMessage()` at all error choke points (builtin-dispatch, Bash.ts, CLI, Python bridge) | `src/fs/real-fs-utils.ts`, `src/interpreter/builtin-dispatch.ts`, `src/Bash.ts`, `src/cli/@ag/bash.ts` |
 | Timing side-channels | hrtime, cpuUsage, memoryUsage | Blocked by defense-in-depth | `src/security/blocked-globals.ts` |
 | performance.now() | Sub-ms timing for side-channels | Blocked by defense-in-depth; internal uses pre-capture `_performanceNow` | `src/security/blocked-globals.ts`, `src/timers.ts` |
 
@@ -262,7 +262,7 @@ Attackers within the sandbox could overwrite `globalThis.Function` or use `Objec
 
 Bash `trap` command has limited security testing. Background job control (`&`, `fg`, `bg`) not systematically tested.
 
-**Mitigation**: ag-bash doesn't spawn real processes, so signals/jobs operate within the virtual model only.
+**Mitigation**: @ag/bash doesn't spawn real processes, so signals/jobs operate within the virtual model only.
 
 ### 4.5 Unicode/Encoding Edge Cases
 

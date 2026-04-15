@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ag-bash is a TypeScript implementation of a bash interpreter with an in-memory virtual filesystem. Designed for AI agents needing a secure, sandboxed bash environment. No WASM dependencies allowed.
+@ag/bash is a TypeScript implementation of a bash interpreter with an in-memory virtual filesystem. Designed for AI agents needing a secure, sandboxed bash environment. No WASM dependencies allowed.
 
 ## Commands
 
@@ -37,30 +37,30 @@ pnpm shell                 # Full network access
 pnpm shell --no-network    # No network
 
 # Sandboxed CLI (read-only by default)
-node ./dist/cli/ag-bash.js -c 'ls -la' --root .
-node ./dist/cli/ag-bash.js -c 'cat package.json' --root .
-node ./dist/cli/ag-bash.js -c 'grep -r "TODO" src/' --root .
+node ./dist/cli/@ag/bash.js -c 'ls -la' --root .
+node ./dist/cli/@ag/bash.js -c 'cat package.json' --root .
+node ./dist/cli/@ag/bash.js -c 'grep -r "TODO" src/' --root .
 ```
 
-### Sandboxed Shell Execution with `ag-bash`
+### Sandboxed Shell Execution with `@ag/bash`
 
-The `ag-bash` CLI provides a secure, sandboxed bash environment using OverlayFS:
+The `@ag/bash` CLI provides a secure, sandboxed bash environment using OverlayFS:
 
 ```bash
 # Execute inline script (read-only by default)
-node ./dist/cli/ag-bash.js -c 'ls -la && cat README.md | head -5' --root .
+node ./dist/cli/@ag/bash.js -c 'ls -la && cat README.md | head -5' --root .
 
 # Execute with JSON output
-node ./dist/cli/ag-bash.js -c 'echo hello' --root . --json
+node ./dist/cli/@ag/bash.js -c 'echo hello' --root . --json
 
 # Allow writes (writes stay in memory, don't affect real filesystem)
-node ./dist/cli/ag-bash.js -c 'echo test > /tmp/file.txt && cat /tmp/file.txt' --root . --allow-write
+node ./dist/cli/@ag/bash.js -c 'echo test > /tmp/file.txt && cat /tmp/file.txt' --root . --allow-write
 
 # Execute script file
-node ./dist/cli/ag-bash.js script.sh --root .
+node ./dist/cli/@ag/bash.js script.sh --root .
 
 # Exit on first error
-node ./dist/cli/ag-bash.js -e -c 'false; echo "not reached"' --root .
+node ./dist/cli/@ag/bash.js -e -c 'false; echo "not reached"' --root .
 ```
 
 Options:
@@ -170,7 +170,7 @@ Commands go in `src/commands/<name>/` with:
 ### Testing Strategy
 
 - **Unit tests**: Fast, isolated tests for specific functionality
-- **Comparison tests**: Compare ag-bash output against recorded bash fixtures (see `src/comparison-tests/README.md`)
+- **Comparison tests**: Compare @ag/bash output against recorded bash fixtures (see `src/comparison-tests/README.md`)
 - **Spec tests** (`src/spec-tests/`): Bash specification conformance (may have known failures)
 
 Prefer comparison tests when uncertain about bash behavior. Keep test files under 300 lines.

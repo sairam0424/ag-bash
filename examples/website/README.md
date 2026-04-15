@@ -1,6 +1,6 @@
-# ag-bash website at 
+# @ag/bash website at 
 
-This is an interactive demo of **ag-bash** running entirely in your browser, with an AI agent that can explore the source code.
+This is an interactive demo of **@ag/bash** running entirely in your browser, with an AI agent that can explore the source code.
 
 ## Architecture
 
@@ -8,7 +8,7 @@ This is an interactive demo of **ag-bash** running entirely in your browser, wit
 +----------------------------------------------------------+
 |                        BROWSER                           |
 |  +----------+    +----------+    +----------------+      |
-|  | xterm.js |--->| ag-bash|--->| Virtual FS     |      |
+|  | xterm.js |--->| @ag/bash|--->| Virtual FS     |      |
 |  | Terminal |    | (browser)|    | (in-memory)    |      |
 |  +----------+    +----------+    +----------------+      |
 |       |                                                  |
@@ -23,11 +23,11 @@ This is an interactive demo of **ag-bash** running entirely in your browser, wit
 +----------------------------------------------------------+
 |                        SERVER                            |
 |  +-------------+    +----------+    +----------------+   |
-|  |ToolLoopAgent|--->| bash-tool|--->| ag-bash      |   |
+|  |ToolLoopAgent|--->| bash-tool|--->| @ag/bash      |   |
 |  | (AI SDK)    |    |          |    | + OverlayFS    |   |
 |  |Claude Haiku |    | - bash   |    |                |   |
 |  +-------------+    | - read   |    | Real files:    |   |
-|                     | - write  |    | - ag-bash/   |   |
+|                     | - write  |    | - @ag/bash/   |   |
 |                     +----------+    | - bash-tool/   |   |
 |                                     +----------------+   |
 +----------------------------------------------------------+
@@ -35,7 +35,7 @@ This is an interactive demo of **ag-bash** running entirely in your browser, wit
 
 ## Components
 
-### 1. ag-bash (Browser)
+### 1. @ag/bash (Browser)
 - Pure TypeScript bash interpreter
 - Runs locally in browser for regular commands
 - In-memory virtual filesystem with pre-loaded files
@@ -63,17 +63,17 @@ This is an interactive demo of **ag-bash** running entirely in your browser, wit
   - `bash` - Execute bash commands
   - `readFile` - Read file contents
   - `writeFile` - Write files (disabled in this demo)
-- Integrates with ag-bash sandbox
+- Integrates with @ag/bash sandbox
 
 ### 6. OverlayFS (Server)
 - Overlays real filesystem (this source code) as read-only
-- Agent can explore ag-bash and bash-tool source
+- Agent can explore @ag/bash and bash-tool source
 - Writes go to memory, not disk
 
 ## Data Flow
 
 1. You type `agent "how does grep work?"`
-2. Browser ag-bash runs the `agent` command
+2. Browser @ag/bash runs the `agent` command
 3. Command POSTs to `/api/agent` with message history
 4. Server creates ToolLoopAgent with bash-tool
 5. Agent thinks, calls tools (bash, readFile), observes results
@@ -92,7 +92,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the terminal.
 
 ## Links
 
-- **ag-bash**: https://github.com/sairam0424/ag-bash
+- **@ag/bash**: https://github.com/sairam0424/@ag/bash
 - **bash-tool**: https://github.com/ag-ai/bash-tool
 - **AI SDK**: https://ai-sdk.dev
 - **xterm.js**: https://xtermjs.org
