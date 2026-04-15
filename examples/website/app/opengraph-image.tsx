@@ -4,12 +4,11 @@ export const alt = "ag-bash - A sandboxed bash interpreter for AI agents";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const ASCII_ART = `   _           _   _               _
-  (_)_   _ ___| |_| |__   __ _ ___| |__
-  | | | | / __| __| '_ \\ / _\` / __| '_ \\
-  | | |_| \\__ \\ |_| |_) | (_| \\__ \\ | | |
- _/ |\\__,_|___/\\__|_.__/ \\__,_|___/_| |_|
-|__/`;
+const ASCII_ART = `      _      ____            _           _
+     / \\    / ___|          | |__   __ _ ___| |__
+    / _ \\  | |  _   _____   | '_ \\ / _\` / __| '_ \\
+   / ___ \\ | |_| | |_____|  | |_) | (_| \\__ \\ | | |
+  /_/   \\_\\ \\____|          |_.__/ \\__,_|___/_| |_|`;
 
 export default async function Image() {
   const font = await fetch(
@@ -74,7 +73,7 @@ export default async function Image() {
                 fontSize: "32px",
               }}
             >
-              npm install ag-bash
+              npm install @ag/bash
             </span>
           </div>
         </div>

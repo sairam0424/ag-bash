@@ -11,6 +11,6 @@
     "@ai-sdk/gateway": "^3.0.2",
     "@steipete/summarize-core": "^0.7.1",
     "ai": "^6.0.3",
-    "ag-bash": "link:../.."
+    "@ag/bash": "link:../.."
   }
 }

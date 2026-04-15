@@ -39,7 +39,7 @@ describe("ag-bash CLI", () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ag-bash-cli-test-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ag-bash-test-"));
   });
 
   afterEach(() => {

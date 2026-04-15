@@ -5,12 +5,11 @@ import TerminalComponent from "./components/Terminal";
 import { TerminalData } from "./components/TerminalData";
 
 const NOSCRIPT_CONTENT = `
-     _           _       _               _
-    (_)_   _ ___| |_    | |__   __ _ ___| |__
-    | | | | / __| __|   | '_ \\ / _\` / __| '_ \\
-    | | |_| \\__ \\ |_ _  | |_) | (_| \\__ \\ | | |
-   _/ |\\__,_|___/\\__( ) |_.__/ \\__,_|___/_| |_|
-  |__/              |/
+      _      ____            _           _
+     / \    / ___|          | |__   __ _ ___| |__
+    / _ \  | |  _   _____   | '_ \ / _` / __| '_ \
+   / ___ \ | |_| | |_____|  | |_) | (_| \__ \ | | |
+  /_/   \_\ \____|          |_.__/ \__,_|___/_| |_|
 
   ag-bash
 
@@ -29,12 +28,12 @@ const NOSCRIPT_CONTENT = `
   INSTALLATION
   ------------
 
-  npm install ag-bash
+  npm install @ag/bash
 
   BASIC USAGE
   -----------
 
-  import { Bash } from "ag-bash";
+  import { Bash } from "@ag/bash";
 
   const env = new Bash();
   await env.exec('echo "Hello" > greeting.txt');
@@ -82,8 +81,8 @@ const NOSCRIPT_CONTENT = `
   LINKS
   -----
 
-  GitHub: https://github.com/ag-ai/ag-bash-cli
-  npm: https://www.npmjs.com/package/@ag/bash-cli
+  GitHub: https://github.com/sairam0424/ag-bash
+  npm: https://www.npmjs.com/package/@ag/bash
 
   License: Apache-2.0
   Author: Ag Bash

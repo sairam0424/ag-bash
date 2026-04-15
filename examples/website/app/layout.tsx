@@ -2,17 +2,17 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ag-bash",
+  title: "Ag-Bash",
   description: "A sandboxed bash interpreter for AI agents. Pure TypeScript with in-memory filesystem.",
   metadataBase: new URL("https://ag-bash.dev"),
   openGraph: {
-    title: "ag-bash",
+    title: "Ag-Bash",
     description: "A sandboxed bash interpreter for AI agents. Pure TypeScript with in-memory filesystem.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "ag-bash",
+    title: "Ag-Bash",
     description: "A sandboxed bash interpreter for AI agents. Pure TypeScript with in-memory filesystem.",
   },
 };

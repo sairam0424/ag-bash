@@ -19,15 +19,15 @@ Or try any bash command: ls, cat, echo, grep, awk, jq, sed, etc.
 Type 'help' for a list of all built-in commands.
 `;
 
-export const CMD_INSTALL = `npm install ag-bash
+export const CMD_INSTALL = `npm install @ag/bash
 
 Usage:
-  import { Bash } from "ag-bash";
+  import { Bash } from "@ag/bash";
   const bash = new Bash();
   const result = await bash.exec("echo hello");
 `;
 
-export const CMD_GITHUB = "https://github.com/ag-ai/ag-bash-cli\n";
+export const CMD_GITHUB = "https://github.com/sairam0424/ag-bash\n";
 
 // File contents (generated from repo)
 export const FILE_README = `# ag-bash
@@ -72,7 +72,7 @@ Supports optional network access via \`curl\` with secure-by-default URL filteri
 ## Installation
 
 \`\`\`bash
-npm install ag-bash
+npm install @ag/bash
 \`\`\`
 
 ## Usage
@@ -80,7 +80,7 @@ npm install ag-bash
 ### Basic API
 
 \`\`\`typescript
-import { Bash } from "ag-bash";
+import { Bash } from "@ag/bash";
 
 const env = new Bash();
 await env.exec('echo "Hello" > greeting.txt');
@@ -127,7 +127,7 @@ This is useful for large or expensive-to-compute content that may not be needed.
 Extend ag-bash with your own TypeScript commands using \`defineCommand\`:
 
 \`\`\`typescript
-import { Bash, defineCommand } from "ag-bash";
+import { Bash, defineCommand } from "@ag/bash";
 
 const hello = defineCommand("hello", async (args, ctx) => {
   const name = args[0] || "world";
@@ -160,8 +160,8 @@ const env = new Bash(); // Uses InMemoryFs by default
 **OverlayFs** - Copy-on-write over a real directory. Reads come from disk, writes stay in memory:
 
 \`\`\`typescript
-import { Bash } from "ag-bash";
-import { OverlayFs } from "ag-bash/fs/overlay-fs";
+import { Bash } from "@ag/bash";
+import { OverlayFs } from "@ag/bash/fs/overlay-fs";
 
 const overlay = new OverlayFs({ root: "/path/to/project" });
 const env = new Bash({ fs: overlay, cwd: overlay.getMountPoint() });
@@ -173,8 +173,8 @@ await env.exec('echo "modified" > package.json'); // stays in memory
 **ReadWriteFs** - Direct read-write access to a real directory. Use this if you want the agent to be agle to write to your disk:
 
 \`\`\`typescript
-import { Bash } from "ag-bash";
-import { ReadWriteFs } from "ag-bash/fs/read-write-fs";
+import { Bash } from "@ag/bash";
+import { ReadWriteFs } from "@ag/bash/fs/read-write-fs";
 
 const rwfs = new ReadWriteFs({ root: "/path/to/sandbox" });
 const env = new Bash({ fs: rwfs });
@@ -185,9 +185,9 @@ await env.exec('echo "hello" > file.txt'); // writes to real filesystem
 **MountableFs** - Mount multiple filesystems at different paths. Combines read-only and read-write filesystems into a unified namespace:
 
 \`\`\`typescript
-import { Bash, MountableFs, InMemoryFs } from "ag-bash";
-import { OverlayFs } from "ag-bash/fs/overlay-fs";
-import { ReadWriteFs } from "ag-bash/fs/read-write-fs";
+import { Bash, MountableFs, InMemoryFs } from "@ag/bash";
+import { OverlayFs } from "@ag/bash/fs/overlay-fs";
+import { ReadWriteFs } from "@ag/bash/fs/read-write-fs";
 
 const fs = new MountableFs({ base: new InMemoryFs() });
 
@@ -207,9 +207,9 @@ await bash.exec('echo "notes" > notes.txt'); // writes to workspace
 You can also configure mounts in the constructor:
 
 \`\`\`typescript
-import { MountableFs, InMemoryFs } from "ag-bash";
-import { OverlayFs } from "ag-bash/fs/overlay-fs";
-import { ReadWriteFs } from "ag-bash/fs/read-write-fs";
+import { MountableFs, InMemoryFs } from "@ag/bash";
+import { OverlayFs } from "@ag/bash/fs/overlay-fs";
+import { ReadWriteFs } from "@ag/bash/fs/read-write-fs";
 
 const fs = new MountableFs({
   base: new InMemoryFs(),
@@ -250,7 +250,7 @@ See the [bash-tool documentation](https://github.com/ag-ai/bash-tool) for more d
 Bash provides a \`Sandbox\` class that's API-compatible with [Secure Sandbox](https://ag-bash.ag-ai.org), making it easy to swap implementations. You can start with Bash and switch to a real sandbox when you need the power of a full VM (e.g. to run node, python, or custom binaries).
 
 \`\`\`typescript
-import { Sandbox } from "ag-bash";
+import { Sandbox } from "@ag/bash";
 
 // Create a sandbox instance
 const sandbox = await Sandbox.create({ cwd: "/app" });
@@ -489,7 +489,7 @@ All limits have sensible defaults. Error messages include hints on which limit t
 Parse bash scripts into an AST, run transform plugins, and serialize back to executable bash. Useful for instrumenting scripts (e.g., capturing per-command stdout/stderr) or analyzing them (e.g., extracting command names) before execution.
 
 \`\`\`typescript
-import { Bash, BashTransformPipeline, TeePlugin, CommandCollectorPlugin } from "ag-bash";
+import { Bash, BashTransformPipeline, TeePlugin, CommandCollectorPlugin } from "@ag/bash";
 
 // Standalone pipeline — output can be run by any shell
 const pipeline = new BashTransformPipeline()
@@ -740,9 +740,9 @@ export const FILE_PACKAGE_JSON = `{
   "description": "A simulated bash environment with virtual filesystem",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ag-ai/ag-bash-cli.git"
+    "url": "git+https://github.com/sairam0424/ag-bash.git"
   },
-  "homepage": "https://github.com/ag-ai/ag-bash-cli#readme",
+  "homepage": "https://github.com/sairam0424/ag-bash#readme",
   "type": "module",
   "main": "dist/bundle/index.js",
   "types": "dist/index.d.ts",
@@ -797,7 +797,7 @@ See the [bash-tool documentation](https://github.com/ag-ai/bash-tool) for more d
 ## Quick Reference
 
 \`\`\`typescript
-import { Bash } from "ag-bash";
+import { Bash } from "@ag/bash";
 
 const bash = new Bash({
   files: { "/data/input.txt": "content" }, // Initial files
@@ -998,7 +998,7 @@ cat data.csv | awk -F',' '{sum += $3} END {print sum}'
 Always check \`exitCode\`:
 
 \`\`\`typescript
-import { Bash } from "ag-bash";
+import { Bash } from "@ag/bash";
 
 const bash = new Bash({ files: { "/file.txt": "some content" } });
 const result = await bash.exec("grep pattern file.txt");
@@ -1175,7 +1175,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the terminal.
 
 ## Links
 
-- **ag-bash**: https://github.com/ag-ai/ag-bash-cli
+- **ag-bash**: https://github.com/sairam0424/ag-bash
 - **bash-tool**: https://github.com/ag-ai/bash-tool
 - **AI SDK**: https://ai-sdk.dev
 - **xterm.js**: https://xtermjs.org

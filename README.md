@@ -9,7 +9,7 @@ Broad support for standard unix commands and bash syntax with optional curl, Pyt
 ## Quick Start
 
 ```bash
-npm install ag-bash
+npm install @ag/bash
 ```
 
 ```typescript

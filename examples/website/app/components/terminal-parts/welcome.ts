@@ -22,9 +22,9 @@ export function showWelcome(term: Terminal) {
 
   term.writeln("\x1b[2mA sandboxed bash interpreter for AI agents. Pure TypeScript with in-memory filesystem.\x1b[0m");
   term.writeln("");
-  term.writeln("  \x1b[1m\x1b[36mnpm install ag-bash\x1b[0m");
+  term.writeln("  \x1b[1m\x1b[36mnpm install @ag/bash\x1b[0m");
   term.writeln("");
-  term.writeln("\x1b[2m  import { Bash } from 'ag-bash';\x1b[0m");
+  term.writeln("\x1b[2m  import { Bash } from '@ag/bash';\x1b[0m");
   term.writeln("\x1b[2m  const bash = new Bash();\x1b[0m");
   term.writeln("\x1b[2m  const { stdout } = await bash.exec(\n    'echo hello');\x1b[0m");
   term.writeln("");

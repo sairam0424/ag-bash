@@ -92,7 +92,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the terminal.
 
 ## Links
 
-- **ag-bash**: https://github.com/ag-ai/ag-bash-cli
+- **ag-bash**: https://github.com/sairam0424/ag-bash
 - **bash-tool**: https://github.com/ag-ai/bash-tool
 - **AI SDK**: https://ai-sdk.dev
 - **xterm.js**: https://xtermjs.org

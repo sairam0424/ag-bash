@@ -69,15 +69,15 @@ Or try any bash command: ls, cat, echo, grep, awk, jq, sed, etc.
 Type 'help' for a list of all built-in commands.
 \`;
 
-export const CMD_INSTALL = \`npm install ag-bash
+export const CMD_INSTALL = \`npm install @ag/bash
 
 Usage:
-  import { Bash } from "ag-bash";
+  import { Bash } from "@ag/bash";
   const bash = new Bash();
   const result = await bash.exec("echo hello");
 \`;
 
-export const CMD_GITHUB = "https://github.com/ag-ai/ag-bash-cli\\n";
+export const CMD_GITHUB = "https://github.com/sairam0424/ag-bash\\n";
 
 // File contents (generated from repo)
 export const FILE_README = \`${escapeTemplate(readme)}\`;

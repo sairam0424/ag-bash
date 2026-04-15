@@ -1,6 +1,6 @@
 import { ToolLoopAgent, createAgentUIStreamResponse, stepCountIs } from "ai";
 import { createBashTool } from "bash-tool";
-import { Bash, OverlayFs } from "ag-bash";
+import { Bash, OverlayFs } from "@ag/bash";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 

@@ -13,7 +13,7 @@ import {
   buildLinkSummaryPrompt,
   pickSummaryLengthForCharacters,
 } from "@steipete/summarize-core/prompts";
-import { defineCommand } from "ag-bash";
+import { defineCommand } from "@ag/bash";
 
 /**
  * Generate a random UUID

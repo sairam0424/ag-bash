@@ -8,7 +8,7 @@ const AGENT_DATA_DIR = "app/api/agent/_agent-data";
 
 const repos = [
   {
-    url: "https://github.com/ag-ai/ag-bash-cli.git",
+    url: "https://github.com/sairam0424/ag-bash.git",
     dir: "ag-bash",
   },
   {
@@ -124,7 +124,7 @@ This is an interactive demo of **ag-bash** running entirely in your browser, wit
 
 ## Links
 
-- **ag-bash**: https://github.com/ag-ai/ag-bash-cli
+- **ag-bash**: https://github.com/sairam0424/ag-bash
 - **bash-tool**: https://github.com/ag-ai/bash-tool
 - **AI SDK**: https://ai-sdk.dev
 - **xterm.js**: https://xtermjs.org

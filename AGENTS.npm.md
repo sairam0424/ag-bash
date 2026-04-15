@@ -45,7 +45,7 @@ See the [bash-tool documentation](https://github.com/ag-ai/bash-tool) for more d
 ## Quick Reference
 
 ```typescript
-import { Bash } from "ag-bash";
+import { Bash } from "@ag/bash";
 
 const bash = new Bash({
   files: { "/data/input.txt": "content" }, // Initial files
