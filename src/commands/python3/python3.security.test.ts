@@ -304,17 +304,15 @@ EOF`);
       expect(result.stderr).toContain("No module named");
     });
 
-    it(
-      "should allow valid dotted module names",
-      { timeout: 60000 },
-      async () => {
-        const env = new Bash({ python: true });
-        // platform is a stdlib module that prints platform info
-        const result = await env.exec("python3 -m platform");
-        expect(result.stdout).toContain("Emscripten");
-        expect(result.exitCode).toBe(0);
-      },
-    );
+    it("should allow valid dotted module names", {
+      timeout: 60000,
+    }, async () => {
+      const env = new Bash({ python: true });
+      // platform is a stdlib module that prints platform info
+      const result = await env.exec("python3 -m platform");
+      expect(result.stdout).toContain("Emscripten");
+      expect(result.exitCode).toBe(0);
+    });
   });
 
   describe("timeout worker termination (Fix 2)", () => {

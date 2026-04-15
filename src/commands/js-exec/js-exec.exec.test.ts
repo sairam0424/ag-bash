@@ -2,18 +2,16 @@ import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
 
 describe("js-exec child_process sub-shell", () => {
-  it(
-    "should execute a shell command and return result",
-    { timeout: 30000 },
-    async () => {
-      const env = new Bash({ javascript: true });
-      const result = await env.exec(
-        `js-exec -c "const cp = require('child_process'); console.log(cp.execSync('echo hello').trim())"`,
-      );
-      expect(result.stdout).toBe("hello\n");
-      expect(result.exitCode).toBe(0);
-    },
-  );
+  it("should execute a shell command and return result", {
+    timeout: 30000,
+  }, async () => {
+    const env = new Bash({ javascript: true });
+    const result = await env.exec(
+      `js-exec -c "const cp = require('child_process'); console.log(cp.execSync('echo hello').trim())"`,
+    );
+    expect(result.stdout).toBe("hello\n");
+    expect(result.exitCode).toBe(0);
+  });
 
   it("should return exit code from sub-shell via spawnSync", async () => {
     const env = new Bash({ javascript: true });
@@ -51,22 +49,20 @@ describe("js-exec child_process sub-shell", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it(
-    "should block recursive js-exec invocation",
-    { timeout: 30000 },
-    async () => {
-      const env = new Bash({
-        javascript: true,
-        files: {
-          "/home/user/reentrant.js": `const cp = require('child_process');
+  it("should block recursive js-exec invocation", {
+    timeout: 30000,
+  }, async () => {
+    const env = new Bash({
+      javascript: true,
+      files: {
+        "/home/user/reentrant.js": `const cp = require('child_process');
 const r = cp.spawnSync('js-exec', ['-c', '1+1']);
 console.log(r.stderr.trim());
 `,
-        },
-      });
-      const result = await env.exec("js-exec /home/user/reentrant.js");
-      expect(result.stdout).toContain("recursive invocation is not supported");
-      expect(result.exitCode).toBe(0);
-    },
-  );
+      },
+    });
+    const result = await env.exec("js-exec /home/user/reentrant.js");
+    expect(result.stdout).toContain("recursive invocation is not supported");
+    expect(result.exitCode).toBe(0);
+  });
 });

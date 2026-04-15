@@ -248,6 +248,6 @@ export class Sandbox {
   }
 }
 
-export { Command };
-export type { CommandFinished };
 export type { OutputMessage } from "./Command.js";
+export type { CommandFinished };
+export { Command };

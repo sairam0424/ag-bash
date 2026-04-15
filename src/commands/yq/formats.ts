@@ -187,6 +187,21 @@ export function parseInput(input: string, options: FormatOptions): QueryValue {
         // SECURITY: Disable DOCTYPE entity processing to prevent entity expansion
         // attacks. External entities already throw, but disabling entirely is safer.
         processEntities: false,
+        // SECURITY: fast-xml-parser v5 throws Error on critical reserved keywords
+        // like __proto__, constructor, and prototype in tag names.
+        // We transform these names BEFORE they reach the security check.
+        transformTagName: (name) => {
+          const critical = ["__proto__", "constructor", "prototype"];
+          if (critical.includes(name)) {
+            return `____${name}`;
+          }
+          return name;
+        },
+        // SECURITY: For other dangerous but non-critical properties, we rename
+        // them using the standard callback.
+        onDangerousProperty: (name) => {
+          return `____${name}`;
+        },
         // Transform empty tags to null to match real yq
         tagValueProcessor: (_name, val) => (val === "" ? null : val),
       });

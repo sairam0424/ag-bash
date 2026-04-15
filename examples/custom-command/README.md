@@ -1,6 +1,6 @@
 # Custom Commands Example
 
-This example demonstrates how to extend ag-bash with custom TypeScript commands.
+This example demonstrates how to extend @ag/bash with custom TypeScript commands.
 
 ## Commands Included
 
@@ -43,10 +43,10 @@ This demonstrates how custom commands can:
 
 ## Creating Your Own Commands
 
-Use `defineCommand` from ag-bash:
+Use `defineCommand` from @ag/bash:
 
 ```typescript
-import { defineCommand } from "ag-bash";
+import { defineCommand } from "@ag/bash";
 
 const myCommand = defineCommand("mycommand", async (args, ctx) => {
   // args: command arguments (string[])

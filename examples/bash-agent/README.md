@@ -35,7 +35,7 @@ Uses [bash-tool](https://github.com/ag-ai/bash-tool) for the AI SDK integration.
 # Explore a specific directory
 npx tsx main.ts /path/to/directory
 
-# Explore the ag-bash project (default)
+# Explore the @ag/bash project (default)
 npx tsx main.ts
 ```
 

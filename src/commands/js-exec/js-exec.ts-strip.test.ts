@@ -2,15 +2,14 @@ import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
 
 describe("js-exec TypeScript type stripping", () => {
-  it(
-    "should strip types from .ts files with various type constructs",
-    { timeout: 30000 },
-    async () => {
-      const env = new Bash({
-        javascript: true,
-        files: {
-          // Interface + type annotation
-          "/home/user/iface.ts": `
+  it("should strip types from .ts files with various type constructs", {
+    timeout: 30000,
+  }, async () => {
+    const env = new Bash({
+      javascript: true,
+      files: {
+        // Interface + type annotation
+        "/home/user/iface.ts": `
 interface User {
   name: string;
   age: number;
@@ -18,46 +17,45 @@ interface User {
 const user: User = { name: "Alice", age: 30 };
 console.log(user.name);
 `,
-          // Type alias
-          "/home/user/alias.ts": `
+        // Type alias
+        "/home/user/alias.ts": `
 type ID = string | number;
 const id: ID = 42;
 console.log(id);
 `,
-          // Generic function
-          "/home/user/generic.ts": `
+        // Generic function
+        "/home/user/generic.ts": `
 function identity<T>(x: T): T { return x; }
 console.log(identity("hello"));
 `,
-          // As-expression
-          "/home/user/as-expr.ts": `
+        // As-expression
+        "/home/user/as-expr.ts": `
 const x = "hello" as string;
 console.log(x);
 `,
-        },
-      });
+      },
+    });
 
-      // Interface + type annotation
-      const r1 = await env.exec("js-exec /home/user/iface.ts");
-      expect(r1.stdout).toBe("Alice\n");
-      expect(r1.exitCode).toBe(0);
+    // Interface + type annotation
+    const r1 = await env.exec("js-exec /home/user/iface.ts");
+    expect(r1.stdout).toBe("Alice\n");
+    expect(r1.exitCode).toBe(0);
 
-      // Type alias
-      const r2 = await env.exec("js-exec /home/user/alias.ts");
-      expect(r2.stdout).toBe("42\n");
-      expect(r2.exitCode).toBe(0);
+    // Type alias
+    const r2 = await env.exec("js-exec /home/user/alias.ts");
+    expect(r2.stdout).toBe("42\n");
+    expect(r2.exitCode).toBe(0);
 
-      // Generic function
-      const r3 = await env.exec("js-exec /home/user/generic.ts");
-      expect(r3.stdout).toBe("hello\n");
-      expect(r3.exitCode).toBe(0);
+    // Generic function
+    const r3 = await env.exec("js-exec /home/user/generic.ts");
+    expect(r3.stdout).toBe("hello\n");
+    expect(r3.exitCode).toBe(0);
 
-      // As-expression
-      const r4 = await env.exec("js-exec /home/user/as-expr.ts");
-      expect(r4.stdout).toBe("hello\n");
-      expect(r4.exitCode).toBe(0);
-    },
-  );
+    // As-expression
+    const r4 = await env.exec("js-exec /home/user/as-expr.ts");
+    expect(r4.stdout).toBe("hello\n");
+    expect(r4.exitCode).toBe(0);
+  });
 
   it("should auto-detect module + strip for .mts files", async () => {
     const env = new Bash({

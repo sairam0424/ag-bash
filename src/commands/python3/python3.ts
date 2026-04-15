@@ -11,6 +11,7 @@
  */
 
 import { randomBytes } from "node:crypto";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import type { IFileSystem } from "../../fs/interface.js";
@@ -185,7 +186,7 @@ export function _resetExecutionQueue(): void {
   executionQueues = new WeakMap();
 }
 
-const workerPath = fileURLToPath(new URL("./worker.js", import.meta.url));
+const workerPath = join(dirname(fileURLToPath(import.meta.url)), "worker.js");
 
 function generateWorkerProtocolToken(): string {
   return randomBytes(16).toString("hex");

@@ -1,15 +1,15 @@
 <!--
 This file is distributed as dist/AGENTS.md in the npm package.
-It provides instructions for AI agents using ag-bash in their projects.
+It provides instructions for AI agents using @ag/bash in their projects.
 The build process copies this file to dist/AGENTS.md (removing this comment).
 TypeScript and bash examples are validated by src/readme.test.ts.
 -->
 
-# AGENTS.md - ag-bash
+# AGENTS.md - @ag/bash
 
-Instructions for AI agents using ag-bash in projects.
+Instructions for AI agents using @ag/bash in projects.
 
-## What is ag-bash?
+## What is @ag/bash?
 
 A sandboxed bash interpreter with an in-memory virtual filesystem. Use it when you need to:
 
@@ -19,7 +19,7 @@ A sandboxed bash interpreter with an in-memory virtual filesystem. Use it when y
 
 ## For AI Agents
 
-If you're building an AI agent that needs a bash tool, use [`bash-tool`](https://github.com/ag-ai/bash-tool) which is optimized for ag-bash:
+If you're building an AI agent that needs a bash tool, use [`bash-tool`](https://github.com/ag-ai/bash-tool) which is optimized for @ag/bash:
 
 ```sh
 npm install bash-tool
@@ -68,7 +68,7 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 4. **No binaries/WASM**: Only built-in commands work. You cannot run node, python, or other binaries.
 
-5. **ReadWriteFs root separation**: If you use `ReadWriteFs`, point it at a workspace directory, not at the installed `ag-bash` package or other trusted runtime code.
+5. **ReadWriteFs root separation**: If you use `ReadWriteFs`, point it at a workspace directory, not at the installed `@ag/bash` package or other trusted runtime code.
 
 ## Available Commands
 
@@ -78,7 +78,7 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 **File operations**: `basename`, `chmod`, `cp`, `dirname`, `du`, `file`, `find`, `ln`, `ls`, `mkdir`, `mv`, `od`, `pwd`, `readlink`, `rm`, `rmdir`, `split`, `stat`, `touch`, `tree`
 
-**Utilities**: `alias`, `base64`, `bash`, `clear`, `curl`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `zcat`
+**Utilities**: `alias`, `base64`, `bash`, `clear`, `curl`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `hello`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `zcat`
 
 All commands support `--help` for usage details.
 
@@ -248,7 +248,7 @@ cat data.csv | awk -F',' '{sum += $3} END {print sum}'
 Always check `exitCode`:
 
 ```typescript
-import { Bash } from "ag-bash";
+import { Bash } from "@ag/bash";
 
 const bash = new Bash({ files: { "/file.txt": "some content" } });
 const result = await bash.exec("grep pattern file.txt");
@@ -313,16 +313,16 @@ TypeScript types are available in the `.d.ts` files. Use JSDoc-style exploration
 
 ```bash
 # Find all type definition files
-find node_modules/ag-bash/dist -name "*.d.ts" | head -20
+find node_modules/@ag/bash/dist -name "*.d.ts" | head -20
 
 # View main exports and their types
-cat node_modules/ag-bash/dist/index.d.ts
+cat node_modules/@ag/bash/dist/index.d.ts
 
 # View Bash class options
-grep -A 30 "interface BashOptions" node_modules/ag-bash/dist/Bash.d.ts
+grep -A 30 "interface BashOptions" node_modules/@ag/bash/dist/Bash.d.ts
 
 # Search for specific types
-grep -r "interface.*Options" node_modules/ag-bash/dist/*.d.ts
+grep -r "interface.*Options" node_modules/@ag/bash/dist/*.d.ts
 ```
 
 Key types to explore:
