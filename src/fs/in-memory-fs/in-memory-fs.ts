@@ -35,14 +35,14 @@ import {
 // Re-export for backwards compatibility
 export type {
   BufferEncoding,
+  DirectoryEntry,
   FileContent,
   FileEntry,
-  LazyFileEntry,
-  DirectoryEntry,
-  SymlinkEntry,
   FsEntry,
   FsStat,
   IFileSystem,
+  LazyFileEntry,
+  SymlinkEntry,
 };
 
 export interface FsData {

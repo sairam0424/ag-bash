@@ -12,8 +12,10 @@ import * as readline from "node:readline";
 import { Bash } from "../Bash.js";
 import { OverlayFs } from "../fs/overlay-fs/overlay-fs.js";
 import { getErrorMessage } from "../interpreter/helpers/errors.js";
-import { DiscoveryService, type ProjectBrief } from "../services/DiscoveryService.js";
-import { BashExecResult } from "../types.js";
+import {
+  DiscoveryService,
+  type ProjectBrief,
+} from "../services/DiscoveryService.js";
 
 // ANSI colors
 const colors = {
@@ -194,7 +196,11 @@ System detects: ${colors.yellow}Project Knowledge Layer Active${colors.reset}
     if (this.isInteractive) {
       this.printWelcome();
       if (this.projectBrief) {
-        console.log(colors.dim + this.discovery.getSummary(this.projectBrief) + colors.reset);
+        console.log(
+          colors.dim +
+            this.discovery.getSummary(this.projectBrief) +
+            colors.reset,
+        );
       }
       this.prompt();
     } else {

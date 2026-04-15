@@ -55,7 +55,7 @@ import type {
  */
 const DEFENSE_IN_DEPTH_NOTICE =
   "\n\nThis is a defense-in-depth measure and indicates a bug in ag-bash. " +
-  "Please report this to the project maintainers(sairam0000).";
+  "Please report this to the project maintainers.";
 
 /**
  * Error thrown when a security violation is detected.

@@ -64,7 +64,7 @@ async function getZstd(): Promise<typeof import("@mongodb-js/zstd")> {
 }
 
 // Re-export types from modern-tar
-export type { TarEntry, TarHeader, ParsedTarEntryWithData };
+export type { ParsedTarEntryWithData, TarEntry, TarHeader };
 
 // Maximum archive size to prevent runaway compute (100MB)
 const MAX_ARCHIVE_SIZE: number = 100 * 1024 * 1024;
