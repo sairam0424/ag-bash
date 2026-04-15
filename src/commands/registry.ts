@@ -11,13 +11,11 @@ interface LazyCommandDef<T extends string = string> {
   load: CommandLoader;
 }
 
-/** All available built-in command names */
+/** All available built-in command names (excludes network commands) */
 export type CommandName =
-  // Basic I/O
   | "echo"
   | "cat"
   | "printf"
-  // File operations
   | "ls"
   | "mkdir"
   | "rmdir"
@@ -27,68 +25,86 @@ export type CommandName =
   | "mv"
   | "ln"
   | "chmod"
-  // Navigation/Path
   | "pwd"
   | "readlink"
-  | "dirname"
-  | "basename"
-  // Text Processing
+  | "head"
+  | "tail"
+  | "wc"
+  | "stat"
   | "grep"
   | "fgrep"
   | "egrep"
+  | "rg"
   | "sed"
   | "awk"
   | "sort"
   | "uniq"
-  | "cut"
-  | "tr"
-  | "head"
-  | "tail"
-  | "wc"
-  // System Info
-  | "whoami"
-  | "hostname"
-  | "env"
-  | "which"
-  | "date"
-  | "stat"
-  | "du"
-  // Archiving
-  | "tar"
-  | "gzip"
-  // Logic/Search
-  | "expr"
-  | "seq"
-  | "find"
-  | "rg"
-  // Shell State
-  | "alias"
-  | "history"
-  // Structured Data
-  | "jq"
-  | "yq"
-  // Comparison
-  | "diff"
   | "comm"
-  // Security/Encoding
-  | "base64"
-  | "md5sum"
-  // Time/Execution
-  | "sleep"
-  | "time"
-  | "timeout"
-  // Utilities
-  | "echo"
+  | "cut"
+  | "paste"
+  | "tr"
+  | "rev"
+  | "nl"
+  | "fold"
+  | "expand"
+  | "unexpand"
+  | "strings"
+  | "split"
+  | "column"
+  | "join"
+  | "tee"
+  | "find"
+  | "basename"
+  | "dirname"
+  | "tree"
+  | "du"
+  | "env"
+  | "printenv"
+  | "alias"
+  | "unalias"
+  | "history"
+  | "xargs"
   | "true"
-  | "false";
+  | "false"
+  | "clear"
+  | "bash"
+  | "sh"
+  | "jq"
+  | "base64"
+  | "diff"
+  | "date"
+  | "sleep"
+  | "timeout"
+  | "seq"
+  | "expr"
+  | "md5sum"
+  | "sha1sum"
+  | "sha256sum"
+  | "file"
+  | "html-to-markdown"
+  | "help"
+  | "which"
+  | "tac"
+  | "hostname"
+  | "od"
+  | "gzip"
+  | "gunzip"
+  | "zcat"
+  | "tar"
+  | "yq"
+  | "xan"
+  | "sqlite3"
+  | "time"
+  | "hello"
+  | "whoami";
 
-/** Network command names */
+/** Network command names (only available when network is configured) */
 export type NetworkCommandName = "curl";
 
-/** Python command names */
+/** Python command names (only available when python is explicitly enabled) */
 export type PythonCommandName = "python3" | "python";
 
-/** JavaScript command names */
+/** JavaScript command names (only available when javascript is explicitly enabled) */
 export type JavaScriptCommandName = "js-exec" | "node";
 
 /** All command names including network, python, and javascript commands */
@@ -99,7 +115,6 @@ export type AllCommandName =
   | JavaScriptCommandName;
 
 // Statically analyzable loaders - each import() call is a literal string
-const commandLoaders: LazyCommandDef<string>[] = [
 const commandLoaders: LazyCommandDef<CommandName>[] = [
   // Basic I/O
   {
@@ -153,7 +168,7 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     load: async () => (await import("./chmod/chmod.js")).chmodCommand,
   },
 
-  // Navigation/Path
+  // Navigation
   {
     name: "pwd",
     load: async () => (await import("./pwd/pwd.js")).pwdCommand,
@@ -162,16 +177,26 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     name: "readlink",
     load: async () => (await import("./readlink/readlink.js")).readlinkCommand,
   },
+
+  // File viewing
   {
-    name: "dirname",
-    load: async () => (await import("./dirname/dirname.js")).dirnameCommand,
+    name: "head",
+    load: async () => (await import("./head/head.js")).headCommand,
   },
   {
-    name: "basename",
-    load: async () => (await import("./basename/basename.js")).basenameCommand,
+    name: "tail",
+    load: async () => (await import("./tail/tail.js")).tailCommand,
+  },
+  {
+    name: "wc",
+    load: async () => (await import("./wc/wc.js")).wcCommand,
+  },
+  {
+    name: "stat",
+    load: async () => (await import("./stat/stat.js")).statCommand,
   },
 
-  // Text Processing
+  // Text processing
   {
     name: "grep",
     load: async () => (await import("./grep/grep.js")).grepCommand,
@@ -183,6 +208,10 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   {
     name: "egrep",
     load: async () => (await import("./grep/grep.js")).egrepCommand,
+  },
+  {
+    name: "rg",
+    load: async () => (await import("./rg/rg.js")).rgCommand,
   },
   {
     name: "sed",
@@ -201,145 +230,115 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     load: async () => (await import("./uniq/uniq.js")).uniqCommand,
   },
   {
+    name: "comm",
+    load: async () => (await import("./comm/comm.js")).commCommand,
+  },
+  {
     name: "cut",
     load: async () => (await import("./cut/cut.js")).cutCommand,
+  },
+  {
+    name: "paste",
+    load: async () => (await import("./paste/paste.js")).pasteCommand,
   },
   {
     name: "tr",
     load: async () => (await import("./tr/tr.js")).trCommand,
   },
   {
-    name: "head",
-    load: async () => (await import("./head/head.js")).headCommand,
+    name: "rev",
+    load: async () => (await import("./rev/rev.js")).rev,
   },
   {
-    name: "tail",
-    load: async () => (await import("./tail/tail.js")).tailCommand,
+    name: "nl",
+    load: async () => (await import("./nl/nl.js")).nl,
   },
   {
-    name: "wc",
-    load: async () => (await import("./wc/wc.js")).wcCommand,
+    name: "fold",
+    load: async () => (await import("./fold/fold.js")).fold,
+  },
+  {
+    name: "expand",
+    load: async () => (await import("./expand/expand.js")).expand,
+  },
+  {
+    name: "unexpand",
+    load: async () => (await import("./expand/unexpand.js")).unexpand,
+  },
+  {
+    name: "strings",
+    load: async () => (await import("./strings/strings.js")).strings,
+  },
+  {
+    name: "split",
+    load: async () => (await import("./split/split.js")).split,
+  },
+  {
+    name: "column",
+    load: async () => (await import("./column/column.js")).column,
+  },
+  {
+    name: "join",
+    load: async () => (await import("./join/join.js")).join,
+  },
+  {
+    name: "tee",
+    load: async () => (await import("./tee/tee.js")).teeCommand,
   },
 
-  // System Info
+  // Search
   {
-    name: "whoami",
-    load: async () => (await import("./whoami/whoami.js")).whoami,
+    name: "find",
+    load: async () => (await import("./find/find.js")).findCommand,
+  },
+
+  // Path utilities
+  {
+    name: "basename",
+    load: async () => (await import("./basename/basename.js")).basenameCommand,
   },
   {
-    name: "hostname",
-    load: async () => (await import("./hostname/hostname.js")).hostname,
+    name: "dirname",
+    load: async () => (await import("./dirname/dirname.js")).dirnameCommand,
   },
+
+  // Directory utilities
   {
-    name: "env",
-    load: async () => (await import("./env/env.js")).envCommand,
-  },
-  {
-    name: "which",
-    load: async () => (await import("./which/which.js")).whichCommand,
-  },
-  {
-    name: "date",
-    load: async () => (await import("./date/date.js")).dateCommand,
-  },
-  {
-    name: "stat",
-    load: async () => (await import("./stat/stat.js")).statCommand,
+    name: "tree",
+    load: async () => (await import("./tree/tree.js")).treeCommand,
   },
   {
     name: "du",
     load: async () => (await import("./du/du.js")).duCommand,
   },
 
-  // Archiving
+  // Environment
   {
-    name: "tar",
-    load: async () => (await import("./tar/tar.js")).tarCommand,
+    name: "env",
+    load: async () => (await import("./env/env.js")).envCommand,
   },
   {
-    name: "gzip",
-    load: async () => (await import("./gzip/gzip.js")).gzipCommand,
+    name: "printenv",
+    load: async () => (await import("./env/env.js")).printenvCommand,
   },
-
-  // Logic/Search
-  {
-    name: "expr",
-    load: async () => (await import("./expr/expr.js")).exprCommand,
-  },
-  {
-    name: "seq",
-    load: async () => (await import("./seq/seq.js")).seqCommand,
-  },
-  {
-    name: "find",
-    load: async () => (await import("./find/find.js")).findCommand,
-  },
-  {
-    name: "rg",
-    load: async () => (await import("./rg/rg.js")).rgCommand,
-  },
-
-  // Network
-  {
-    name: "curl",
-    load: async () => (await import("./curl/curl.js")).curlCommand,
-  },
-
-  // Shell State
   {
     name: "alias",
     load: async () => (await import("./alias/alias.js")).aliasCommand,
+  },
+  {
+    name: "unalias",
+    load: async () => (await import("./alias/alias.js")).unaliasCommand,
   },
   {
     name: "history",
     load: async () => (await import("./history/history.js")).historyCommand,
   },
 
-  // Structured Data
-  {
-    name: "jq",
-    load: async () => (await import("./jq/jq.js")).jqCommand,
-  },
-  {
-    name: "yq",
-    load: async () => (await import("./yq/yq.js")).yqCommand,
-  },
-
-  // Comparison
-  {
-    name: "diff",
-    load: async () => (await import("./diff/diff.js")).diffCommand,
-  },
-  {
-    name: "comm",
-    load: async () => (await import("./comm/comm.js")).commCommand,
-  },
-
-  // Security/Encoding
-  {
-    name: "base64",
-    load: async () => (await import("./base64/base64.js")).base64Command,
-  },
-  {
-    name: "md5sum",
-    load: async () => (await import("./md5sum/md5sum.js")).md5sumCommand,
-  },
-
-  // Time/Execution
-  {
-    name: "sleep",
-    load: async () => (await import("./sleep/sleep.js")).sleepCommand,
-  },
-  {
-    name: "time",
-    load: async () => (await import("./time/time.js")).timeCommand,
-  },
-  {
-    name: "timeout",
-    load: async () => (await import("./timeout/timeout.js")).timeoutCommand,
-  },
-
   // Utilities
+  {
+    name: "xargs",
+    load: async () => (await import("./xargs/xargs.js")).xargsCommand,
+  },
   {
     name: "true",
     load: async () => (await import("./true/true.js")).trueCommand,
@@ -348,23 +347,191 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     name: "false",
     load: async () => (await import("./true/true.js")).falseCommand,
   },
+  {
+    name: "clear",
+    load: async () => (await import("./clear/clear.js")).clearCommand,
+  },
 
-  // Language Runtimes
+  // Shell
   {
+    name: "bash",
+    load: async () => (await import("./bash/bash.js")).bashCommand,
+  },
+  {
+    name: "sh",
+    load: async () => (await import("./bash/bash.js")).shCommand,
+  },
+
+  // Data processing
+  {
+    name: "jq",
+    load: async () => (await import("./jq/jq.js")).jqCommand,
+  },
+  {
+    name: "base64",
+    load: async () => (await import("./base64/base64.js")).base64Command,
+  },
+  {
+    name: "diff",
+    load: async () => (await import("./diff/diff.js")).diffCommand,
+  },
+  {
+    name: "date",
+    load: async () => (await import("./date/date.js")).dateCommand,
+  },
+  {
+    name: "sleep",
+    load: async () => (await import("./sleep/sleep.js")).sleepCommand,
+  },
+  {
+    name: "timeout",
+    load: async () => (await import("./timeout/timeout.js")).timeoutCommand,
+  },
+  {
+    name: "time",
+    load: async () => (await import("./time/time.js")).timeCommand,
+  },
+  {
+    name: "seq",
+    load: async () => (await import("./seq/seq.js")).seqCommand,
+  },
+  {
+    name: "expr",
+    load: async () => (await import("./expr/expr.js")).exprCommand,
+  },
+
+  // Checksums
+  {
+    name: "md5sum",
+    load: async () => (await import("./md5sum/md5sum.js")).md5sumCommand,
+  },
+  {
+    name: "sha1sum",
+    load: async () => (await import("./md5sum/sha1sum.js")).sha1sumCommand,
+  },
+  {
+    name: "sha256sum",
+    load: async () => (await import("./md5sum/sha256sum.js")).sha256sumCommand,
+  },
+
+  // File type detection
+  {
+    name: "file",
+    load: async () => (await import("./file/file.js")).fileCommand,
+  },
+
+  // HTML processing
+  {
+    name: "html-to-markdown",
+    load: async () =>
+      (await import("./html-to-markdown/html-to-markdown.js"))
+        .htmlToMarkdownCommand,
+  },
+
+  // Help
+  {
+    name: "help",
+    load: async () => (await import("./help/help.js")).helpCommand,
+  },
+
+  // PATH utilities
+  {
+    name: "which",
+    load: async () => (await import("./which/which.js")).whichCommand,
+  },
+
+  // Misc utilities
+  {
+    name: "tac",
+    load: async () => (await import("./tac/tac.js")).tac,
+  },
+  {
+    name: "hostname",
+    load: async () => (await import("./hostname/hostname.js")).hostname,
+  },
+  {
+    name: "whoami",
+    load: async () => (await import("./whoami/whoami.js")).whoami,
+  },
+  {
+    name: "od",
+    load: async () => (await import("./od/od.js")).od,
+  },
+
+  // Compression
+  {
+    name: "gzip",
+    load: async () => (await import("./gzip/gzip.js")).gzipCommand,
+  },
+  {
+    name: "gunzip",
+    load: async () => (await import("./gzip/gzip.js")).gunzipCommand,
+  },
+  {
+    name: "zcat",
+    load: async () => (await import("./gzip/gzip.js")).zcatCommand,
+  },
+  {
+    name: "hello",
+    load: async () => (await import("./hello/hello.js")).helloCommand,
+  },
+];
+
+// tar, yq, xan, and sqlite3 don't work in browsers
+// __BROWSER__ is defined by esbuild at build time for browser bundles
+declare const __BROWSER__: boolean | undefined;
+if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
+  commandLoaders.push({
+    name: "tar" as CommandName,
+    load: async () => (await import("./tar/tar.js")).tarCommand,
+  });
+  commandLoaders.push({
+    name: "yq" as CommandName,
+    load: async () => (await import("./yq/yq.js")).yqCommand,
+  });
+  commandLoaders.push({
+    name: "xan" as CommandName,
+    load: async () => (await import("./xan/xan.js")).xanCommand,
+  });
+  commandLoaders.push({
+    name: "sqlite3" as CommandName,
+    load: async () => (await import("./sqlite3/sqlite3.js")).sqlite3Command,
+  });
+}
+
+// Python commands - only registered when python is explicitly enabled
+// These introduce additional security surface (arbitrary code execution)
+const pythonCommandLoaders: LazyCommandDef<PythonCommandName>[] = [];
+// __BROWSER__ is defined by esbuild at build time for browser bundles
+if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
+  pythonCommandLoaders.push({
     name: "python3",
-    load: async () => (await import("./python/python3.js")).python3Command,
-  },
-  {
+    load: async () => (await import("./python3/python3.js")).python3Command,
+  });
+  pythonCommandLoaders.push({
     name: "python",
-    load: async () => (await import("./python/python3.js")).pythonCommand,
-  },
-  {
+    load: async () => (await import("./python3/python3.js")).pythonCommand,
+  });
+}
+
+// JavaScript commands - only registered when javascript is explicitly enabled
+const jsCommandLoaders: LazyCommandDef<JavaScriptCommandName>[] = [];
+if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
+  jsCommandLoaders.push({
     name: "js-exec",
     load: async () => (await import("./js-exec/js-exec.js")).jsExecCommand,
-  },
-  {
+  });
+  jsCommandLoaders.push({
     name: "node",
     load: async () => (await import("./js-exec/js-exec.js")).nodeStubCommand,
+  });
+}
+
+// Network commands - only registered when network is configured
+const networkCommandLoaders: LazyCommandDef<NetworkCommandName>[] = [
+  {
+    name: "curl",
+    load: async () => (await import("./curl/curl.js")).curlCommand,
   },
 ];
 
@@ -381,8 +548,21 @@ function createLazyCommand(def: LazyCommandDef): Command {
       let cmd = cache.get(def.name);
 
       if (!cmd) {
+        // Lazy imports run inside the defense-in-depth context.
+        // Module loading may access blocked globals (e.g., worker_threads
+        // uses SharedArrayBuffer, sql.js uses WebAssembly), so we suspend
+        // blocking during the import.
         cmd = await DefenseInDepthBox.runTrustedAsync(() => def.load());
         cache.set(def.name, cmd);
+      }
+
+      // Emit flag coverage hits when fuzzing (not available in browser bundles)
+      if (
+        ctx.coverage &&
+        (typeof __BROWSER__ === "undefined" || !__BROWSER__)
+      ) {
+        const { emitFlagCoverage } = await import("./flag-coverage.js");
+        emitFlagCoverage(ctx.coverage, def.name, args);
       }
 
       return cmd.execute(args, ctx);
@@ -391,7 +571,7 @@ function createLazyCommand(def: LazyCommandDef): Command {
 }
 
 /**
- * Gets all available command names
+ * Gets all available command names (excludes network commands)
  */
 export function getCommandNames(): string[] {
   return commandLoaders.map((def) => def.name);
@@ -401,64 +581,57 @@ export function getCommandNames(): string[] {
  * Gets all network command names
  */
 export function getNetworkCommandNames(): string[] {
-  return ["curl"];
+  return networkCommandLoaders.map((def) => def.name);
 }
 
 /**
- * Creates all lazy commands for registration
+ * Creates all lazy commands for registration (excludes network commands)
+ * @param filter Optional array of command names to include. If not provided, all commands are created.
  */
-export function createLazyCommands(filter?: AllCommandName[]): Command[] {
+export function createLazyCommands(filter?: CommandName[]): Command[] {
   const loaders = filter
-    ? commandLoaders.filter((def) => filter.includes(def.name as CommandName))
     ? commandLoaders.filter((def) => filter.includes(def.name))
     : commandLoaders;
   return loaders.map(createLazyCommand);
 }
 
 /**
- * Creates network commands (curl, etc.)
+ * Creates network commands for registration (curl, etc.)
+ * These are only registered when network is explicitly configured.
  */
 export function createNetworkCommands(): Command[] {
-  return [
-    createLazyCommand({
-      name: "curl",
-      load: async () => (await import("./curl/curl.js")).curlCommand,
-    }),
-  ];
+  return networkCommandLoaders.map(createLazyCommand);
 }
 
 /**
  * Gets all python command names
  */
 export function getPythonCommandNames(): string[] {
-  return ["python3", "python"];
+  return pythonCommandLoaders.map((def) => def.name);
 }
 
 /**
- * Creates python commands
+ * Creates python commands for registration (python3, python).
+ * These are only registered when python is explicitly enabled.
+ * Note: Python introduces additional security surface (arbitrary code execution).
  */
 export function createPythonCommands(): Command[] {
-  const pythonDefs = commandLoaders.filter(
-    (def) => def.name === "python" || def.name === "python3",
-  );
-  return pythonDefs.map(createLazyCommand);
+  return pythonCommandLoaders.map(createLazyCommand);
 }
 
 /**
  * Gets all javascript command names
  */
 export function getJavaScriptCommandNames(): string[] {
-  return ["js-exec", "node"];
+  return jsCommandLoaders.map((def) => def.name);
 }
 
 /**
- * Creates javascript commands
+ * Creates javascript commands for registration (js-exec).
+ * These are only registered when javascript is explicitly enabled.
  */
 export function createJavaScriptCommands(): Command[] {
-  const jsDefs = commandLoaders.filter(
-    (def) => def.name === "js-exec" || def.name === "node",
-  );
-  return jsDefs.map(createLazyCommand);
+  return jsCommandLoaders.map(createLazyCommand);
 }
 
 /**
@@ -466,4 +639,11 @@ export function createJavaScriptCommands(): Command[] {
  */
 export function clearCommandCache(): void {
   cache.clear();
+}
+
+/**
+ * Gets the number of loaded commands (for testing)
+ */
+export function getLoadedCommandCount(): number {
+  return cache.size;
 }
