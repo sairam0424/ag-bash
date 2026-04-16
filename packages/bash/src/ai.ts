@@ -13,6 +13,21 @@ export interface CreateBashToolOptions {
    * The destination path for the sandbox (currently used for metadata context).
    */
   destination?: string;
+
+  /**
+   * Extra instructions to append to the tool description.
+   */
+  extraInstructions?: string;
+
+  /**
+   * Optional callback called before a bash command is executed.
+   */
+  onBeforeBashCall?: (input: { command: string }) => void | Promise<void>;
+
+  /**
+   * Optional callback called after a bash command is executed.
+   */
+  onAfterBashCall?: (input: { command: string; result: any }) => void | Promise<void>;
 }
 
 /**
@@ -26,38 +41,10 @@ export function createBashTool(options: CreateBashToolOptions): {
   tools: {
     bash: {
       description: string;
-      inputSchema: {
-        type: string;
-        properties: {
-          command: {
-            type: string;
-            description: string;
-          };
-        };
-        required: string[];
-      };
+      inputSchema: any;
       /** @deprecated Use inputSchema */
-      parameters: {
-        type: string;
-        properties: {
-          command: {
-            type: string;
-            description: string;
-          };
-        };
-        required: string[];
-      };
-      execute: ({ command }: { command: string; }) => Promise<{
-        stdout: string;
-        stderr: string;
-        exitCode: number;
-        error?: undefined;
-      } | {
-        error: any;
-        exitCode: number;
-        stdout?: undefined;
-        stderr?: undefined;
-      }>;
+      parameters: any;
+      execute: (args: any) => Promise<any>;
     };
   };
 } {
@@ -66,7 +53,7 @@ export function createBashTool(options: CreateBashToolOptions): {
   return {
     tools: {
       bash: {
-        description: "Execute a bash command in a secure sandbox with a virtual filesystem. You can use common commands like ls, cat, grep, awk, sed, jq, etc. to explore the environment and process data.",
+        description: "Execute a bash command in a secure sandbox with a virtual filesystem. You can use common commands like ls, cat, grep, awk, sed, jq, etc. to explore the environment and process data." + (options.extraInstructions ? "\n\n" + options.extraInstructions : ""),
         inputSchema: {
           type: "object",
           properties: {
@@ -76,7 +63,7 @@ export function createBashTool(options: CreateBashToolOptions): {
             },
           },
           required: ["command"],
-        },
+        } as const,
         parameters: {
           type: "object",
           properties: {
@@ -86,30 +73,25 @@ export function createBashTool(options: CreateBashToolOptions): {
             },
           },
           required: ["command"],
-        },
-        execute: async ({ command }: { command: string }): Promise<{
-          stdout: string;
-          stderr: string;
-          exitCode: number;
-          error?: undefined;
-        } | {
-          error: any;
-          exitCode: number;
-          stdout?: undefined;
-          stderr?: undefined;
-        }> => {
+        } as const,
+        execute: async ({ command }: { command: string }): Promise<any> => {
           try {
+            await options.onBeforeBashCall?.({ command });
             const result = await sandbox.exec(command);
-            return {
+            const toolResult = {
               stdout: result.stdout,
               stderr: result.stderr,
               exitCode: result.exitCode,
             };
+            await options.onAfterBashCall?.({ command, result: toolResult });
+            return toolResult;
           } catch (error: any) {
-            return {
+            const errorResult = {
               error: error.message,
               exitCode: 1,
             };
+            await options.onAfterBashCall?.({ command, result: errorResult });
+            return errorResult;
           }
         },
       },
