@@ -34,6 +34,8 @@ jobs:
 
       - name: Run unit tests
         run: pnpm test:unit
+        working-directory: packages/bash
 
       - name: Run dist tests
         run: pnpm test:dist
+        working-directory: packages/bash

@@ -29,9 +29,11 @@ jobs:
 
       - name: Knip
         run: pnpm knip
+        working-directory: packages/bash
 
       - name: Build
         run: pnpm build
 
       - name: Check worker sync
         run: pnpm check:worker-sync
+        working-directory: packages/bash

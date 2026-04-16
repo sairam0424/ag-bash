@@ -31,3 +31,4 @@ jobs:
 
       - name: Run WASM tests
         run: pnpm test:wasm
+        working-directory: packages/bash
