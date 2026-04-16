@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Bash } from "ag-bash/browser";
+import { Bash } from "@ag-bash/bash/browser";
 import { getTerminalData } from "./TerminalData";
 import {
   createStaticCommands,
-  createAgentCommand,
+  createAgentExecutor,
   createInputHandler,
   showWelcome,
 } from "./terminal-parts";
 import { LiteTerminal } from "./lite-terminal";
+
 
 async function fetchFiles(bash: Bash) {
   const response = await fetch("/api/fs");
@@ -19,37 +20,39 @@ async function fetchFiles(bash: Bash) {
   }
 }
 
-function getTheme(isDark: boolean) {
+function getTheme() {
   return {
-    background: isDark ? "#000" : "#fff",
-    foreground: isDark ? "#e0e0e0" : "#1a1a1a",
-    cursor: isDark ? "#fff" : "#000",
-    cyan: isDark ? "#0AC5B3" : "#089485",
-    brightCyan: isDark ? "#3DD9C8" : "#067A6D",
-    brightBlack: isDark ? "#666" : "#525252",
+    background: "#000",
+    foreground: "#f0f6fc",
+    cursor: "#0ac5b3",
+    cyan: "#0AC5B3",
+    brightCyan: "#3DD9C8",
+    brightBlack: "#666",
   };
 }
 
-export default function TerminalComponent() {
+export default function TerminalComponent({ 
+  onInit,
+  onFileSystemChange 
+}: { 
+  onInit?: (execute: (cmd: string) => void) => void,
+  onFileSystemChange?: (files: Record<string, any>) => void
+}) {
   const terminalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = terminalRef.current;
     if (!container) return;
 
-    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-
     const term = new LiteTerminal({
       cursorBlink: true,
-      theme: getTheme(isDark),
+      theme: getTheme(),
     });
     term.open(container);
 
-    // Create commands
     const { aboutCmd, installCmd, githubCmd } = createStaticCommands();
-    const agentCmd = createAgentCommand(term);
+    const { agentCmd, executeAgentPrompt } = createAgentExecutor(term);
 
-    // Files from DOM
     const files = {
       "/home/user/README.md": getTerminalData("file-readme"),
       "/home/user/LICENSE": getTerminalData("file-license"),
@@ -63,51 +66,48 @@ export default function TerminalComponent() {
       customCommands: [aboutCmd, installCmd, githubCmd, agentCmd],
       files,
       cwd: "/home/user",
+      persistState: true,
+      onCommandNotFound: async (cmd, args) => {
+        const fullPrompt = [cmd, ...args].join(" ");
+        return executeAgentPrompt(fullPrompt);
+      },
     });
 
-    // Set up input handling
     const inputHandler = createInputHandler(term, bash);
+    
+    // Notify parent and offer execution hook
+    if (onInit) {
+      onInit((cmd) => {
+        void inputHandler.executeCommand(cmd);
+      });
+    }
 
-    // Load additional files from API into bash filesystem
+    // Initial FS state
+    if (onFileSystemChange) onFileSystemChange(files);
+
     void fetchFiles(bash);
 
-    // Track cleanup state
     let disposed = false;
 
-    // Show welcome and handle ?agent= query parameter
     requestAnimationFrame(() => {
       if (disposed) return;
-
       showWelcome(term);
-
-      // Check for ?agent= query parameter
+      
       const params = new URLSearchParams(window.location.search);
       const agentQuery = params.get("agent");
 
       if (agentQuery) {
-        // Clean the URL
         window.history.replaceState({}, "", window.location.pathname);
-        // Execute the agent command
         void inputHandler.executeCommand(`agent "${agentQuery}"`);
       } else if (inputHandler.history.length === 0) {
-        // Pre-populate command if history is empty and no query param
         inputHandler.setInitialCommand('agent "What is ag-bash?"');
       }
     });
 
-    // Color scheme change handling
-    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const onColorSchemeChange = (e: MediaQueryListEvent) => {
-      term.options.theme = getTheme(e.matches);
-    };
-    colorSchemeQuery.addEventListener("change", onColorSchemeChange);
-
-    // Initial focus
     term.focus();
 
     return () => {
       disposed = true;
-      colorSchemeQuery.removeEventListener("change", onColorSchemeChange);
       term.dispose();
     };
   }, []);

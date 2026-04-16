@@ -20,9 +20,9 @@ const outputFile = path.resolve(
 const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf-8");
 const license = fs.readFileSync(path.join(repoRoot, "LICENSE"), "utf-8");
 const packageJson = JSON.parse(
-  fs.readFileSync(path.join(repoRoot, "package.json"), "utf-8")
+  fs.readFileSync(path.join(repoRoot, "packages/bash/package.json"), "utf-8")
 );
-const agentsMd = fs.readFileSync(path.join(repoRoot, "AGENTS.npm.md"), "utf-8");
+const agentsMd = fs.readFileSync(path.join(repoRoot, "packages/bash/AGENTS.npm.md"), "utf-8");
 const wtfIsThis = fs.readFileSync(path.resolve(__dirname, "../README.md"), "utf-8");
 
 // Escape backticks and ${} for template literals
@@ -69,10 +69,10 @@ Or try any bash command: ls, cat, echo, grep, awk, jq, sed, etc.
 Type 'help' for a list of all built-in commands.
 \`;
 
-export const CMD_INSTALL = \`npm install @ag/bash
+export const CMD_INSTALL = \`npm install @ag-bash/bash
 
 Usage:
-  import { Bash } from "@ag/bash";
+  import { Bash } from "@ag-bash/bash";
   const bash = new Bash();
   const result = await bash.exec("echo hello");
 \`;

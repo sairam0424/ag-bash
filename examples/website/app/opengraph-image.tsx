@@ -73,7 +73,7 @@ export default async function Image() {
                 fontSize: "32px",
               }}
             >
-              npm install @ag/bash
+              npm install @ag-bash/bash
             </span>
           </div>
         </div>

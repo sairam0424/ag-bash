@@ -1,4 +1,4 @@
-import type { Bash } from "ag-bash/browser";
+import type { Bash } from "@ag-bash/bash/browser";
 import { HISTORY_KEY, MAX_HISTORY } from "./constants";
 import { formatMarkdown } from "./markdown";
 

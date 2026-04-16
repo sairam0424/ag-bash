@@ -19,10 +19,10 @@ Or try any bash command: ls, cat, echo, grep, awk, jq, sed, etc.
 Type 'help' for a list of all built-in commands.
 `;
 
-export const CMD_INSTALL = `npm install @ag/bash
+export const CMD_INSTALL = `npm install @ag-bash/bash
 
 Usage:
-  import { Bash } from "@ag/bash";
+  import { Bash } from "@ag-bash/bash";
   const bash = new Bash();
   const result = await bash.exec("echo hello");
 `;
@@ -30,503 +30,97 @@ Usage:
 export const CMD_GITHUB = "https://github.com/sairam0424/ag-bash\n";
 
 // File contents (generated from repo)
-export const FILE_README = `# ag-bash
+export const FILE_README = `# Ag-Bash: The AI-Native Shell Monorepo
 
-A simulated bash environment with an in-memory virtual filesystem, written in TypeScript.
+[![NPM Version](https://img.shields.io/npm/v/@ag-bash/bash.svg)](https://www.npmjs.com/package/@ag-bash/bash)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/sairam0424/ag-bash/blob/main/LICENSE)
 
-Designed for AI agents that need a secure, sandboxed bash environment.
+Ag-Bash is a production-grade, sandboxed Bash environment designed specifically for AI agents. It provides a virtualized Unix-like experience entirely in-process, featuring an in-memory filesystem, integrated runtimes for Python and JavaScript, and full support for modern agentic protocols.
 
-Supports optional network access via \`curl\` with secure-by-default URL filtering.
+## 🏗️ Monorepo Architecture
 
-**Note**: This is beta software. Use at your own risk and please provide feedback.
+This repository is organized into a modular monorepo to support independent versioning and consumption of core engine components and protocol adapters.
 
-## Table of Contents
+| Package | Version | Description |
+|---|---|---|
+| [\`@ag-bash/bash\`](./packages/bash) | \`v1.1.0\` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [\`@ag-bash/mcp-server\`](./packages/mcp-server) | \`v1.1.0\` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
 
-- [Security model](#security-model)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Basic API](#basic-api)
-  - [Configuration](#configuration)
-  - [Custom Commands](#custom-commands)
-  - [Filesystem Options](#filesystem-options)
-  - [AI SDK Tool](#ai-sdk-tool)
-  - [Secure Sandbox Compatible API](#secure-sandbox-compatible-api)
-  - [CLI Binary](#cli-binary)
-  - [Interactive Shell](#interactive-shell)
-- [Supported Commands](#supported-commands)
-- [Shell Features](#shell-features)
-- [Default Layout](#default-layout)
-- [Network Access](#network-access)
-- [Execution Protection](#execution-protection)
-- [AST Transform Plugins](#ast-transform-plugins)
-- [Development](#development)
+---
 
-## Security model
+## 🚀 Quick Start
 
-- The shell only has access to the provided file system.
-- Execution is protected against infinite loops or recursion. However, Bash is not fully robust against DOS from input. If you need to be robust against this, use process isolation at the OS level.
-- Binaries or even WASM are inherently unsupported (Use [Secure Sandbox](https://ag-bash.ag-ai.org) or a similar product if a full VM is needed).
-- There is no network access by default.
-- Network access can be enabled, but requests are checked against URL prefix allow-lists and HTTP-method allow-lists. See [network access](#network-access) for details
+### For Developers (Library)
 
-## Installation
+If you are building an application and want to embed a sandboxed shell:
 
 \`\`\`bash
-npm install @ag/bash
-\`\`\`
-
-## Usage
-
-### Basic API
-
-\`\`\`typescript
-import { Bash } from "@ag/bash";
-
-const env = new Bash();
-await env.exec('echo "Hello" > greeting.txt');
-const result = await env.exec("cat greeting.txt");
-console.log(result.stdout); // "Hello\\n"
-console.log(result.exitCode); // 0
-console.log(result.env); // Final environment after execution
-\`\`\`
-
-Each \`exec()\` is isolated—env vars, functions, and cwd don't persist across calls (filesystem does).
-
-### Configuration
-
-\`\`\`typescript
-const env = new Bash({
-  files: { "/data/file.txt": "content" }, // Initial files
-  env: { MY_VAR: "value" }, // Initial environment
-  cwd: "/app", // Starting directory (default: /home/user)
-  executionLimits: { maxCallDepth: 50 }, // See "Execution Protection"
-});
-
-// Per-exec overrides
-await env.exec("echo $TEMP", { env: { TEMP: "value" }, cwd: "/tmp" });
-\`\`\`
-
-#### Lazy Files
-
-File values can be functions (sync or async). The function is called on first read and the result is cached — if the file is written to before being read, the function is never called:
-
-\`\`\`typescript
-const env = new Bash({
-  files: {
-    "/data/config.json": () => JSON.stringify({ key: "value" }),
-    "/data/remote.txt": async () => (await fetch("https://example.com")).text(),
-    "/data/static.txt": "always loaded",
-  },
-});
-\`\`\`
-
-This is useful for large or expensive-to-compute content that may not be needed.
-
-### Custom Commands
-
-Extend ag-bash with your own TypeScript commands using \`defineCommand\`:
-
-\`\`\`typescript
-import { Bash, defineCommand } from "@ag/bash";
-
-const hello = defineCommand("hello", async (args, ctx) => {
-  const name = args[0] || "world";
-  return { stdout: \`Hello, \${name}!\\n\`, stderr: "", exitCode: 0 };
-});
-
-const upper = defineCommand("upper", async (args, ctx) => {
-  return { stdout: ctx.stdin.toUpperCase(), stderr: "", exitCode: 0 };
-});
-
-const bash = new Bash({ customCommands: [hello, upper] });
-
-await bash.exec("hello Alice"); // "Hello, Alice!\\n"
-await bash.exec("echo 'test' | upper"); // "TEST\\n"
-\`\`\`
-
-Custom commands receive the full \`CommandContext\` with access to \`fs\`, \`cwd\`, \`env\`, \`stdin\`, and \`exec\` for running subcommands.
-
-### Filesystem Options
-
-Four filesystem implementations are available:
-
-**InMemoryFs** (default) - Pure in-memory filesystem, no disk access:
-
-\`\`\`typescript
-import { Bash } from "ag-bash";
-const env = new Bash(); // Uses InMemoryFs by default
-\`\`\`
-
-**OverlayFs** - Copy-on-write over a real directory. Reads come from disk, writes stay in memory:
-
-\`\`\`typescript
-import { Bash } from "@ag/bash";
-import { OverlayFs } from "@ag/bash/fs/overlay-fs";
-
-const overlay = new OverlayFs({ root: "/path/to/project" });
-const env = new Bash({ fs: overlay, cwd: overlay.getMountPoint() });
-
-await env.exec("cat package.json"); // reads from disk
-await env.exec('echo "modified" > package.json'); // stays in memory
-\`\`\`
-
-**ReadWriteFs** - Direct read-write access to a real directory. Use this if you want the agent to be agle to write to your disk:
-
-\`\`\`typescript
-import { Bash } from "@ag/bash";
-import { ReadWriteFs } from "@ag/bash/fs/read-write-fs";
-
-const rwfs = new ReadWriteFs({ root: "/path/to/sandbox" });
-const env = new Bash({ fs: rwfs });
-
-await env.exec('echo "hello" > file.txt'); // writes to real filesystem
-\`\`\`
-
-**MountableFs** - Mount multiple filesystems at different paths. Combines read-only and read-write filesystems into a unified namespace:
-
-\`\`\`typescript
-import { Bash, MountableFs, InMemoryFs } from "@ag/bash";
-import { OverlayFs } from "@ag/bash/fs/overlay-fs";
-import { ReadWriteFs } from "@ag/bash/fs/read-write-fs";
-
-const fs = new MountableFs({ base: new InMemoryFs() });
-
-// Mount read-only knowledge base
-fs.mount("/mnt/knowledge", new OverlayFs({ root: "/path/to/knowledge", readOnly: true }));
-
-// Mount read-write workspace
-fs.mount("/home/agent", new ReadWriteFs({ root: "/path/to/workspace" }));
-
-const bash = new Bash({ fs, cwd: "/home/agent" });
-
-await bash.exec("ls /mnt/knowledge"); // reads from knowledge base
-await bash.exec("cp /mnt/knowledge/doc.txt ./"); // cross-mount copy
-await bash.exec('echo "notes" > notes.txt'); // writes to workspace
-\`\`\`
-
-You can also configure mounts in the constructor:
-
-\`\`\`typescript
-import { MountableFs, InMemoryFs } from "@ag/bash";
-import { OverlayFs } from "@ag/bash/fs/overlay-fs";
-import { ReadWriteFs } from "@ag/bash/fs/read-write-fs";
-
-const fs = new MountableFs({
-  base: new InMemoryFs(),
-  mounts: [
-    { mountPoint: "/data", filesystem: new OverlayFs({ root: "/shared/data" }) },
-    { mountPoint: "/workspace", filesystem: new ReadWriteFs({ root: "/tmp/work" }) },
-  ],
-});
-\`\`\`
-
-### AI SDK Tool
-
-For AI agents, use [\`bash-tool\`](https://github.com/ag-ai/bash-tool) which is optimized for ag-bash and provides a ready-to-use [AI SDK](https://ai-sdk.dev/) tool:
-
-\`\`\`bash
-npm install bash-tool
+npm install @ag-bash/bash
 \`\`\`
 
 \`\`\`typescript
-import { createBashTool } from "bash-tool";
-import { generateText } from "ai";
+import { Bash } from "@ag-bash/bash";
 
-const bashTool = createBashTool({
-  files: { "/data/users.json": '[{"name": "Alice"}, {"name": "Bob"}]' },
-});
-
-const result = await generateText({
-  model: "anthropic/claude-sonnet-4",
-  tools: { bash: bashTool },
-  prompt: "Count the users in /data/users.json",
-});
-\`\`\`
-
-See the [bash-tool documentation](https://github.com/ag-ai/bash-tool) for more details and examples.
-
-### Secure Sandbox Compatible API
-
-Bash provides a \`Sandbox\` class that's API-compatible with [Secure Sandbox](https://ag-bash.ag-ai.org), making it easy to swap implementations. You can start with Bash and switch to a real sandbox when you need the power of a full VM (e.g. to run node, python, or custom binaries).
-
-\`\`\`typescript
-import { Sandbox } from "@ag/bash";
-
-// Create a sandbox instance
-const sandbox = await Sandbox.create({ cwd: "/app" });
-
-// Write files to the virtual filesystem
-await sandbox.writeFiles({
-  "/app/script.sh": 'echo "Hello World"',
-  "/app/data.json": '{"key": "value"}',
-});
-
-// Run commands and get results
-const cmd = await sandbox.runCommand("bash /app/script.sh");
-const output = await cmd.stdout(); // "Hello World\\n"
-const exitCode = (await cmd.wait()).exitCode; // 0
-
-// Read files back
-const content = await sandbox.readFile("/app/data.json");
-
-// Create directories
-await sandbox.mkDir("/app/logs", { recursive: true });
-
-// Clean up (no-op for Bash, but API-compatible)
-await sandbox.stop();
-\`\`\`
-
-### CLI Binary
-
-After installing globally (\`npm install -g ag-bash\`), use the \`ag-bash\` command as a secure alternative to \`bash\` for AI agents:
-
-\`\`\`bash
-# Execute inline script
-ag-bash -c 'ls -la && cat package.json | head -5'
-
-# Execute with specific project root
-ag-bash -c 'grep -r "TODO" src/' --root /path/to/project
-
-# Pipe script from stdin
-echo 'find . -name "*.ts" | wc -l' | ag-bash
-
-# Execute a script file
-ag-bash ./scripts/deploy.sh
-
-# Get JSON output for programmatic use
-ag-bash -c 'echo hello' --json
-# Output: {"stdout":"hello\\n","stderr":"","exitCode":0}
-\`\`\`
-
-The CLI uses OverlayFS - reads come from the real filesystem, but all writes stay in memory and are discarded after execution. The project root is mounted at \`/home/user/project\`.
-
-Options:
-
-- \`-c <script>\` - Execute script from argument
-- \`--root <path>\` - Root directory (default: current directory)
-- \`--cwd <path>\` - Working directory in sandbox
-- \`-e, --errexit\` - Exit on first error
-- \`--json\` - Output as JSON
-
-### Interactive Shell
-
-\`\`\`bash
-pnpm shell
-\`\`\`
-
-The interactive shell has full internet access enabled by default, allowing you to use \`curl\` to fetch data from any URL. Use \`--no-network\` to disable this:
-
-\`\`\`bash
-pnpm shell --no-network
-\`\`\`
-
-## Supported Commands
-
-### File Operations
-
-\`cat\`, \`cp\`, \`file\`, \`ln\`, \`ls\`, \`mkdir\`, \`mv\`, \`readlink\`, \`rm\`, \`rmdir\`, \`split\`, \`stat\`, \`touch\`, \`tree\`
-
-### Text Processing
-
-\`awk\`, \`base64\`, \`column\`, \`comm\`, \`cut\`, \`diff\`, \`expand\`, \`fold\`, \`grep\` (+ \`egrep\`, \`fgrep\`), \`head\`, \`join\`, \`md5sum\`, \`nl\`, \`od\`, \`paste\`, \`printf\`, \`rev\`, \`rg\`, \`sed\`, \`sha1sum\`, \`sha256sum\`, \`sort\`, \`strings\`, \`tac\`, \`tail\`, \`tr\`, \`unexpand\`, \`uniq\`, \`wc\`, \`xargs\`
-
-### Data Processing
-
-\`jq\` (JSON), \`python3\`/\`python\` (Python via Pyodide; required opt-in), \`sqlite3\` (SQLite), \`xan\` (CSV), \`yq\` (YAML/XML/TOML/CSV)
-
-### Compression & Archives
-
-\`gzip\` (+ \`gunzip\`, \`zcat\`), \`tar\`
-
-### Navigation & Environment
-
-\`basename\`, \`cd\`, \`dirname\`, \`du\`, \`echo\`, \`env\`, \`export\`, \`find\`, \`hostname\`, \`printenv\`, \`pwd\`, \`tee\`
-
-### Shell Utilities
-
-\`alias\`, \`bash\`, \`chmod\`, \`clear\`, \`date\`, \`expr\`, \`false\`, \`help\`, \`history\`, \`seq\`, \`sh\`, \`sleep\`, \`time\`, \`timeout\`, \`true\`, \`unalias\`, \`which\`, \`whoami\`
-
-### Network Commands
-
-\`curl\`, \`html-to-markdown\`
-
-All commands support \`--help\` for usage information.
-
-## Shell Features
-
-- **Pipes**: \`cmd1 | cmd2\`
-- **Redirections**: \`>\`, \`>>\`, \`2>\`, \`2>&1\`, \`<\`
-- **Command chaining**: \`&&\`, \`||\`, \`;\`
-- **Variables**: \`$VAR\`, \`\${VAR}\`, \`\${VAR:-default}\`
-- **Positional parameters**: \`$1\`, \`$2\`, \`$@\`, \`$#\`
-- **Glob patterns**: \`*\`, \`?\`, \`[...]\`
-- **If statements**: \`if COND; then CMD; elif COND; then CMD; else CMD; fi\`
-- **Functions**: \`function name { ... }\` or \`name() { ... }\`
-- **Local variables**: \`local VAR=value\`
-- **Loops**: \`for\`, \`while\`, \`until\`
-- **Symbolic links**: \`ln -s target link\`
-- **Hard links**: \`ln target link\`
-
-## Default Layout
-
-When created without options, Bash provides a Unix-like directory structure:
-
-- \`/home/user\` - Default working directory (and \`$HOME\`)
-- \`/bin\` - Contains stubs for all built-in commands
-- \`/usr/bin\` - Additional binary directory
-- \`/tmp\` - Temporary files directory
-
-Commands can be invoked by path (e.g., \`/bin/ls\`) or by name.
-
-## Network Access
-
-Network access (and the \`curl\` command) is disabled by default for security. To enable it, configure the \`network\` option:
-
-\`\`\`typescript
-// Allow specific URLs with GET/HEAD only (safest)
-const env = new Bash({
-  network: {
-    allowedUrlPrefixes: [
-      "https://api.github.com/repos/myorg/",
-      "https://api.example.com",
-    ],
-  },
-});
-
-// Allow specific URLs with additional methods
-const env = new Bash({
-  network: {
-    allowedUrlPrefixes: ["https://api.example.com"],
-    allowedMethods: ["GET", "HEAD", "POST"], // Default: ["GET", "HEAD"]
-  },
-});
-
-// Allow all URLs and methods (use with caution)
-const env = new Bash({
-  network: { dangerouslyAllowFullInternetAccess: true },
-});
-\`\`\`
-
-**Note:** The \`curl\` command only exists when network is configured. Without network configuration, \`curl\` returns "command not found".
-
-## Python Support
-
-Python support via Pyodide is opt-in due to additional security surface. Enable it explicitly, but be aware of the risk:
-
-\`\`\`typescript
-const env = new Bash({
-  python: true,
-});
-
-// Execute Python code
-await env.exec('python3 -c "print(1 + 2)"');
-
-// Run Python scripts
-await env.exec('python3 script.py');
-\`\`\`
-
-**Note:** The \`python3\` and \`python\` commands only exist when \`python: true\` is configured. Python is not available in browser environments.
-
-## SQLite Support
-
-The \`sqlite3\` command uses sql.js (WASM-based SQLite) which is fully sandboxed and cannot access the real filesystem:
-
-\`\`\`typescript
-const env = new Bash();
-
-// Query in-memory database
-await env.exec('sqlite3 :memory: "SELECT 1 + 1"');
-
-// Query file-based database
-await env.exec('sqlite3 data.db "SELECT * FROM users"');
-\`\`\`
-
-**Note:** SQLite is not available in browser environments. Queries run in a worker thread with a configurable timeout (default: 5 seconds) to prevent runaway queries from blocking execution.
-
-### Allow-List Security
-
-The allow-list enforces:
-
-- **Origin matching**: URLs must match the exact origin (scheme + host + port)
-- **Path prefix**: Only paths starting with the specified prefix are allowed
-- **HTTP method restrictions**: Only GET and HEAD by default (configure \`allowedMethods\` for more)
-- **Redirect protection**: Redirects to non-allowed URLs are blocked
-
-### Using curl
-
-\`\`\`bash
-# Fetch and process data
-curl -s https://api.example.com/data | grep pattern
-
-# Download and convert HTML to Markdown
-curl -s https://example.com | html-to-markdown
-
-# POST JSON data
-curl -X POST -H "Content-Type: application/json" \\
-  -d '{"key":"value"}' https://api.example.com/endpoint
-\`\`\`
-
-## Execution Protection
-
-Bash protects against infinite loops and deep recursion with configurable limits:
-
-\`\`\`typescript
-const env = new Bash({
-  executionLimits: {
-    maxCallDepth: 100, // Max function recursion depth
-    maxCommandCount: 10000, // Max total commands executed
-    maxLoopIterations: 10000, // Max iterations per loop
-    maxAwkIterations: 10000, // Max iterations in awk programs
-    maxSedIterations: 10000, // Max iterations in sed scripts
-  },
-});
-\`\`\`
-
-All limits have sensible defaults. Error messages include hints on which limit to increase. Feel free to increase if your scripts intentionally go beyond them.
-
-## AST Transform Plugins
-
-Parse bash scripts into an AST, run transform plugins, and serialize back to executable bash. Useful for instrumenting scripts (e.g., capturing per-command stdout/stderr) or analyzing them (e.g., extracting command names) before execution.
-
-\`\`\`typescript
-import { Bash, BashTransformPipeline, TeePlugin, CommandCollectorPlugin } from "@ag/bash";
-
-// Standalone pipeline — output can be run by any shell
-const pipeline = new BashTransformPipeline()
-  .use(new TeePlugin({ outputDir: "/tmp/logs" }))
-  .use(new CommandCollectorPlugin());
-const result = pipeline.transform("echo hello | grep hello");
-result.script;             // transformed bash string
-result.metadata.commands;  // ["echo", "grep", "tee"]
-
-// Integrated API — exec() auto-applies transforms and returns metadata
 const bash = new Bash();
-bash.registerTransformPlugin(new CommandCollectorPlugin());
-const execResult = await bash.exec("echo hello | grep hello");
-execResult.metadata?.commands; // ["echo", "grep"]
+const result = await bash.exec('echo "Hello Ag-Bash"');
+console.log(result.stdout); // "Hello Ag-Bash\\n"
 \`\`\`
 
-See [src/transform/README.md](src/transform/README.md) for the full API, built-in plugins, and how to write custom plugins.
+### 2. Standalone CLI & Shell (Global)
 
-## Development
+For human-in-the-loop debugging and interactive use, install the Ag-Bash suite globally.
+
+#### Via Homebrew (macOS)
+\`\`\`bash
+brew tap ag-bash/homebrew-tap
+brew install ag-bash
+\`\`\`
+
+#### Via NPM (Cross-platform)
+\`\`\`bash
+npm install -g @ag-bash/bash @ag-bash/mcp-server
+\`\`\`
+
+---
+
+### For AI Agents (MCP)
+
+To provide a bash environment to your agent (e.g., in Claude Desktop or Cursor):
 
 \`\`\`bash
-pnpm test        # Run tests in watch mode
-pnpm test:run    # Run tests once
-pnpm typecheck   # Type check without emitting
-pnpm build       # Build TypeScript
-pnpm shell       # Run interactive shell
+npm install -g @ag-bash/mcp-server
 \`\`\`
 
-## AI Agent Instructions
+Then, add the server to your MCP configuration:
 
-For AI agents, we recommend using [\`bash-tool\`](https://github.com/ag-ai/bash-tool) which is optimized for ag-bash and provides additional guidance in its \`AGENTS.md\`:
-
-\`\`\`bash
-cat node_modules/bash-tool/dist/AGENTS.md
+\`\`\`json
+{
+  "mcpServers": {
+    "ag-bash": {
+      "command": "ag-bash-mcp",
+      "args": []
+    }
+  }
+}
 \`\`\`
 
-## License
+---
+
+## 🛡️ Key Features
+
+- **Virtual Filesystem**: Choose between \`InMemoryFs\`, \`OverlayFs\` (COW), or \`ReadWriteFs\`.
+- **Integrated Runtimes**: Out-of-the-box support for \`jq\`, \`sqlite3\`, \`python3\` (WASM), and \`js-exec\` (QuickJS).
+- **Protocol First**: Full Model Context Protocol (MCP) support with persistent session state.
+- **Defense in Depth**: Robust sandbox prevents prototype pollution and unauthorized filesystem access.
+- **No Dependencies**: The core engine is lightweight and runs in Node.js or the Browser.
+
+## 📖 Documentation
+
+- **[Shell Engine Guide](./packages/bash/README.md)**: Deep dive into shell features, custom commands, and filesystem options.
+- **[MCP Protocol Guide](./packages/mcp-server/README.md)**: Configuration and usage for agentic frameworks.
+- **[Security Architecture](./THREAT_MODEL.md)**: Detailed breakdown of the sandbox and thread model.
+
+## 📜 License
 
 Apache-2.0
 `;
@@ -735,33 +329,32 @@ limitations under the License.
 `;
 
 export const FILE_PACKAGE_JSON = `{
-  "name": "ag-bash",
-  "version": "2.12.0",
-  "description": "A simulated bash environment with virtual filesystem",
+  "name": "@ag-bash/bash",
+  "version": "1.1.0",
+  "description": "Unified Agentic Bash for Ag-Bash",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sairam0424/ag-bash.git"
+    "url": "https://github.com/sairam0424/ag-bash.git"
   },
-  "homepage": "https://github.com/sairam0424/ag-bash#readme",
   "type": "module",
   "main": "dist/bundle/index.js",
   "types": "dist/index.d.ts",
-  "author": "Malte and Claude",
+  "author": "Ag-Bash",
   "license": "Apache-2.0"
 }`;
 
 export const FILE_AGENTS_MD = `<!--
 This file is distributed as dist/AGENTS.md in the npm package.
-It provides instructions for AI agents using ag-bash in their projects.
+It provides instructions for AI agents using @ag-bash/bash in their projects.
 The build process copies this file to dist/AGENTS.md (removing this comment).
 TypeScript and bash examples are validated by src/readme.test.ts.
 -->
 
-# AGENTS.md - ag-bash
+# AGENTS.md - @ag-bash/bash
 
-Instructions for AI agents using ag-bash in projects.
+Instructions for AI agents using @ag-bash/bash in projects.
 
-## What is ag-bash?
+## What is @ag-bash/bash?
 
 A sandboxed bash interpreter with an in-memory virtual filesystem. Use it when you need to:
 
@@ -771,14 +364,14 @@ A sandboxed bash interpreter with an in-memory virtual filesystem. Use it when y
 
 ## For AI Agents
 
-If you're building an AI agent that needs a bash tool, use [\`bash-tool\`](https://github.com/ag-ai/bash-tool) which is optimized for ag-bash:
+If you're building an AI agent that needs a bash tool, use [\`@ag-bash/bash\`](https://github.com/ag-ai/@ag-bash/bash) which is optimized for @ag-bash/bash:
 
 \`\`\`sh
-npm install bash-tool
+npm install @ag-bash/bash
 \`\`\`
 
 \`\`\`typescript
-import { createBashTool } from "bash-tool";
+import { createBashTool } from "@ag-bash/bash";
 import { generateText } from "ai";
 
 const bashTool = createBashTool({
@@ -792,12 +385,10 @@ const result = await generateText({
 });
 \`\`\`
 
-See the [bash-tool documentation](https://github.com/ag-ai/bash-tool) for more details.
-
 ## Quick Reference
 
 \`\`\`typescript
-import { Bash } from "@ag/bash";
+import { Bash } from "@ag-bash/bash";
 
 const bash = new Bash({
   files: { "/data/input.txt": "content" }, // Initial files
@@ -820,15 +411,17 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 4. **No binaries/WASM**: Only built-in commands work. You cannot run node, python, or other binaries.
 
+5. **ReadWriteFs root separation**: If you use \`ReadWriteFs\`, point it at a workspace directory, not at the installed \`@ag-bash/bash\` package or other trusted runtime code.
+
 ## Available Commands
 
 **Text processing**: \`awk\`, \`cat\`, \`column\`, \`comm\`, \`cut\`, \`egrep\`, \`expand\`, \`fgrep\`, \`fold\`, \`grep\`, \`head\`, \`join\`, \`nl\`, \`paste\`, \`rev\`, \`rg\`, \`sed\`, \`sort\`, \`strings\`, \`tac\`, \`tail\`, \`tr\`, \`unexpand\`, \`uniq\`, \`wc\`, \`xargs\`
 
-**Data processing**: \`jq\` (JSON), \`python3\`/\`python\` (Python via Pyodide), \`sqlite3\` (SQLite), \`xan\` (CSV), \`yq\` (YAML/XML/TOML/CSV)
+**Data processing**: \`jq\` (JSON), \`js-exec\` (JavaScript/TypeScript via QuickJS), \`python3\`/\`python\` (Python via WASM/CPython), \`sqlite3\` (SQLite), \`xan\` (CSV), \`yq\` (YAML/XML/TOML/CSV)
 
 **File operations**: \`basename\`, \`chmod\`, \`cp\`, \`dirname\`, \`du\`, \`file\`, \`find\`, \`ln\`, \`ls\`, \`mkdir\`, \`mv\`, \`od\`, \`pwd\`, \`readlink\`, \`rm\`, \`rmdir\`, \`split\`, \`stat\`, \`touch\`, \`tree\`
 
-**Utilities**: \`alias\`, \`base64\`, \`bash\`, \`clear\`, \`curl\`, \`date\`, \`diff\`, \`echo\`, \`env\`, \`expr\`, \`false\`, \`gzip\`, \`gunzip\`, \`help\`, \`history\`, \`hostname\`, \`html-to-markdown\`, \`md5sum\`, \`printenv\`, \`printf\`, \`seq\`, \`sh\`, \`sha1sum\`, \`sha256sum\`, \`sleep\`, \`tar\`, \`tee\`, \`time\`, \`timeout\`, \`true\`, \`unalias\`, \`which\`, \`whoami\`, \`zcat\`
+**Utilities**: \`alias\`, \`base64\`, \`bash\`, \`clear\`, \`curl\`, \`date\`, \`diff\`, \`echo\`, \`env\`, \`expr\`, \`false\`, \`gzip\`, \`gunzip\`, \`hello\`, \`help\`, \`history\`, \`hostname\`, \`html-to-markdown\`, \`md5sum\`, \`printenv\`, \`printf\`, \`seq\`, \`sh\`, \`sha1sum\`, \`sha256sum\`, \`sleep\`, \`tar\`, \`tee\`, \`time\`, \`timeout\`, \`true\`, \`unalias\`, \`which\`, \`whoami\`, \`zcat\`
 
 All commands support \`--help\` for usage details.
 
@@ -998,7 +591,7 @@ cat data.csv | awk -F',' '{sum += $3} END {print sum}'
 Always check \`exitCode\`:
 
 \`\`\`typescript
-import { Bash } from "@ag/bash";
+import { Bash } from "@ag-bash/bash";
 
 const bash = new Bash({ files: { "/file.txt": "some content" } });
 const result = await bash.exec("grep pattern file.txt");
@@ -1063,16 +656,16 @@ TypeScript types are available in the \`.d.ts\` files. Use JSDoc-style explorati
 
 \`\`\`bash
 # Find all type definition files
-find node_modules/ag-bash/dist -name "*.d.ts" | head -20
+find node_modules/@ag-bash/bash/dist -name "*.d.ts" | head -20
 
 # View main exports and their types
-cat node_modules/ag-bash/dist/index.d.ts
+cat node_modules/@ag-bash/bash/dist/index.d.ts
 
 # View Bash class options
-grep -A 30 "interface BashOptions" node_modules/ag-bash/dist/Bash.d.ts
+grep -A 30 "interface BashOptions" node_modules/@ag-bash/bash/dist/Bash.d.ts
 
 # Search for specific types
-grep -r "interface.*Options" node_modules/ag-bash/dist/*.d.ts
+grep -r "interface.*Options" node_modules/@ag-bash/bash/dist/*.d.ts
 \`\`\`
 
 Key types to explore:
@@ -1081,9 +674,9 @@ Key types to explore:
 - \`InitialFiles\` - File specification format
 `;
 
-export const FILE_WTF_IS_THIS = `# ag-bash
+export const FILE_WTF_IS_THIS = `# @ag-bash/bash website at 
 
-This is an interactive demo of **ag-bash** running entirely in your browser, with an AI agent that can explore the source code.
+This is an interactive demo of **@ag-bash/bash** running entirely in your browser, with an AI agent that can explore the source code.
 
 ## Architecture
 
@@ -1091,7 +684,7 @@ This is an interactive demo of **ag-bash** running entirely in your browser, wit
 +----------------------------------------------------------+
 |                        BROWSER                           |
 |  +----------+    +----------+    +----------------+      |
-|  | xterm.js |--->| ag-bash|--->| Virtual FS     |      |
+|  | xterm.js |--->| @ag-bash/bash|--->| Virtual FS     |      |
 |  | Terminal |    | (browser)|    | (in-memory)    |      |
 |  +----------+    +----------+    +----------------+      |
 |       |                                                  |
@@ -1106,19 +699,19 @@ This is an interactive demo of **ag-bash** running entirely in your browser, wit
 +----------------------------------------------------------+
 |                        SERVER                            |
 |  +-------------+    +----------+    +----------------+   |
-|  |ToolLoopAgent|--->| bash-tool|--->| ag-bash      |   |
+|  |ToolLoopAgent|--->| @ag-bash/bash|--->| @ag-bash/bash      |   |
 |  | (AI SDK)    |    |          |    | + OverlayFS    |   |
 |  |Claude Haiku |    | - bash   |    |                |   |
 |  +-------------+    | - read   |    | Real files:    |   |
-|                     | - write  |    | - ag-bash/   |   |
-|                     +----------+    | - bash-tool/   |   |
+|                     | - write  |    | - @ag-bash/bash/   |   |
+|                     +----------+    | - @ag-bash/bash/   |   |
 |                                     +----------------+   |
 +----------------------------------------------------------+
 \`\`\`
 
 ## Components
 
-### 1. ag-bash (Browser)
+### 1. @ag-bash/bash (Browser)
 - Pure TypeScript bash interpreter
 - Runs locally in browser for regular commands
 - In-memory virtual filesystem with pre-loaded files
@@ -1141,24 +734,24 @@ This is an interactive demo of **ag-bash** running entirely in your browser, wit
 - Stops after 20 tool calls or when done
 - Streams responses back to browser
 
-### 5. bash-tool (Server)
+### 5. @ag-bash/bash (Server)
 - Provides tools for the AI agent:
   - \`bash\` - Execute bash commands
   - \`readFile\` - Read file contents
   - \`writeFile\` - Write files (disabled in this demo)
-- Integrates with ag-bash sandbox
+- Integrates with @ag-bash/bash sandbox
 
 ### 6. OverlayFS (Server)
 - Overlays real filesystem (this source code) as read-only
-- Agent can explore ag-bash and bash-tool source
+- Agent can explore @ag-bash/bash and @ag-bash/bash source
 - Writes go to memory, not disk
 
 ## Data Flow
 
 1. You type \`agent "how does grep work?"\`
-2. Browser ag-bash runs the \`agent\` command
+2. Browser @ag-bash/bash runs the \`agent\` command
 3. Command POSTs to \`/api/agent\` with message history
-4. Server creates ToolLoopAgent with bash-tool
+4. Server creates ToolLoopAgent with @ag-bash/bash
 5. Agent thinks, calls tools (bash, readFile), observes results
 6. Each step streams back as SSE events
 7. Browser displays tool calls and final response
@@ -1175,8 +768,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the terminal.
 
 ## Links
 
-- **ag-bash**: https://github.com/sairam0424/ag-bash
-- **bash-tool**: https://github.com/ag-ai/bash-tool
+- **@ag-bash/bash**: https://github.com/sairam0424/@ag-bash/bash
+- **@ag-bash/bash**: https://github.com/ag-ai/@ag-bash/bash
 - **AI SDK**: https://ai-sdk.dev
 - **xterm.js**: https://xtermjs.org
 `;

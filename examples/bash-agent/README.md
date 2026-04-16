@@ -2,12 +2,12 @@
 
 An interactive AI agent that lets you explore files and directories using natural language.
 
-Uses [bash-tool](https://github.com/ag-ai/bash-tool) for the AI SDK integration.
+Uses [@ag-bash/bash](https://github.com/ag-ai/@ag-bash/bash) for the AI SDK integration.
 
 ## Files
 
 - `main.ts` - Entry point
-- `agent.ts` - Agent logic (bash-tool + AI SDK)
+- `agent.ts` - Agent logic (@ag-bash/bash + AI SDK)
 - `shell.ts` - Interactive readline shell
 
 ## Setup
@@ -35,7 +35,7 @@ Uses [bash-tool](https://github.com/ag-ai/bash-tool) for the AI SDK integration.
 # Explore a specific directory
 npx tsx main.ts /path/to/directory
 
-# Explore the @ag/bash project (default)
+# Explore the @ag-bash/bash project (default)
 npx tsx main.ts
 ```
 

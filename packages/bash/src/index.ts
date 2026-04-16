@@ -118,3 +118,6 @@ export type {
   ExecResult,
   IFileSystem,
 } from "./types.js";
+
+// AI Tool integration
+export { createBashTool, type CreateBashToolOptions } from "./ai.js";

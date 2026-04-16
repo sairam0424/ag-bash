@@ -2,13 +2,13 @@
  * Minimal AI agent for exploring codebases
  *
  * This file contains only the agent logic - see shell.ts for the interactive loop.
- * Uses bash-tool with a ag-bash OverlayFS to provide read access to the real project files.
+ * Uses @ag-bash/bash with a ag-bash OverlayFS to provide read access to the real project files.
  */
 
 import * as path from "node:path";
 import { streamText, stepCountIs } from "ai";
-import { createBashTool } from "bash-tool";
-import { Bash, OverlayFs } from "@ag/bash";
+import { createBashTool } from "@ag-bash/bash";
+import { Bash, OverlayFs } from "@ag-bash/bash";
 
 export interface AgentRunner {
   chat(
@@ -88,7 +88,7 @@ Help the user explore, search, and understand the contents.`,
 
       const result = streamText({
         model: "anthropic/claude-haiku-4.5",
-        tools: { bash: toolkit.bash },
+        tools: { bash: toolkit.tools.bash },
         stopWhen: stepCountIs(50),
         messages: history,
       });

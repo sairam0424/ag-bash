@@ -15,25 +15,22 @@ export function showWelcome(term: Terminal) {
       term.writeln(line);
     }
   } else {
-    term.writeln("\x1b[1mag-bash\x1b[0m");
-    term.writeln("=========");
+    term.writeln("\x1b[38;5;42m  ◈ Ag-Bash v1.1.0 \x1b[38;5;242m| \x1b[38;5;45mDigital Architect Edition\x1b[0m");
+    term.writeln("\x1b[2m  High-fidelity WASM/OverlayFS shell for agentic workflows\x1b[0m");
+    term.writeln("");
+    term.writeln("  \x1b[1m\x1b[38;5;42m$ npm install @ag-bash/bash\x1b[0m");
+    term.writeln("");
+    term.writeln("\x1b[2m  import { Bash } from '@ag-bash/bash';\x1b[0m");
+    term.writeln("\x1b[2m  const bash = new Bash({ persistState: true });\x1b[0m");
+    term.writeln("\x1b[2m  await bash.exec('python3 data_analysis.py');\x1b[0m");
+    term.writeln("");
+    term.writeln(
+      "\x1b[2mCommands:\x1b[0m \x1b[38;5;42mabout\x1b[0m, \x1b[38;5;42minstall\x1b[0m, \x1b[38;5;42mgithub\x1b[0m, \x1b[38;5;42magent\x1b[0m, \x1b[38;5;42mhelp\x1b[0m"
+    );
+    term.writeln(
+      "\x1b[2mTry:\x1b[0m \x1b[38;5;42mls -R\x1b[0m, \x1b[38;5;42mcat\x1b[0m README.md | \x1b[38;5;42mgrep\x1b[0m bash, \x1b[38;5;42mtree\x1b[0m, \x1b[38;5;42mpython3\x1b[0m --version"
+    );
   }
-  term.writeln("");
-
-  term.writeln("\x1b[2mA sandboxed bash interpreter for AI agents. Pure TypeScript with in-memory filesystem.\x1b[0m");
-  term.writeln("");
-  term.writeln("  \x1b[1m\x1b[36mnpm install @ag/bash\x1b[0m");
-  term.writeln("");
-  term.writeln("\x1b[2m  import { Bash } from '@ag/bash';\x1b[0m");
-  term.writeln("\x1b[2m  const bash = new Bash();\x1b[0m");
-  term.writeln("\x1b[2m  const { stdout } = await bash.exec(\n    'echo hello');\x1b[0m");
-  term.writeln("");
-  term.writeln(
-    "\x1b[2mCommands:\x1b[0m \x1b[36mabout\x1b[0m, \x1b[36minstall\x1b[0m, \x1b[36mgithub\x1b[0m, \x1b[36magent\x1b[0m, \x1b[36mhelp\x1b[0m"
-  );
-  term.writeln(
-    "\x1b[2mTry:\x1b[0m \x1b[36mls\x1b[0m | \x1b[36mhead\x1b[0m, \x1b[36mgrep\x1b[0m bash README.md, \x1b[36mtree\x1b[0m, \x1b[36mcat\x1b[0m package.json | \x1b[36mjq\x1b[0m .version"
-  );
   term.writeln("");
   term.write("$ ");
 }
