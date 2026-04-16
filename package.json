@@ -2,7 +2,13 @@
   "name": "@ag/bash",
   "version": "1.0.0",
   "description": "Unified Agentic Bash for Ag-Bash",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "repository": {
+
     "type": "git",
     "url": "https://github.com/sairam0424/ag-bash.git"
   },
