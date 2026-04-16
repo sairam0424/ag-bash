@@ -14,7 +14,7 @@ export interface ExecResult {
   stdout: string;
   stderr: string;
   exitCode: number;
-  /** The final environment variables after execution (only set by BashEnv.exec) */
+  /** The final environment variables after execution (only set by Bash.exec) */
   env?: Record<string, string>;
   /**
    * Encoding hint for stdout content when writing to files via redirections.
@@ -25,7 +25,7 @@ export interface ExecResult {
   stdoutEncoding?: "binary";
 }
 
-/** Result from BashEnv.exec() - always includes env */
+/** Result from Bash.exec() - always includes env */
 export interface BashExecResult extends ExecResult {
   env: Record<string, string>;
   metadata?: Record<string, unknown>;
@@ -73,12 +73,12 @@ export interface CommandExecOptions {
  * **Always available (core fields):**
  * - `fs`, `cwd`, `env`, `stdin`
  *
- * **Available when running via BashEnv interpreter:**
+ * **Available when running via Bash interpreter:**
  * - `exec` - For commands like `xargs`, `bash -c` that need to run subcommands
  * - `getRegisteredCommands` - For the `help` command to list available commands
  *
  * **Conditionally available based on configuration:**
- * - `fetch` - Only when `network` option is configured in BashEnv
+ * - `fetch` - Only when `network` option is configured in Bash
  * - `sleep` - Only when a custom sleep function is provided (e.g., for testing)
  */
 /**
@@ -117,7 +117,7 @@ export interface CommandContext {
   stdin: string;
   /**
    * Execution limits configuration.
-   * Available when running commands via BashEnv interpreter.
+   * Available when running commands via Bash interpreter.
    */
   limits?: Required<ExecutionLimits>;
   /**
@@ -127,7 +127,7 @@ export interface CommandContext {
   trace?: TraceCallback;
   /**
    * Execute a subcommand (e.g., for `xargs`, `bash -c`).
-   * Available when running commands via BashEnv interpreter.
+   * Available when running commands via Bash interpreter.
    *
    * @param command - The command string to execute
    * @param options - Required options including `cwd` to prevent directory bugs
@@ -135,12 +135,12 @@ export interface CommandContext {
   exec?: (command: string, options: CommandExecOptions) => Promise<ExecResult>;
   /**
    * Secure fetch function for network requests (e.g., for `curl`).
-   * Only available when `network` option is configured in BashEnv.
+   * Only available when `network` option is configured in Bash.
    */
   fetch?: SecureFetch;
   /**
    * Returns names of all registered commands.
-   * Available when running commands via BashEnv interpreter.
+   * Available when running commands via Bash interpreter.
    * Used by the `help` command.
    */
   getRegisteredCommands?: () => string[];

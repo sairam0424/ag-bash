@@ -1,7 +1,7 @@
 /**
  * Vitest runner for Oils spec tests
  *
- * This runs the imported spec tests from the Oils project against BashEnv.
+ * This runs the imported spec tests from the Oils project against Bash.
  */
 
 import * as fs from "node:fs";

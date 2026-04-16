@@ -181,7 +181,7 @@ describe("html-to-markdown", () => {
       const env = new Bash();
       const result = await env.exec("html-to-markdown --help");
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("BashEnv extension");
+      expect(result.stdout).toContain("Bash extension");
       expect(result.stdout).toContain("turndown");
       expect(result.stdout).toContain("Description:");
     });

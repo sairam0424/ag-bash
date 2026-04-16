@@ -89,7 +89,7 @@ describe("OverlayFs", () => {
       expect(await overlay.exists("/home/user/project")).toBe(true);
     });
 
-    it("should work with BashEnv at mount point", async () => {
+    it("should work with Bash at mount point", async () => {
       fs.writeFileSync(path.join(tempDir, "file.txt"), "hello");
       const overlay = new OverlayFs({ root: tempDir, allowSymlinks: true });
       const env = new Bash({ fs: overlay, cwd: overlay.getMountPoint() });
@@ -682,7 +682,7 @@ describe("OverlayFs", () => {
       expect(await overlay.readFile("/test.txt")).toBe("content");
     });
 
-    it("should work with BashEnv in readOnly mode", async () => {
+    it("should work with Bash in readOnly mode", async () => {
       fs.writeFileSync(path.join(tempDir, "data.txt"), "hello");
       const overlay = new OverlayFs({
         root: tempDir,
@@ -707,8 +707,8 @@ describe("OverlayFs", () => {
     });
   });
 
-  describe("integration with BashEnv", () => {
-    it("should work with BashEnv for basic commands", async () => {
+  describe("integration with Bash", () => {
+    it("should work with Bash for basic commands", async () => {
       fs.writeFileSync(path.join(tempDir, "input.txt"), "hello world");
       const overlay = new OverlayFs({
         root: tempDir,

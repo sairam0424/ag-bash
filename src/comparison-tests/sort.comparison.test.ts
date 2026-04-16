@@ -29,7 +29,7 @@ describe("sort command - Real Bash Comparison", () => {
       // Skip: macOS and Linux have different default locale sorting for mixed case
       // macOS: case-sensitive ASCII order (A-Z before a-z)
       // Linux: locale-aware order (case-insensitive by default)
-      // BashEnv uses JavaScript's sort which is ASCII-order like macOS
+      // Bash uses JavaScript's sort which is ASCII-order like macOS
       const env = await setupFiles(testDir, {
         "test.txt": "banana\napple\ncherry\n",
       });

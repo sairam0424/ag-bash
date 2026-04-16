@@ -40,7 +40,7 @@ export const curlHelp: {
     "-v, --verbose         Verbose output",
     "    --help            Display this help and exit",
     "",
-    "Note: Network access must be configured via BashEnv network option.",
+    "Note: Network access must be configured via Bash network option.",
     "      curl is not available by default for security reasons.",
   ],
 };

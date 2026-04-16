@@ -3,7 +3,7 @@
  *
  * This module provides:
  * - Mock fetch implementation with predefined responses
- * - Environment adapters for BashEnv and Sandbox
+ * - Environment adapters for Bash and Sandbox
  * - Test utilities like expectBlocked
  */
 
@@ -112,7 +112,7 @@ export function createMockFetch(): ReturnType<typeof vi.fn<typeof fetch>> {
 }
 
 /**
- * Environment adapter interface for running tests with both BashEnv and Sandbox
+ * Environment adapter interface for running tests with both Bash and Sandbox
  */
 export interface EnvAdapter {
   exec(
@@ -122,9 +122,9 @@ export interface EnvAdapter {
 }
 
 /**
- * Creates an adapter for BashEnv
+ * Creates an adapter for Bash
  */
-export function createBashEnvAdapter(options: BashOptions): EnvAdapter {
+export function createBashAdapter(options: BashOptions): EnvAdapter {
   const env = new Bash({ ...options });
   return {
     exec: (cmd) => env.exec(cmd),

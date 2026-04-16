@@ -41,6 +41,7 @@ import { resolve } from "node:path";
 import { Bash } from "../Bash.js";
 import { OverlayFs } from "../fs/overlay-fs/index.js";
 import { sanitizeErrorMessage } from "../fs/real-fs-utils.js";
+import { Theme } from "./theme.js";
 
 interface CliOptions {
   script?: string;
@@ -109,7 +110,7 @@ Examples:
 }
 
 function printVersion(): void {
-  console.log("ag-bash 1.0.0");
+  console.log(Theme.colors.cyan(Theme.colors.bold("ag-bash")) + " " + Theme.colors.dim("v1.0.0"));
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -288,7 +289,17 @@ async function main(): Promise<void> {
     // Script from stdin
     script = await readStdin();
   } else {
-    // No script provided - show help
+    // No script provided - show banner if TTY, then help
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+      Theme.printHeader("1.0.0");
+      Theme.printBrandManifest();
+      Theme.printManifest({
+        commands: 100,
+        filesystems: 2,
+        python: options.python ? "Enabled" : "Available",
+        javascript: options.javascript ? "Enabled" : "Available",
+      });
+    }
     printHelp();
     process.exit(1);
   }

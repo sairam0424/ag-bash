@@ -61,7 +61,7 @@ describe("cat command - Real Bash Comparison", () => {
   });
 
   // Linux cat -n continues line numbers across files, macOS resets per file
-  // BashEnv follows Linux behavior - fixture uses Linux output
+  // Bash follows Linux behavior - fixture uses Linux output
   it("should match -n with multiple files", async () => {
     const env = await setupFiles(testDir, {
       "a.txt": "file a line 1\nfile a line 2\n",

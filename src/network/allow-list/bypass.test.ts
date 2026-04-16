@@ -7,7 +7,7 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  createBashEnvAdapter,
+  createBashAdapter,
   createMockFetch,
   expectAllowed,
   expectBlocked,
@@ -30,14 +30,14 @@ describe("allow-list bypass attempts", () => {
 
   describe("hostname confusion attacks", () => {
     it("blocks evil.com disguised with allowed domain as subdomain", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "https://api.example.com.evil.com/data");
     });
 
     it("blocks using @ to put allowed domain in username", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // https://api.example.com@evil.com actually connects to evil.com
@@ -45,14 +45,14 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks using credentials with allowed domain", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "https://user:pass@evil.com/data");
     });
 
     it("blocks hostname with trailing dot", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Trailing dot is technically valid DNS but should be treated carefully
@@ -65,7 +65,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks similar-looking domains (typosquatting)", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "https://api.examp1e.com/data");
@@ -77,7 +77,7 @@ describe("allow-list bypass attempts", () => {
 
   describe("URL encoding attacks", () => {
     it("blocks URL-encoded hostname", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // %65 = 'e', trying to encode part of hostname
@@ -90,7 +90,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks double URL encoding", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // %25 = '%', so %2565 = %65 after first decode
@@ -103,7 +103,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks URL-encoded slashes in path", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
       });
       // %2f = '/', trying to bypass path prefix check
@@ -111,7 +111,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks encoded separator traversal within an allowed subtree", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
       });
       await expectBlocked(env, "https://api.example.com/v1/%2f..%2fv2/users");
@@ -119,7 +119,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("handles URL-encoded allowed path correctly", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Normal URL encoding in path should still work for allowed URLs
@@ -133,21 +133,21 @@ describe("allow-list bypass attempts", () => {
 
   describe("path traversal attacks", () => {
     it("blocks path traversal to escape prefix", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
       });
       await expectBlocked(env, "https://api.example.com/v1/../v2/users");
     });
 
     it("blocks encoded path traversal", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
       });
       await expectBlocked(env, "https://api.example.com/v1/%2e%2e/v2/users");
     });
 
     it("handles double-encoded path traversal - encoded dots stay encoded", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
       });
       // %252e = %2e after single decode, which stays in path as literal %2e
@@ -163,7 +163,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks backslash path traversal", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
       });
       await expectBlocked(env, "https://api.example.com/v1/..\\v2/users");
@@ -172,7 +172,7 @@ describe("allow-list bypass attempts", () => {
 
   describe("protocol attacks", () => {
     it("blocks file:// protocol", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       const result = await env.exec('curl "file:///etc/passwd"');
@@ -181,7 +181,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks data: URLs", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       const result = await env.exec('curl "data:text/plain,evil"');
@@ -190,7 +190,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks ftp:// protocol - curl treats unrecognized scheme as hostname", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // curl adds https:// to URLs without recognized scheme, so ftp:// becomes
@@ -203,7 +203,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks javascript: URLs", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       const result = await env.exec('curl "javascript:alert(1)"');
@@ -212,7 +212,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks protocol-relative URLs (//)", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Protocol-relative URLs - curl treats // as path, adds https://
@@ -228,14 +228,14 @@ describe("allow-list bypass attempts", () => {
 
   describe("port manipulation attacks", () => {
     it("blocks non-standard HTTPS port", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "https://api.example.com:8443/data");
     });
 
     it("allows explicit port 443 when default port is allowed", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Port 443 is the default HTTPS port, so https://host:443 should match https://host
@@ -248,14 +248,14 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks HTTP on port 443", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "http://api.example.com:443/data");
     });
 
     it("blocks HTTPS on port 80", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "https://api.example.com:80/data");
@@ -264,7 +264,7 @@ describe("allow-list bypass attempts", () => {
 
   describe("case sensitivity attacks", () => {
     it("blocks uppercase scheme - curl adds https:// prefix", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // curl adds https:// to URLs without recognized scheme
@@ -277,7 +277,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("handles uppercase hostname - passes allow-list with normalized hostname", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // URL class normalizes hostname to lowercase for allow-list check
@@ -290,7 +290,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks mixed case evil domain - preserves case in error", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Error message preserves the original URL casing
@@ -304,14 +304,14 @@ describe("allow-list bypass attempts", () => {
 
   describe("IPv4/IPv6 attacks", () => {
     it("blocks IPv4 localhost", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "https://127.0.0.1/data");
     });
 
     it("blocks IPv4 private ranges", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "https://192.168.1.1/data");
@@ -320,14 +320,14 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks IPv6 localhost", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(env, "https://[::1]/data");
     });
 
     it("blocks IPv4-mapped IPv6", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // IPv4-mapped IPv6 address for 127.0.0.1
@@ -335,7 +335,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks decimal IP notation", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // 2130706433 = 127.0.0.1 in decimal
@@ -343,7 +343,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks octal IP notation", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // 0177.0.0.1 = 127.0.0.1 in octal
@@ -351,7 +351,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks hex IP notation", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // 0x7f000001 = 127.0.0.1 in hex
@@ -361,7 +361,7 @@ describe("allow-list bypass attempts", () => {
 
   describe("special character injection", () => {
     it("blocks null byte injection", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Null byte might truncate URL processing
@@ -373,7 +373,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks CRLF injection", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       const result = await env.exec(
@@ -384,7 +384,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks fragment to hide path", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
       });
       // Fragment should not bypass path prefix check
@@ -392,7 +392,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks query string manipulation", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
       });
       // Query string with path should not bypass
@@ -402,7 +402,7 @@ describe("allow-list bypass attempts", () => {
 
   describe("Unicode/IDN attacks", () => {
     it("blocks homoglyph attacks (Cyrillic 'а' vs Latin 'a')", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Using Cyrillic 'а' (U+0430) instead of Latin 'a' (U+0061)
@@ -410,7 +410,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks punycode bypass attempts", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // xn-- is punycode prefix
@@ -418,7 +418,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks URL with BOM", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // UTF-8 BOM before URL
@@ -428,7 +428,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks zero-width characters in hostname", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Zero-width space (U+200B) in hostname
@@ -438,7 +438,7 @@ describe("allow-list bypass attempts", () => {
 
   describe("whitespace and delimiter attacks", () => {
     it("blocks tab in URL", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Tab in URL makes it invalid
@@ -451,7 +451,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks newline in URL", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Newline in URL - blocked because evil.com is not allowed
@@ -464,7 +464,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks space-separated URL injection", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Space in URL creates invalid path, returns 404 from mock
@@ -481,7 +481,7 @@ describe("allow-list bypass attempts", () => {
   describe("redirect chain attacks", () => {
     it("blocks open redirect via allowed domain", async () => {
       // Even if allowed domain has an open redirect, we should block
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       const result = await env.exec(
@@ -496,7 +496,7 @@ describe("allow-list bypass attempts", () => {
 
     it("verifies no data leaks on blocked redirect", async () => {
       mockFetch.mockClear();
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
 
@@ -511,7 +511,7 @@ describe("allow-list bypass attempts", () => {
 
   describe("edge case URLs", () => {
     it("blocks empty hostname", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // Empty hostname is blocked
@@ -524,7 +524,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks URL with only protocol", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       // URL with only protocol is blocked
@@ -537,7 +537,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks extremely long hostname", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       const longHost = `${"a".repeat(1000)}.evil.com`;
@@ -545,7 +545,7 @@ describe("allow-list bypass attempts", () => {
     });
 
     it("blocks URL with many subdomains", async () => {
-      const env = createBashEnvAdapter({
+      const env = createBashAdapter({
         network: { allowedUrlPrefixes: ["https://api.example.com"] },
       });
       await expectBlocked(
