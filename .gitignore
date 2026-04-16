@@ -1,28 +1,42 @@
-node_modules
+# Dependencies
+**/node_modules
+**/.node_modules
+**/.pnpm-store
+**/.npm-cache
 package-lock.json
+# Ignore example/nested lockfiles but keep root
+examples/**/pnpm-lock.yaml
+packages/**/pnpm-lock.yaml
+
+# Build Artifacts
+**/dist
+**/coverage
+**/*.parsed.json
+packages/bash/src/commands/python3/worker.js
+packages/bash/src/commands/js-exec/worker.js
+
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+.npmrc
+
+# Editor and System
 .DS_Store
 .vscode
 .idea
-.env
-.env.*
-dist
-/coverage
+.claude/settings.local.json
+
+# Temporary and Logs
+tmp-tap/
+publish-tmp/
+scratch/
 debug-*.ts
-test-*.ts
-profile-*.mjs
+# Don't ignore .test.sh or .test.ts unless they start with debug/test prefix
+test-output/
+fuzz-*.log
 *.cpuprofile
+profile-*.mjs
 bench-*.mjs
 todo/
-*.parsed.json
-.pnpm-store
 .docs-test-tmp/
-packages/*/dist
-packages/*/node_modules
-scratch/
-.npm-cache/
-packages/bash/src/commands/python3/worker.js
-packages/bash/src/commands/js-exec/worker.js
-fuzz-*.log
-.claude/settings.local.json
-.npmrc
-\n# Sensitive NPM config\n.npmrc
