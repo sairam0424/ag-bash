@@ -835,6 +835,7 @@ export class Bash {
     return mapToRecord(this.state.env);
   }
 
+  // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin registration
   registerTransformPlugin(plugin: TransformPlugin<any>): void {
     this.transformPlugins.push(plugin);
   }
