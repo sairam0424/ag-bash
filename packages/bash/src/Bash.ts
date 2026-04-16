@@ -297,7 +297,6 @@ export class Bash {
   private logger?: BashLogger;
   private defenseInDepthConfig?: DefenseInDepthConfig | boolean;
   private coverageWriter?: FeatureCoverageWriter;
-  private requireDefenseContext?: boolean;
   private jsBootstrapCode?: string;
   private onCommandNotFound?: BashOptions["onCommandNotFound"];
   // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin storage for untyped API
@@ -836,7 +835,6 @@ export class Bash {
     return mapToRecord(this.state.env);
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: accepts any plugin for untyped API
   registerTransformPlugin(plugin: TransformPlugin<any>): void {
     this.transformPlugins.push(plugin);
   }

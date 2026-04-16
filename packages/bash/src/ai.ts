@@ -60,9 +60,9 @@ export function createBashTool(options: CreateBashToolOptions): {
   return {
     tools: {
       bash: {
-        description:
-          "Execute a bash command in a secure sandbox with a virtual filesystem. You can use common commands like ls, cat, grep, awk, sed, jq, etc. to explore the environment and process data." +
-          (options.extraInstructions ? "\n\n" + options.extraInstructions : ""),
+        description: `Execute a bash command in a secure sandbox with a virtual filesystem. You can use common commands like ls, cat, grep, awk, sed, jq, etc. to explore the environment and process data.${
+          options.extraInstructions ? `\n\n${options.extraInstructions}` : ""
+        }`,
         inputSchema: {
           type: "object",
           properties: {
@@ -97,6 +97,7 @@ export function createBashTool(options: CreateBashToolOptions): {
             };
             await options.onAfterBashCall?.({ command, result: toolResult });
             return toolResult;
+            // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
           } catch (error: any) {
             const errorResult = {
               error: error.message,

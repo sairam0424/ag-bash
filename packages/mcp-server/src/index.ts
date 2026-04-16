@@ -22,17 +22,17 @@ class AgBashServer {
     });
   }
 
-   // biome-ignore lint/suspicious/noExplicitAny: JSON-RPC result or error object
+  // biome-ignore lint/suspicious/noExplicitAny: JSON-RPC result or error object
   private sendResponse(id: string | number | null, resultOrError: any) {
     const response = {
       jsonrpc: "2.0",
       id,
       ...resultOrError,
     };
-    process.stdout.write(JSON.stringify(response) + "\n");
+    process.stdout.write(`${JSON.stringify(response)}\n`);
   }
 
-   // biome-ignore lint/suspicious/noExplicitAny: incoming JSON-RPC request object
+  // biome-ignore lint/suspicious/noExplicitAny: incoming JSON-RPC request object
   private async handleRequest(request: any) {
     const { method, params, id } = request;
 
