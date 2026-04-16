@@ -34,6 +34,23 @@ const result = await bash.exec('echo "Hello Ag-Bash"');
 console.log(result.stdout); // "Hello Ag-Bash\n"
 ```
 
+### 2. Standalone CLI & Shell (Global)
+
+For human-in-the-loop debugging and interactive use, install the Ag-Bash suite globally.
+
+#### Via Homebrew (macOS)
+```bash
+brew tap ag-bash/homebrew-tap
+brew install ag-bash
+```
+
+#### Via NPM (Cross-platform)
+```bash
+npm install -g @ag-bash/bash @ag-bash/mcp-server
+```
+
+---
+
 ### For AI Agents (MCP)
 
 To provide a bash environment to your agent (e.g., in Claude Desktop or Cursor):

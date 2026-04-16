@@ -238,20 +238,26 @@ function parseArgs(): ShellOptions {
       options.network = false;
     } else if (args[i] === "--help" || args[i] === "-h") {
       console.log(`
-Usage: pnpm shell [options]
+  ag-shell — INTERACTIVE VIRTUAL BASH ENVIRONMENT
+  -----------------------------------------------------------------
 
-Interactive shell using OverlayFs - reads from the current directory,
-writes stay in memory (copy-on-write).
+  Usage:
+    ag-shell [options]
 
-Options:
-  --cwd <dir>         Set initial working directory (default: /)
-  --network           Enable network access (disabled by default)
-  --no-network        Disable network access (default)
-  --help, -h          Show this help message
+  Interactive shell using OverlayFS - reads from the current directory,
+  writes stay in memory (copy-on-write). Perfect for safe agentic
+  debugging and human-in-the-loop experimentation.
 
-Example:
-  pnpm shell
-  pnpm shell --network
+  Options:
+    --cwd <path>      Initial working directory (default: /)
+    --network         Enable network access (dangerouslyAllowFullInternetAccess)
+    --no-network      Disable network access (default)
+    -h, --help        Show this help message
+
+  Example:
+    ag-shell
+    ag-shell --cwd /usr/local
+    ag-shell --network
 `);
       process.exit(0);
     }

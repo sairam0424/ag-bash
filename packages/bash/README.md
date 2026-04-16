@@ -6,7 +6,22 @@ Broad support for standard unix commands and bash syntax with optional curl, Pyt
 
 **Note**: This is beta software. Use at your own risk and please provide feedback. See [security model](#security-model).
 
-## Quick Start
+## Installation
+
+### Globally (CLI & Shell)
+
+#### Via Homebrew (macOS)
+```bash
+brew tap ag-bash/homebrew-tap
+brew install ag-bash
+```
+
+#### Via NPM
+```bash
+npm install -g @ag-bash/bash
+```
+
+### As a Library
 
 ```bash
 npm install @ag-bash/bash
