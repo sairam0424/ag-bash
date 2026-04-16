@@ -1,4 +1,4 @@
-import { defineCommand } from "ag-bash/browser";
+import { defineCommand } from "@ag-bash/bash/browser";
 import { MAX_TOOL_OUTPUT_LINES } from "./constants";
 import { formatMarkdown } from "./markdown";
 

@@ -26,6 +26,12 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/bundle/index.cjs"
       }
+    },
+    "./browser": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/bundle/browser.js"
+      }
     }
   },
   "bin": {

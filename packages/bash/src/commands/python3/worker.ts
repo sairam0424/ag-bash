@@ -1297,7 +1297,8 @@ async function runPython(input: WorkerInput): Promise<WorkerOutput> {
   // Load the CPython Emscripten factory function
   assertApprovedPath(cpythonEntryPath, "cpython-entry");
   // @banned-pattern-ignore: path validated by assertApprovedPath allowlist above
-  const createPythonModule = require(cpythonEntryPath) as (
+  const requireFn = require;
+  const createPythonModule = requireFn(cpythonEntryPath) as (
     config: Record<string, unknown>,
   ) => Promise<EmscriptenModule>;
 

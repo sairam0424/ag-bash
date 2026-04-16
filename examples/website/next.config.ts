@@ -16,7 +16,7 @@ const cspHeader = `
   .trim();
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@ag/bash"],
+  serverExternalPackages: ["@ag-bash/bash"],
   outputFileTracingIncludes: {
     "/api/agent": ["./app/api/agent/_agent-data/**/*"],
     "/api/fs": ["./app/api/agent/_agent-data/**/*"],
