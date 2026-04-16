@@ -1,5 +1,5 @@
-import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
 import type { Bash } from "./Bash.js";
+import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
 
 /**
  * Options for creating an AI tool that wraps a Bash sandbox.
