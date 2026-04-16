@@ -263,6 +263,11 @@ export interface ExecOptions {
    * positional parameters ($1, $2, "$@", etc.).
    */
   args?: string[];
+  /**
+   * If true, commit execution state back to the Bash instance after success.
+   * Persists CWD, environment variables, and functions.
+   */
+  persistState?: boolean;
 }
 
 export class Bash {
@@ -678,11 +683,20 @@ export class Bash {
         return this.logResult(execResult);
       };
 
-      // If defense-in-depth is enabled, run within the protected context
-      if (defenseHandle) {
-        return await defenseHandle.run(executeScript);
+      const execResult = await (defenseHandle ? defenseHandle.run(executeScript) : executeScript());
+      
+      // If persistence is enabled, commit the state back to the Bash instance
+      if (options?.persistState && execResult.exitCode === 0) {
+        this.state.cwd = execState.cwd;
+        this.state.env = execState.env;
+        this.state.functions = execState.functions;
+        this.state.lastExitCode = execResult.exitCode;
+        this.state.shoptOptions = { ...execState.shoptOptions };
+        this.state.options = { ...execState.options };
+        this.state.hashTable = execState.hashTable;
       }
-      return await executeScript();
+      
+      return execResult;
     } catch (error) {
       // ExitError propagates from 'exit' builtin (including via eval/source)
       if (error instanceof ExitError) {

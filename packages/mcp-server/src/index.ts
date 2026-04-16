@@ -91,7 +91,7 @@ class AgBashServer {
           const { name, arguments: args } = params;
           if (name === "run_bash") {
             const script = String(args?.script || "");
-            const result = await this.bash.exec(script);
+            const result = await this.bash.exec(script, { persistState: true });
             
             let output = "";
             if (result.stdout) output += result.stdout;
