@@ -10,10 +10,12 @@
  * Defense-in-depth activates BEFORE CPython loads to block dangerous Node.js APIs.
  */
 
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { statSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
+
 import { sanitizeHostErrorMessage } from "../../fs/sanitize-error.js";
 import {
   WorkerDefenseInDepth,
@@ -126,10 +128,10 @@ try {
   /* best-effort */
 }
 
-function checkBinaryHealth(path: string): void {
+function checkBinaryHealth(path: string, minSize = 51200): void {
   try {
     const stats = statSync(path);
-    if (stats.size < 1024 * 1024) {
+    if (stats.size < minSize) {
       // Python WASM should be ~6MB. LFS pointers and HTML error pages are much smaller.
       throw new Error(
         `Binary at ${path} is too small (${stats.size} bytes). Likely a Git LFS pointer or corrupted file. Please restore the valid binary.`,
@@ -137,17 +139,13 @@ function checkBinaryHealth(path: string): void {
     }
 
     // Check for HTML content (common redirect error)
-    const fs = require("node:fs");
     const buffer = Buffer.alloc(15);
-    const fd = fs.openSync(path, "r");
-    fs.readSync(fd, buffer, 0, 15, 0);
-    fs.closeSync(fd);
+    const fd = openSync(path, "r");
+    readSync(fd, buffer, 0, 15, 0);
+    closeSync(fd);
 
     const firstChars = buffer.toString();
-    if (
-      firstChars.includes("<!DOCTYPE") ||
-      firstChars.includes("<html")
-    ) {
+    if (firstChars.includes("<!DOCTYPE") || firstChars.includes("<html")) {
       throw new Error(
         `Binary at ${path} contains HTML instead of WebAssembly. This is likely a redirected GitHub error page. Please restore the valid binary.`,
       );
@@ -163,26 +161,59 @@ function checkBinaryHealth(path: string): void {
 }
 
 let cpythonEntryPath: string;
-try {
-  cpythonEntryPath = require.resolve(
-    "../../../vendor/cpython-emscripten/python.cjs",
-  );
-} catch (_e) {
-  // Fallback: resolve relative to this file
-  cpythonEntryPath =
-    dirname(import.meta.url).replace("file://", "") +
-    "/../../../vendor/cpython-emscripten/python.cjs";
+const workerDir = dirname(fileURLToPath(import.meta.url));
+
+const entryCandidates = [
+  // 1. Same dir as worker (if we copy vendor there)
+  join(workerDir, "vendor/cpython-emscripten/python.cjs"),
+  // 2. Standard dist layout
+  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
+  // 3. Bundled chunk layout (dist/bin/chunks/worker.js)
+  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
+  // 4. Source layout (src/commands/python3/worker.ts -> src/commands/python3/worker.js)
+  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
+  // 5. Package layout (node_modules/@ag/bash/...)
+  join(workerDir, "../../vendor/cpython-emscripten/python.cjs"),
+];
+
+let foundPath = "";
+for (const cand of entryCandidates) {
+  try {
+    if (statSync(cand).isFile()) {
+      foundPath = cand;
+      break;
+    }
+  } catch {
+    /* continue */
+  }
 }
+
+if (!foundPath) {
+  // Fallback to require.resolve if available
+  try {
+    foundPath = require.resolve(
+      "../../../vendor/cpython-emscripten/python.cjs",
+    );
+  } catch {
+    throw new Error(
+      `[Defense-in-depth] Could not locate CPython entry at any candidate path. WorkerDir: ${workerDir}`,
+    );
+  }
+}
+
+cpythonEntryPath = foundPath;
 assertApprovedPath(cpythonEntryPath, "cpython-entry");
+
+let stdlibZipPath = "";
 checkBinaryHealth(cpythonEntryPath);
 
 const cpythonDir = dirname(cpythonEntryPath);
 const wasmPath = join(cpythonDir, "python.wasm");
-checkBinaryHealth(wasmPath);
+checkBinaryHealth(wasmPath, 1024 * 1024);
 
-const stdlibZipPath = `${cpythonDir}/python313.zip`;
+stdlibZipPath = `${cpythonDir}/python313.zip`;
 assertApprovedPath(stdlibZipPath, "cpython-stdlib");
-checkBinaryHealth(stdlibZipPath);
+checkBinaryHealth(stdlibZipPath, 1024 * 1024);
 
 // Emscripten module types
 interface EmscriptenModule {

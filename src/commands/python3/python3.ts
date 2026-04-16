@@ -186,7 +186,10 @@ export function _resetExecutionQueue(): void {
   executionQueues = new WeakMap();
 }
 
+// Resolve worker path with fallbacks for bundled/minified environments
 const workerPath = join(dirname(fileURLToPath(import.meta.url)), "worker.js");
+// If we are in a chunk (ESM splitting), the worker might be in the same dir or a parent dir
+// depending on how the build script copies it.
 
 function generateWorkerProtocolToken(): string {
   return randomBytes(16).toString("hex");

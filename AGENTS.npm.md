@@ -40,8 +40,6 @@ const result = await generateText({
 });
 ```
 
-See the [bash-tool documentation](https://github.com/ag-ai/bash-tool) for more details.
-
 ## Quick Reference
 
 ```typescript

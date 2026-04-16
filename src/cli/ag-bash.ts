@@ -59,58 +59,43 @@ interface CliOptions {
 }
 
 function printHelp(): void {
-  console.log(`ag-bash - A secure bash environment for AI agents
+  const c = Theme.colors;
+  console.log(`
+  ${c.cyan(c.bold("ag-bash"))} — ${c.bold("SECURE UNIFIED AGENTIC BASH RUNTIME")}
+  ${c.dim("-----------------------------------------------------------------")}
 
-Usage:
-  ag-bash [options] [script-file]
-  ag-bash -c 'script' [options]
-  echo 'script' | ag-bash [options]
+  Usage:
+    ag-bash [options] [script-file]
+    ag-bash -c 'script' [options]
+    echo 'script' | ag-bash [options]
 
-Options:
-  -c <script>       Execute the script from command line argument
-  -e, --errexit     Exit immediately if a command exits with non-zero status
-  --root <path>     Root directory for OverlayFS (default: current directory)
-  --cwd <path>      Working directory within the sandbox (default: project mount point)
-  --allow-write     Allow write operations (default: read-only)
-  --python          Enable python3/python commands (disabled by default)
-  --javascript      Enable js-exec command (disabled by default)
-  --json            Output results as JSON (stdout, stderr, exitCode)
-  -h, --help        Show this help message
-  -v, --version     Show version
+  Options:
+    -c <script>       Execute the script from command line argument
+    -e, --errexit     Exit immediately if a command exits with non-zero status
+    --root <path>     Root directory for OverlayFS (default: current directory)
+    --cwd <path>      Working directory within the sandbox (default: /)
+    --allow-write     Allow write operations (default: read-only)
+    --python          Enable python3 commands (isolated WASM)
+    --javascript      Enable js-exec commands (QuickJS)
+    --json            Output results as JSON
+    -h, --help        Show this help message
+    -v, --version     Show version
 
-Security:
-  - Reads from the real filesystem (read-only via OverlayFS)
-  - Write operations are blocked by default (use --allow-write to enable)
-  - Cannot escape the root directory
-  - No network access
+  Security USPs:
+    - ${c.bold("Byte-Transparent")}: 1:1 local-to-virtual mirroring via OverlayFS
+    - ${c.bold("Defense-in-Depth")}: Writes stay in-memory; global sandboxing
+    - ${c.bold("Cross-Runtime")}: Unified sandbox for Bash, Python, and JS
+  `);
 
-Filesystem:
-  The root directory is mounted at /home/user/project in the virtual filesystem.
-  The working directory starts at this mount point.
-
-Examples:
-  # List files in current directory
-  ag-bash -c 'ls -la'
-
-  # Execute with specific root
-  ag-bash -c 'cat package.json' --root /path/to/project
-
-  # Pipe script from stdin
-  echo 'find . -name "*.ts" | head -5' | ag-bash
-
-  # Execute a script file
-  ag-bash ./scripts/build.sh
-
-  # Get JSON output for programmatic use
-  ag-bash -c 'echo hello' --json
-
-  # Allow write operations (writes stay in memory)
-  ag-bash -c 'echo test > /tmp/file.txt && cat /tmp/file.txt' --allow-write
-`);
+  Theme.printPowerSuite();
 }
 
 function printVersion(): void {
-  console.log(Theme.colors.cyan(Theme.colors.bold("ag-bash")) + " " + Theme.colors.dim("v1.0.0"));
+  console.log(
+    Theme.colors.cyan(Theme.colors.bold("ag-bash")) +
+      " " +
+      Theme.colors.dim("v1.0.0"),
+  );
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -299,6 +284,7 @@ async function main(): Promise<void> {
         python: options.python ? "Enabled" : "Available",
         javascript: options.javascript ? "Enabled" : "Available",
       });
+      Theme.printPowerSuite();
     }
     printHelp();
     process.exit(1);
