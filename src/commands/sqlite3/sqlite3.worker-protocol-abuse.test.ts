@@ -169,8 +169,9 @@ describe("sqlite3 worker protocol abuse", () => {
 
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
-      "sqlite3: sqlite3 worker message callback attempted outside defense context\n\nThis is a defense-in-depth measure and indicates a bug in ag-bash. Please report this on GitHub\n",
+      "sqlite3: sqlite3 worker message callback attempted outside defense context\n\nThis is a defense-in-depth measure and indicates a bug in ag-bash. Please report this to the project maintainers.\n",
     );
+
     expect(result.exitCode).toBe(1);
   });
 

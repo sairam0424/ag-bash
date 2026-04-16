@@ -8,11 +8,7 @@
 
 import { lookup } from "node:dns";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import {
-  createBashAdapter,
-  createMockFetch,
-  originalFetch,
-} from "./shared.js";
+import { createBashAdapter, createMockFetch, originalFetch } from "./shared.js";
 
 /**
  * Resolve a hostname with real DNS and return addresses.

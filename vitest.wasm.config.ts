@@ -8,7 +8,8 @@ export default defineConfig({
   test: {
     globals: true,
     include: [
-      "**/security/attacks/**",
+      "**/security/attacks/**/*.test.ts",
+
       "**/security/defense-in-depth-box*.test.ts",
       "**/browser.bundle.test.ts",
       "**/python3.test.ts",

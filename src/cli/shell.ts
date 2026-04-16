@@ -19,7 +19,6 @@ import {
 import { Theme } from "./theme.js";
 
 // ANSI colors
-const colors = Theme.colors;
 
 interface ShellOptions {
   cwd?: string;
@@ -168,6 +167,7 @@ class VirtualShell {
       javascript: "Enabled",
     };
     Theme.printSuccess("Node.js", "Interactive Shell", stats);
+    Theme.printPowerSuite();
   }
 
   private prompt(): void {
