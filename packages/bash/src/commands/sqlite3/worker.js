@@ -1,0 +1,203 @@
+/**
+ * Worker thread for sqlite3 query execution.
+ *
+ * This isolates potentially long-running queries so they can be
+ * terminated if they exceed the timeout.
+ *
+ * Uses sql.js (WASM-based SQLite) which is fully sandboxed and cannot
+ * access the real filesystem.
+ *
+ * Security: Uses phased defense-in-depth:
+ * 1. Init phase: sql.js WASM loads without restrictions
+ * 2. Defense phase: Activate full blocking after sql.js init
+ * 3. Execute phase: User SQL runs with all dangerous globals blocked
+ */
+import { parentPort, workerData } from "node:worker_threads";
+import initSqlJs from "sql.js";
+import { sanitizeHostErrorMessage } from "../../fs/sanitize-error.js";
+import { WorkerDefenseInDepth, } from "../../security/index.js";
+import { sanitizeUnknownError, wrapWasmCallback, } from "../../security/wasm-callback.js";
+// Cached SQL.js module (initialized once)
+let cachedSQL = null;
+// Defense instance (activated after sql.js init)
+let defense = null;
+function wrapWorkerMessage(protocolToken, message) {
+    const wrapped = Object.create(null);
+    if (!message || typeof message !== "object") {
+        wrapped.success = false;
+        wrapped.error = "Worker attempted to post non-object message";
+        wrapped.protocolToken = protocolToken;
+        return wrapped;
+    }
+    for (const [key, value] of Object.entries(message))
+        wrapped[key] = value;
+    // Set token AFTER copying message entries to prevent payload from overwriting it
+    wrapped.protocolToken = protocolToken;
+    return wrapped;
+}
+function postWorkerMessage(protocolToken, message) {
+    try {
+        parentPort?.postMessage(wrapWorkerMessage(protocolToken, message));
+    }
+    catch (error) {
+        // Best effort: avoid crashing worker when parent port is unavailable.
+        console.debug("[sqlite3-worker] failed to post worker message:", sanitizeUnknownError(error));
+    }
+}
+/**
+ * Initialize sql.js and activate defense-in-depth.
+ * Called once per worker lifetime.
+ */
+async function initializeWithDefense(protocolToken) {
+    if (cachedSQL) {
+        return cachedSQL;
+    }
+    // Initialize sql.js WASM first (needs unrestricted JS features)
+    cachedSQL = await initSqlJs();
+    // Activate defense after sql.js is loaded (no exclusions needed)
+    const onViolation = wrapWasmCallback("sqlite3-worker", "onViolation", (v) => {
+        postWorkerMessage(protocolToken, {
+            type: "security-violation",
+            violation: v,
+        });
+    });
+    defense = new WorkerDefenseInDepth({ onViolation });
+    return cachedSQL;
+}
+function isWriteStatement(sql) {
+    const trimmed = sql.trim().toUpperCase();
+    return (trimmed.startsWith("INSERT") ||
+        trimmed.startsWith("UPDATE") ||
+        trimmed.startsWith("DELETE") ||
+        trimmed.startsWith("CREATE") ||
+        trimmed.startsWith("DROP") ||
+        trimmed.startsWith("ALTER") ||
+        trimmed.startsWith("REPLACE") ||
+        trimmed.startsWith("VACUUM"));
+}
+function splitStatements(sql) {
+    const statements = [];
+    let current = "";
+    let inString = false;
+    let stringChar = "";
+    for (let i = 0; i < sql.length; i++) {
+        const char = sql[i];
+        if (inString) {
+            current += char;
+            if (char === stringChar) {
+                if (sql[i + 1] === stringChar) {
+                    current += sql[++i];
+                }
+                else {
+                    inString = false;
+                }
+            }
+        }
+        else if (char === "'" || char === '"') {
+            current += char;
+            inString = true;
+            stringChar = char;
+        }
+        else if (char === ";") {
+            const stmt = current.trim();
+            if (stmt)
+                statements.push(stmt);
+            current = "";
+        }
+        else {
+            current += char;
+        }
+    }
+    const stmt = current.trim();
+    if (stmt)
+        statements.push(stmt);
+    return statements;
+}
+async function executeQuery(data) {
+    let db;
+    try {
+        const SQL = await initializeWithDefense(data.protocolToken);
+        if (data.dbBuffer) {
+            db = new SQL.Database(data.dbBuffer);
+        }
+        else {
+            db = new SQL.Database();
+        }
+    }
+    catch (e) {
+        const message = sanitizeHostErrorMessage(e.message);
+        return {
+            success: false,
+            error: message,
+            defenseStats: defense?.getStats(),
+        };
+    }
+    const results = [];
+    let hasModifications = false;
+    try {
+        const statements = splitStatements(data.sql);
+        for (const stmt of statements) {
+            try {
+                if (isWriteStatement(stmt)) {
+                    db.run(stmt);
+                    hasModifications = true;
+                    results.push({ type: "data", columns: [], rows: [] });
+                }
+                else {
+                    // Use prepared statement to get column names even for empty result sets
+                    const prepared = db.prepare(stmt);
+                    const columns = prepared.getColumnNames();
+                    const rows = [];
+                    while (prepared.step()) {
+                        rows.push(prepared.get());
+                    }
+                    prepared.free();
+                    results.push({ type: "data", columns, rows });
+                }
+            }
+            catch (e) {
+                const error = e.message;
+                results.push({ type: "error", error });
+                if (data.options.bail) {
+                    break;
+                }
+            }
+        }
+        let resultBuffer = null;
+        if (hasModifications) {
+            resultBuffer = db.export();
+        }
+        db.close();
+        return {
+            success: true,
+            results,
+            hasModifications,
+            dbBuffer: resultBuffer,
+            defenseStats: defense?.getStats(),
+        };
+    }
+    catch (e) {
+        db.close();
+        const message = sanitizeHostErrorMessage(e.message);
+        return {
+            success: false,
+            error: message,
+            defenseStats: defense?.getStats(),
+        };
+    }
+}
+// Execute when run as worker
+if (parentPort && workerData) {
+    const input = workerData;
+    executeQuery(input)
+        .then((result) => {
+        postWorkerMessage(input.protocolToken, result);
+    })
+        .catch((error) => {
+        postWorkerMessage(input.protocolToken, {
+            success: false,
+            error: sanitizeUnknownError(error),
+            defenseStats: defense?.getStats(),
+        });
+    });
+}
