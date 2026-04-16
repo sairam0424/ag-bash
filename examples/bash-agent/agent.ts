@@ -56,7 +56,7 @@ export async function createAgent(
     cwd: "/workspace",
   });
 
-  const toolkit = await createBashTool({
+  const toolkit = createBashTool({
     sandbox: bash,
     destination: "/workspace",
     extraInstructions: `You have access to files and directories mounted at /workspace.
@@ -68,11 +68,11 @@ Use bash commands to explore:
 - head, tail, wc, sort, uniq for data analysis
 
 Help the user explore, search, and understand the contents.`,
-    onBeforeBashCall: (input) => {
+    onBeforeBashCall: (input: { command: string; }) => {
       options.onToolCall?.(input.command);
       return undefined;
     },
-    onAfterBashCall: (input) => {
+    onAfterBashCall: (input: { result: CommandResult; }) => {
       options.onToolResult?.(input.result);
       return undefined;
     },
