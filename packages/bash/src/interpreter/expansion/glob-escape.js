@@ -7,15 +7,15 @@
  * Check if a string contains glob patterns, including extglob when enabled.
  */
 export function hasGlobPattern(value, extglob) {
-    // Standard glob characters
-    if (/[*?[]/.test(value)) {
-        return true;
-    }
-    // Extglob patterns: @(...), *(...), +(...), ?(...), !(...)
-    if (extglob && /[@*+?!]\(/.test(value)) {
-        return true;
-    }
-    return false;
+  // Standard glob characters
+  if (/[*?[]/.test(value)) {
+    return true;
+  }
+  // Extglob patterns: @(...), *(...), +(...), ?(...), !(...)
+  if (extglob && /[@*+?!]\(/.test(value)) {
+    return true;
+  }
+  return false;
 }
 /**
  * Unescape a glob pattern - convert escaped glob chars to literal chars.
@@ -30,32 +30,31 @@ export function hasGlobPattern(value, extglob) {
  * the output is "\\_" (with processed escapes), not [\\]_ (raw pattern).
  */
 export function unescapeGlobPattern(pattern) {
-    let result = "";
-    let i = 0;
-    while (i < pattern.length) {
-        if (pattern[i] === "\\" && i + 1 < pattern.length) {
-            // Backslash escapes the next character - output just the escaped char
-            result += pattern[i + 1];
-            i += 2;
-        }
-        else {
-            result += pattern[i];
-            i++;
-        }
+  let result = "";
+  let i = 0;
+  while (i < pattern.length) {
+    if (pattern[i] === "\\" && i + 1 < pattern.length) {
+      // Backslash escapes the next character - output just the escaped char
+      result += pattern[i + 1];
+      i += 2;
+    } else {
+      result += pattern[i];
+      i++;
     }
-    return result;
+  }
+  return result;
 }
 /**
  * Escape glob metacharacters in a string for literal matching.
  * Includes extglob metacharacters: ( ) |
  */
 export function escapeGlobChars(str) {
-    return str.replace(/([*?[\]\\()|])/g, "\\$1");
+  return str.replace(/([*?[\]\\()|])/g, "\\$1");
 }
 /**
  * Escape regex metacharacters in a string for literal matching.
  * Used when quoted patterns are used with =~ operator.
  */
 export function escapeRegexChars(str) {
-    return str.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+  return str.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }

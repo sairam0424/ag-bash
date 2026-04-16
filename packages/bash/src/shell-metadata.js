@@ -12,14 +12,15 @@ export const BASH_VERSION = "5.1.0(1)-release";
 /**
  * Simulated kernel version for /proc/version
  */
-export const KERNEL_VERSION = "Linux version 5.15.0-generic (ag-bash) #1 SMP PREEMPT";
+export const KERNEL_VERSION =
+  "Linux version 5.15.0-generic (ag-bash) #1 SMP PREEMPT";
 /**
  * Format /proc/self/status content using virtual process info.
  * Never exposes real host process information.
  */
 export function formatProcStatus(info) {
-    const { pid, ppid, uid, gid } = info;
-    return `Name:\tbash
+  const { pid, ppid, uid, gid } = info;
+  return `Name:\tbash
 State:\tR (running)
 Pid:\t${pid}
 PPid:\t${ppid}

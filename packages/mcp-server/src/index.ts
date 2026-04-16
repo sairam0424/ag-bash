@@ -22,6 +22,7 @@ class AgBashServer {
     });
   }
 
+   // biome-ignore lint/suspicious/noExplicitAny: JSON-RPC result or error object
   private sendResponse(id: string | number | null, resultOrError: any) {
     const response = {
       jsonrpc: "2.0",
@@ -31,6 +32,7 @@ class AgBashServer {
     process.stdout.write(JSON.stringify(response) + "\n");
   }
 
+   // biome-ignore lint/suspicious/noExplicitAny: incoming JSON-RPC request object
   private async handleRequest(request: any) {
     const { method, params, id } = request;
 
@@ -62,7 +64,8 @@ class AgBashServer {
               tools: [
                 {
                   name: "run_bash",
-                  description: "Run a bash script in a persistent sandboxed environment. State (cwd, variables, functions) persists between calls.",
+                  description:
+                    "Run a bash script in a persistent sandboxed environment. State (cwd, variables, functions) persists between calls.",
                   inputSchema: {
                     type: "object",
                     properties: {
@@ -76,7 +79,8 @@ class AgBashServer {
                 },
                 {
                   name: "get_state",
-                  description: "Retrieve the current state of the shell (CWD and Environment Variables).",
+                  description:
+                    "Retrieve the current state of the shell (CWD and Environment Variables).",
                   inputSchema: {
                     type: "object",
                     properties: {},
@@ -92,11 +96,11 @@ class AgBashServer {
           if (name === "run_bash") {
             const script = String(args?.script || "");
             const result = await this.bash.exec(script, { persistState: true });
-            
+
             let output = "";
             if (result.stdout) output += result.stdout;
             if (result.stderr) output += `\nError:\n${result.stderr}`;
-            
+
             return this.sendResponse(id, {
               result: {
                 content: [
@@ -114,10 +118,14 @@ class AgBashServer {
                 content: [
                   {
                     type: "text",
-                    text: JSON.stringify({
-                      cwd: this.bash.getCwd(),
-                      env: this.bash.getEnv(),
-                    }, null, 2),
+                    text: JSON.stringify(
+                      {
+                        cwd: this.bash.getCwd(),
+                        env: this.bash.getEnv(),
+                      },
+                      null,
+                      2,
+                    ),
                   },
                 ],
               },
@@ -138,7 +146,6 @@ class AgBashServer {
           message: `Method not found: ${method}`,
         },
       });
-
     } catch (error) {
       return this.sendResponse(id, {
         error: {
@@ -166,7 +173,9 @@ class AgBashServer {
     process.on("SIGINT", () => process.exit(0));
     process.on("SIGTERM", () => process.exit(0));
 
-    console.error("Ag-Bash MCP server running on stdio (V2 Custom Implementation)");
+    console.error(
+      "Ag-Bash MCP server running on stdio (V2 Custom Implementation)",
+    );
   }
 }
 

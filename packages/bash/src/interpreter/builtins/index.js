@@ -25,7 +25,12 @@ export { handleCompgen } from "./compgen.js";
 export { handleComplete } from "./complete.js";
 export { handleCompopt } from "./compopt.js";
 export { handleContinue } from "./continue.js";
-export { applyCaseTransform, handleDeclare, handleReadonly, isInteger, } from "./declare.js";
+export {
+  applyCaseTransform,
+  handleDeclare,
+  handleReadonly,
+  isInteger,
+} from "./declare.js";
 export { handleDirs, handlePopd, handlePushd } from "./dirs.js";
 export { handleEval } from "./eval.js";
 export { handleExit } from "./exit.js";

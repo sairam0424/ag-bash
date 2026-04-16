@@ -11,6 +11,7 @@
  */
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
+
 // Re-export path utilities used by callers that import from real-fs-utils.
 export { normalizePath, validatePath } from "./path-utils.js";
 /**
@@ -19,7 +20,7 @@ export { normalizePath, validatePath } from "./path-utils.js";
  * match `/datastore`.
  */
 export function isPathWithinRoot(resolved, canonicalRoot) {
-    return resolved === canonicalRoot || resolved.startsWith(`${canonicalRoot}/`);
+  return resolved === canonicalRoot || resolved.startsWith(`${canonicalRoot}/`);
 }
 /**
  * Validate that a real filesystem path stays within the sandbox root after
@@ -30,22 +31,20 @@ export function isPathWithinRoot(resolved, canonicalRoot) {
  * the sandbox (fail-closed on unexpected errors).
  */
 export function validateRealPath(realPath, canonicalRoot) {
-    try {
-        const resolved = fs.realpathSync(realPath);
-        return isPathWithinRoot(resolved, canonicalRoot);
+  try {
+    const resolved = fs.realpathSync(realPath);
+    return isPathWithinRoot(resolved, canonicalRoot);
+  } catch (e) {
+    const code = e.code;
+    if (code === "ENOENT") {
+      // Path doesn't exist yet - validate parent instead
+      const parent = nodePath.dirname(realPath);
+      if (parent === realPath) return false;
+      return validateRealPath(parent, canonicalRoot);
     }
-    catch (e) {
-        const code = e.code;
-        if (code === "ENOENT") {
-            // Path doesn't exist yet - validate parent instead
-            const parent = nodePath.dirname(realPath);
-            if (parent === realPath)
-                return false;
-            return validateRealPath(parent, canonicalRoot);
-        }
-        // For other errors (EACCES, EIO, etc.), fail closed
-        return false;
-    }
+    // For other errors (EACCES, EIO, etc.), fail closed
+    return false;
+  }
 }
 /**
  * Resolve a real filesystem path to its canonical form and verify it stays
@@ -58,46 +57,45 @@ export function validateRealPath(realPath, canonicalRoot) {
  * validation and use.
  */
 export function resolveCanonicalPath(realPath, canonicalRoot) {
-    try {
-        const resolved = fs.realpathSync(realPath);
-        return isPathWithinRoot(resolved, canonicalRoot) ? resolved : null;
-    }
-    catch (e) {
-        if (e.code === "ENOENT") {
-            const parent = nodePath.dirname(realPath);
-            if (parent === realPath)
-                return null;
-            const parentCanon = resolveCanonicalPath(parent, canonicalRoot);
-            if (parentCanon === null)
-                return null;
-            // Defense-in-depth: the leaf component might be a broken symlink
-            // whose target doesn't exist (causing the ENOENT above).
-            // realpathSync tried to follow it, failed, and we walked up.
-            // Check with lstatSync (which doesn't follow symlinks) whether
-            // the leaf is a symlink, and if so, validate its target stays
-            // within the sandbox by recursing through resolveCanonicalPath
-            // (which handles root canonicalization and ENOENT walk-up).
-            try {
-                const leafStat = fs.lstatSync(realPath);
-                if (leafStat.isSymbolicLink()) {
-                    const target = fs.readlinkSync(realPath);
-                    const resolvedTarget = nodePath.isAbsolute(target)
-                        ? target
-                        : nodePath.resolve(nodePath.dirname(realPath), target);
-                    const validatedTarget = resolveCanonicalPath(resolvedTarget, canonicalRoot);
-                    if (validatedTarget === null) {
-                        return null;
-                    }
-                }
-            }
-            catch {
-                // lstatSync ENOENT: the leaf truly doesn't exist (not a symlink
-                // entry on disk), so the walk-up basename is correct.
-            }
-            return nodePath.join(parentCanon, nodePath.basename(realPath));
+  try {
+    const resolved = fs.realpathSync(realPath);
+    return isPathWithinRoot(resolved, canonicalRoot) ? resolved : null;
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      const parent = nodePath.dirname(realPath);
+      if (parent === realPath) return null;
+      const parentCanon = resolveCanonicalPath(parent, canonicalRoot);
+      if (parentCanon === null) return null;
+      // Defense-in-depth: the leaf component might be a broken symlink
+      // whose target doesn't exist (causing the ENOENT above).
+      // realpathSync tried to follow it, failed, and we walked up.
+      // Check with lstatSync (which doesn't follow symlinks) whether
+      // the leaf is a symlink, and if so, validate its target stays
+      // within the sandbox by recursing through resolveCanonicalPath
+      // (which handles root canonicalization and ENOENT walk-up).
+      try {
+        const leafStat = fs.lstatSync(realPath);
+        if (leafStat.isSymbolicLink()) {
+          const target = fs.readlinkSync(realPath);
+          const resolvedTarget = nodePath.isAbsolute(target)
+            ? target
+            : nodePath.resolve(nodePath.dirname(realPath), target);
+          const validatedTarget = resolveCanonicalPath(
+            resolvedTarget,
+            canonicalRoot,
+          );
+          if (validatedTarget === null) {
+            return null;
+          }
         }
-        return null;
+      } catch {
+        // lstatSync ENOENT: the leaf truly doesn't exist (not a symlink
+        // entry on disk), so the walk-up basename is correct.
+      }
+      return nodePath.join(parentCanon, nodePath.basename(realPath));
     }
+    return null;
+  }
 }
 /**
  * Resolve a real filesystem path to its canonical form, verify it stays
@@ -112,33 +110,31 @@ export function resolveCanonicalPath(realPath, canonicalRoot) {
  * — the only extra cost is one string comparison.
  */
 export function resolveCanonicalPathNoSymlinks(realPath, root, canonicalRoot) {
-    const canonical = resolveCanonicalPath(realPath, canonicalRoot);
-    if (canonical === null)
-        return null;
-    const resolvedReal = nodePath.resolve(realPath);
-    const relFromRoot = resolvedReal.slice(root.length);
-    const relFromCanonical = canonical.slice(canonicalRoot.length);
-    if (relFromRoot !== relFromCanonical) {
-        return null; // symlink was traversed
+  const canonical = resolveCanonicalPath(realPath, canonicalRoot);
+  if (canonical === null) return null;
+  const resolvedReal = nodePath.resolve(realPath);
+  const relFromRoot = resolvedReal.slice(root.length);
+  const relFromCanonical = canonical.slice(canonicalRoot.length);
+  if (relFromRoot !== relFromCanonical) {
+    return null; // symlink was traversed
+  }
+  // Defense-in-depth: detect broken symlinks at the leaf component.
+  // resolveCanonicalPath's ENOENT walk-up masks broken symlinks: when
+  // realpathSync follows a symlink whose target doesn't exist, it returns
+  // ENOENT and the walk-up appends the literal basename — making the
+  // relative paths match even though the leaf IS a symlink.  Without this
+  // check, writeFile through a broken symlink pointing outside the sandbox
+  // would follow the link and create the target file.
+  try {
+    const stat = fs.lstatSync(resolvedReal);
+    if (stat.isSymbolicLink()) {
+      return null; // broken symlink at the leaf
     }
-    // Defense-in-depth: detect broken symlinks at the leaf component.
-    // resolveCanonicalPath's ENOENT walk-up masks broken symlinks: when
-    // realpathSync follows a symlink whose target doesn't exist, it returns
-    // ENOENT and the walk-up appends the literal basename — making the
-    // relative paths match even though the leaf IS a symlink.  Without this
-    // check, writeFile through a broken symlink pointing outside the sandbox
-    // would follow the link and create the target file.
-    try {
-        const stat = fs.lstatSync(resolvedReal);
-        if (stat.isSymbolicLink()) {
-            return null; // broken symlink at the leaf
-        }
-    }
-    catch {
-        // ENOENT: path truly doesn't exist (not a symlink entry) — safe,
-        // any subsequent write creates a new file within the sandbox.
-    }
-    return canonical;
+  } catch {
+    // ENOENT: path truly doesn't exist (not a symlink entry) — safe,
+    // any subsequent write creates a new file within the sandbox.
+  }
+  return canonical;
 }
 /**
  * Validate that a root directory exists and is actually a directory.
@@ -147,13 +143,13 @@ export function resolveCanonicalPathNoSymlinks(realPath, root, canonicalRoot) {
  * error message to prevent information leakage.
  */
 export function validateRootDirectory(root, fsName) {
-    if (!fs.existsSync(root)) {
-        throw new Error(`${fsName} root does not exist`);
-    }
-    const stat = fs.statSync(root);
-    if (!stat.isDirectory()) {
-        throw new Error(`${fsName} root is not a directory`);
-    }
+  if (!fs.existsSync(root)) {
+    throw new Error(`${fsName} root does not exist`);
+  }
+  const stat = fs.statSync(root);
+  if (!stat.isDirectory()) {
+    throw new Error(`${fsName} root is not a directory`);
+  }
 }
 // Re-export sanitizeErrorMessage from its own module (no node:fs dependency)
 // so existing callers that import from real-fs-utils.ts continue to work.
@@ -171,24 +167,23 @@ export { sanitizeErrorMessage } from "./sanitize-error.js";
  * sandbox, or `{ withinRoot: false, safeName }` when it is outside.
  */
 export function sanitizeSymlinkTarget(rawTarget, canonicalRoot) {
-    if (!nodePath.isAbsolute(rawTarget)) {
-        // Relative targets don't leak real paths; treat as within-root
-        return { withinRoot: true, relativePath: rawTarget };
-    }
-    // Absolute target: resolve and check if it's within root
-    let resolved;
-    try {
-        resolved = fs.realpathSync(rawTarget);
-    }
-    catch {
-        resolved = nodePath.resolve(rawTarget);
-    }
-    if (isPathWithinRoot(resolved, canonicalRoot)) {
-        const relativePath = resolved.slice(canonicalRoot.length) || "/";
-        return { withinRoot: true, relativePath };
-    }
-    // Outside root - return just the basename to avoid leaking real paths
-    return { withinRoot: false, safeName: nodePath.basename(rawTarget) };
+  if (!nodePath.isAbsolute(rawTarget)) {
+    // Relative targets don't leak real paths; treat as within-root
+    return { withinRoot: true, relativePath: rawTarget };
+  }
+  // Absolute target: resolve and check if it's within root
+  let resolved;
+  try {
+    resolved = fs.realpathSync(rawTarget);
+  } catch {
+    resolved = nodePath.resolve(rawTarget);
+  }
+  if (isPathWithinRoot(resolved, canonicalRoot)) {
+    const relativePath = resolved.slice(canonicalRoot.length) || "/";
+    return { withinRoot: true, relativePath };
+  }
+  // Outside root - return just the basename to avoid leaking real paths
+  return { withinRoot: false, safeName: nodePath.basename(rawTarget) };
 }
 /**
  * Sanitize an error thrown during real-FS operations to prevent leaking
@@ -201,15 +196,20 @@ export function sanitizeSymlinkTarget(rawTarget, canonicalRoot) {
  * already contain safe virtual paths).  All other errors are replaced with
  * a generic `"CODE: operation 'virtualPath'"` message.
  */
-export function sanitizeFsError(e, virtualPath, operation, passthroughPatterns) {
-    const err = e;
-    if (err.path === undefined) {
-        for (const pat of passthroughPatterns) {
-            if (err.message?.includes(pat)) {
-                throw e;
-            }
-        }
+export function sanitizeFsError(
+  e,
+  virtualPath,
+  operation,
+  passthroughPatterns,
+) {
+  const err = e;
+  if (err.path === undefined) {
+    for (const pat of passthroughPatterns) {
+      if (err.message?.includes(pat)) {
+        throw e;
+      }
     }
-    const code = err.code || "EIO";
-    throw new Error(`${code}: ${operation} '${virtualPath}'`);
+  }
+  const code = err.code || "EIO";
+  throw new Error(`${code}: ${operation} '${virtualPath}'`);
 }

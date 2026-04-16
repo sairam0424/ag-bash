@@ -16,88 +16,94 @@ import { getArrayElements } from "./variable.js";
  * Returns each array element as a separate word.
  */
 export function handleSimpleArrayExpansion(ctx, wordParts) {
-    if (wordParts.length !== 1 || wordParts[0].type !== "DoubleQuoted") {
-        return null;
+  if (wordParts.length !== 1 || wordParts[0].type !== "DoubleQuoted") {
+    return null;
+  }
+  const dqPart = wordParts[0];
+  if (
+    dqPart.parts.length !== 1 ||
+    dqPart.parts[0].type !== "ParameterExpansion"
+  ) {
+    return null;
+  }
+  const paramPart = dqPart.parts[0];
+  // Check if it's ONLY the array expansion (like "${a[@]}") without operations
+  if (paramPart.operation) {
+    return null;
+  }
+  const arrayMatch = paramPart.parameter.match(
+    /^([a-zA-Z_][a-zA-Z0-9_]*)\[(@)\]$/,
+  );
+  if (!arrayMatch) {
+    return null;
+  }
+  const arrayName = arrayMatch[1];
+  // Special case: if arrayName is a nameref pointing to array[@],
+  // ${ref[@]} doesn't do double indirection - it returns empty
+  if (isNameref(ctx, arrayName)) {
+    const target = getNamerefTarget(ctx, arrayName);
+    if (target?.endsWith("[@]") || target?.endsWith("[*]")) {
+      // ref points to arr[@], so ${ref[@]} is invalid/empty
+      return { values: [], quoted: true };
     }
-    const dqPart = wordParts[0];
-    if (dqPart.parts.length !== 1 ||
-        dqPart.parts[0].type !== "ParameterExpansion") {
-        return null;
-    }
-    const paramPart = dqPart.parts[0];
-    // Check if it's ONLY the array expansion (like "${a[@]}") without operations
-    if (paramPart.operation) {
-        return null;
-    }
-    const arrayMatch = paramPart.parameter.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\[(@)\]$/);
-    if (!arrayMatch) {
-        return null;
-    }
-    const arrayName = arrayMatch[1];
-    // Special case: if arrayName is a nameref pointing to array[@],
-    // ${ref[@]} doesn't do double indirection - it returns empty
-    if (isNameref(ctx, arrayName)) {
-        const target = getNamerefTarget(ctx, arrayName);
-        if (target?.endsWith("[@]") || target?.endsWith("[*]")) {
-            // ref points to arr[@], so ${ref[@]} is invalid/empty
-            return { values: [], quoted: true };
-        }
-    }
-    const elements = getArrayElements(ctx, arrayName);
-    if (elements.length > 0) {
-        // Return each element as a separate word
-        return { values: elements.map(([, v]) => v), quoted: true };
-    }
-    // No array elements - check for scalar variable
-    // ${s[@]} where s='abc' should return 'abc' (treat scalar as single-element array)
-    // But NOT if the scalar value is actually from a nameref to array[@]
-    const scalarValue = ctx.state.env.get(arrayName);
-    if (scalarValue !== undefined) {
-        return { values: [scalarValue], quoted: true };
-    }
-    // Variable is unset - return empty
-    return { values: [], quoted: true };
+  }
+  const elements = getArrayElements(ctx, arrayName);
+  if (elements.length > 0) {
+    // Return each element as a separate word
+    return { values: elements.map(([, v]) => v), quoted: true };
+  }
+  // No array elements - check for scalar variable
+  // ${s[@]} where s='abc' should return 'abc' (treat scalar as single-element array)
+  // But NOT if the scalar value is actually from a nameref to array[@]
+  const scalarValue = ctx.state.env.get(arrayName);
+  if (scalarValue !== undefined) {
+    return { values: [scalarValue], quoted: true };
+  }
+  // Variable is unset - return empty
+  return { values: [], quoted: true };
 }
 /**
  * Handle namerefs pointing to array[@] - "${ref}" where ref='arr[@]'
  * When a nameref points to array[@], expanding "$ref" should produce multiple words
  */
 export function handleNamerefArrayExpansion(ctx, wordParts) {
-    if (wordParts.length !== 1 || wordParts[0].type !== "DoubleQuoted") {
-        return null;
-    }
-    const dqPart = wordParts[0];
-    if (dqPart.parts.length !== 1 ||
-        dqPart.parts[0].type !== "ParameterExpansion" ||
-        dqPart.parts[0].operation) {
-        return null;
-    }
-    const paramPart = dqPart.parts[0];
-    const varName = paramPart.parameter;
-    // Check if it's a simple variable name (not already an array subscript)
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(varName) || !isNameref(ctx, varName)) {
-        return null;
-    }
-    const target = getNamerefTarget(ctx, varName);
-    if (!target) {
-        return null;
-    }
-    // Check if resolved target is array[@]
-    const targetArrayMatch = target.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\[(@)\]$/);
-    if (!targetArrayMatch) {
-        return null;
-    }
-    const arrayName = targetArrayMatch[1];
-    const elements = getArrayElements(ctx, arrayName);
-    if (elements.length > 0) {
-        // Return each element as a separate word
-        return { values: elements.map(([, v]) => v), quoted: true };
-    }
-    // No array elements - check for scalar variable
-    const scalarValue = ctx.state.env.get(arrayName);
-    if (scalarValue !== undefined) {
-        return { values: [scalarValue], quoted: true };
-    }
-    // Variable is unset - return empty
-    return { values: [], quoted: true };
+  if (wordParts.length !== 1 || wordParts[0].type !== "DoubleQuoted") {
+    return null;
+  }
+  const dqPart = wordParts[0];
+  if (
+    dqPart.parts.length !== 1 ||
+    dqPart.parts[0].type !== "ParameterExpansion" ||
+    dqPart.parts[0].operation
+  ) {
+    return null;
+  }
+  const paramPart = dqPart.parts[0];
+  const varName = paramPart.parameter;
+  // Check if it's a simple variable name (not already an array subscript)
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(varName) || !isNameref(ctx, varName)) {
+    return null;
+  }
+  const target = getNamerefTarget(ctx, varName);
+  if (!target) {
+    return null;
+  }
+  // Check if resolved target is array[@]
+  const targetArrayMatch = target.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\[(@)\]$/);
+  if (!targetArrayMatch) {
+    return null;
+  }
+  const arrayName = targetArrayMatch[1];
+  const elements = getArrayElements(ctx, arrayName);
+  if (elements.length > 0) {
+    // Return each element as a separate word
+    return { values: elements.map(([, v]) => v), quoted: true };
+  }
+  // No array elements - check for scalar variable
+  const scalarValue = ctx.state.env.get(arrayName);
+  if (scalarValue !== undefined) {
+    return { values: [scalarValue], quoted: true };
+  }
+  // Variable is unset - return empty
+  return { values: [], quoted: true };
 }

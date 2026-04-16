@@ -18,46 +18,34 @@
  * in the command substitution. $(< file; cmd) or $(cmd; < file) are NOT special.
  */
 export function getFileReadShorthand(body) {
-    // Must have exactly one statement
-    if (body.statements.length !== 1)
-        return null;
-    const statement = body.statements[0];
-    // Must not have any operators (no && or ||)
-    if (statement.operators.length !== 0)
-        return null;
-    // Must have exactly one pipeline
-    if (statement.pipelines.length !== 1)
-        return null;
-    const pipeline = statement.pipelines[0];
-    // Must not be negated
-    if (pipeline.negated)
-        return null;
-    // Must have exactly one command
-    if (pipeline.commands.length !== 1)
-        return null;
-    const cmd = pipeline.commands[0];
-    // Must be a SimpleCommand
-    if (cmd.type !== "SimpleCommand")
-        return null;
-    const simpleCmd = cmd;
-    // Must have no command name
-    if (simpleCmd.name !== null)
-        return null;
-    // Must have no arguments
-    if (simpleCmd.args.length !== 0)
-        return null;
-    // Must have no assignments
-    if (simpleCmd.assignments.length !== 0)
-        return null;
-    // Must have exactly one redirection
-    if (simpleCmd.redirections.length !== 1)
-        return null;
-    const redirect = simpleCmd.redirections[0];
-    // Must be an input redirection (<)
-    if (redirect.operator !== "<")
-        return null;
-    // Target must be a WordNode (not heredoc)
-    if (redirect.target.type !== "Word")
-        return null;
-    return { target: redirect.target };
+  // Must have exactly one statement
+  if (body.statements.length !== 1) return null;
+  const statement = body.statements[0];
+  // Must not have any operators (no && or ||)
+  if (statement.operators.length !== 0) return null;
+  // Must have exactly one pipeline
+  if (statement.pipelines.length !== 1) return null;
+  const pipeline = statement.pipelines[0];
+  // Must not be negated
+  if (pipeline.negated) return null;
+  // Must have exactly one command
+  if (pipeline.commands.length !== 1) return null;
+  const cmd = pipeline.commands[0];
+  // Must be a SimpleCommand
+  if (cmd.type !== "SimpleCommand") return null;
+  const simpleCmd = cmd;
+  // Must have no command name
+  if (simpleCmd.name !== null) return null;
+  // Must have no arguments
+  if (simpleCmd.args.length !== 0) return null;
+  // Must have no assignments
+  if (simpleCmd.assignments.length !== 0) return null;
+  // Must have exactly one redirection
+  if (simpleCmd.redirections.length !== 1) return null;
+  const redirect = simpleCmd.redirections[0];
+  // Must be an input redirection (<)
+  if (redirect.operator !== "<") return null;
+  // Target must be a WordNode (not heredoc)
+  if (redirect.target.type !== "Word") return null;
+  return { target: redirect.target };
 }

@@ -7,16 +7,16 @@ const STRING_TEST_OPS = new Set(["-z", "-n"]);
  * Check if an operator is a string test operator.
  */
 export function isStringTestOp(op) {
-    return STRING_TEST_OPS.has(op);
+  return STRING_TEST_OPS.has(op);
 }
 /**
  * Evaluate a string test operator.
  */
 export function evaluateStringTest(op, value) {
-    switch (op) {
-        case "-z":
-            return value === "";
-        case "-n":
-            return value !== "";
-    }
+  switch (op) {
+    case "-z":
+      return value === "";
+    case "-n":
+      return value !== "";
+  }
 }

@@ -10,7 +10,7 @@ import { matchPattern } from "../conditionals.js";
  * Check if an operator is a string comparison operator.
  */
 export function isStringCompareOp(op) {
-    return op === "=" || op === "==" || op === "!=";
+  return op === "=" || op === "==" || op === "!=";
 }
 /**
  * Compare two strings using the specified operator.
@@ -23,15 +23,22 @@ export function isStringCompareOp(op) {
  * @param extglob - If true, enable extended glob patterns @(), *(), +(), ?(), !() (default: false)
  * @returns True if the comparison succeeds
  */
-export function compareStrings(op, left, right, usePattern = false, nocasematch = false, extglob = false) {
-    if (usePattern) {
-        const isEqual = matchPattern(left, right, nocasematch, extglob);
-        return op === "!=" ? !isEqual : isEqual;
-    }
-    if (nocasematch) {
-        const isEqual = left.toLowerCase() === right.toLowerCase();
-        return op === "!=" ? !isEqual : isEqual;
-    }
-    const isEqual = left === right;
+export function compareStrings(
+  op,
+  left,
+  right,
+  usePattern = false,
+  nocasematch = false,
+  extglob = false,
+) {
+  if (usePattern) {
+    const isEqual = matchPattern(left, right, nocasematch, extglob);
     return op === "!=" ? !isEqual : isEqual;
+  }
+  if (nocasematch) {
+    const isEqual = left.toLowerCase() === right.toLowerCase();
+    return op === "!=" ? !isEqual : isEqual;
+  }
+  const isEqual = left === right;
+  return op === "!=" ? !isEqual : isEqual;
 }

@@ -28,8 +28,14 @@
  * ```
  */
 // Main class (for main thread with AsyncLocalStorage context tracking)
-export { DefenseInDepthBox, SecurityViolationError, } from "./defense-in-depth-box.js";
+export {
+  DefenseInDepthBox,
+  SecurityViolationError,
+} from "./defense-in-depth-box.js";
 // Violation logger
-export { createConsoleViolationCallback, SecurityViolationLogger, } from "./security-violation-logger.js";
+export {
+  createConsoleViolationCallback,
+  SecurityViolationLogger,
+} from "./security-violation-logger.js";
 // Worker-compatible version (no AsyncLocalStorage, always blocks)
-export { WorkerDefenseInDepth, } from "./worker-defense-in-depth.js";
+export { WorkerDefenseInDepth } from "./worker-defense-in-depth.js";

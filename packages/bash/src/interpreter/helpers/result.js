@@ -10,9 +10,9 @@ import { ExecutionLimitError } from "../errors.js";
  * Use this for commands that succeed silently.
  */
 export const OK = Object.freeze({
-    stdout: "",
-    stderr: "",
-    exitCode: 0,
+  stdout: "",
+  stderr: "",
+  exitCode: 0,
 });
 /**
  * Create a successful result with optional stdout.
@@ -21,7 +21,7 @@ export const OK = Object.freeze({
  * @returns ExecResult with exitCode 0
  */
 export function success(stdout = "") {
-    return { stdout, stderr: "", exitCode: 0 };
+  return { stdout, stderr: "", exitCode: 0 };
 }
 /**
  * Create a failure result with stderr message.
@@ -31,7 +31,7 @@ export function success(stdout = "") {
  * @returns ExecResult with the specified exitCode
  */
 export function failure(stderr, exitCode = 1) {
-    return { stdout: "", stderr, exitCode };
+  return { stdout: "", stderr, exitCode };
 }
 /**
  * Create a result with all fields specified.
@@ -42,7 +42,7 @@ export function failure(stderr, exitCode = 1) {
  * @returns ExecResult with all fields
  */
 export function result(stdout, stderr, exitCode) {
-    return { stdout, stderr, exitCode };
+  return { stdout, stderr, exitCode };
 }
 /**
  * Convert a boolean test result to an ExecResult.
@@ -52,7 +52,7 @@ export function result(stdout, stderr, exitCode) {
  * @returns ExecResult with exitCode 0 if passed, 1 otherwise
  */
 export function testResult(passed) {
-    return { stdout: "", stderr: "", exitCode: passed ? 0 : 1 };
+  return { stdout: "", stderr: "", exitCode: passed ? 0 : 1 };
 }
 /**
  * Throw an ExecutionLimitError for execution limits (recursion, iterations, commands).
@@ -63,16 +63,24 @@ export function testResult(passed) {
  * @param stderr - Accumulated stderr to include
  * @throws ExecutionLimitError always
  */
-export function throwExecutionLimit(message, limitType, stdout = "", stderr = "") {
-    throw new ExecutionLimitError(message, limitType, stdout, stderr);
+export function throwExecutionLimit(
+  message,
+  limitType,
+  stdout = "",
+  stderr = "",
+) {
+  throw new ExecutionLimitError(message, limitType, stdout, stderr);
 }
 /**
  * Check file descriptor count against the limit before adding a new one.
  * Throws ExecutionLimitError if the limit would be exceeded.
  */
 export function checkFdLimit(ctx) {
-    const fds = ctx.state.fileDescriptors;
-    if (fds && fds.size >= ctx.limits.maxFileDescriptors) {
-        throw new ExecutionLimitError(`too many open file descriptors (max ${ctx.limits.maxFileDescriptors})`, "file_descriptors");
-    }
+  const fds = ctx.state.fileDescriptors;
+  if (fds && fds.size >= ctx.limits.maxFileDescriptors) {
+    throw new ExecutionLimitError(
+      `too many open file descriptors (max ${ctx.limits.maxFileDescriptors})`,
+      "file_descriptors",
+    );
+  }
 }

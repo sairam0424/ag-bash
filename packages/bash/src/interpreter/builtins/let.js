@@ -16,68 +16,70 @@
 import { parse } from "../../parser/parser.js";
 import { evaluateArithmetic } from "../arithmetic.js";
 import { failure, result } from "../helpers/result.js";
+
 /**
  * Parse arguments into expressions.
  * Handles cases like `let x=( 1 )` where parentheses cause splitting.
  */
 function parseLetArgs(args) {
-    const expressions = [];
-    let current = "";
-    let parenDepth = 0;
-    for (const arg of args) {
-        // Count open and close parens in this arg
-        for (const ch of arg) {
-            if (ch === "(")
-                parenDepth++;
-            else if (ch === ")")
-                parenDepth--;
-        }
-        if (current) {
-            current += ` ${arg}`;
-        }
-        else {
-            current = arg;
-        }
-        // If parens are balanced, this is a complete expression
-        if (parenDepth === 0) {
-            expressions.push(current);
-            current = "";
-        }
+  const expressions = [];
+  let current = "";
+  let parenDepth = 0;
+  for (const arg of args) {
+    // Count open and close parens in this arg
+    for (const ch of arg) {
+      if (ch === "(") parenDepth++;
+      else if (ch === ")") parenDepth--;
     }
-    // Handle any remaining (unbalanced parens treated as single expression)
     if (current) {
-        expressions.push(current);
+      current += ` ${arg}`;
+    } else {
+      current = arg;
     }
-    return expressions;
+    // If parens are balanced, this is a complete expression
+    if (parenDepth === 0) {
+      expressions.push(current);
+      current = "";
+    }
+  }
+  // Handle any remaining (unbalanced parens treated as single expression)
+  if (current) {
+    expressions.push(current);
+  }
+  return expressions;
 }
 export async function handleLet(ctx, args) {
-    if (args.length === 0) {
-        return failure("bash: let: expression expected\n");
-    }
-    // Parse args into expressions (handling split parentheses)
-    const expressions = parseLetArgs(args);
-    let lastResult = 0;
-    for (const expr of expressions) {
-        try {
-            // Parse the expression by wrapping it in (( ))
-            // This leverages the existing arithmetic parser
-            const script = parse(`(( ${expr} ))`);
-            // Navigate through the AST: Script -> Statement -> Pipeline -> Command
-            const statement = script.statements[0];
-            if (statement &&
-                statement.pipelines.length > 0 &&
-                statement.pipelines[0].commands.length > 0) {
-                const command = statement.pipelines[0].commands[0];
-                if (command.type === "ArithmeticCommand") {
-                    const arithNode = command;
-                    lastResult = await evaluateArithmetic(ctx, arithNode.expression.expression);
-                }
-            }
+  if (args.length === 0) {
+    return failure("bash: let: expression expected\n");
+  }
+  // Parse args into expressions (handling split parentheses)
+  const expressions = parseLetArgs(args);
+  let lastResult = 0;
+  for (const expr of expressions) {
+    try {
+      // Parse the expression by wrapping it in (( ))
+      // This leverages the existing arithmetic parser
+      const script = parse(`(( ${expr} ))`);
+      // Navigate through the AST: Script -> Statement -> Pipeline -> Command
+      const statement = script.statements[0];
+      if (
+        statement &&
+        statement.pipelines.length > 0 &&
+        statement.pipelines[0].commands.length > 0
+      ) {
+        const command = statement.pipelines[0].commands[0];
+        if (command.type === "ArithmeticCommand") {
+          const arithNode = command;
+          lastResult = await evaluateArithmetic(
+            ctx,
+            arithNode.expression.expression,
+          );
         }
-        catch (error) {
-            return failure(`bash: let: ${expr}: ${error.message}\n`);
-        }
+      }
+    } catch (error) {
+      return failure(`bash: let: ${expr}: ${error.message}\n`);
     }
-    // Return 0 if last expression is non-zero, 1 if zero
-    return result("", "", lastResult === 0 ? 1 : 0);
+  }
+  // Return 0 if last expression is non-zero, 1 if zero
+  return result("", "", lastResult === 0 ? 1 : 0);
 }

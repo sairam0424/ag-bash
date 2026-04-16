@@ -8,14 +8,14 @@ import { ExitError } from "../errors.js";
  * Mark a variable as readonly.
  */
 export function markReadonly(ctx, name) {
-    ctx.state.readonlyVars = ctx.state.readonlyVars || new Set();
-    ctx.state.readonlyVars.add(name);
+  ctx.state.readonlyVars = ctx.state.readonlyVars || new Set();
+  ctx.state.readonlyVars.add(name);
 }
 /**
  * Check if a variable is readonly.
  */
 export function isReadonly(ctx, name) {
-    return ctx.state.readonlyVars?.has(name) ?? false;
+  return ctx.state.readonlyVars?.has(name) ?? false;
 }
 /**
  * Check if a variable is readonly and throw an error if so.
@@ -33,12 +33,12 @@ export function isReadonly(ctx, name) {
  * @throws ExitError if variable is readonly
  */
 export function checkReadonlyError(ctx, name, command = "bash") {
-    if (isReadonly(ctx, name)) {
-        const stderr = `${command}: ${name}: readonly variable\n`;
-        // Assigning to a readonly variable is always fatal
-        throw new ExitError(1, "", stderr);
-    }
-    return null;
+  if (isReadonly(ctx, name)) {
+    const stderr = `${command}: ${name}: readonly variable\n`;
+    // Assigning to a readonly variable is always fatal
+    throw new ExitError(1, "", stderr);
+  }
+  return null;
 }
 /**
  * Mark a variable as exported.
@@ -49,31 +49,36 @@ export function checkReadonlyError(ctx, name, command = "bash") {
  * before entering the function.
  */
 export function markExported(ctx, name) {
-    const wasExported = ctx.state.exportedVars?.has(name) ?? false;
-    ctx.state.exportedVars = ctx.state.exportedVars || new Set();
-    ctx.state.exportedVars.add(name);
-    // If we're in a local scope and the variable is local, track it
-    if (ctx.state.localScopes.length > 0) {
-        const currentScope = ctx.state.localScopes[ctx.state.localScopes.length - 1];
-        // Only track if: the variable is local AND it wasn't already exported before
-        if (currentScope.has(name) && !wasExported) {
-            // Initialize localExportedVars stack if needed
-            if (!ctx.state.localExportedVars) {
-                ctx.state.localExportedVars = [];
-            }
-            // Ensure we have a set for the current scope depth
-            while (ctx.state.localExportedVars.length < ctx.state.localScopes.length) {
-                ctx.state.localExportedVars.push(new Set());
-            }
-            // Track this variable as locally exported
-            ctx.state.localExportedVars[ctx.state.localExportedVars.length - 1].add(name);
-        }
+  const wasExported = ctx.state.exportedVars?.has(name) ?? false;
+  ctx.state.exportedVars = ctx.state.exportedVars || new Set();
+  ctx.state.exportedVars.add(name);
+  // If we're in a local scope and the variable is local, track it
+  if (ctx.state.localScopes.length > 0) {
+    const currentScope =
+      ctx.state.localScopes[ctx.state.localScopes.length - 1];
+    // Only track if: the variable is local AND it wasn't already exported before
+    if (currentScope.has(name) && !wasExported) {
+      // Initialize localExportedVars stack if needed
+      if (!ctx.state.localExportedVars) {
+        ctx.state.localExportedVars = [];
+      }
+      // Ensure we have a set for the current scope depth
+      while (
+        ctx.state.localExportedVars.length < ctx.state.localScopes.length
+      ) {
+        ctx.state.localExportedVars.push(new Set());
+      }
+      // Track this variable as locally exported
+      ctx.state.localExportedVars[ctx.state.localExportedVars.length - 1].add(
+        name,
+      );
     }
+  }
 }
 /**
  * Remove the export attribute from a variable.
  * The variable value is preserved, just no longer exported to child processes.
  */
 export function unmarkExported(ctx, name) {
-    ctx.state.exportedVars?.delete(name);
+  ctx.state.exportedVars?.delete(name);
 }

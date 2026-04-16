@@ -151,7 +151,10 @@ function addImpliedImports(code: string): string {
   if (code.includes("Bash") && !code.includes('from "@ag-bash/bash"')) {
     imports.push('import { Bash } from "@ag-bash/bash";');
   }
-  if (code.includes("defineCommand") && !code.includes('from "@ag-bash/bash"')) {
+  if (
+    code.includes("defineCommand") &&
+    !code.includes('from "@ag-bash/bash"')
+  ) {
     imports.push('import { defineCommand } from "@ag-bash/bash";');
   }
   if (code.includes("Sandbox") && !code.includes('from "@ag-bash/bash"')) {
@@ -168,7 +171,9 @@ function addImpliedImports(code: string): string {
     code.includes("ReadWriteFs") &&
     !code.includes('from "@ag-bash/bash/fs/read-write-fs"')
   ) {
-    imports.push('import { ReadWriteFs } from "@ag-bash/bash/fs/read-write-fs";');
+    imports.push(
+      'import { ReadWriteFs } from "@ag-bash/bash/fs/read-write-fs";',
+    );
   }
   // ai imports are handled via ephemeral type definitions
 
@@ -259,7 +264,9 @@ export function generateText(options: {
         allowSyntheticDefaultImports: true,
         resolveJsonModule: true,
         paths: {
-          "@ag-bash/bash": [path.join(import.meta.dirname, "..", "src/index.ts")],
+          "@ag-bash/bash": [
+            path.join(import.meta.dirname, "..", "src/index.ts"),
+          ],
           "@ag-bash/bash/fs/overlay-fs": [
             path.join(import.meta.dirname, "..", "src/fs/overlay-fs/index.ts"),
           ],

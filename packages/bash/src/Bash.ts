@@ -155,7 +155,10 @@ export interface BashOptions {
    * If provided, called with the command name and arguments.
    * Return null to fall back to the standard "command not found" error.
    */
-  onCommandNotFound?: (command: string, args: string[]) => Promise<ExecResult | null>;
+  onCommandNotFound?: (
+    command: string,
+    args: string[],
+  ) => Promise<ExecResult | null>;
   /**
    * Custom commands to register alongside built-in commands.
    * These take precedence over built-ins with the same name.
@@ -705,8 +708,10 @@ export class Bash {
         return this.logResult(execResult);
       };
 
-      const execResult = await (defenseHandle ? defenseHandle.run(executeScript) : executeScript());
-      
+      const execResult = await (defenseHandle
+        ? defenseHandle.run(executeScript)
+        : executeScript());
+
       // If persistence is enabled, commit the state back to the Bash instance
       const shouldPersist = options?.persistState ?? this.defaultPersistState;
       if (shouldPersist && execResult.exitCode === 0) {
@@ -718,7 +723,7 @@ export class Bash {
         this.state.options = { ...execState.options };
         this.state.hashTable = execState.hashTable;
       }
-      
+
       return execResult;
     } catch (error) {
       // ExitError propagates from 'exit' builtin (including via eval/source)

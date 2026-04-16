@@ -4,7 +4,13 @@
  * Consolidates the common pattern of executing a list of statements
  * and accumulating their output.
  */
-import { ErrexitError, ExecutionLimitError, ExitError, isScopeExitError, SubshellExitError, } from "../errors.js";
+import {
+  ErrexitError,
+  ExecutionLimitError,
+  ExitError,
+  isScopeExitError,
+  SubshellExitError,
+} from "../errors.js";
 import { getErrorMessage } from "./errors.js";
 /**
  * Execute a list of statements and accumulate their output.
@@ -16,32 +22,38 @@ import { getErrorMessage } from "./errors.js";
  * @param initialStderr - Initial stderr to prepend (default "")
  * @returns Accumulated stdout, stderr, and final exit code
  */
-export async function executeStatements(ctx, statements, initialStdout = "", initialStderr = "") {
-    let stdout = initialStdout;
-    let stderr = initialStderr;
-    let exitCode = 0;
-    try {
-        for (const stmt of statements) {
-            const result = await ctx.executeStatement(stmt);
-            stdout += result.stdout;
-            stderr += result.stderr;
-            exitCode = result.exitCode;
-        }
+export async function executeStatements(
+  ctx,
+  statements,
+  initialStdout = "",
+  initialStderr = "",
+) {
+  let stdout = initialStdout;
+  let stderr = initialStderr;
+  let exitCode = 0;
+  try {
+    for (const stmt of statements) {
+      const result = await ctx.executeStatement(stmt);
+      stdout += result.stdout;
+      stderr += result.stderr;
+      exitCode = result.exitCode;
     }
-    catch (error) {
-        if (isScopeExitError(error) ||
-            error instanceof ErrexitError ||
-            error instanceof ExitError ||
-            error instanceof ExecutionLimitError ||
-            error instanceof SubshellExitError) {
-            error.prependOutput(stdout, stderr);
-            throw error;
-        }
-        return {
-            stdout,
-            stderr: `${stderr}${getErrorMessage(error)}\n`,
-            exitCode: 1,
-        };
+  } catch (error) {
+    if (
+      isScopeExitError(error) ||
+      error instanceof ErrexitError ||
+      error instanceof ExitError ||
+      error instanceof ExecutionLimitError ||
+      error instanceof SubshellExitError
+    ) {
+      error.prependOutput(stdout, stderr);
+      throw error;
     }
-    return { stdout, stderr, exitCode };
+    return {
+      stdout,
+      stderr: `${stderr}${getErrorMessage(error)}\n`,
+      exitCode: 1,
+    };
+  }
+  return { stdout, stderr, exitCode };
 }

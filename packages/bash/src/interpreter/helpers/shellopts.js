@@ -9,16 +9,16 @@
  * This matches bash's ordering (alphabetical).
  */
 const SHELLOPTS_OPTIONS = [
-    "allexport",
-    "errexit",
-    "noglob",
-    "noclobber",
-    "noexec",
-    "nounset",
-    "pipefail",
-    "posix",
-    "verbose",
-    "xtrace",
+  "allexport",
+  "errexit",
+  "noglob",
+  "noclobber",
+  "noexec",
+  "nounset",
+  "pipefail",
+  "posix",
+  "verbose",
+  "xtrace",
 ];
 /**
  * Options that are always enabled in bash (no-op in our implementation but
@@ -32,60 +32,60 @@ const ALWAYS_ON_OPTIONS = ["braceexpand", "hashall", "interactive-comments"];
  * Includes always-on options like braceexpand, hashall, interactive-comments.
  */
 export function buildShellopts(options) {
-    const enabled = [];
-    // Add always-on options and dynamic options in alphabetical order
-    const allOptions = [
-        ...ALWAYS_ON_OPTIONS.map((opt) => ({ name: opt, enabled: true })),
-        ...SHELLOPTS_OPTIONS.map((opt) => ({ name: opt, enabled: options[opt] })),
-    ].sort((a, b) => a.name.localeCompare(b.name));
-    for (const opt of allOptions) {
-        if (opt.enabled) {
-            enabled.push(opt.name);
-        }
+  const enabled = [];
+  // Add always-on options and dynamic options in alphabetical order
+  const allOptions = [
+    ...ALWAYS_ON_OPTIONS.map((opt) => ({ name: opt, enabled: true })),
+    ...SHELLOPTS_OPTIONS.map((opt) => ({ name: opt, enabled: options[opt] })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+  for (const opt of allOptions) {
+    if (opt.enabled) {
+      enabled.push(opt.name);
     }
-    return enabled.join(":");
+  }
+  return enabled.join(":");
 }
 /**
  * Update the SHELLOPTS environment variable to reflect current shell options.
  * Should be called whenever shell options change (via set -o or shopt -o).
  */
 export function updateShellopts(ctx) {
-    ctx.state.env.set("SHELLOPTS", buildShellopts(ctx.state.options));
+  ctx.state.env.set("SHELLOPTS", buildShellopts(ctx.state.options));
 }
 /**
  * List of shopt option names in the order they appear in BASHOPTS.
  * This matches bash's ordering (alphabetical).
  */
 const BASHOPTS_OPTIONS = [
-    "dotglob",
-    "expand_aliases",
-    "extglob",
-    "failglob",
-    "globskipdots",
-    "globstar",
-    "lastpipe",
-    "nocaseglob",
-    "nocasematch",
-    "nullglob",
-    "xpg_echo",
+  "dotglob",
+  "expand_aliases",
+  "extglob",
+  "failglob",
+  "globskipdots",
+  "globstar",
+  "lastpipe",
+  "nocaseglob",
+  "nocasematch",
+  "nullglob",
+  "xpg_echo",
 ];
 /**
  * Build the BASHOPTS string from current shopt options.
  * Returns a colon-separated list of enabled options (alphabetically sorted).
  */
 export function buildBashopts(shoptOptions) {
-    const enabled = [];
-    for (const opt of BASHOPTS_OPTIONS) {
-        if (shoptOptions[opt]) {
-            enabled.push(opt);
-        }
+  const enabled = [];
+  for (const opt of BASHOPTS_OPTIONS) {
+    if (shoptOptions[opt]) {
+      enabled.push(opt);
     }
-    return enabled.join(":");
+  }
+  return enabled.join(":");
 }
 /**
  * Update the BASHOPTS environment variable to reflect current shopt options.
  * Should be called whenever shopt options change.
  */
 export function updateBashopts(ctx) {
-    ctx.state.env.set("BASHOPTS", buildBashopts(ctx.state.shoptOptions));
+  ctx.state.env.set("BASHOPTS", buildBashopts(ctx.state.shoptOptions));
 }

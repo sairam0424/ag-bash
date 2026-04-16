@@ -6,5 +6,5 @@
  * All regex special characters are escaped.
  */
 export function escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

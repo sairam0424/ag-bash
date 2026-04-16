@@ -2,13 +2,19 @@
  * Central aggregator for command fuzz flag metadata.
  * Imports flagsForFuzzing from every command file and provides a lookup Map.
  */
-import { flagsForFuzzing as alias, unaliasFlagsForFuzzing as unalias, } from "./alias/alias.js";
+import {
+  flagsForFuzzing as alias,
+  unaliasFlagsForFuzzing as unalias,
+} from "./alias/alias.js";
 import { flagsForFuzzing as awk } from "./awk/awk2.js";
 import { flagsForFuzzing as base64 } from "./base64/base64.js";
 // Path utilities
 import { flagsForFuzzing as basename } from "./basename/basename.js";
 // Shell
-import { flagsForFuzzing as bash, shFlagsForFuzzing as sh, } from "./bash/bash.js";
+import {
+  flagsForFuzzing as bash,
+  shFlagsForFuzzing as sh,
+} from "./bash/bash.js";
 import { flagsForFuzzing as cat } from "./cat/cat.js";
 import { flagsForFuzzing as chmod } from "./chmod/chmod.js";
 import { flagsForFuzzing as clear } from "./clear/clear.js";
@@ -23,7 +29,10 @@ import { flagsForFuzzing as du } from "./du/du.js";
 // Basic I/O
 import { flagsForFuzzing as echo } from "./echo/echo.js";
 // Environment
-import { flagsForFuzzing as env, printenvFlagsForFuzzing as printenv, } from "./env/env.js";
+import {
+  flagsForFuzzing as env,
+  printenvFlagsForFuzzing as printenv,
+} from "./env/env.js";
 import { flagsForFuzzing as expand } from "./expand/expand.js";
 import { flagsForFuzzing as unexpand } from "./expand/unexpand.js";
 import { flagsForFuzzing as expr } from "./expr/expr.js";
@@ -33,9 +42,17 @@ import { flagsForFuzzing as file } from "./file/file.js";
 import { flagsForFuzzing as find } from "./find/find.js";
 import { flagsForFuzzing as fold } from "./fold/fold.js";
 // Text processing
-import { egrepFlagsForFuzzing as egrep, fgrepFlagsForFuzzing as fgrep, flagsForFuzzing as grep, } from "./grep/grep.js";
+import {
+  egrepFlagsForFuzzing as egrep,
+  fgrepFlagsForFuzzing as fgrep,
+  flagsForFuzzing as grep,
+} from "./grep/grep.js";
 // Compression
-import { gunzipFlagsForFuzzing as gunzip, flagsForFuzzing as gzip, zcatFlagsForFuzzing as zcat, } from "./gzip/gzip.js";
+import {
+  gunzipFlagsForFuzzing as gunzip,
+  flagsForFuzzing as gzip,
+  zcatFlagsForFuzzing as zcat,
+} from "./gzip/gzip.js";
 // File viewing
 import { flagsForFuzzing as head } from "./head/head.js";
 // Help
@@ -87,7 +104,10 @@ import { flagsForFuzzing as touch } from "./touch/touch.js";
 import { flagsForFuzzing as tr } from "./tr/tr.js";
 // Directory utilities
 import { flagsForFuzzing as tree } from "./tree/tree.js";
-import { falseFlagsForFuzzing as falseCmd, flagsForFuzzing as trueCmd, } from "./true/true.js";
+import {
+  falseFlagsForFuzzing as falseCmd,
+  flagsForFuzzing as trueCmd,
+} from "./true/true.js";
 import { flagsForFuzzing as uniq } from "./uniq/uniq.js";
 import { flagsForFuzzing as wc } from "./wc/wc.js";
 // PATH utilities
@@ -97,92 +117,93 @@ import { flagsForFuzzing as xan } from "./xan/xan.js";
 // Utilities
 import { flagsForFuzzing as xargs } from "./xargs/xargs.js";
 import { flagsForFuzzing as yq } from "./yq/yq.js";
+
 const allFuzzInfo = [
-    echo,
-    cat,
-    printf,
-    ls,
-    mkdir,
-    rmdir,
-    touch,
-    rm,
-    cp,
-    mv,
-    ln,
-    chmod,
-    pwd,
-    readlink,
-    head,
-    tail,
-    wc,
-    stat,
-    grep,
-    fgrep,
-    egrep,
-    rg,
-    sed,
-    awk,
-    sort,
-    uniq,
-    comm,
-    cut,
-    paste,
-    tr,
-    rev,
-    nl,
-    fold,
-    expand,
-    unexpand,
-    strings,
-    split,
-    column,
-    join,
-    tee,
-    find,
-    basename,
-    dirname,
-    tree,
-    du,
-    env,
-    printenv,
-    alias,
-    unalias,
-    history,
-    xargs,
-    trueCmd,
-    falseCmd,
-    clear,
-    bash,
-    sh,
-    jq,
-    base64,
-    diff,
-    date,
-    sleep,
-    timeout,
-    time,
-    seq,
-    expr,
-    md5sum,
-    sha1sum,
-    sha256sum,
-    file,
-    htmlToMarkdown,
-    help,
-    which,
-    tac,
-    hostname,
-    whoami,
-    od,
-    gzip,
-    gunzip,
-    zcat,
-    tar,
-    yq,
-    xan,
-    sqlite3,
+  echo,
+  cat,
+  printf,
+  ls,
+  mkdir,
+  rmdir,
+  touch,
+  rm,
+  cp,
+  mv,
+  ln,
+  chmod,
+  pwd,
+  readlink,
+  head,
+  tail,
+  wc,
+  stat,
+  grep,
+  fgrep,
+  egrep,
+  rg,
+  sed,
+  awk,
+  sort,
+  uniq,
+  comm,
+  cut,
+  paste,
+  tr,
+  rev,
+  nl,
+  fold,
+  expand,
+  unexpand,
+  strings,
+  split,
+  column,
+  join,
+  tee,
+  find,
+  basename,
+  dirname,
+  tree,
+  du,
+  env,
+  printenv,
+  alias,
+  unalias,
+  history,
+  xargs,
+  trueCmd,
+  falseCmd,
+  clear,
+  bash,
+  sh,
+  jq,
+  base64,
+  diff,
+  date,
+  sleep,
+  timeout,
+  time,
+  seq,
+  expr,
+  md5sum,
+  sha1sum,
+  sha256sum,
+  file,
+  htmlToMarkdown,
+  help,
+  which,
+  tac,
+  hostname,
+  whoami,
+  od,
+  gzip,
+  gunzip,
+  zcat,
+  tar,
+  yq,
+  xan,
+  sqlite3,
 ];
 /** Get all command fuzz info entries */
 export function getAllCommandFuzzInfo() {
-    return allFuzzInfo;
+  return allFuzzInfo;
 }

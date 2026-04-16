@@ -8,21 +8,21 @@
  * Shared between bash arithmetic and AWK.
  */
 export function applyNumericBinaryOp(left, right, operator) {
-    switch (operator) {
-        case "+":
-            return left + right;
-        case "-":
-            return left - right;
-        case "*":
-            return left * right;
-        case "/":
-            return right !== 0 ? left / right : 0;
-        case "%":
-            return right !== 0 ? left % right : 0;
-        case "^":
-        case "**":
-            return left ** right;
-        default:
-            return 0;
-    }
+  switch (operator) {
+    case "+":
+      return left + right;
+    case "-":
+      return left - right;
+    case "*":
+      return left * right;
+    case "/":
+      return right !== 0 ? left / right : 0;
+    case "%":
+      return right !== 0 ? left % right : 0;
+    case "^":
+    case "**":
+      return left ** right;
+    default:
+      return 0;
+  }
 }

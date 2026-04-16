@@ -3,176 +3,200 @@
  *
  * Main interpreter class that orchestrates AWK program execution.
  */
-import { assertDefenseContext as assertDefenseContextInvariant, awaitWithDefenseContext, } from "../../../security/defense-context.js";
+import {
+  assertDefenseContext as assertDefenseContextInvariant,
+  awaitWithDefenseContext,
+} from "../../../security/defense-context.js";
 import { evalExpr } from "./expressions.js";
 import { setCurrentLine } from "./fields.js";
 import { executeBlock } from "./statements.js";
 import { isTruthy, matchRegex } from "./type-coercion.js";
 export class AwkInterpreter {
-    ctx;
-    program = null;
-    rangeStates = [];
-    constructor(ctx) {
-        this.ctx = ctx;
+  ctx;
+  program = null;
+  rangeStates = [];
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+  assertDefenseContext(phase) {
+    assertDefenseContextInvariant(this.ctx.requireDefenseContext, "awk", phase);
+  }
+  withDefenseContext(phase, op) {
+    return awaitWithDefenseContext(
+      this.ctx.requireDefenseContext,
+      "awk",
+      phase,
+      op,
+    );
+  }
+  /**
+   * Initialize the interpreter with a program.
+   * Must be called before executeBegin/executeLine/executeEnd.
+   */
+  execute(program) {
+    this.assertDefenseContext("program initialization");
+    this.program = program;
+    this.ctx.output = "";
+    // Register user-defined functions
+    for (const func of program.functions) {
+      this.ctx.functions.set(func.name, func);
     }
-    assertDefenseContext(phase) {
-        assertDefenseContextInvariant(this.ctx.requireDefenseContext, "awk", phase);
+    // Initialize range states
+    this.rangeStates = program.rules.map(() => false);
+  }
+  /**
+   * Execute all BEGIN blocks.
+   */
+  async executeBegin() {
+    this.assertDefenseContext("BEGIN execution entry");
+    if (!this.program) return;
+    for (const rule of this.program.rules) {
+      if (rule.pattern?.type === "begin") {
+        await this.withDefenseContext("BEGIN block execution", () =>
+          executeBlock(this.ctx, rule.action.statements),
+        );
+        if (this.ctx.shouldExit) break;
+      }
     }
-    withDefenseContext(phase, op) {
-        return awaitWithDefenseContext(this.ctx.requireDefenseContext, "awk", phase, op);
+  }
+  /**
+   * Execute rules for a single input line.
+   */
+  async executeLine(line) {
+    this.assertDefenseContext("line execution entry");
+    if (!this.program || this.ctx.shouldExit) return;
+    // Update context with new line
+    setCurrentLine(this.ctx, line);
+    this.ctx.NR++;
+    this.ctx.FNR++;
+    this.ctx.shouldNext = false;
+    for (let i = 0; i < this.program.rules.length; i++) {
+      if (this.ctx.shouldExit || this.ctx.shouldNext || this.ctx.shouldNextFile)
+        break;
+      const rule = this.program.rules[i];
+      // Skip BEGIN/END rules
+      if (rule.pattern?.type === "begin" || rule.pattern?.type === "end") {
+        continue;
+      }
+      if (
+        await this.withDefenseContext("rule match", () =>
+          this.matchesRule(rule, i),
+        )
+      ) {
+        await this.withDefenseContext("rule block execution", () =>
+          executeBlock(this.ctx, rule.action.statements),
+        );
+      }
     }
-    /**
-     * Initialize the interpreter with a program.
-     * Must be called before executeBegin/executeLine/executeEnd.
-     */
-    execute(program) {
-        this.assertDefenseContext("program initialization");
-        this.program = program;
-        this.ctx.output = "";
-        // Register user-defined functions
-        for (const func of program.functions) {
-            this.ctx.functions.set(func.name, func);
-        }
-        // Initialize range states
-        this.rangeStates = program.rules.map(() => false);
+  }
+  /**
+   * Execute all END blocks.
+   * END blocks run even after exit is called, but exit from within
+   * an END block stops further END block execution.
+   */
+  async executeEnd() {
+    this.assertDefenseContext("END execution entry");
+    if (!this.program) return;
+    // If we're already in END blocks (exit called from END), don't recurse
+    if (this.ctx.inEndBlock) return;
+    this.ctx.inEndBlock = true;
+    // Reset shouldExit so END blocks can execute, but preserve exitCode
+    this.ctx.shouldExit = false;
+    for (const rule of this.program.rules) {
+      if (rule.pattern?.type === "end") {
+        await this.withDefenseContext("END block execution", () =>
+          executeBlock(this.ctx, rule.action.statements),
+        );
+        if (this.ctx.shouldExit) break; // exit from END block stops further END blocks
+      }
     }
-    /**
-     * Execute all BEGIN blocks.
-     */
-    async executeBegin() {
-        this.assertDefenseContext("BEGIN execution entry");
-        if (!this.program)
-            return;
-        for (const rule of this.program.rules) {
-            if (rule.pattern?.type === "begin") {
-                await this.withDefenseContext("BEGIN block execution", () => executeBlock(this.ctx, rule.action.statements));
-                if (this.ctx.shouldExit)
-                    break;
+    this.ctx.inEndBlock = false;
+  }
+  /**
+   * Get the accumulated output.
+   */
+  getOutput() {
+    return this.ctx.output;
+  }
+  /**
+   * Get the exit code.
+   */
+  getExitCode() {
+    return this.ctx.exitCode;
+  }
+  /**
+   * Get the runtime context (for access to control flow flags, etc.)
+   */
+  getContext() {
+    return this.ctx;
+  }
+  /**
+   * Check if a rule matches the current line.
+   */
+  async matchesRule(rule, ruleIndex) {
+    this.assertDefenseContext("rule matching");
+    const pattern = rule.pattern;
+    // No pattern - always matches
+    if (!pattern) return true;
+    switch (pattern.type) {
+      case "begin":
+      case "end":
+        return false;
+      case "regex_pattern":
+        return matchRegex(pattern.pattern, this.ctx.line);
+      case "expr_pattern":
+        return isTruthy(
+          await this.withDefenseContext("expression pattern evaluation", () =>
+            evalExpr(this.ctx, pattern.expression),
+          ),
+        );
+      case "range": {
+        const startMatches = await this.withDefenseContext(
+          "range start pattern",
+          () => this.matchPattern(pattern.start),
+        );
+        const endMatches = await this.withDefenseContext(
+          "range end pattern",
+          () => this.matchPattern(pattern.end),
+        );
+        if (!this.rangeStates[ruleIndex]) {
+          if (startMatches) {
+            this.rangeStates[ruleIndex] = true;
+            // Check if end also matches (single line range)
+            if (endMatches) {
+              this.rangeStates[ruleIndex] = false;
             }
-        }
-    }
-    /**
-     * Execute rules for a single input line.
-     */
-    async executeLine(line) {
-        this.assertDefenseContext("line execution entry");
-        if (!this.program || this.ctx.shouldExit)
-            return;
-        // Update context with new line
-        setCurrentLine(this.ctx, line);
-        this.ctx.NR++;
-        this.ctx.FNR++;
-        this.ctx.shouldNext = false;
-        for (let i = 0; i < this.program.rules.length; i++) {
-            if (this.ctx.shouldExit || this.ctx.shouldNext || this.ctx.shouldNextFile)
-                break;
-            const rule = this.program.rules[i];
-            // Skip BEGIN/END rules
-            if (rule.pattern?.type === "begin" || rule.pattern?.type === "end") {
-                continue;
-            }
-            if (await this.withDefenseContext("rule match", () => this.matchesRule(rule, i))) {
-                await this.withDefenseContext("rule block execution", () => executeBlock(this.ctx, rule.action.statements));
-            }
-        }
-    }
-    /**
-     * Execute all END blocks.
-     * END blocks run even after exit is called, but exit from within
-     * an END block stops further END block execution.
-     */
-    async executeEnd() {
-        this.assertDefenseContext("END execution entry");
-        if (!this.program)
-            return;
-        // If we're already in END blocks (exit called from END), don't recurse
-        if (this.ctx.inEndBlock)
-            return;
-        this.ctx.inEndBlock = true;
-        // Reset shouldExit so END blocks can execute, but preserve exitCode
-        this.ctx.shouldExit = false;
-        for (const rule of this.program.rules) {
-            if (rule.pattern?.type === "end") {
-                await this.withDefenseContext("END block execution", () => executeBlock(this.ctx, rule.action.statements));
-                if (this.ctx.shouldExit)
-                    break; // exit from END block stops further END blocks
-            }
-        }
-        this.ctx.inEndBlock = false;
-    }
-    /**
-     * Get the accumulated output.
-     */
-    getOutput() {
-        return this.ctx.output;
-    }
-    /**
-     * Get the exit code.
-     */
-    getExitCode() {
-        return this.ctx.exitCode;
-    }
-    /**
-     * Get the runtime context (for access to control flow flags, etc.)
-     */
-    getContext() {
-        return this.ctx;
-    }
-    /**
-     * Check if a rule matches the current line.
-     */
-    async matchesRule(rule, ruleIndex) {
-        this.assertDefenseContext("rule matching");
-        const pattern = rule.pattern;
-        // No pattern - always matches
-        if (!pattern)
             return true;
-        switch (pattern.type) {
-            case "begin":
-            case "end":
-                return false;
-            case "regex_pattern":
-                return matchRegex(pattern.pattern, this.ctx.line);
-            case "expr_pattern":
-                return isTruthy(await this.withDefenseContext("expression pattern evaluation", () => evalExpr(this.ctx, pattern.expression)));
-            case "range": {
-                const startMatches = await this.withDefenseContext("range start pattern", () => this.matchPattern(pattern.start));
-                const endMatches = await this.withDefenseContext("range end pattern", () => this.matchPattern(pattern.end));
-                if (!this.rangeStates[ruleIndex]) {
-                    if (startMatches) {
-                        this.rangeStates[ruleIndex] = true;
-                        // Check if end also matches (single line range)
-                        if (endMatches) {
-                            this.rangeStates[ruleIndex] = false;
-                        }
-                        return true;
-                    }
-                    return false;
-                }
-                else {
-                    // In range
-                    if (endMatches) {
-                        this.rangeStates[ruleIndex] = false;
-                    }
-                    return true;
-                }
-            }
-            default:
-                return false;
+          }
+          return false;
+        } else {
+          // In range
+          if (endMatches) {
+            this.rangeStates[ruleIndex] = false;
+          }
+          return true;
         }
+      }
+      default:
+        return false;
     }
-    /**
-     * Check if a pattern matches.
-     */
-    async matchPattern(pattern) {
-        this.assertDefenseContext("pattern matching");
-        switch (pattern.type) {
-            case "regex_pattern":
-                return matchRegex(pattern.pattern, this.ctx.line);
-            case "expr_pattern":
-                return isTruthy(await this.withDefenseContext("nested expression pattern", () => evalExpr(this.ctx, pattern.expression)));
-            default:
-                return false;
-        }
+  }
+  /**
+   * Check if a pattern matches.
+   */
+  async matchPattern(pattern) {
+    this.assertDefenseContext("pattern matching");
+    switch (pattern.type) {
+      case "regex_pattern":
+        return matchRegex(pattern.pattern, this.ctx.line);
+      case "expr_pattern":
+        return isTruthy(
+          await this.withDefenseContext("nested expression pattern", () =>
+            evalExpr(this.ctx, pattern.expression),
+          ),
+        );
+      default:
+        return false;
     }
+  }
 }

@@ -6,5 +6,5 @@
  * - Context lines (before/after)
  * - Regex building for different modes (basic, extended, fixed, perl)
  */
-export { searchContent, } from "./matcher.js";
-export { buildRegex, convertReplacement, } from "./regex.js";
+export { searchContent } from "./matcher.js";
+export { buildRegex, convertReplacement } from "./regex.js";

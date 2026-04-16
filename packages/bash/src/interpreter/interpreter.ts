@@ -134,7 +134,10 @@ export interface InterpreterOptions {
   requireDefenseContext?: boolean;
   /** Bootstrap JavaScript code for js-exec */
   jsBootstrapCode?: string;
-  onCommandNotFound?: (command: string, args: string[]) => Promise<ExecResult | null>;
+  onCommandNotFound?: (
+    command: string,
+    args: string[],
+  ) => Promise<ExecResult | null>;
 }
 
 export class Interpreter {

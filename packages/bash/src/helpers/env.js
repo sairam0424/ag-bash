@@ -15,7 +15,7 @@
  * @returns A null-prototype object with the same key-value pairs
  */
 export function mapToRecord(env) {
-    return Object.assign(Object.create(null), Object.fromEntries(env));
+  return Object.assign(Object.create(null), Object.fromEntries(env));
 }
 /**
  * Convert a Map<string, string> to a null-prototype Record, with optional
@@ -26,7 +26,7 @@ export function mapToRecord(env) {
  * @returns A null-prototype object with the combined key-value pairs
  */
 export function mapToRecordWithExtras(env, extra) {
-    return Object.assign(Object.create(null), Object.fromEntries(env), extra);
+  return Object.assign(Object.create(null), Object.fromEntries(env), extra);
 }
 /**
  * Merge multiple objects into a null-prototype object.
@@ -38,5 +38,5 @@ export function mapToRecordWithExtras(env, extra) {
  * @returns A null-prototype object with all properties merged
  */
 export function mergeToNullPrototype(...objects) {
-    return Object.assign(Object.create(null), ...objects);
+  return Object.assign(Object.create(null), ...objects);
 }

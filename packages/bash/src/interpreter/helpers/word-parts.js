@@ -10,16 +10,16 @@
  * Returns null for complex parts that require expansion.
  */
 export function getLiteralValue(part) {
-    switch (part.type) {
-        case "Literal":
-            return part.value;
-        case "SingleQuoted":
-            return part.value;
-        case "Escaped":
-            return part.value;
-        default:
-            return null;
-    }
+  switch (part.type) {
+    case "Literal":
+      return part.value;
+    case "SingleQuoted":
+      return part.value;
+    case "Escaped":
+      return part.value;
+    default:
+      return null;
+  }
 }
 /**
  * Check if a word part is "quoted" - meaning glob characters should be treated literally.
@@ -30,16 +30,16 @@ export function getLiteralValue(part) {
  * - Literal with empty value (doesn't affect quoting)
  */
 export function isQuotedPart(part) {
-    switch (part.type) {
-        case "SingleQuoted":
-        case "Escaped":
-        case "DoubleQuoted":
-            return true;
-        case "Literal":
-            // Empty literals don't affect quoting
-            return part.value === "";
-        default:
-            // Unquoted expansions like $var are not quoted
-            return false;
-    }
+  switch (part.type) {
+    case "SingleQuoted":
+    case "Escaped":
+    case "DoubleQuoted":
+      return true;
+    case "Literal":
+      // Empty literals don't affect quoting
+      return part.value === "";
+    default:
+      // Unquoted expansions like $var are not quoted
+      return false;
+  }
 }

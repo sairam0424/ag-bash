@@ -1,1 +1,1 @@
-export { MountableFs, } from "./mountable-fs.js";
+export { MountableFs } from "./mountable-fs.js";

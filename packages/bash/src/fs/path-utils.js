@@ -18,23 +18,22 @@ export const SYMLINK_MODE = 0o777;
  * strip trailing slashes.  Pure function, no I/O.
  */
 export function normalizePath(path) {
-    if (!path || path === "/")
-        return "/";
-    let normalized = path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
-    if (!normalized.startsWith("/")) {
-        normalized = `/${normalized}`;
+  if (!path || path === "/") return "/";
+  let normalized =
+    path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
+  if (!normalized.startsWith("/")) {
+    normalized = `/${normalized}`;
+  }
+  const parts = normalized.split("/").filter((p) => p && p !== ".");
+  const resolved = [];
+  for (const part of parts) {
+    if (part === "..") {
+      resolved.pop();
+    } else {
+      resolved.push(part);
     }
-    const parts = normalized.split("/").filter((p) => p && p !== ".");
-    const resolved = [];
-    for (const part of parts) {
-        if (part === "..") {
-            resolved.pop();
-        }
-        else {
-            resolved.push(part);
-        }
-    }
-    return `/${resolved.join("/")}` || "/";
+  }
+  return `/${resolved.join("/")}` || "/";
 }
 /**
  * Validate that a path does not contain null bytes.
@@ -42,37 +41,36 @@ export function normalizePath(path) {
  * filters.
  */
 export function validatePath(path, operation) {
-    if (path.includes("\0")) {
-        throw new Error(`ENOENT: path contains null byte, ${operation} '${path}'`);
-    }
+  if (path.includes("\0")) {
+    throw new Error(`ENOENT: path contains null byte, ${operation} '${path}'`);
+  }
 }
 /**
  * Get the directory name of a normalized virtual path.
  */
 export function dirname(path) {
-    const normalized = normalizePath(path);
-    if (normalized === "/")
-        return "/";
-    const lastSlash = normalized.lastIndexOf("/");
-    return lastSlash === 0 ? "/" : normalized.slice(0, lastSlash);
+  const normalized = normalizePath(path);
+  if (normalized === "/") return "/";
+  const lastSlash = normalized.lastIndexOf("/");
+  return lastSlash === 0 ? "/" : normalized.slice(0, lastSlash);
 }
 /**
  * Resolve a relative path against a base directory.
  * If `path` is absolute, it is normalized and returned directly.
  */
 export function resolvePath(base, path) {
-    if (path.startsWith("/")) {
-        return normalizePath(path);
-    }
-    const combined = base === "/" ? `/${path}` : `${base}/${path}`;
-    return normalizePath(combined);
+  if (path.startsWith("/")) {
+    return normalizePath(path);
+  }
+  const combined = base === "/" ? `/${path}` : `${base}/${path}`;
+  return normalizePath(combined);
 }
 /**
  * Join a parent path with a child name.
  * Handles the root-path edge case (`"/" + "child"` → `"/child"`).
  */
 export function joinPath(parent, child) {
-    return parent === "/" ? `/${child}` : `${parent}/${child}`;
+  return parent === "/" ? `/${child}` : `${parent}/${child}`;
 }
 /**
  * Resolve a symlink target relative to the symlink's location.
@@ -80,9 +78,9 @@ export function joinPath(parent, child) {
  * resolved from the symlink's parent directory.
  */
 export function resolveSymlinkTarget(symlinkPath, target) {
-    if (target.startsWith("/")) {
-        return normalizePath(target);
-    }
-    const dir = dirname(symlinkPath);
-    return normalizePath(joinPath(dir, target));
+  if (target.startsWith("/")) {
+    return normalizePath(target);
+  }
+  const dir = dirname(symlinkPath);
+  return normalizePath(joinPath(dir, target));
 }

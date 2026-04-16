@@ -14,4 +14,4 @@
  *   // For internal patterns (that we control), you can still use RegExp directly
  *   const internalRegex = /^[a-z]+$/;
  */
-export { ConstantRegex, createUserRegex, UserRegex, } from "./user-regex.js";
+export { ConstantRegex, createUserRegex, UserRegex } from "./user-regex.js";

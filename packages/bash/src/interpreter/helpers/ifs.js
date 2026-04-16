@@ -13,13 +13,13 @@ const DEFAULT_IFS = " \t\n";
  * Returns DEFAULT_IFS if IFS is undefined, or the actual value (including empty string).
  */
 export function getIfs(env) {
-    return env.get("IFS") ?? DEFAULT_IFS;
+  return env.get("IFS") ?? DEFAULT_IFS;
 }
 /**
  * Check if IFS is set to empty string (disables word splitting).
  */
 export function isIfsEmpty(env) {
-    return env.get("IFS") === "";
+  return env.get("IFS") === "";
 }
 /**
  * Check if IFS contains only whitespace characters (space, tab, newline).
@@ -28,56 +28,50 @@ export function isIfsEmpty(env) {
  * When IFS has only whitespace, empty params are dropped.
  */
 export function isIfsWhitespaceOnly(env) {
-    const ifs = getIfs(env);
-    if (ifs === "")
-        return true; // Empty IFS counts as "whitespace only" for this purpose
-    for (const ch of ifs) {
-        if (ch !== " " && ch !== "\t" && ch !== "\n") {
-            return false;
-        }
+  const ifs = getIfs(env);
+  if (ifs === "") return true; // Empty IFS counts as "whitespace only" for this purpose
+  for (const ch of ifs) {
+    if (ch !== " " && ch !== "\t" && ch !== "\n") {
+      return false;
     }
-    return true;
+  }
+  return true;
 }
 /**
  * Build a regex-safe pattern from IFS characters for use in character classes.
  * E.g., for IFS=" \t\n", returns " \\t\\n" (escaped for [pattern] use)
  */
 export function buildIfsCharClassPattern(ifs) {
-    let hasDash = false;
-    const parts = [];
-    for (const c of ifs.split("")) {
-        if (c === "-") {
-            // Defer '-' to place it last in the character class
-            hasDash = true;
-        }
-        else if (/[\\^$.*+?()[\]{}|]/.test(c)) {
-            parts.push(`\\${c}`);
-        }
-        else if (c === "\t") {
-            parts.push("\\t");
-        }
-        else if (c === "\n") {
-            parts.push("\\n");
-        }
-        else {
-            parts.push(c);
-        }
+  let hasDash = false;
+  const parts = [];
+  for (const c of ifs.split("")) {
+    if (c === "-") {
+      // Defer '-' to place it last in the character class
+      hasDash = true;
+    } else if (/[\\^$.*+?()[\]{}|]/.test(c)) {
+      parts.push(`\\${c}`);
+    } else if (c === "\t") {
+      parts.push("\\t");
+    } else if (c === "\n") {
+      parts.push("\\n");
+    } else {
+      parts.push(c);
     }
-    // Place '-' last to prevent unintended ranges like [a-z]
-    if (hasDash) {
-        parts.push("\\-");
-    }
-    return parts.join("");
+  }
+  // Place '-' last to prevent unintended ranges like [a-z]
+  if (hasDash) {
+    parts.push("\\-");
+  }
+  return parts.join("");
 }
 /**
  * Get the first character of IFS (used for joining with $* and ${!prefix*}).
  * Returns space if IFS is undefined, empty string if IFS is empty.
  */
 export function getIfsSeparator(env) {
-    const ifs = env.get("IFS");
-    if (ifs === undefined)
-        return " ";
-    return ifs[0] || "";
+  const ifs = env.get("IFS");
+  if (ifs === undefined) return " ";
+  return ifs[0] || "";
 }
 /** IFS whitespace characters */
 const IFS_WHITESPACE = " \t\n";
@@ -85,23 +79,22 @@ const IFS_WHITESPACE = " \t\n";
  * Check if a character is an IFS whitespace character.
  */
 function isIfsWhitespace(ch) {
-    return IFS_WHITESPACE.includes(ch);
+  return IFS_WHITESPACE.includes(ch);
 }
 /**
  * Split IFS characters into whitespace and non-whitespace sets.
  */
 function categorizeIfs(ifs) {
-    const whitespace = new Set();
-    const nonWhitespace = new Set();
-    for (const ch of ifs) {
-        if (isIfsWhitespace(ch)) {
-            whitespace.add(ch);
-        }
-        else {
-            nonWhitespace.add(ch);
-        }
+  const whitespace = new Set();
+  const nonWhitespace = new Set();
+  for (const ch of ifs) {
+    if (isIfsWhitespace(ch)) {
+      whitespace.add(ch);
+    } else {
+      nonWhitespace.add(ch);
     }
-    return { whitespace, nonWhitespace };
+  }
+  return { whitespace, nonWhitespace };
 }
 /**
  * Advanced IFS splitting for the read builtin with proper whitespace/non-whitespace handling.
@@ -119,101 +112,101 @@ function categorizeIfs(ifs) {
  * @returns Object with words array and wordStarts array
  */
 export function splitByIfsForRead(value, ifs, maxSplit, raw) {
-    // Empty IFS means no splitting
-    if (ifs === "") {
-        // If value is empty, return empty array (no words)
-        // If value is non-empty, return the entire value as a single word
-        if (value === "") {
-            return { words: [], wordStarts: [] };
-        }
-        return { words: [value], wordStarts: [0] };
+  // Empty IFS means no splitting
+  if (ifs === "") {
+    // If value is empty, return empty array (no words)
+    // If value is non-empty, return the entire value as a single word
+    if (value === "") {
+      return { words: [], wordStarts: [] };
     }
-    const { whitespace, nonWhitespace } = categorizeIfs(ifs);
-    const words = [];
-    const wordStarts = [];
-    let pos = 0;
-    // Skip leading IFS whitespace
+    return { words: [value], wordStarts: [0] };
+  }
+  const { whitespace, nonWhitespace } = categorizeIfs(ifs);
+  const words = [];
+  const wordStarts = [];
+  let pos = 0;
+  // Skip leading IFS whitespace
+  while (pos < value.length && whitespace.has(value[pos])) {
+    pos++;
+  }
+  // If we've consumed all input, return empty result
+  if (pos >= value.length) {
+    return { words: [], wordStarts: [] };
+  }
+  // Check for leading non-whitespace delimiter (creates empty field)
+  if (nonWhitespace.has(value[pos])) {
+    words.push("");
+    wordStarts.push(pos);
+    pos++;
+    // Skip any whitespace after the delimiter
     while (pos < value.length && whitespace.has(value[pos])) {
-        pos++;
+      pos++;
     }
-    // If we've consumed all input, return empty result
+  }
+  // Now process words
+  while (pos < value.length) {
+    // Check if we've reached maxSplit limit
+    if (maxSplit !== undefined && words.length >= maxSplit) {
+      break;
+    }
+    const wordStart = pos;
+    wordStarts.push(wordStart);
+    // Collect characters until we hit an IFS character
+    // In non-raw mode, backslash escapes the next character (protects it from being IFS)
+    while (pos < value.length) {
+      const ch = value[pos];
+      // In non-raw mode, backslash escapes the next character
+      if (!raw && ch === "\\") {
+        pos++; // skip backslash
+        if (pos < value.length) {
+          pos++; // skip escaped character (it's part of the word, not IFS)
+        }
+        continue;
+      }
+      // Check if current char is IFS
+      if (whitespace.has(ch) || nonWhitespace.has(ch)) {
+        break;
+      }
+      pos++;
+    }
+    words.push(value.substring(wordStart, pos));
     if (pos >= value.length) {
-        return { words: [], wordStarts: [] };
+      break;
     }
-    // Check for leading non-whitespace delimiter (creates empty field)
-    if (nonWhitespace.has(value[pos])) {
+    // Now handle the delimiter(s)
+    // Skip IFS characters (whitespace before non-whitespace)
+    while (pos < value.length && whitespace.has(value[pos])) {
+      pos++;
+    }
+    // Check for non-whitespace delimiter
+    if (pos < value.length && nonWhitespace.has(value[pos])) {
+      pos++;
+      // Skip whitespace after non-whitespace delimiter
+      while (pos < value.length && whitespace.has(value[pos])) {
+        pos++;
+      }
+      // Check for another non-whitespace delimiter (creates empty field)
+      while (pos < value.length && nonWhitespace.has(value[pos])) {
+        // Check maxSplit
+        if (maxSplit !== undefined && words.length >= maxSplit) {
+          break;
+        }
+        // Empty field for this delimiter
         words.push("");
         wordStarts.push(pos);
         pos++;
-        // Skip any whitespace after the delimiter
+        // Skip whitespace after
         while (pos < value.length && whitespace.has(value[pos])) {
-            pos++;
+          pos++;
         }
+      }
     }
-    // Now process words
-    while (pos < value.length) {
-        // Check if we've reached maxSplit limit
-        if (maxSplit !== undefined && words.length >= maxSplit) {
-            break;
-        }
-        const wordStart = pos;
-        wordStarts.push(wordStart);
-        // Collect characters until we hit an IFS character
-        // In non-raw mode, backslash escapes the next character (protects it from being IFS)
-        while (pos < value.length) {
-            const ch = value[pos];
-            // In non-raw mode, backslash escapes the next character
-            if (!raw && ch === "\\") {
-                pos++; // skip backslash
-                if (pos < value.length) {
-                    pos++; // skip escaped character (it's part of the word, not IFS)
-                }
-                continue;
-            }
-            // Check if current char is IFS
-            if (whitespace.has(ch) || nonWhitespace.has(ch)) {
-                break;
-            }
-            pos++;
-        }
-        words.push(value.substring(wordStart, pos));
-        if (pos >= value.length) {
-            break;
-        }
-        // Now handle the delimiter(s)
-        // Skip IFS characters (whitespace before non-whitespace)
-        while (pos < value.length && whitespace.has(value[pos])) {
-            pos++;
-        }
-        // Check for non-whitespace delimiter
-        if (pos < value.length && nonWhitespace.has(value[pos])) {
-            pos++;
-            // Skip whitespace after non-whitespace delimiter
-            while (pos < value.length && whitespace.has(value[pos])) {
-                pos++;
-            }
-            // Check for another non-whitespace delimiter (creates empty field)
-            while (pos < value.length && nonWhitespace.has(value[pos])) {
-                // Check maxSplit
-                if (maxSplit !== undefined && words.length >= maxSplit) {
-                    break;
-                }
-                // Empty field for this delimiter
-                words.push("");
-                wordStarts.push(pos);
-                pos++;
-                // Skip whitespace after
-                while (pos < value.length && whitespace.has(value[pos])) {
-                    pos++;
-                }
-            }
-        }
-        // Note: Trailing non-whitespace delimiter does NOT create an empty field.
-        // Empty fields are only created between consecutive non-whitespace delimiters.
-        // For example: "a:b:" with IFS=":" produces ['a', 'b'], not ['a', 'b', '']
-        // But "a::b" with IFS=":" produces ['a', '', 'b'] (empty field between the two colons)
-    }
-    return { words, wordStarts };
+    // Note: Trailing non-whitespace delimiter does NOT create an empty field.
+    // Empty fields are only created between consecutive non-whitespace delimiters.
+    // For example: "a:b:" with IFS=":" produces ['a', 'b'], not ['a', 'b', '']
+    // But "a::b" with IFS=":" produces ['a', '', 'b'] (empty field between the two colons)
+  }
+  return { words, wordStarts };
 }
 /**
  * Extended IFS splitting that tracks trailing delimiters.
@@ -222,111 +215,111 @@ export function splitByIfsForRead(value, ifs, maxSplit, raw) {
  * should become a separate word, not join with `c`.
  */
 export function splitByIfsForExpansionEx(value, ifs) {
-    // Empty IFS means no splitting
-    if (ifs === "") {
-        return {
-            words: value ? [value] : [],
-            hadLeadingDelimiter: false,
-            hadTrailingDelimiter: false,
-        };
-    }
-    // Empty value means no words
-    if (value === "") {
-        return {
-            words: [],
-            hadLeadingDelimiter: false,
-            hadTrailingDelimiter: false,
-        };
-    }
-    const { whitespace, nonWhitespace } = categorizeIfs(ifs);
-    const words = [];
-    let pos = 0;
-    let hadLeadingDelimiter = false;
-    let hadTrailingDelimiter = false;
-    // Skip leading IFS whitespace
-    const leadingStart = pos;
+  // Empty IFS means no splitting
+  if (ifs === "") {
+    return {
+      words: value ? [value] : [],
+      hadLeadingDelimiter: false,
+      hadTrailingDelimiter: false,
+    };
+  }
+  // Empty value means no words
+  if (value === "") {
+    return {
+      words: [],
+      hadLeadingDelimiter: false,
+      hadTrailingDelimiter: false,
+    };
+  }
+  const { whitespace, nonWhitespace } = categorizeIfs(ifs);
+  const words = [];
+  let pos = 0;
+  let hadLeadingDelimiter = false;
+  let hadTrailingDelimiter = false;
+  // Skip leading IFS whitespace
+  const leadingStart = pos;
+  while (pos < value.length && whitespace.has(value[pos])) {
+    pos++;
+  }
+  // Track if we consumed any leading whitespace
+  if (pos > leadingStart) {
+    hadLeadingDelimiter = true;
+  }
+  // If we've consumed all input, return empty result
+  if (pos >= value.length) {
+    // The value was all whitespace - it had both leading and trailing delimiter
+    return { words: [], hadLeadingDelimiter: true, hadTrailingDelimiter: true };
+  }
+  // Check for leading non-whitespace delimiter (creates empty field)
+  if (nonWhitespace.has(value[pos])) {
+    words.push("");
+    pos++;
+    // Skip any whitespace after the delimiter
     while (pos < value.length && whitespace.has(value[pos])) {
-        pos++;
+      pos++;
     }
-    // Track if we consumed any leading whitespace
-    if (pos > leadingStart) {
-        hadLeadingDelimiter = true;
+  }
+  // Now process words
+  while (pos < value.length) {
+    const wordStart = pos;
+    // Collect characters until we hit an IFS character
+    while (pos < value.length) {
+      const ch = value[pos];
+      if (whitespace.has(ch) || nonWhitespace.has(ch)) {
+        break;
+      }
+      pos++;
     }
-    // If we've consumed all input, return empty result
+    words.push(value.substring(wordStart, pos));
     if (pos >= value.length) {
-        // The value was all whitespace - it had both leading and trailing delimiter
-        return { words: [], hadLeadingDelimiter: true, hadTrailingDelimiter: true };
+      // Ended on a word, no trailing delimiter
+      hadTrailingDelimiter = false;
+      break;
     }
-    // Check for leading non-whitespace delimiter (creates empty field)
-    if (nonWhitespace.has(value[pos])) {
+    // Now handle the delimiter(s)
+    // Skip IFS whitespace
+    const beforeDelimiterPos = pos;
+    while (pos < value.length && whitespace.has(value[pos])) {
+      pos++;
+    }
+    // Check for non-whitespace delimiter
+    if (pos < value.length && nonWhitespace.has(value[pos])) {
+      pos++;
+      // Skip whitespace after non-whitespace delimiter
+      while (pos < value.length && whitespace.has(value[pos])) {
+        pos++;
+      }
+      // Check for more non-whitespace delimiters (creates empty fields)
+      while (pos < value.length && nonWhitespace.has(value[pos])) {
+        // Empty field for this delimiter
         words.push("");
         pos++;
-        // Skip any whitespace after the delimiter
+        // Skip whitespace after
         while (pos < value.length && whitespace.has(value[pos])) {
-            pos++;
+          pos++;
         }
+      }
     }
-    // Now process words
-    while (pos < value.length) {
-        const wordStart = pos;
-        // Collect characters until we hit an IFS character
-        while (pos < value.length) {
-            const ch = value[pos];
-            if (whitespace.has(ch) || nonWhitespace.has(ch)) {
-                break;
-            }
-            pos++;
-        }
-        words.push(value.substring(wordStart, pos));
-        if (pos >= value.length) {
-            // Ended on a word, no trailing delimiter
-            hadTrailingDelimiter = false;
-            break;
-        }
-        // Now handle the delimiter(s)
-        // Skip IFS whitespace
-        const beforeDelimiterPos = pos;
-        while (pos < value.length && whitespace.has(value[pos])) {
-            pos++;
-        }
-        // Check for non-whitespace delimiter
-        if (pos < value.length && nonWhitespace.has(value[pos])) {
-            pos++;
-            // Skip whitespace after non-whitespace delimiter
-            while (pos < value.length && whitespace.has(value[pos])) {
-                pos++;
-            }
-            // Check for more non-whitespace delimiters (creates empty fields)
-            while (pos < value.length && nonWhitespace.has(value[pos])) {
-                // Empty field for this delimiter
-                words.push("");
-                pos++;
-                // Skip whitespace after
-                while (pos < value.length && whitespace.has(value[pos])) {
-                    pos++;
-                }
-            }
-        }
-        // If we've consumed all input, we ended on a delimiter
-        if (pos >= value.length && pos > beforeDelimiterPos) {
-            hadTrailingDelimiter = true;
-        }
+    // If we've consumed all input, we ended on a delimiter
+    if (pos >= value.length && pos > beforeDelimiterPos) {
+      hadTrailingDelimiter = true;
     }
-    return { words, hadLeadingDelimiter, hadTrailingDelimiter };
+  }
+  return { words, hadLeadingDelimiter, hadTrailingDelimiter };
 }
 export function splitByIfsForExpansion(value, ifs) {
-    return splitByIfsForExpansionEx(value, ifs).words;
+  return splitByIfsForExpansionEx(value, ifs).words;
 }
 /**
  * Check if string contains any non-whitespace IFS chars.
  */
 function containsNonWsIfs(value, nonWhitespace) {
-    for (const ch of value) {
-        if (nonWhitespace.has(ch)) {
-            return true;
-        }
+  for (const ch of value) {
+    if (nonWhitespace.has(ch)) {
+      return true;
     }
-    return false;
+  }
+  return false;
 }
 /**
  * Strip trailing IFS from the last variable in read builtin.
@@ -349,55 +342,54 @@ function containsNonWsIfs(value, nonWhitespace) {
  * @param raw - If true, backslash escaping is disabled
  */
 export function stripTrailingIfsWhitespace(value, ifs, raw) {
-    if (ifs === "")
-        return value;
-    const { whitespace, nonWhitespace } = categorizeIfs(ifs);
-    // First strip trailing whitespace IFS, but stop if we hit an escaped character
-    let end = value.length;
-    while (end > 0) {
-        // Check if current trailing char is IFS whitespace
-        if (!whitespace.has(value[end - 1])) {
-            break;
-        }
-        // In non-raw mode, check if this char is escaped by a backslash
-        // A char at position i is escaped if there's a backslash at position i-1
-        // But we need to count consecutive backslashes to handle \\
-        if (!raw && end >= 2) {
-            // Count how many backslashes precede this character
-            let backslashCount = 0;
-            let pos = end - 2;
-            while (pos >= 0 && value[pos] === "\\") {
-                backslashCount++;
-                pos--;
-            }
-            // If odd number of backslashes, the char is escaped - stop stripping
-            if (backslashCount % 2 === 1) {
-                break;
-            }
-        }
-        end--;
+  if (ifs === "") return value;
+  const { whitespace, nonWhitespace } = categorizeIfs(ifs);
+  // First strip trailing whitespace IFS, but stop if we hit an escaped character
+  let end = value.length;
+  while (end > 0) {
+    // Check if current trailing char is IFS whitespace
+    if (!whitespace.has(value[end - 1])) {
+      break;
     }
-    const result = value.substring(0, end);
-    // Check for trailing single IFS non-whitespace char
-    if (result.length >= 1 && nonWhitespace.has(result[result.length - 1])) {
-        // In non-raw mode, check if this char is escaped
-        if (!raw && result.length >= 2) {
-            let backslashCount = 0;
-            let pos = result.length - 2;
-            while (pos >= 0 && result[pos] === "\\") {
-                backslashCount++;
-                pos--;
-            }
-            // If odd number of backslashes, the char is escaped - don't strip
-            if (backslashCount % 2 === 1) {
-                return result;
-            }
-        }
-        // Only strip if there are NO other non-ws IFS chars in the rest of the string
-        const contentWithoutTrailing = result.substring(0, result.length - 1);
-        if (!containsNonWsIfs(contentWithoutTrailing, nonWhitespace)) {
-            return contentWithoutTrailing;
-        }
+    // In non-raw mode, check if this char is escaped by a backslash
+    // A char at position i is escaped if there's a backslash at position i-1
+    // But we need to count consecutive backslashes to handle \\
+    if (!raw && end >= 2) {
+      // Count how many backslashes precede this character
+      let backslashCount = 0;
+      let pos = end - 2;
+      while (pos >= 0 && value[pos] === "\\") {
+        backslashCount++;
+        pos--;
+      }
+      // If odd number of backslashes, the char is escaped - stop stripping
+      if (backslashCount % 2 === 1) {
+        break;
+      }
     }
-    return result;
+    end--;
+  }
+  const result = value.substring(0, end);
+  // Check for trailing single IFS non-whitespace char
+  if (result.length >= 1 && nonWhitespace.has(result[result.length - 1])) {
+    // In non-raw mode, check if this char is escaped
+    if (!raw && result.length >= 2) {
+      let backslashCount = 0;
+      let pos = result.length - 2;
+      while (pos >= 0 && result[pos] === "\\") {
+        backslashCount++;
+        pos--;
+      }
+      // If odd number of backslashes, the char is escaped - don't strip
+      if (backslashCount % 2 === 1) {
+        return result;
+      }
+    }
+    // Only strip if there are NO other non-ws IFS chars in the rest of the string
+    const contentWithoutTrailing = result.substring(0, result.length - 1);
+    if (!containsNonWsIfs(contentWithoutTrailing, nonWhitespace)) {
+      return contentWithoutTrailing;
+    }
+  }
+  return result;
 }

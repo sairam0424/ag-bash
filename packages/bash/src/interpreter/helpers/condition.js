@@ -13,21 +13,20 @@
  * @returns Accumulated stdout, stderr, and final exit code
  */
 export async function executeCondition(ctx, statements) {
-    const savedInCondition = ctx.state.inCondition;
-    ctx.state.inCondition = true;
-    let stdout = "";
-    let stderr = "";
-    let exitCode = 0;
-    try {
-        for (const stmt of statements) {
-            const result = await ctx.executeStatement(stmt);
-            stdout += result.stdout;
-            stderr += result.stderr;
-            exitCode = result.exitCode;
-        }
+  const savedInCondition = ctx.state.inCondition;
+  ctx.state.inCondition = true;
+  let stdout = "";
+  let stderr = "";
+  let exitCode = 0;
+  try {
+    for (const stmt of statements) {
+      const result = await ctx.executeStatement(stmt);
+      stdout += result.stdout;
+      stderr += result.stderr;
+      exitCode = result.exitCode;
     }
-    finally {
-        ctx.state.inCondition = savedInCondition;
-    }
-    return { stdout, stderr, exitCode };
+  } finally {
+    ctx.state.inCondition = savedInCondition;
+  }
+  return { stdout, stderr, exitCode };
 }

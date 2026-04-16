@@ -7,7 +7,7 @@
  * Type guard to check if a custom command is lazy-loaded.
  */
 export function isLazyCommand(cmd) {
-    return "load" in cmd && typeof cmd.load === "function";
+  return "load" in cmd && typeof cmd.load === "function";
 }
 /**
  * Define a TypeScript command with type inference.
@@ -25,22 +25,22 @@ export function isLazyCommand(cmd) {
  * ```
  */
 export function defineCommand(name, execute) {
-    return { name, trusted: true, execute };
+  return { name, trusted: true, execute };
 }
 /**
  * Create a lazy-loaded wrapper for a custom command.
  * The command is only loaded when first executed.
  */
 export function createLazyCustomCommand(lazy) {
-    let cached = null;
-    return {
-        name: lazy.name,
-        trusted: true,
-        async execute(args, ctx) {
-            if (!cached) {
-                cached = await lazy.load();
-            }
-            return cached.execute(args, ctx);
-        },
-    };
+  let cached = null;
+  return {
+    name: lazy.name,
+    trusted: true,
+    async execute(args, ctx) {
+      if (!cached) {
+        cached = await lazy.load();
+      }
+      return cached.execute(args, ctx);
+    },
+  };
 }

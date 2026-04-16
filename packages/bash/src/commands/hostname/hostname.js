@@ -6,14 +6,14 @@
  * In sandboxed environment, always returns "localhost".
  */
 async function hostnameExecute(_args, _ctx) {
-    // In sandboxed environment, always return "localhost"
-    return { stdout: "localhost\n", stderr: "", exitCode: 0 };
+  // In sandboxed environment, always return "localhost"
+  return { stdout: "localhost\n", stderr: "", exitCode: 0 };
 }
 export const hostname = {
-    name: "hostname",
-    execute: hostnameExecute,
+  name: "hostname",
+  execute: hostnameExecute,
 };
 export const flagsForFuzzing = {
-    name: "hostname",
-    flags: [],
+  name: "hostname",
+  flags: [],
 };

@@ -10,16 +10,16 @@
  * is not available.
  */
 export const BROWSER_EXCLUDED_COMMANDS = [
-    "tar", // Uses native compression modules (@mongodb-js/zstd, node-liblzma, seek-bzip)
-    "yq", // Requires fast-xml-parser and other Node.js-specific parsing
-    "xan", // Complex CSV/data processing with Node.js dependencies
-    "sqlite3", // Uses sql.js (WASM) which requires Node.js worker threads
-    "python3", // Uses CPython Emscripten (WASM) which requires Node.js worker threads
-    "python", // Alias for python3
+  "tar", // Uses native compression modules (@mongodb-js/zstd, node-liblzma, seek-bzip)
+  "yq", // Requires fast-xml-parser and other Node.js-specific parsing
+  "xan", // Complex CSV/data processing with Node.js dependencies
+  "sqlite3", // Uses sql.js (WASM) which requires Node.js worker threads
+  "python3", // Uses CPython Emscripten (WASM) which requires Node.js worker threads
+  "python", // Alias for python3
 ];
 /**
  * Check if a command is browser-excluded
  */
 export function isBrowserExcludedCommand(commandName) {
-    return BROWSER_EXCLUDED_COMMANDS.includes(commandName);
+  return BROWSER_EXCLUDED_COMMANDS.includes(commandName);
 }

@@ -1,1 +1,1 @@
-export { Command, Sandbox, } from "./Sandbox.js";
+export { Command, Sandbox } from "./Sandbox.js";
