@@ -1,3 +1,4 @@
+import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
 import type { Bash } from "./Bash.js";
 
 /**
@@ -100,7 +101,7 @@ export function createBashTool(options: CreateBashToolOptions): {
             // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
           } catch (error: any) {
             const errorResult = {
-              error: error.message,
+              error: sanitizeErrorMessage(error.message),
               exitCode: 1,
             };
             await options.onAfterBashCall?.({ command, result: errorResult });

@@ -43,7 +43,7 @@ class AgBashServer {
             result: {
               protocolVersion: this.protocolVersion,
               capabilities: {
-                tools: {},
+                tools: Object.create(null),
               },
               serverInfo: {
                 name: "ag-bash",
@@ -83,7 +83,7 @@ class AgBashServer {
                     "Retrieve the current state of the shell (CWD and Environment Variables).",
                   inputSchema: {
                     type: "object",
-                    properties: {},
+                    properties: Object.create(null),
                   },
                 },
               ],

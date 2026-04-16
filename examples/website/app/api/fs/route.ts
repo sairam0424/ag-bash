@@ -97,7 +97,7 @@ export async function GET() {
   } catch (error) {
     console.error("Error reading agent data:", error);
     // Return empty files object if directory doesn't exist yet
-    return new Response(JSON.stringify({}), {
+    return new Response(JSON.stringify(Object.create(null)), {
       headers: {
         "Content-Type": "application/json",
       },
