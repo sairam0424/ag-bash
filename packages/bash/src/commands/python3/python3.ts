@@ -187,7 +187,17 @@ export function _resetExecutionQueue(): void {
 }
 
 // Resolve worker path with fallbacks for bundled/minified environments
-const workerPath = join(dirname(fileURLToPath(import.meta.url)), "worker.js");
+let _workerPath: string;
+if (typeof import.meta !== "undefined" && import.meta.url) {
+  _workerPath = join(dirname(fileURLToPath(import.meta.url)), "worker.js");
+} else {
+  // CommonJS fallback for bundled versions
+  // @ts-ignore - __dirname exists in CJS
+  const _dirname = typeof __dirname !== "undefined" ? __dirname : ".";
+  _workerPath = join(_dirname, "worker.js");
+}
+
+const workerPath = _workerPath;
 // If we are in a chunk (ESM splitting), the worker might be in the same dir or a parent dir
 // depending on how the build script copies it.
 
