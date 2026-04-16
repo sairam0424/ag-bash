@@ -1,4 +1,4 @@
-import { Bash } from "@ag/bash";
+import { Bash } from "ag-bash-engine";
 
 async function main() {
   const bash = new Bash();

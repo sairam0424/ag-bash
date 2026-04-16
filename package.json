@@ -1,5 +1,6 @@
 {
-  "name": "@ag/bash",
+  "name": "ag-bash-engine",
+
   "version": "1.0.0",
   "description": "Unified Agentic Bash for Ag-Bash",
   "files": [
