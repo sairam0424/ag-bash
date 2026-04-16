@@ -88,7 +88,7 @@ Help the user explore, search, and understand the contents.`,
 
       const result = streamText({
         model: "anthropic/claude-haiku-4.5",
-        tools: { bash: toolkit.bash },
+        tools: { bash: toolkit.tools.bash },
         stopWhen: stepCountIs(50),
         messages: history,
       });

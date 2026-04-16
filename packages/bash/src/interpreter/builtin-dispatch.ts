@@ -373,6 +373,12 @@ export async function executeExternalCommand(
     useDefaultPath ? defaultPath : undefined,
   );
   if (!resolved) {
+    // Try custom command-not-found handler if provided
+    if (ctx.onCommandNotFound) {
+      const result = await ctx.onCommandNotFound(commandName, args);
+      if (result) return result;
+    }
+
     // Check if this is a browser-excluded command for a more helpful error
     if (isBrowserExcludedCommand(commandName)) {
       return failure(

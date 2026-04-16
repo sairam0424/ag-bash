@@ -10,18 +10,25 @@ interface Action {
 
 const ACTIONS: Action[] = [
   {
+    id: "consult",
+    label: "Consult Architect",
+    description: "Ask the agent for project architecture advice",
+    command: "How should I structure a monorepo for maximum scalability?",
+    icon: "🏛️"
+  },
+  {
+    id: "summarize",
+    label: "Summarize Project",
+    description: "Agentic summary of the current workspace",
+    command: "Summarize the project files and tell me what this app does.",
+    icon: "📝"
+  },
+  {
     id: "python",
     label: "Python Analysis",
     description: "Run data analysis via Pyodide",
     command: "python3 -c 'import sys; print(f\"Python {sys.version} is live!\"); [print(i**2) for i in range(5)]'",
     icon: "🐍"
-  },
-  {
-    id: "logs",
-    label: "Process Logs",
-    description: "Extract and sort access patterns",
-    command: "cat /home/user/README.md | grep -i ag-bash | wc -l",
-    icon: "📊"
   },
   {
     id: "audit",

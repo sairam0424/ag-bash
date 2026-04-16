@@ -5,11 +5,12 @@ import { Bash } from "@ag-bash/bash/browser";
 import { getTerminalData } from "./TerminalData";
 import {
   createStaticCommands,
-  createAgentCommand,
+  createAgentExecutor,
   createInputHandler,
   showWelcome,
 } from "./terminal-parts";
 import { LiteTerminal } from "./lite-terminal";
+
 
 async function fetchFiles(bash: Bash) {
   const response = await fetch("/api/fs");
@@ -50,7 +51,7 @@ export default function TerminalComponent({
     term.open(container);
 
     const { aboutCmd, installCmd, githubCmd } = createStaticCommands();
-    const agentCmd = createAgentCommand(term);
+    const { agentCmd, executeAgentPrompt } = createAgentExecutor(term);
 
     const files = {
       "/home/user/README.md": getTerminalData("file-readme"),
@@ -66,6 +67,10 @@ export default function TerminalComponent({
       files,
       cwd: "/home/user",
       persistState: true,
+      onCommandNotFound: async (cmd, args) => {
+        const fullPrompt = [cmd, ...args].join(" ");
+        return executeAgentPrompt(fullPrompt);
+      },
     });
 
     const inputHandler = createInputHandler(term, bash);

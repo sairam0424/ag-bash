@@ -26,6 +26,17 @@ export function createBashTool(options: CreateBashToolOptions): {
   tools: {
     bash: {
       description: string;
+      inputSchema: {
+        type: string;
+        properties: {
+          command: {
+            type: string;
+            description: string;
+          };
+        };
+        required: string[];
+      };
+      /** @deprecated Use inputSchema */
       parameters: {
         type: string;
         properties: {
@@ -56,6 +67,16 @@ export function createBashTool(options: CreateBashToolOptions): {
     tools: {
       bash: {
         description: "Execute a bash command in a secure sandbox with a virtual filesystem. You can use common commands like ls, cat, grep, awk, sed, jq, etc. to explore the environment and process data.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            command: {
+              type: "string",
+              description: "The bash command to execute (e.g. 'ls -R', 'cat README.md', 'grep -r \"pattern\" .')",
+            },
+          },
+          required: ["command"],
+        },
         parameters: {
           type: "object",
           properties: {

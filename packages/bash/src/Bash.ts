@@ -70,6 +70,7 @@ import type {
   BashExecResult,
   Command,
   CommandRegistry,
+  ExecResult,
   FeatureCoverageWriter,
   TraceCallback,
 } from "./types.js";
@@ -150,6 +151,12 @@ export interface BashOptions {
    */
   sleep?: (ms: number) => Promise<void>;
   /**
+   * Optional handler for when a command is not found.
+   * If provided, called with the command name and arguments.
+   * Return null to fall back to the standard "command not found" error.
+   */
+  onCommandNotFound?: (command: string, args: string[]) => Promise<ExecResult | null>;
+  /**
    * Custom commands to register alongside built-in commands.
    * These take precedence over built-ins with the same name.
    *
@@ -222,6 +229,12 @@ export interface BashOptions {
     uid?: number;
     gid?: number;
   };
+  /**
+   * If true, commit execution state back to the Bash instance after success by default.
+   * Persists CWD, environment variables, and functions.
+   * Individual exec calls can override this.
+   */
+  persistState?: boolean;
 }
 
 export interface ExecOptions {
@@ -281,9 +294,12 @@ export class Bash {
   private logger?: BashLogger;
   private defenseInDepthConfig?: DefenseInDepthConfig | boolean;
   private coverageWriter?: FeatureCoverageWriter;
+  private requireDefenseContext?: boolean;
   private jsBootstrapCode?: string;
+  private onCommandNotFound?: BashOptions["onCommandNotFound"];
   // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin storage for untyped API
   private transformPlugins: TransformPlugin<any>[] = [];
+  private defaultPersistState: boolean;
 
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
@@ -340,6 +356,9 @@ export class Bash {
 
     // Store logger if provided
     this.logger = options.logger;
+
+    // Store onCommandNotFound hook if provided
+    this.onCommandNotFound = options.onCommandNotFound;
 
     // Defense-in-depth defaults to enabled
     this.defenseInDepthConfig = options.defenseInDepth ?? true;
@@ -482,6 +501,8 @@ export class Bash {
         }
       }
     }
+
+    this.defaultPersistState = options.persistState ?? false;
   }
 
   registerCommand(command: Command): void {
@@ -671,6 +692,7 @@ export class Bash {
           coverage: this.coverageWriter,
           requireDefenseContext: defenseBox?.isEnabled() === true,
           jsBootstrapCode: this.jsBootstrapCode,
+          onCommandNotFound: this.onCommandNotFound,
         };
 
         const interpreter = new Interpreter(interpreterOptions, execState);
@@ -686,7 +708,8 @@ export class Bash {
       const execResult = await (defenseHandle ? defenseHandle.run(executeScript) : executeScript());
       
       // If persistence is enabled, commit the state back to the Bash instance
-      if (options?.persistState && execResult.exitCode === 0) {
+      const shouldPersist = options?.persistState ?? this.defaultPersistState;
+      if (shouldPersist && execResult.exitCode === 0) {
         this.state.cwd = execState.cwd;
         this.state.env = execState.env;
         this.state.functions = execState.functions;

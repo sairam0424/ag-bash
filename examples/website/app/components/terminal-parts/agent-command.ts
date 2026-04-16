@@ -28,27 +28,16 @@ function formatForTerminal(text: string): string {
   return text.replace(/\t/g, "  ").replace(/\r?\n/g, "\r\n");
 }
 
-export function createAgentCommand(term: TerminalWriter) {
+export function createAgentExecutor(term: TerminalWriter) {
   const agentMessages: UIMessage[] = [];
   let messageIdCounter = 0;
 
-  const agentCmd = defineCommand("agent", async (args) => {
-    const prompt = args.join(" ");
+  async function executeAgentPrompt(prompt: string) {
     if (!prompt) {
       return {
         stdout: "",
-        stderr: "Usage: agent <message>\nExample: agent how do I use custom commands?\n\nThis is a multi-turn chat. Use 'agent reset' to clear history.\n",
+        stderr: "Error: Empty prompt\n",
         exitCode: 1,
-      };
-    }
-
-    // Handle reset command
-    if (prompt.toLowerCase() === "reset") {
-      agentMessages.length = 0;
-      return {
-        stdout: "Agent conversation reset.\n",
-        stderr: "",
-        exitCode: 0,
       };
     }
 
@@ -81,14 +70,13 @@ export function createAgentCommand(term: TerminalWriter) {
         return { stdout: "", stderr: "Error: No response body\n", exitCode: 1 };
       }
 
-      let lineBuffer = ""; // Buffer for streaming complete lines
-      let fullText = ""; // Track all text for message history
+      let lineBuffer = "";
+      let fullText = "";
       const toolCallsMap = new Map<string, { toolName: string; args: unknown; result?: string }>();
       const decoder = new TextDecoder();
       let buffer = "";
-      let isStreaming = false; // Track if we're streaming thinking
+      let isStreaming = false;
 
-      // "Thinking..." indicator state
       let thinkingTimeout: ReturnType<typeof setTimeout> | null = null;
       let showingThinking = false;
 
@@ -101,7 +89,6 @@ export function createAgentCommand(term: TerminalWriter) {
 
       const clearThinking = (restart = true) => {
         if (showingThinking) {
-          // Clear the "Thinking..." text: move to start of line and clear it
           term.write("\r\x1b[K");
           showingThinking = false;
         }
@@ -109,7 +96,6 @@ export function createAgentCommand(term: TerminalWriter) {
           clearTimeout(thinkingTimeout);
           thinkingTimeout = null;
         }
-        // Restart timer for next potential pause
         if (restart) {
           thinkingTimeout = setTimeout(showThinking, 500);
         }
@@ -124,10 +110,8 @@ export function createAgentCommand(term: TerminalWriter) {
         }
       };
 
-      // Start the initial thinking timer
       resetThinkingTimer();
 
-      // Helper to format and display tool result
       const formatToolResult = (tc: { toolName: string; args: unknown; result?: string }) => {
         if (!tc.result) return;
         let displayResult = tc.result;
@@ -145,7 +129,7 @@ export function createAgentCommand(term: TerminalWriter) {
             }
           }
         } catch {
-          // Keep original if not valid JSON
+          // Keep original
         }
 
         if (displayResult && displayResult.trim()) {
@@ -164,15 +148,12 @@ export function createAgentCommand(term: TerminalWriter) {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
         for (const line of lines) {
           const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-
-          if (!trimmedLine.startsWith("data:")) continue;
+          if (!trimmedLine || !trimmedLine.startsWith("data:")) continue;
 
           const jsonStr = trimmedLine.slice(5).trim();
           if (jsonStr === "[DONE]") continue;
@@ -180,35 +161,27 @@ export function createAgentCommand(term: TerminalWriter) {
           try {
             const data = JSON.parse(jsonStr);
 
-            // Stream text line-by-line (complete lines only to preserve ASCII art)
             if (data.type === "text-delta" && data.delta) {
-              fullText += data.delta; // Track for message history
+              fullText += data.delta;
               lineBuffer += data.delta;
-
-              // Check for complete lines to stream
               const lastNewline = lineBuffer.lastIndexOf("\n");
               if (lastNewline !== -1) {
                 clearThinking();
                 const completeLines = lineBuffer.slice(0, lastNewline + 1);
-                lineBuffer = lineBuffer.slice(lastNewline + 1); // Keep partial line
+                lineBuffer = lineBuffer.slice(lastNewline + 1);
                 term.write(formatForTerminal(formatMarkdown(completeLines)));
               } else {
-                resetThinkingTimer(); // No complete line yet, reset timer
+                resetThinkingTimer();
               }
-            }
-            // Handle text-end - flush buffer and ensure newline
-            else if (data.type === "text-end") {
+            } else if (data.type === "text-end") {
               clearThinking();
               if (lineBuffer) {
                 term.write(formatForTerminal(formatMarkdown(lineBuffer)));
                 lineBuffer = "";
               }
               term.write("\r\n");
-            }
-            // Handle tool input - show header immediately
-            else if (data.type === "tool-input-available" && data.toolCallId) {
-              clearThinking(); // Clear "Thinking..." before showing tool
-              // Add line break after text before tool calls
+            } else if (data.type === "tool-input-available" && data.toolCallId) {
+              clearThinking();
               if (fullText && !fullText.endsWith("\n")) {
                 term.write("\r\n");
                 fullText += "\n";
@@ -217,7 +190,6 @@ export function createAgentCommand(term: TerminalWriter) {
               if (data.toolName === "bash" && args.command) {
                 const cmd = String(args.command).replace(/\t/g, "  ");
                 const lines = cmd.split("\n");
-                // Write each line separately for proper terminal rendering
                 term.write(`\x1b[36m$ ${lines[0]}\x1b[0m\r\n`);
                 for (let i = 1; i < lines.length; i++) {
                   term.write(`\x1b[36m${lines[i]}\x1b[0m\r\n`);
@@ -229,67 +201,43 @@ export function createAgentCommand(term: TerminalWriter) {
               } else {
                 term.write(`\x1b[36m[${data.toolName}]\x1b[0m\r\n`);
               }
-
-              toolCallsMap.set(data.toolCallId, {
-                toolName: data.toolName,
-                args: data.input,
-              });
-            }
-            // Handle tool output - show result immediately
-            else if (data.type === "tool-output-available" && data.toolCallId) {
+              toolCallsMap.set(data.toolCallId, { toolName: data.toolName, args: data.input });
+            } else if (data.type === "tool-output-available" && data.toolCallId) {
               const existing = toolCallsMap.get(data.toolCallId);
               const result = data.output;
               const resultStr = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-
               const tc = {
                 toolName: existing?.toolName || "tool",
                 args: existing?.args || Object.create(null),
                 result: resultStr,
               };
               formatToolResult(tc);
-
-              if (existing) {
-                existing.result = resultStr;
-              } else {
-                toolCallsMap.set(data.toolCallId, tc);
-              }
-            }
-            // Handle reasoning/thinking tokens - stream in real-time
-            else if (data.type === "reasoning-start") {
-              clearThinking(); // Clear "Thinking..." before actual reasoning
-              // Start streaming thinking in dim italic
+              if (existing) existing.result = resultStr;
+              else toolCallsMap.set(data.toolCallId, tc);
+            } else if (data.type === "reasoning-start") {
+              clearThinking();
               isStreaming = true;
-              term.write("\x1b[2m\x1b[3m"); // dim + italic
-            }
-            else if (data.type === "reasoning-delta" && data.delta) {
-              // Stream thinking tokens as they arrive
+              term.write("\x1b[2m\x1b[3m");
+            } else if (data.type === "reasoning-delta" && data.delta) {
               term.write(formatForTerminal(data.delta));
-              resetThinkingTimer(); // Keep resetting while actively streaming
-            }
-            else if (data.type === "reasoning-end") {
-              // End thinking block
+              resetThinkingTimer();
+            } else if (data.type === "reasoning-end") {
               if (isStreaming) {
-                term.write("\x1b[0m\r\n"); // reset styling + newline
+                term.write("\x1b[0m\r\n");
                 isStreaming = false;
               }
-            }
-            // Handle errors
-            else if (data.type === "error") {
+            } else if (data.type === "error") {
               const errorMsg = data.error || data.message || "Unknown error";
               term.write(`\x1b[31mError: ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`);
-            }
-            else if (data.type === "tool-input-error") {
+            } else if (data.type === "tool-input-error") {
               const errorMsg = data.error || "Tool input error";
               term.write(`\x1b[31m[Tool Error] ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`);
-            }
-            else if (data.type === "tool-output-error") {
+            } else if (data.type === "tool-output-error") {
               const errorMsg = data.error || "Tool execution error";
               term.write(`\x1b[31m[Tool Error] ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`);
-            }
-            else if (data.type === "tool-output-denied") {
+            } else if (data.type === "tool-output-denied") {
               term.write(`\x1b[33m[Tool Denied]\x1b[0m\r\n`);
-            }
-            else if (data.type === "abort") {
+            } else if (data.type === "abort") {
               term.write(`\x1b[33m[Aborted]\x1b[0m\r\n`);
             }
           } catch (e) {
@@ -298,16 +246,12 @@ export function createAgentCommand(term: TerminalWriter) {
         }
       }
 
-      // Clean up thinking timer (don't restart - we're done)
       clearThinking(false);
-
-      // Write any remaining partial line that didn't end with newline
       if (lineBuffer) {
         term.write(formatForTerminal(formatMarkdown(lineBuffer)));
         term.write("\r\n");
       }
 
-      // Add assistant message to history (only text parts)
       if (fullText) {
         agentMessages.push({
           id: `msg-${++messageIdCounter}`,
@@ -316,24 +260,31 @@ export function createAgentCommand(term: TerminalWriter) {
         });
       }
 
-      // Return empty since we already wrote to terminal
-      return {
-        stdout: "",
-        stderr: "",
-        exitCode: 0,
-      };
+      return { stdout: "", stderr: "", exitCode: 0 };
     } catch (error) {
-      const message = sanitizeTerminalError(
-        error instanceof Error ? error.message : "Unknown error",
-      );
+      const message = sanitizeTerminalError(error instanceof Error ? error.message : "Unknown error");
       agentMessages.pop();
+      return { stdout: "", stderr: `Error: ${message}\n`, exitCode: 1 };
+    }
+  }
+
+  const agentCmd = defineCommand("agent", async (args) => {
+    const prompt = args.join(" ");
+    if (!prompt) {
       return {
         stdout: "",
-        stderr: `Error: ${message}\n`,
+        stderr: "Usage: agent <message>\nExample: agent how do I use custom commands?\n\nThis is a multi-turn chat. Use 'agent reset' to clear history.\n",
         exitCode: 1,
       };
     }
+
+    if (prompt.toLowerCase() === "reset") {
+      agentMessages.length = 0;
+      return { stdout: "Agent conversation reset.\n", stderr: "", exitCode: 0 };
+    }
+
+    return executeAgentPrompt(prompt);
   });
 
-  return agentCmd;
+  return { agentCmd, executeAgentPrompt };
 }
