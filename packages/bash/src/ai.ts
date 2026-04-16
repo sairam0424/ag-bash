@@ -26,38 +26,10 @@ export function createBashTool(options: CreateBashToolOptions): {
   tools: {
     bash: {
       description: string;
-      inputSchema: {
-        type: string;
-        properties: {
-          command: {
-            type: string;
-            description: string;
-          };
-        };
-        required: string[];
-      };
+      inputSchema: any;
       /** @deprecated Use inputSchema */
-      parameters: {
-        type: string;
-        properties: {
-          command: {
-            type: string;
-            description: string;
-          };
-        };
-        required: string[];
-      };
-      execute: ({ command }: { command: string; }) => Promise<{
-        stdout: string;
-        stderr: string;
-        exitCode: number;
-        error?: undefined;
-      } | {
-        error: any;
-        exitCode: number;
-        stdout?: undefined;
-        stderr?: undefined;
-      }>;
+      parameters: any;
+      execute: (args: any) => Promise<any>;
     };
   };
 } {
@@ -76,7 +48,7 @@ export function createBashTool(options: CreateBashToolOptions): {
             },
           },
           required: ["command"],
-        },
+        } as const,
         parameters: {
           type: "object",
           properties: {
@@ -86,7 +58,7 @@ export function createBashTool(options: CreateBashToolOptions): {
             },
           },
           required: ["command"],
-        },
+        } as const,
         execute: async ({ command }: { command: string }): Promise<{
           stdout: string;
           stderr: string;
