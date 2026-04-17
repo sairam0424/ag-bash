@@ -26,7 +26,7 @@ export interface LookupAllOptions extends LookupOptions {
   all: true;
 }
 
-type LookupCallback = (err: Error | null, ...args: any[]) => void;
+type LookupCallback = (err: Error | null, ...args: unknown[]) => void;
 
 /**
  * Partial implementation of dns.lookup that always fails.
@@ -54,10 +54,11 @@ export function lookup(
     family: number,
   ) => void,
 ): void;
+// biome-ignore lint/suspicious/noExplicitAny: Implementation signature for overloads must be broad
 export function lookup(
   hostname: string,
-  optionsOrCallback: LookupOptions | number | LookupCallback,
-  callbackOrNone?: LookupCallback,
+  optionsOrCallback: any,
+  callbackOrNone?: any,
 ): void {
   const options =
     typeof optionsOrCallback === "function" ? undefined : optionsOrCallback;
