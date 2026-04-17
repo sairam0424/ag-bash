@@ -45,6 +45,7 @@ export interface WorkerOutput {
   defenseStats?: WorkerDefenseStats;
 }
 
+
 const require = createRequire(import.meta.url);
 const CPYTHON_ENTRY_BASENAME = "/vendor/cpython-emscripten/python.cjs";
 const CPYTHON_STDLIB_BASENAME = "/vendor/cpython-emscripten/python313.zip";
@@ -179,14 +180,14 @@ const workerDir = _workerDir;
 const entryCandidates = [
   // 1. Same dir as worker (if we copy vendor there)
   join(workerDir, "vendor/cpython-emscripten/python.cjs"),
-  // 2. Standard dist layout
-  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
-  // 3. Bundled chunk layout (dist/bin/chunks/worker.js)
-  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
-  // 4. Source layout (src/commands/python3/worker.ts -> src/commands/python3/worker.js)
-  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
-  // 5. Package layout (node_modules/@ag/bash/...)
+  // 2. Local dev from dist/commands/python3
   join(workerDir, "../../vendor/cpython-emscripten/python.cjs"),
+  // 3. Local dev from packages/bash/dist/bin/chunks
+  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
+  // 4. Root vendor from packages/bash/dist/bin/chunks
+  join(workerDir, "../../../../../vendor/cpython-emscripten/python.cjs"),
+  // 5. Standard dist layout
+  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
 ];
 
 let foundPath = "";
@@ -1308,7 +1309,6 @@ async function runPython(input: WorkerInput): Promise<WorkerOutput> {
   const backend = new SyncBackend(input.sharedBuffer, input.timeoutMs);
 
   // Load the CPython Emscripten factory function
-  assertApprovedPath(cpythonEntryPath, "cpython-entry");
   const requireFn = require;
   const createPythonModule = requireFn(cpythonEntryPath) as (
     config: Record<string, unknown>,

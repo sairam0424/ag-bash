@@ -186,30 +186,54 @@ export function _resetExecutionQueue(): void {
   executionQueues = new WeakMap();
 }
 
-// Resolve worker path with fallbacks for bundled/minified environments
 // Resolve worker path with fallbacks for Node.js, Vitest, and Browser contexts
-let _workerPath = "worker.js";
-if (typeof import.meta !== "undefined" && import.meta.url) {
-  try {
-    const url = new URL(import.meta.url);
-    if (url.protocol === "file:") {
-      _workerPath = join(dirname(fileURLToPath(url)), "worker.js");
-    } else {
-      // Browser/Worker context: use relative URL path
-      _workerPath = new URL("worker.js", import.meta.url).pathname;
-    }
-  } catch {
-    _workerPath = "worker.js";
-  }
-} else {
-  // CommonJS fallback for bundled versions
-  const _dirname = typeof __dirname !== "undefined" ? __dirname : ".";
-  _workerPath = join(_dirname, "worker.js");
-}
+let _workerPathCache: string | URL | null = null;
 
-const workerPath = _workerPath;
-// If we are in a chunk (ESM splitting), the worker might be in the same dir or a parent dir
-// depending on how the build script copies it.
+async function getWorkerPath() {
+  if (_workerPathCache) return _workerPathCache;
+
+  let _workerPath: string | URL = "worker.js";
+
+  // Check for known locations in bundled vs source environments
+  const isNode =
+    typeof process !== "undefined" &&
+    process.versions &&
+    process.versions.node;
+
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    try {
+      const url = new URL(import.meta.url);
+      if (url.protocol === "file:") {
+        const baseDir = dirname(fileURLToPath(url));
+        _workerPath = join(baseDir, "worker.js");
+
+        // Node-specific check for chunks directory (standard for our esbuild setup)
+        if (isNode) {
+          try {
+            const fs = await import("node:fs");
+            const chunkPath = join(baseDir, "chunks", "worker.js");
+            if (fs.existsSync(chunkPath) && !fs.existsSync(_workerPath as string)) {
+              _workerPath = chunkPath;
+            }
+          } catch {
+            // ignore if fs not available
+          }
+        }
+      } else {
+        // Browser/Worker context: use relative URL path
+        _workerPath = new URL("worker.js", import.meta.url);
+      }
+    } catch {
+      _workerPath = "worker.js";
+    }
+  } else if (typeof __dirname !== "undefined") {
+    // CommonJS fallback for bundled versions
+    _workerPath = join(__dirname, "worker.js");
+  }
+
+  _workerPathCache = _workerPath;
+  return _workerPath;
+}
 
 function generateWorkerProtocolToken(): string {
   return randomBytes(16).toString("hex");
@@ -273,7 +297,7 @@ function normalizeWorkerMessage(
   };
 }
 
-function processNextExecution(queueState: QueueState): void {
+async function processNextExecution(queueState: QueueState): Promise<void> {
   if (queueState.isExecuting || queueState.executionQueue.length === 0) {
     return;
   }
@@ -295,14 +319,25 @@ function processNextExecution(queueState: QueueState): void {
   }
   queueState.isExecuting = true;
 
+  const workerPath = await getWorkerPath();
+
   // Create a fresh worker for each execution.
   // CPython Emscripten uses EXIT_RUNTIME, so the module can only run once.
   // The worker caches the stdlib zip at module scope (read from disk once
   // per worker lifetime, not per execution).
   let worker: Worker;
   try {
-    worker = DefenseInDepthBox.runTrusted(
-      () => new Worker(workerPath, { workerData: next.input }),
+    worker = await DefenseInDepthBox.runTrustedAsync(
+      async () => {
+        // Handle different worker implementations (Node vs Browser)
+        if (typeof process !== "undefined" && process.versions && process.versions.node) {
+          // Node.js worker_threads
+          const { Worker: NodeWorker } = await import("node:worker_threads");
+          return new NodeWorker(workerPath as string, { workerData: next.input });
+        }
+        // Browser standard Worker
+        return new (Worker as any)(workerPath as string | URL, { type: "module" });
+      }
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -311,7 +346,7 @@ function processNextExecution(queueState: QueueState): void {
       error: sanitizeHostErrorMessage(message),
     });
     queueState.isExecuting = false;
-    processNextExecution(queueState);
+    await processNextExecution(queueState);
     return;
   }
 
@@ -321,81 +356,54 @@ function processNextExecution(queueState: QueueState): void {
     next.requireDefenseContext,
     "python3",
     "worker message callback",
-    (msg: unknown) => {
+    async (msg: unknown) => {
       next.resolve(normalizeWorkerMessage(msg, next.input.protocolToken));
       queueState.isExecuting = false;
-      worker.terminate();
-      processNextExecution(queueState);
+      await worker.terminate();
+      void processNextExecution(queueState);
     },
   );
   const onError = bindDefenseContextCallback(
     next.requireDefenseContext,
     "python3",
     "worker error callback",
-    (err: Error) => {
-      const workerError = sanitizeHostErrorMessage(getErrorMessage(err));
+    async (err: Error) => {
+      const workerError = sanitizeHostErrorMessage(err.message);
       next.resolve({
         success: false,
         error: workerError,
       });
       queueState.isExecuting = false;
-      processNextExecution(queueState);
+      await worker.terminate();
+      void processNextExecution(queueState);
     },
   );
   const onExit = bindDefenseContextCallback(
     next.requireDefenseContext,
     "python3",
     "worker exit callback",
-    () => {
+    async (code: number) => {
       if (queueState.isExecuting) {
-        next.resolve({ success: false, error: "Worker exited unexpectedly" });
+        next.resolve({
+          success: false,
+          error: `Worker exited unexpectedly with code ${code}`,
+        });
         queueState.isExecuting = false;
-        processNextExecution(queueState);
+        void processNextExecution(queueState);
       }
     },
   );
 
   const dispatchMessage = (msg: unknown): void => {
-    try {
-      onMessage(msg);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      next.resolve({
-        success: false,
-        error: sanitizeHostErrorMessage(message),
-      });
-      queueState.isExecuting = false;
-      worker.terminate();
-      processNextExecution(queueState);
-    }
+    void onMessage(msg);
   };
 
   const dispatchError = (err: Error): void => {
-    try {
-      onError(err);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      next.resolve({
-        success: false,
-        error: sanitizeHostErrorMessage(message),
-      });
-      queueState.isExecuting = false;
-      processNextExecution(queueState);
-    }
+    void onError(err);
   };
 
-  const dispatchExit = (): void => {
-    try {
-      onExit();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      next.resolve({
-        success: false,
-        error: sanitizeHostErrorMessage(message),
-      });
-      queueState.isExecuting = false;
-      processNextExecution(queueState);
-    }
+  const dispatchExit = (code: number): void => {
+    void onExit(code);
   };
 
   worker.on("message", dispatchMessage);
