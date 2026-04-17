@@ -54,11 +54,10 @@ export function lookup(
     family: number,
   ) => void,
 ): void;
-// biome-ignore lint/suspicious/noExplicitAny: Implementation signature for overloads must be broad
 export function lookup(
   hostname: string,
-  optionsOrCallback: any,
-  callbackOrNone?: any,
+  optionsOrCallback: unknown,
+  callbackOrNone?: unknown,
 ): void {
   const options =
     typeof optionsOrCallback === "function" ? undefined : optionsOrCallback;
