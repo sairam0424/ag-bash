@@ -187,9 +187,20 @@ export function _resetExecutionQueue(): void {
 }
 
 // Resolve worker path with fallbacks for bundled/minified environments
-let _workerPath: string;
+// Resolve worker path with fallbacks for Node.js, Vitest, and Browser contexts
+let _workerPath = "worker.js";
 if (typeof import.meta !== "undefined" && import.meta.url) {
-  _workerPath = join(dirname(fileURLToPath(import.meta.url)), "worker.js");
+  try {
+    const url = new URL(import.meta.url);
+    if (url.protocol === "file:") {
+      _workerPath = join(dirname(fileURLToPath(url)), "worker.js");
+    } else {
+      // Browser/Worker context: use relative URL path
+      _workerPath = new URL("worker.js", import.meta.url).pathname;
+    }
+  } catch {
+    _workerPath = "worker.js";
+  }
 } else {
   // CommonJS fallback for bundled versions
   const _dirname = typeof __dirname !== "undefined" ? __dirname : ".";

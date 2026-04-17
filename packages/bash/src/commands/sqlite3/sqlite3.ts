@@ -228,7 +228,20 @@ async function getSqliteVersion(): Promise<string> {
  * - ../../../dist/commands/sqlite3/worker.js (tests from src/)
  */
 function findWorkerPath(): string {
-  const currentDir = dirname(fileURLToPath(import.meta.url));
+  let _workerPath = "worker.js";
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    try {
+      const url = new URL(import.meta.url);
+      if (url.protocol === "file:") {
+        _workerPath = dirname(fileURLToPath(url));
+      } else {
+        _workerPath = new URL(".", import.meta.url).pathname;
+      }
+    } catch {
+      _workerPath = ".";
+    }
+  }
+  const currentDir = _workerPath;
 
   // For bundled builds, go up to find dist/commands/sqlite3/worker.js
   // This handles both dist/bin/chunks/ and dist/bundle/chunks/ cases
