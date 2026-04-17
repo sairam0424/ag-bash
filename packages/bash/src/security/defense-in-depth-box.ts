@@ -1663,9 +1663,9 @@ export class DefenseInDepthBox {
 
       // @ts-ignore: defining property on Object
       Object.defineProperty = function defineProperty(
-        target: any,
+        target: object,
         prop: PropertyKey,
-        attributes: PropertyDescriptor & ThisType<any>,
+        attributes: PropertyDescriptor & ThisType<unknown>,
       ) {
         if (box.shouldBlock() && isDangerousDefine(target, prop)) {
           const path = `${box.getPathForTarget(target, String(prop))} (defineProperty)`;
@@ -1684,7 +1684,10 @@ export class DefenseInDepthBox {
     }
 
     // 2. Reflect.defineProperty
-    if (typeof Reflect !== "undefined" && typeof Reflect.defineProperty === "function") {
+    if (
+      typeof Reflect !== "undefined" &&
+      typeof Reflect.defineProperty === "function"
+    ) {
       try {
         const originalReflectDefine = Reflect.defineProperty;
         this.originalDescriptors.push({

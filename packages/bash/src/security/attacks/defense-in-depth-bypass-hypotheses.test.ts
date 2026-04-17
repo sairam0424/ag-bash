@@ -17,7 +17,9 @@ describe("Defense-in-Depth Bypass Hypotheses", () => {
   it("H1: pre-captured process.binding can still be called inside sandbox context", async () => {
     // Note: in many environments process.binding is already removed or protected.
     // We use it here as a hypothesis for function pre-capture.
-    const capturedBinding = (process as unknown as { binding: (name: string) => unknown }).binding;
+    const capturedBinding = (
+      process as unknown as { binding: (name: string) => unknown }
+    ).binding;
     if (typeof capturedBinding !== "function") {
       it.skip("process.binding not available");
       return;
@@ -30,7 +32,7 @@ describe("Defense-in-Depth Bypass Hypotheses", () => {
     const handle = box.activate();
 
     let directError: Error | undefined;
-    let bypassValue: any;
+    let bypassValue: unknown;
     let bypassError: Error | undefined;
 
     await handle.run(async () => {
@@ -157,31 +159,43 @@ describe("Defense-in-Depth Bypass Hypotheses", () => {
       try {
         // Attack: replace JSON.stringify to capture objects
         const originalStringify = JSON.stringify;
-        JSON.stringify = function (obj: any) {
+        JSON.stringify = function (obj: unknown) {
           return originalStringify(obj);
         };
       } catch (e) {
         mutationError = e as Error;
+      }
+      try {
+        Object.defineProperty(JSON, "parse", { value: () => ({}) });
+      } catch (err) {
+        // JSON blocking prevents hijacking these channels.
+        // It may throw a SecurityViolationError (if patched via Proxy)
+        // or a TypeError (if the property was made non-writable).
+        if (
+          err instanceof SecurityViolationError ||
+          err instanceof TypeError
+        ) {
+          return;
+        }
       }
     });
 
     handle.deactivate();
 
     // JSON blocking prevents hijacking these channels
-    // JSON blocking prevents hijacking these channels. 
-    // It may throw a SecurityViolationError (if patched via Proxy) 
-    // or a TypeError (if the property was made non-writable).
     try {
       expect(mutationError).toBeDefined();
       if (!(mutationError instanceof SecurityViolationError)) {
         expect(mutationError).toBeInstanceOf(TypeError);
       }
     } catch (e) {
-      // Re-throw with clear message if neither
-      if (mutationError instanceof SecurityViolationError || mutationError instanceof TypeError) {
+      if (
+        mutationError instanceof SecurityViolationError ||
+        mutationError instanceof TypeError
+      ) {
         return;
       }
-      throw mutationError;
+      throw e;
     }
   });
 });
