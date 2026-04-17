@@ -26,16 +26,14 @@ export interface LookupAllOptions extends LookupOptions {
   all: true;
 }
 
+type LookupCallback = (err: Error | null, ...args: any[]) => void;
+
 /**
  * Partial implementation of dns.lookup that always fails.
  */
 export function lookup(
   hostname: string,
-  callback: (
-    err: Error | null,
-    address: string,
-    family: number,
-  ) => void,
+  callback: (err: Error | null, address: string, family: number) => void,
 ): void;
 export function lookup(
   hostname: string,
@@ -45,11 +43,7 @@ export function lookup(
 export function lookup(
   hostname: string,
   options: LookupOneOptions,
-  callback: (
-    err: Error | null,
-    address: string,
-    family: number,
-  ) => void,
+  callback: (err: Error | null, address: string, family: number) => void,
 ): void;
 export function lookup(
   hostname: string,
@@ -62,15 +56,15 @@ export function lookup(
 ): void;
 export function lookup(
   hostname: string,
-  optionsOrCallback: LookupOptions | number | Function,
-  callbackOrNone?: Function,
+  optionsOrCallback: LookupOptions | number | LookupCallback,
+  callbackOrNone?: LookupCallback,
 ): void {
   const options =
     typeof optionsOrCallback === "function" ? undefined : optionsOrCallback;
   const callback =
     typeof optionsOrCallback === "function"
-      ? (optionsOrCallback as Function)
-      : (callbackOrNone as Function);
+      ? (optionsOrCallback as LookupCallback)
+      : (callbackOrNone as LookupCallback);
 
   const err = new Error(
     `DNS lookup for "${hostname}" is not supported in the browser.`,
