@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const AGENT_DATA_DIR = "app/api/agent/_agent-data";
+const AGENT_DATA_DIR = "agent-data";
 
 // Clean and create agent-data directory
 if (existsSync(AGENT_DATA_DIR)) {
