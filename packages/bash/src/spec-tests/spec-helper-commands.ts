@@ -13,12 +13,22 @@ export const testHelperCommands: Command[] = [
       // using Python's repr() logic for strings.
       const formattedItems = args.map((arg) => {
         // Python repr() logic for strings:
-        // 1. Convert to UTF-8 bytes and escape non-ASCII / non-printable
-        // 2. Escape backslashes
-        // 3. Choice of ' or " based on contents
+        // Use manual charCode mapping to maintain binary transparency for Ag-Bash strings.
+        // JS strings in the interpreter use 1 char per byte for binary data from printf etc.
+        // Characters > 255 are treated as Unicode and encoded to UTF-8 bytes.
+        const bytes: number[] = [];
+        for (let i = 0; i < arg.length; i++) {
+          const code = arg.charCodeAt(i);
+          if (code < 256) {
+            bytes.push(code);
+          } else {
+            const encoded = new TextEncoder().encode(arg[i]);
+            for (let j = 0; j < encoded.length; j++) {
+              bytes.push(encoded[j]);
+            }
+          }
+        }
 
-        const encoder = new TextEncoder();
-        const bytes = encoder.encode(arg);
         let result = "";
         let hasSingleQuote = false;
         let hasDoubleQuote = false;
@@ -96,9 +106,9 @@ export const testHelperCommands: Command[] = [
   },
   {
     name: "stdout_stderr.py",
-    execute: async () => {
+    execute: async (args: string[]) => {
       return {
-        stdout: "STDOUT\n",
+        stdout: args.length > 0 ? args[0] : "STDOUT\n",
         stderr: "STDERR\n",
         exitCode: 0,
       };
@@ -106,15 +116,24 @@ export const testHelperCommands: Command[] = [
   },
   {
     name: "read_from_fd.py",
-    execute: async (_args: string[]) => {
+    execute: async (args: string[], context: CommandContext) => {
       // read_from_fd.py <fd1> <fd2> ...
       // Reads from specified FDs and prints formatted output
-      // Note: Ag-Bash IFileSystem currently doesn't expose raw FD reading to commands.
-      // This is a placeholder for here-doc tests that require it.
+      let stdout = "";
+      for (const arg of args) {
+        const fd = Number(arg);
+        let content = context.fileDescriptors?.get(fd);
+        // Special case for stdin (FD 0) if not in the map
+        if (fd === 0 && content === undefined) {
+          content = context.stdin;
+        }
+        if (content !== undefined) {
+          stdout += `${fd}: ${content.trimEnd()}\n`;
+        }
+      }
       return {
-        stdout: "",
-        stderr:
-          "read_from_fd.py: FD reading not yet supported in this environment\n",
+        stdout,
+        stderr: "",
         exitCode: 0,
       };
     },
