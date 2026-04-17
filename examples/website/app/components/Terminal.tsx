@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { Bash } from "@ag-bash/bash/browser";
+import type { InitialFiles } from "@ag-bash/bash";
 import { getTerminalData } from "./TerminalData";
 import {
   createStaticCommands,
@@ -36,7 +37,7 @@ export default function TerminalComponent({
   onFileSystemChange 
 }: { 
   onInit?: (execute: (cmd: string) => void) => void,
-  onFileSystemChange?: (files: Record<string, any>) => void
+  onFileSystemChange?: (files: InitialFiles) => void
 }) {
   const terminalRef = useRef<HTMLDivElement>(null);
 
@@ -110,7 +111,7 @@ export default function TerminalComponent({
       disposed = true;
       term.dispose();
     };
-  }, []);
+  }, [onInit, onFileSystemChange]);
 
   return (
     <div

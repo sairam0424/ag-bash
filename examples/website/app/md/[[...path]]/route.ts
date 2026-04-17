@@ -25,7 +25,7 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ path?: string[] }> }
 ) {
-  let { path } = await params;
+  const { path } = await params;
   const filePath = path?.join("/").replace(/^md\//, "") || "README.md";
 
   const content = FILES[filePath];

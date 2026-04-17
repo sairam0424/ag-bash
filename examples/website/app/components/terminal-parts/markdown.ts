@@ -1,7 +1,6 @@
 // ANSI escape codes for styling
 // Base color: #0AC5B3 = rgb(10, 197, 179)
 const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
 const ITALIC = "\x1b[3m";
 const UNDERLINE = "\x1b[4m";
 const CYAN = "\x1b[38;2;10;197;179m"; // #0AC5B3
