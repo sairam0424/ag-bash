@@ -20,7 +20,6 @@ import {
   sanitizeHostErrorMessage,
 } from "../../fs/sanitize-error.js";
 import { mapToRecord } from "../../helpers/env.js";
-import { getErrorMessage } from "../../interpreter/helpers/errors.js";
 
 import { bindDefenseContextCallback } from "../../security/defense-context.js";
 import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
@@ -542,41 +541,50 @@ async function executePython(
   let workerResult: { success: boolean; error?: string };
 
   try {
-    type RaceResult = 
-      | { type: 'both'; bridge: ExecResult; worker: { success: boolean; error?: string } }
-      | { type: 'worker_fail'; error: any };
-
-    const result = await Promise.race([
-      Promise.all([
-        bridgeHandler.run(timeoutMs),
-        workerPromise
-      ]).then(([bridge, worker]) => ({ type: 'both' as const, bridge, worker })),
-      
-      workerPromise.then((w) => {
-        if (!w.success) {
-          return { type: 'worker_fail' as const, error: w.error };
+    type RaceResult =
+      | {
+          type: "both";
+          bridge: ExecResult;
+          worker: { success: boolean; error?: string };
         }
-        return new Promise<RaceResult>(() => {});
-      }).catch((err) => ({ type: 'worker_fail' as const, error: err }))
-    ]) as RaceResult;
-    
-    if (result.type === 'both') {
+      | { type: "worker_fail"; error: any };
+
+    const result = (await Promise.race([
+      Promise.all([bridgeHandler.run(timeoutMs), workerPromise]).then(
+        ([bridge, worker]) => ({ type: "both" as const, bridge, worker }),
+      ),
+
+      workerPromise
+        .then((w) => {
+          if (!w.success) {
+            return { type: "worker_fail" as const, error: w.error };
+          }
+          return new Promise<RaceResult>(() => {});
+        })
+        .catch((err) => ({ type: "worker_fail" as const, error: err })),
+    ])) as RaceResult;
+
+    if (result.type === "both") {
       bridgeOutput = result.bridge;
       workerResult = result.worker;
     } else {
       bridgeOutput = bridgeHandler.getOutput();
       if (bridgeOutput.exitCode === 0) bridgeOutput.exitCode = 1;
-      workerResult = { 
-        success: false, 
-        error: sanitizeHostErrorMessage(result.error instanceof Error ? result.error.message : String(result.error)) 
+      workerResult = {
+        success: false,
+        error: sanitizeHostErrorMessage(
+          result.error instanceof Error
+            ? result.error.message
+            : String(result.error),
+        ),
       };
     }
   } catch (e) {
     bridgeOutput = { stdout: "", stderr: "", exitCode: 1 };
     const errMsg = e instanceof Error ? e.message : String(e);
-    workerResult = { 
-      success: false, 
-      error: sanitizeHostErrorMessage(`bridge error: ${errMsg}`) 
+    workerResult = {
+      success: false,
+      error: sanitizeHostErrorMessage(`bridge error: ${errMsg}`),
     };
   }
 

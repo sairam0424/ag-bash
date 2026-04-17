@@ -1579,7 +1579,7 @@ export class DefenseInDepthBox {
           handler: ProxyHandler<object>,
         ) {
           if (box.shouldBlock()) {
-            const message = 
+            const message =
               "Proxy.revocable is blocked during script execution";
             const violation = box.recordViolation(
               "proxy",

@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { DefenseInDepthBox } from "../defense-in-depth-box.js";
-import { SecurityViolationError } from "../defense-in-depth-box.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  DefenseInDepthBox,
+  SecurityViolationError,
+} from "../defense-in-depth-box.js";
 import type { SecurityViolation } from "../types.js";
 
 describe("Defense-in-Depth Bypass Hypotheses", () => {
@@ -171,10 +173,7 @@ describe("Defense-in-Depth Bypass Hypotheses", () => {
         // JSON blocking prevents hijacking these channels.
         // It may throw a SecurityViolationError (if patched via Proxy)
         // or a TypeError (if the property was made non-writable).
-        if (
-          err instanceof SecurityViolationError ||
-          err instanceof TypeError
-        ) {
+        if (err instanceof SecurityViolationError || err instanceof TypeError) {
           return;
         }
       }
