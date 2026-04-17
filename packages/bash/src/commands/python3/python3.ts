@@ -196,9 +196,7 @@ async function getWorkerPath() {
 
   // Check for known locations in bundled vs source environments
   const isNode =
-    typeof process !== "undefined" &&
-    process.versions &&
-    process.versions.node;
+    typeof process !== "undefined" && process.versions && process.versions.node;
 
   if (typeof import.meta !== "undefined" && import.meta.url) {
     try {
@@ -212,7 +210,10 @@ async function getWorkerPath() {
           try {
             const fs = await import("node:fs");
             const chunkPath = join(baseDir, "chunks", "worker.js");
-            if (fs.existsSync(chunkPath) && !fs.existsSync(_workerPath as string)) {
+            if (
+              fs.existsSync(chunkPath) &&
+              !fs.existsSync(_workerPath as string)
+            ) {
               _workerPath = chunkPath;
             }
           } catch {
@@ -327,18 +328,23 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
   // per worker lifetime, not per execution).
   let worker: Worker;
   try {
-    worker = await DefenseInDepthBox.runTrustedAsync(
-      async () => {
-        // Handle different worker implementations (Node vs Browser)
-        if (typeof process !== "undefined" && process.versions && process.versions.node) {
-          // Node.js worker_threads
-          const { Worker: NodeWorker } = await import("node:worker_threads");
-          return new NodeWorker(workerPath as string, { workerData: next.input });
-        }
-        // Browser standard Worker
-        return new (Worker as any)(workerPath as string | URL, { type: "module" });
+    worker = await DefenseInDepthBox.runTrustedAsync(async () => {
+      // Handle different worker implementations (Node vs Browser)
+      if (
+        typeof process !== "undefined" &&
+        process.versions &&
+        process.versions.node
+      ) {
+        // Node.js worker_threads
+        const { Worker: NodeWorker } = await import("node:worker_threads");
+        return new NodeWorker(workerPath as string, { workerData: next.input });
       }
-    );
+      // Browser standard Worker
+      // biome-ignore lint/suspicious/noExplicitAny: Worker cast needed for browser compatibility
+      return new (Worker as any)(workerPath as string | URL, {
+        type: "module",
+      });
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     next.resolve({

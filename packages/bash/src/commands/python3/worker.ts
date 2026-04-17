@@ -45,7 +45,6 @@ export interface WorkerOutput {
   defenseStats?: WorkerDefenseStats;
 }
 
-
 const require = createRequire(import.meta.url);
 const CPYTHON_ENTRY_BASENAME = "/vendor/cpython-emscripten/python.cjs";
 const CPYTHON_STDLIB_BASENAME = "/vendor/cpython-emscripten/python313.zip";

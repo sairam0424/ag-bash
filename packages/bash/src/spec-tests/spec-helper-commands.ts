@@ -16,35 +16,40 @@ export const testHelperCommands: Command[] = [
         // 1. Convert to UTF-8 bytes and escape non-ASCII / non-printable
         // 2. Escape backslashes
         // 3. Choice of ' or " based on contents
-        
+
         const encoder = new TextEncoder();
         const bytes = encoder.encode(arg);
         let result = "";
         let hasSingleQuote = false;
         let hasDoubleQuote = false;
-        
+
         for (const b of bytes) {
           if (b === 39) hasSingleQuote = true; // '
           if (b === 34) hasDoubleQuote = true; // "
-          
-          if (b === 92) { // \
+
+          if (b === 92) {
+            // \
             result += "\\\\";
-          } else if (b === 39) { // '
+          } else if (b === 39) {
+            // '
             result += "'";
-          } else if (b === 10) { // \n
+          } else if (b === 10) {
+            // \n
             result += "\\n";
-          } else if (b === 13) { // \r
+          } else if (b === 13) {
+            // \r
             result += "\\r";
-          } else if (b === 9) { // \t
+          } else if (b === 9) {
+            // \t
             result += "\\t";
           } else if (b >= 32 && b <= 126) {
             result += String.fromCharCode(b);
           } else {
             // Hex escape for non-ASCII
-            result += "\\x" + b.toString(16).padStart(2, "0");
+            result += `\\x${b.toString(16).padStart(2, "0")}`;
           }
         }
-        
+
         if (hasSingleQuote && !hasDoubleQuote) {
           return `"${result}"`;
         }
@@ -53,7 +58,7 @@ export const testHelperCommands: Command[] = [
 
       const formatted = `[${formattedItems.join(", ")}]`;
       return {
-        stdout: formatted + "\n",
+        stdout: `${formatted}\n`,
         stderr: "",
         exitCode: 0,
       };
@@ -65,7 +70,7 @@ export const testHelperCommands: Command[] = [
       // Oils printenv.py prints 'None' if variable is not set
       // It should only show EXPORTED variables.
       const envRec = context.exportedEnv || Object.create(null);
-      
+
       if (args.length === 0) {
         const output = Object.entries(envRec)
           .map(([k, v]) => `${k}=${v}`)
@@ -83,7 +88,7 @@ export const testHelperCommands: Command[] = [
         })
         .join("\n");
       return {
-        stdout: output + "\n",
+        stdout: `${output}\n`,
         stderr: "",
         exitCode: 0,
       };
@@ -101,14 +106,15 @@ export const testHelperCommands: Command[] = [
   },
   {
     name: "read_from_fd.py",
-    execute: async (args: string[]) => {
+    execute: async (_args: string[]) => {
       // read_from_fd.py <fd1> <fd2> ...
       // Reads from specified FDs and prints formatted output
       // Note: Ag-Bash IFileSystem currently doesn't expose raw FD reading to commands.
       // This is a placeholder for here-doc tests that require it.
       return {
-        stdout: "", 
-        stderr: "read_from_fd.py: FD reading not yet supported in this environment\n",
+        stdout: "",
+        stderr:
+          "read_from_fd.py: FD reading not yet supported in this environment\n",
         exitCode: 0,
       };
     },
