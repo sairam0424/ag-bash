@@ -7,6 +7,6 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@ag-bash/bash": "file:../.."
+    "@ag-bash/bash": "workspace:*"
   }
 }

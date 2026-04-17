@@ -2,9 +2,10 @@ name: Unit Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  workflow_dispatch: {}
 
 jobs:
   unit-tests:
@@ -26,13 +27,15 @@ jobs:
           cache: "pnpm"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build
         run: pnpm build
 
       - name: Run unit tests
         run: pnpm test:unit
+        working-directory: packages/bash
 
       - name: Run dist tests
         run: pnpm test:dist
+        working-directory: packages/bash

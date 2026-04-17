@@ -155,7 +155,10 @@ export interface BashOptions {
    * If provided, called with the command name and arguments.
    * Return null to fall back to the standard "command not found" error.
    */
-  onCommandNotFound?: (command: string, args: string[]) => Promise<ExecResult | null>;
+  onCommandNotFound?: (
+    command: string,
+    args: string[],
+  ) => Promise<ExecResult | null>;
   /**
    * Custom commands to register alongside built-in commands.
    * These take precedence over built-ins with the same name.
@@ -294,7 +297,6 @@ export class Bash {
   private logger?: BashLogger;
   private defenseInDepthConfig?: DefenseInDepthConfig | boolean;
   private coverageWriter?: FeatureCoverageWriter;
-  private requireDefenseContext?: boolean;
   private jsBootstrapCode?: string;
   private onCommandNotFound?: BashOptions["onCommandNotFound"];
   // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin storage for untyped API
@@ -705,8 +707,10 @@ export class Bash {
         return this.logResult(execResult);
       };
 
-      const execResult = await (defenseHandle ? defenseHandle.run(executeScript) : executeScript());
-      
+      const execResult = await (defenseHandle
+        ? defenseHandle.run(executeScript)
+        : executeScript());
+
       // If persistence is enabled, commit the state back to the Bash instance
       const shouldPersist = options?.persistState ?? this.defaultPersistState;
       if (shouldPersist && execResult.exitCode === 0) {
@@ -718,7 +722,7 @@ export class Bash {
         this.state.options = { ...execState.options };
         this.state.hashTable = execState.hashTable;
       }
-      
+
       return execResult;
     } catch (error) {
       // ExitError propagates from 'exit' builtin (including via eval/source)
@@ -831,7 +835,7 @@ export class Bash {
     return mapToRecord(this.state.env);
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: accepts any plugin for untyped API
+  // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin registration
   registerTransformPlugin(plugin: TransformPlugin<any>): void {
     this.transformPlugins.push(plugin);
   }

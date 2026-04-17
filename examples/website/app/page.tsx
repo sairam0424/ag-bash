@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import TerminalComponent from "./components/Terminal";
+import type { InitialFiles } from "@ag-bash/bash";
 import { Dashboard } from "./components/Dashboard";
 import { VfsExplorer } from "./components/VfsExplorer";
 import { ActionPanel } from "./components/ActionPanel";
@@ -14,7 +15,7 @@ import { ActionPanel } from "./components/ActionPanel";
  */
 export default function Home() {
   const [terminalExecutor, setTerminalExecutor] = useState<((cmd: string) => void) | null>(null);
-  const [vfs, setVfs] = useState<Record<string, any>>({});
+  const [vfs, setVfs] = useState<InitialFiles>({});
 
   // Initialize terminal hook
   const handleInit = useCallback((execute: (cmd: string) => void) => {
@@ -22,7 +23,7 @@ export default function Home() {
   }, []);
 
   // Sync VFS state
-  const handleFileSystemChange = useCallback((files: Record<string, any>) => {
+  const handleFileSystemChange = useCallback((files: InitialFiles) => {
     setVfs(files);
   }, []);
 

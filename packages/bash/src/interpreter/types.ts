@@ -447,5 +447,8 @@ export interface InterpreterContext {
   /**
    * Optional handler for when a command is not found.
    */
-  onCommandNotFound?: (command: string, args: string[]) => Promise<ExecResult | null>;
+  onCommandNotFound?: (
+    command: string,
+    args: string[],
+  ) => Promise<ExecResult | null>;
 }

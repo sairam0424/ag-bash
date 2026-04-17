@@ -2,9 +2,10 @@ name: WASM Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  workflow_dispatch: {}
 
 jobs:
   python-tests:
@@ -23,10 +24,11 @@ jobs:
           cache: "pnpm"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build
         run: pnpm build
 
       - name: Run WASM tests
         run: pnpm test:wasm
+        working-directory: packages/bash

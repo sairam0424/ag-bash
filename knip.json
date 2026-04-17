@@ -1,6 +1,12 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/index.ts", "src/browser.ts", "src/cli/ag-bash.ts"],
+  "entry": [
+    "src/browser.ts!",
+    "src/cli/ag-bash.ts!",
+    "src/vitest-setup.ts",
+    "src/comparison-tests/vitest.setup.ts",
+    "src/shims/browser-dns.ts"
+  ],
   "project": ["src/**/*.ts"],
   "ignore": [
     "src/spec-tests/**",

@@ -187,7 +187,27 @@ export function _resetExecutionQueue(): void {
 }
 
 // Resolve worker path with fallbacks for bundled/minified environments
-const workerPath = join(dirname(fileURLToPath(import.meta.url)), "worker.js");
+// Resolve worker path with fallbacks for Node.js, Vitest, and Browser contexts
+let _workerPath = "worker.js";
+if (typeof import.meta !== "undefined" && import.meta.url) {
+  try {
+    const url = new URL(import.meta.url);
+    if (url.protocol === "file:") {
+      _workerPath = join(dirname(fileURLToPath(url)), "worker.js");
+    } else {
+      // Browser/Worker context: use relative URL path
+      _workerPath = new URL("worker.js", import.meta.url).pathname;
+    }
+  } catch {
+    _workerPath = "worker.js";
+  }
+} else {
+  // CommonJS fallback for bundled versions
+  const _dirname = typeof __dirname !== "undefined" ? __dirname : ".";
+  _workerPath = join(_dirname, "worker.js");
+}
+
+const workerPath = _workerPath;
 // If we are in a chunk (ESM splitting), the worker might be in the same dir or a parent dir
 // depending on how the build script copies it.
 

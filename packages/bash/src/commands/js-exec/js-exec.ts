@@ -223,7 +223,20 @@ type QueuedExecution = {
 const executionQueue: QueuedExecution[] = [];
 let currentExecution: QueuedExecution | null = null;
 
-const workerPath = fileURLToPath(new URL(`./${"worker.js"}`, import.meta.url));
+let _workerPath = "worker.js";
+if (typeof import.meta !== "undefined" && import.meta.url) {
+  try {
+    const url = new URL(import.meta.url);
+    if (url.protocol === "file:") {
+      _workerPath = fileURLToPath(new URL(`./${"worker.js"}`, import.meta.url));
+    } else {
+      _workerPath = new URL("worker.js", import.meta.url).pathname;
+    }
+  } catch {
+    _workerPath = "worker.js";
+  }
+}
+const workerPath = _workerPath;
 
 function processNextExecution(): void {
   // Skip canceled entries (timed out before execution started)

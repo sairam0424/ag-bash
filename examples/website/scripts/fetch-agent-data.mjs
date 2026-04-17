@@ -8,14 +8,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const AGENT_DATA_DIR = "app/api/agent/_agent-data";
-
-const repos = [
-  {
-    url: "https://github.com/sairam0424/ag-bash.git",
-    dir: "ag-bash",
-  },
-];
+const AGENT_DATA_DIR = "agent-data";
 
 // Clean and create agent-data directory
 if (existsSync(AGENT_DATA_DIR)) {

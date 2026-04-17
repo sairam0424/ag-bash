@@ -161,7 +161,20 @@ function checkBinaryHealth(path: string, minSize = 51200): void {
 }
 
 let cpythonEntryPath: string;
-const workerDir = dirname(fileURLToPath(import.meta.url));
+let _workerDir = ".";
+if (typeof import.meta !== "undefined" && import.meta.url) {
+  try {
+    const url = new URL(import.meta.url);
+    if (url.protocol === "file:") {
+      _workerDir = dirname(fileURLToPath(url));
+    } else {
+      _workerDir = new URL(".", import.meta.url).pathname;
+    }
+  } catch {
+    _workerDir = ".";
+  }
+}
+const workerDir = _workerDir;
 
 const entryCandidates = [
   // 1. Same dir as worker (if we copy vendor there)
@@ -1296,7 +1309,6 @@ async function runPython(input: WorkerInput): Promise<WorkerOutput> {
 
   // Load the CPython Emscripten factory function
   assertApprovedPath(cpythonEntryPath, "cpython-entry");
-  // @banned-pattern-ignore: path validated by assertApprovedPath allowlist above
   const requireFn = require;
   const createPythonModule = requireFn(cpythonEntryPath) as (
     config: Record<string, unknown>,
