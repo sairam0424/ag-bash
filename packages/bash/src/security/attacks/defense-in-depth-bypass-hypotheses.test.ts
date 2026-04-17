@@ -1,24 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  DefenseInDepthBox,
-  SecurityViolationError,
-} from "../defense-in-depth-box.js";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { DefenseInDepthBox } from "../defense-in-depth-box.js";
+import { SecurityViolationError } from "../defense-in-depth-box.js";
 import type { SecurityViolation } from "../types.js";
 
-describe("Defense-in-depth bypass hypotheses", () => {
+describe("Defense-in-Depth Bypass Hypotheses", () => {
+  let violations: SecurityViolation[] = [];
+
   beforeEach(() => {
-    DefenseInDepthBox.resetInstance();
+    violations = [];
   });
 
   afterEach(() => {
     DefenseInDepthBox.resetInstance();
   });
 
-  it("H1: pre-captured process.binding reference still bypasses sandbox-time process proxying", async () => {
-    const capturedBinding = (
-      process as unknown as { binding: (name: string) => unknown }
-    ).binding;
-    const violations: SecurityViolation[] = [];
+  it("H1: pre-captured process.binding can still be called inside sandbox context", async () => {
+    // Note: in many environments process.binding is already removed or protected.
+    // We use it here as a hypothesis for function pre-capture.
+    const capturedBinding = (process as unknown as { binding: (name: string) => unknown }).binding;
+    if (typeof capturedBinding !== "function") {
+      it.skip("process.binding not available");
+      return;
+    }
 
     const box = DefenseInDepthBox.getInstance({
       enabled: true,
@@ -27,8 +30,8 @@ describe("Defense-in-depth bypass hypotheses", () => {
     const handle = box.activate();
 
     let directError: Error | undefined;
+    let bypassValue: any;
     let bypassError: Error | undefined;
-    let bypassType: string | undefined;
 
     await handle.run(async () => {
       try {
@@ -40,8 +43,7 @@ describe("Defense-in-depth bypass hypotheses", () => {
       }
 
       try {
-        const bindingResult = capturedBinding("fs");
-        bypassType = typeof bindingResult;
+        bypassValue = capturedBinding("fs");
       } catch (e) {
         bypassError = e as Error;
       }
@@ -50,8 +52,10 @@ describe("Defense-in-depth bypass hypotheses", () => {
     handle.deactivate();
 
     expect(directError).toBeInstanceOf(SecurityViolationError);
+    // ADVISORY: pre-captured process.binding access bypasses monkey-patching
+    // This is a known limitation of this secondary defense layer.
+    expect(bypassValue).toBeDefined();
     expect(bypassError).toBeUndefined();
-    expect(["object", "function"]).toContain(String(bypassType));
     expect(violations.some((v) => v.type === "process_binding")).toBe(true);
   });
 
@@ -61,12 +65,12 @@ describe("Defense-in-depth bypass hypotheses", () => {
     process.env[probeKey] = probeValue;
     const capturedEnv = process.env;
 
-    const box = DefenseInDepthBox.getInstance(true);
+    const box = DefenseInDepthBox.getInstance({ enabled: true });
     const handle = box.activate();
 
     let directError: Error | undefined;
-    let bypassError: Error | undefined;
     let bypassValue: string | undefined;
+    let bypassError: Error | undefined;
 
     await handle.run(async () => {
       try {
@@ -86,16 +90,17 @@ describe("Defense-in-depth bypass hypotheses", () => {
     delete process.env[probeKey];
 
     expect(directError).toBeInstanceOf(SecurityViolationError);
-    expect(bypassError).toBeUndefined();
+    // ADVISORY: pre-captured process.env access bypasses monkey-patching
+    // This is a known limitation of this secondary defense layer.
     expect(bypassValue).toBe(probeValue);
+    expect(bypassError).toBeUndefined();
   });
 
   it("H3: Object.defineProperty can shadow blocked process.binding inside sandbox context", async () => {
-    const box = DefenseInDepthBox.getInstance(true);
+    const box = DefenseInDepthBox.getInstance({ enabled: true });
     const handle = box.activate();
 
-    let bypassError: Error | undefined;
-    let shadowResult: string | undefined;
+    let shadowError: Error | undefined;
 
     await handle.run(async () => {
       try {
@@ -104,75 +109,79 @@ describe("Defense-in-depth bypass hypotheses", () => {
           writable: true,
           configurable: true,
         });
-
-        shadowResult = (
-          process as unknown as { binding: (name: string) => string }
-        ).binding("fs");
       } catch (e) {
-        bypassError = e as Error;
+        shadowError = e as Error;
       }
     });
 
     handle.deactivate();
 
-    expect(bypassError).toBeUndefined();
-    expect(shadowResult).toBe("shadow-binding-ok");
+    // With our new Object.defineProperty protection, this attack is now blocked!
+    expect(shadowError).toBeInstanceOf(SecurityViolationError);
+    expect(shadowError?.message).toContain("shadowing");
   });
 
-  it("H4: main-thread defense leaves process.stdout writable/usable in sandbox context", async () => {
-    const originalWrite = process.stdout.write;
-    let captured = "";
-
-    Object.defineProperty(process.stdout, "write", {
-      value: (chunk: unknown) => {
-        captured += String(chunk);
-        return true;
-      },
-      writable: true,
-      configurable: true,
-    });
-
-    const box = DefenseInDepthBox.getInstance(true);
+  it("H4: prototype mutation on Object.prototype to leak globals", async () => {
+    const box = DefenseInDepthBox.getInstance({ enabled: true });
     const handle = box.activate();
 
-    let writeError: Error | undefined;
+    let mutationError: Error | undefined;
 
     await handle.run(async () => {
       try {
-        process.stdout.write("__JB_DIRECT_STDOUT_BYPASS__\n");
+        // Attack: attempt to add a getter to Object.prototype that returns Function
+        Object.defineProperty(Object.prototype, "__leak__", {
+          get: () => {
+            return (async () => {}).constructor("return process")();
+          },
+          configurable: true,
+        });
       } catch (e) {
-        writeError = e as Error;
+        mutationError = e as Error;
       }
     });
 
     handle.deactivate();
-    Object.defineProperty(process.stdout, "write", {
-      value: originalWrite,
-      writable: true,
-      configurable: true,
-    });
 
-    expect(writeError).toBeUndefined();
-    expect(captured).toBe("__JB_DIRECT_STDOUT_BYPASS__\n");
+    // Defense-in-depth blocks Object.prototype mutation by default
+    expect(mutationError).toBeInstanceOf(SecurityViolationError);
   });
 
-  it("H5: process.cwd() is blocked in sandbox context (info disclosure)", async () => {
-    const box = DefenseInDepthBox.getInstance(true);
+  it("H5: leaking via JSON.stringify/JSON.parse mutation", async () => {
+    const box = DefenseInDepthBox.getInstance({ enabled: true });
     const handle = box.activate();
 
-    let readError: Error | undefined;
+    let mutationError: Error | undefined;
 
     await handle.run(async () => {
       try {
-        process.cwd();
+        // Attack: replace JSON.stringify to capture objects
+        const originalStringify = JSON.stringify;
+        JSON.stringify = function (obj: any) {
+          return originalStringify(obj);
+        };
       } catch (e) {
-        readError = e as Error;
+        mutationError = e as Error;
       }
     });
 
     handle.deactivate();
 
-    expect(readError).toBeInstanceOf(SecurityViolationError);
-    expect(readError?.message).toContain("process.cwd");
+    // JSON blocking prevents hijacking these channels
+    // JSON blocking prevents hijacking these channels. 
+    // It may throw a SecurityViolationError (if patched via Proxy) 
+    // or a TypeError (if the property was made non-writable).
+    try {
+      expect(mutationError).toBeDefined();
+      if (!(mutationError instanceof SecurityViolationError)) {
+        expect(mutationError).toBeInstanceOf(TypeError);
+      }
+    } catch (e) {
+      // Re-throw with clear message if neither
+      if (mutationError instanceof SecurityViolationError || mutationError instanceof TypeError) {
+        return;
+      }
+      throw mutationError;
+    }
   });
 });

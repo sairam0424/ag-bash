@@ -476,9 +476,11 @@ export class DefenseInDepthBox {
    * Use for error recovery only.
    */
   forceDeactivate(): void {
-    if (this.refCount > 0) {
+    if (this.refCount > 0 || this.originalDescriptors.length > 0) {
+      if (this.refCount > 0) {
+        this.totalActiveTimeMs += Date.now() - this.activationTime;
+      }
       this.restorePatches();
-      this.totalActiveTimeMs += Date.now() - this.activationTime;
     }
     this.activeExecutionIds.clear();
     this.contextCache.clear();
@@ -910,10 +912,10 @@ export class DefenseInDepthBox {
     this.lockWellKnownSymbols();
 
     // Block Proxy.revocable to prevent bypassing Proxy constructor blocking.
-    // Runs after the main loop wraps globalThis.Proxy; property operations on
-    // the blocking proxy (which has no get/defineProperty traps) pass through
-    // to the original Proxy constructor, so we can patch revocable in place.
     this.protectProxyRevocable();
+
+    // Protect Object.defineProperty/Reflect.defineProperty against shadowing attacks (H3)
+    this.protectDefineProperty();
 
     // Note: process.connected is NOT blocked in the main thread — it is a
     // boolean primitive used by Node.js IPC internals and blocking it
@@ -1577,8 +1579,7 @@ export class DefenseInDepthBox {
           handler: ProxyHandler<object>,
         ) {
           if (box.shouldBlock()) {
-            const message =
-              "Proxy.revocable is blocked during script execution";
+            const message = "Proxy.revocable is blocked during script execution";
             const violation = box.recordViolation(
               "proxy",
               "Proxy.revocable",
@@ -1608,6 +1609,109 @@ export class DefenseInDepthBox {
         "[DefenseInDepthBox] Could not protect Proxy.revocable:",
         e instanceof Error ? e.message : e,
       );
+    }
+  }
+
+  /**
+   * Protect Object.defineProperty/Reflect.defineProperty from being used to
+   * shadow blocked globals (attack vector H3).
+   *
+   * If a script uses Object.defineProperty(process, 'binding', { value: ... }),
+   * it would normally overwrite our blocking proxy. We intercept these calls
+   * and block them if they target a dangerous property during script execution.
+   */
+  private protectDefineProperty(): void {
+    const box = this;
+
+    const prototypeTargets = new Set<unknown>([
+      Object.prototype,
+      Function.prototype,
+      Array.prototype,
+      Object,
+      Function,
+      Array,
+    ]);
+
+    const isDangerousDefine = (target: unknown, prop: PropertyKey): boolean => {
+      // 1. Any modification to shared basic prototypes is dangerous
+      if (prototypeTargets.has(target)) return true;
+
+      // 2. Specific dangerous properties on process/globalThis
+      if (target === process || target === globalThis) {
+        const sProp = String(prop);
+        return (
+          sProp === "binding" ||
+          sProp === "mainModule" ||
+          sProp === "execPath" ||
+          sProp === "eval" ||
+          sProp === "Function"
+        );
+      }
+
+      return false;
+    };
+
+    // 1. Object.defineProperty
+    try {
+      const originalDefineProperty = Object.defineProperty;
+      this.originalDescriptors.push({
+        target: Object,
+        prop: "defineProperty",
+        descriptor: Object.getOwnPropertyDescriptor(Object, "defineProperty"),
+      });
+
+      // @ts-ignore: defining property on Object
+      Object.defineProperty = function defineProperty(
+        target: any,
+        prop: PropertyKey,
+        attributes: PropertyDescriptor & ThisType<any>,
+      ) {
+        if (box.shouldBlock() && isDangerousDefine(target, prop)) {
+          const path = `${box.getPathForTarget(target, String(prop))} (defineProperty)`;
+          const message = `shadowing ${path} via defineProperty is blocked during script execution`;
+          const violation = box.recordViolation(
+            "object_define_property",
+            path,
+            message,
+          );
+          throw new SecurityViolationError(message, violation);
+        }
+        return originalDefineProperty(target, prop, attributes);
+      };
+    } catch (e) {
+      this.patchFailures.push("Object.defineProperty");
+    }
+
+    // 2. Reflect.defineProperty
+    if (typeof Reflect !== "undefined" && typeof Reflect.defineProperty === "function") {
+      try {
+        const originalReflectDefine = Reflect.defineProperty;
+        this.originalDescriptors.push({
+          target: Reflect,
+          prop: "defineProperty",
+          descriptor: Object.getOwnPropertyDescriptor(Reflect, "defineProperty"),
+        });
+
+        Reflect.defineProperty = function defineProperty(
+          target: object,
+          propertyKey: PropertyKey,
+          attributes: PropertyDescriptor,
+        ) {
+          if (box.shouldBlock() && isDangerousDefine(target, propertyKey)) {
+            const path = `${box.getPathForTarget(target, String(propertyKey))} (Reflect.defineProperty)`;
+            const message = `shadowing ${path} via Reflect.defineProperty is blocked during script execution`;
+            const violation = box.recordViolation(
+              "reflect_define_property",
+              path,
+              message,
+            );
+            throw new SecurityViolationError(message, violation);
+          }
+          return originalReflectDefine(target, propertyKey, attributes);
+        };
+      } catch (e) {
+        this.patchFailures.push("Reflect.defineProperty");
+      }
     }
   }
 
@@ -1934,6 +2038,11 @@ export class DefenseInDepthBox {
       }
 
       // Store original descriptor for restoration
+      // Skip if we've already recorded a descriptor for this target/prop in this instance
+      if (this.originalDescriptors.some(d => d.target === target && d.prop === prop)) {
+        return;
+      }
+
       const descriptor = Object.getOwnPropertyDescriptor(target, prop);
       this.originalDescriptors.push({ target, prop, descriptor });
 
