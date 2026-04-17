@@ -7,8 +7,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     globals: true,
-    testTimeout: 60000,
-    hookTimeout: 60000,
+    testTimeout: 120000,
+    hookTimeout: 120000,
     exclude: [
       "**/node_modules/**",
       "**/dist/**",

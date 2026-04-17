@@ -565,7 +565,11 @@ function createLazyCommand(def: LazyCommandDef): Command {
         emitFlagCoverage(ctx.coverage, def.name, args);
       }
 
-      return cmd.execute(args, ctx);
+      // Built-in commands are trusted infrastructure (part of the TCB).
+      // We run their execution in a trusted scope so they can use Node.js
+      // core modules (fetch, workers, etc.) without being blocked by the
+      // very sandbox they are implementing.
+      return DefenseInDepthBox.runTrustedAsync(() => cmd.execute(args, ctx));
     },
   };
 }
