@@ -7,30 +7,30 @@
  */
 
 export function lookup(
-	hostname: string,
-	options: unknown,
-	callback: (
-		err: Error | null,
-		address: string | null,
-		family?: number,
-	) => void,
+  hostname: string,
+  options: unknown,
+  callback: (
+    err: Error | null,
+    address: string | null,
+    family?: number,
+  ) => void,
 ): void {
-	// If options is a callback, shift arguments
-	const actualCallback = typeof options === "function" ? options : callback;
+  // If options is a callback, shift arguments
+  const actualCallback = typeof options === "function" ? options : callback;
 
-	const err = new Error(
-		`DNS lookup for "${hostname}" is not supported in the browser.`,
-	);
-	Object.assign(err, { code: "ENOTFOUND" });
+  const err = new Error(
+    `DNS lookup for "${hostname}" is not supported in the browser.`,
+  );
+  Object.assign(err, { code: "ENOTFOUND" });
 
-	// Always return an error to prevent reaching private IPs by hostname
-	// since we can't verify the resolved IP in the browser.
-	setTimeout(() => actualCallback(err, null), 0);
+  // Always return an error to prevent reaching private IPs by hostname
+  // since we can't verify the resolved IP in the browser.
+  setTimeout(() => actualCallback(err, null), 0);
 }
 
 const _default_1: {
-	lookup: typeof lookup;
+  lookup: typeof lookup;
 } = {
-	lookup,
+  lookup,
 };
 export default _default_1;
