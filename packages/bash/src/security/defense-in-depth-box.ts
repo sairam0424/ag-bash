@@ -1579,7 +1579,8 @@ export class DefenseInDepthBox {
           handler: ProxyHandler<object>,
         ) {
           if (box.shouldBlock()) {
-            const message = "Proxy.revocable is blocked during script execution";
+            const message = 
+              "Proxy.revocable is blocked during script execution";
             const violation = box.recordViolation(
               "proxy",
               "Proxy.revocable",
@@ -1678,7 +1679,7 @@ export class DefenseInDepthBox {
         }
         return originalDefineProperty(target, prop, attributes);
       };
-    } catch (e) {
+    } catch (_e) {
       this.patchFailures.push("Object.defineProperty");
     }
 
@@ -1689,7 +1690,10 @@ export class DefenseInDepthBox {
         this.originalDescriptors.push({
           target: Reflect,
           prop: "defineProperty",
-          descriptor: Object.getOwnPropertyDescriptor(Reflect, "defineProperty"),
+          descriptor: Object.getOwnPropertyDescriptor(
+            Reflect,
+            "defineProperty",
+          ),
         });
 
         Reflect.defineProperty = function defineProperty(
@@ -1709,7 +1713,7 @@ export class DefenseInDepthBox {
           }
           return originalReflectDefine(target, propertyKey, attributes);
         };
-      } catch (e) {
+      } catch (_e) {
         this.patchFailures.push("Reflect.defineProperty");
       }
     }
@@ -2039,7 +2043,11 @@ export class DefenseInDepthBox {
 
       // Store original descriptor for restoration
       // Skip if we've already recorded a descriptor for this target/prop in this instance
-      if (this.originalDescriptors.some(d => d.target === target && d.prop === prop)) {
+      if (
+        this.originalDescriptors.some(
+          (d) => d.target === target && d.prop === prop,
+        )
+      ) {
         return;
       }
 
