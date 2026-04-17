@@ -433,9 +433,11 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
         attachListeners(w);
         return w;
       }
-      const w = new (Worker as unknown as {
-        new (url: string | URL, options?: { type: "module" }): Worker;
-      })(workerPath as string | URL, {
+      const w = new (
+        Worker as unknown as {
+          new (url: string | URL, options?: { type: "module" }): Worker;
+        }
+      )(workerPath as string | URL, {
         type: "module",
       });
       attachListeners(w);
