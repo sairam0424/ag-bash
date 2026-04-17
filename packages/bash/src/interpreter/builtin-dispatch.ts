@@ -381,8 +381,14 @@ export async function executeExternalCommand(
 
     // Check if this is a browser-excluded command for a more helpful error
     if (isBrowserExcludedCommand(commandName)) {
+      const suggestFlag =
+        commandName === "python" || commandName === "python3"
+          ? " (Enable with --python)"
+          : commandName === "sqlite3"
+            ? " (Enable with --sqlite3)"
+            : "";
       return failure(
-        `bash: ${commandName}: command not available in browser environments. ` +
+        `bash: ${commandName}: command not available in browser environments.${suggestFlag} ` +
           `Exclude '${commandName}' from your commands or use the Node.js bundle.\n`,
         127,
       );
