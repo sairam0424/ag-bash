@@ -433,7 +433,9 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
         attachListeners(w);
         return w;
       }
-      const w = new (Worker as any)(workerPath as string | URL, {
+      const w = new (Worker as unknown as {
+        new (url: string | URL, options?: { type: "module" }): Worker;
+      })(workerPath as string | URL, {
         type: "module",
       });
       attachListeners(w);
@@ -492,7 +494,7 @@ async function executePython(
   const workerPromise = new Promise<WorkerOutput>((resolve) => {
     const queueEntry: QueuedExecution = {
       input: workerInput,
-      resolve: () => {}, 
+      resolve: () => {},
       workerRef,
       requireDefenseContext: ctx.requireDefenseContext,
     };
@@ -547,7 +549,7 @@ async function executePython(
           bridge: ExecResult;
           worker: { success: boolean; error?: string };
         }
-      | { type: "worker_fail"; error: any };
+      | { type: "worker_fail"; error: unknown };
 
     const result = (await Promise.race([
       Promise.all([bridgeHandler.run(timeoutMs), workerPromise]).then(

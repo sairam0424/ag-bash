@@ -1661,7 +1661,7 @@ export class DefenseInDepthBox {
         descriptor: Object.getOwnPropertyDescriptor(Object, "defineProperty"),
       });
 
-      // @ts-ignore: defining property on Object
+      // @ts-expect-error: defining property on Object
       Object.defineProperty = function defineProperty(
         target: object,
         prop: PropertyKey,

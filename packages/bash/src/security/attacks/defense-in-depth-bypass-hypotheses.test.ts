@@ -159,11 +159,8 @@ describe("Defense-in-Depth Bypass Hypotheses", () => {
 
     await handle.run(async () => {
       try {
-        // Attack: replace JSON.stringify to capture objects
         const originalStringify = JSON.stringify;
-        JSON.stringify = function (obj: unknown) {
-          return originalStringify(obj);
-        };
+        JSON.stringify = (obj: unknown) => originalStringify(obj);
       } catch (e) {
         mutationError = e as Error;
       }
