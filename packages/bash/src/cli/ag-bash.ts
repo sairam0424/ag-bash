@@ -94,7 +94,7 @@ function printVersion(): void {
   console.log(
     Theme.colors.cyan(Theme.colors.bold("ag-bash")) +
       " " +
-      Theme.colors.dim("v1.0.0"),
+      Theme.colors.dim("v1.2.0"),
   );
 }
 
@@ -276,7 +276,7 @@ async function main(): Promise<void> {
   } else {
     // No script provided - show banner if TTY, then help
     if (process.stdin.isTTY && process.stdout.isTTY) {
-      Theme.printHeader("1.0.0");
+      Theme.printHeader("1.2.0");
       Theme.printBrandManifest();
       Theme.printManifest({
         commands: 100,

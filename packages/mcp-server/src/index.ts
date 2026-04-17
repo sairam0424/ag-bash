@@ -47,7 +47,7 @@ class AgBashServer {
               },
               serverInfo: {
                 name: "ag-bash",
-                version: "1.0.0",
+                version: "1.2.0",
               },
             },
           });

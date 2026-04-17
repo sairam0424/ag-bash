@@ -1,6 +1,6 @@
 {
   "name": "cjs-consumer-example",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Example of using ag-bash from a CommonJS project",
   "scripts": {
     "typecheck": "npx tsc --noEmit",
