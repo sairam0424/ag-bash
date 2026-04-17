@@ -1,14 +1,14 @@
 class AgBash < Formula
   desc "Secure unified agentic bash runtime and MCP server"
   homepage "https://github.com/sairam0424/ag-bash"
-  url "https://registry.npmjs.org/@ag-bash/bash/-/bash-1.1.0.tgz"
+  url "https://registry.npmjs.org/@ag-bash/bash/-/bash-1.2.0.tgz"
   sha256 "ab688d49b033363809c938bef91de2dad68c161aa072b527c5fef2643cd14297"
   license "MIT"
 
   depends_on "node"
 
   resource "mcp-server" do
-    url "https://registry.npmjs.org/@ag-bash/mcp-server/-/mcp-server-1.1.0.tgz"
+    url "https://registry.npmjs.org/@ag-bash/mcp-server/-/mcp-server-1.2.0.tgz"
     sha256 "eaf3ee05b79d0fab50d6d935b596fd46dd4db7319eaaf358c3e70420c7d97f56"
   end
 

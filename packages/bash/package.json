@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/bash",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Unified Agentic Bash for Ag-Bash",
   "files": [
     "dist/",
