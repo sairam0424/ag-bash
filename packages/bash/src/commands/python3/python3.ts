@@ -192,7 +192,6 @@ if (typeof import.meta !== "undefined" && import.meta.url) {
   _workerPath = join(dirname(fileURLToPath(import.meta.url)), "worker.js");
 } else {
   // CommonJS fallback for bundled versions
-  // @ts-ignore - __dirname exists in CJS
   const _dirname = typeof __dirname !== "undefined" ? __dirname : ".";
   _workerPath = join(_dirname, "worker.js");
 }
