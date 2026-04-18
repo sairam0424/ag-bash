@@ -337,7 +337,7 @@ MIT License`,
 - Bug in module A
 - Bug in module B
 
-## [1.1.0] - 2024-01-01
+## [1.2.0] - 2024-01-01
 ### Added
 - Feature Z
 
@@ -369,7 +369,7 @@ MIT License`,
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("Found 3 versions");
     expect(result.stdout).toContain("v2.0.0");
-    expect(result.stdout).toContain("v1.1.0");
+    expect(result.stdout).toContain("v1.2.0");
     expect(result.stdout).toContain("v1.0.0");
     expect(result.exitCode).toBe(0);
   });
