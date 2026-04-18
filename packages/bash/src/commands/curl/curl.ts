@@ -128,9 +128,10 @@ function buildOutput(
   // Verbose output
   if (options.verbose) {
     output += `> ${options.method} ${requestUrl}\n`;
-    for (const [name, value] of options.headers) {
+    // biome-ignore lint/suspicious/noExplicitAny: Headers iteration workaround
+    (options.headers as any).forEach((value: string, name: string) => {
       output += `> ${name}: ${value}\n`;
-    }
+    });
     output += ">\n";
     output += `< HTTP/1.1 ${result.status} ${result.statusText}\n`;
     for (const [name, value] of Object.entries(result.headers)) {

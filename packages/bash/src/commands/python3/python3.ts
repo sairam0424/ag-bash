@@ -11,6 +11,7 @@
  */
 
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
@@ -190,51 +191,46 @@ export function _resetExecutionQueue(): void {
 // Resolve worker path with fallbacks for Node.js, Vitest, and Browser contexts
 let _workerPathCache: string | URL | null = null;
 
-async function getWorkerPath() {
-  if (_workerPathCache) return _workerPathCache;
-
-  let _workerPath: string | URL = "worker.js";
-
-  // Check for known locations in bundled vs source environments
-  const isNode =
-    typeof process !== "undefined" && process.versions && process.versions.node;
+function findWorkerPath(): string {
+  let _workerPath = "worker.js";
+  const isNode = typeof process !== "undefined";
 
   if (typeof import.meta !== "undefined" && import.meta.url) {
     try {
       const url = new URL(import.meta.url);
       if (url.protocol === "file:") {
         const baseDir = dirname(fileURLToPath(url));
-        _workerPath = join(baseDir, "worker.js");
+        const localPath = join(baseDir, "worker.js");
 
-        // Node-specific check for chunks directory (standard for our esbuild setup)
         if (isNode) {
-          try {
-            const fs = await import("node:fs");
-            const chunkPath = join(baseDir, "chunks", "worker.js");
-            if (
-              fs.existsSync(chunkPath) &&
-              !fs.existsSync(_workerPath as string)
-            ) {
-              _workerPath = chunkPath;
+          const paths = [
+            localPath,
+            join(baseDir, "python-worker.js"),
+            join(baseDir, "chunks", "python-worker.js"),
+            join(baseDir, "..", "commands", "python3", "worker.js"),
+            join(baseDir, "../../../dist/commands/python3/worker.js"),
+          ];
+
+          for (const p of paths) {
+            if (existsSync(p)) {
+              return p;
             }
-          } catch {
-            // ignore if fs not available
           }
         }
-      } else {
-        // Browser/Worker context: use relative URL path
-        _workerPath = new URL("worker.js", import.meta.url);
+        _workerPath = localPath;
       }
     } catch {
-      _workerPath = "worker.js";
+      // ignore
     }
-  } else if (typeof __dirname !== "undefined") {
-    // CommonJS fallback for bundled versions
-    _workerPath = join(__dirname, "worker.js");
   }
-
-  _workerPathCache = _workerPath;
   return _workerPath;
+}
+
+async function getWorkerPath() {
+  if (_workerPathCache) return _workerPathCache;
+  const path = findWorkerPath();
+  _workerPathCache = path;
+  return path;
 }
 
 function generateWorkerProtocolToken(): string {

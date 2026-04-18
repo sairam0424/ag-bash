@@ -1,4 +1,10 @@
-# @ag-bash/bash Threat Model
+# Ag-Bash Security Threat Model (v1.3.0 - LOCKED)
+
+This document outlines the security architecture and threat mitigations for Ag-Bash.
+
+> [!IMPORTANT]
+> **Status: RELEASE v1.3.0**
+> All core security layers described below (Architecture, FS, Network, Runtime) are implemented and verified for the v1.3.0 release.
 
 ## Context
 
