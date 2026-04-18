@@ -1,4 +1,4 @@
-import { Bash } from "../../bash/src/index.js";
+import { Bash } from "@ag-bash/bash";
 
 /**
  * Ag-Bash MCP Server (Dependency-Free Implementation)
