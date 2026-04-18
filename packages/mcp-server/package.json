@@ -8,7 +8,7 @@
     "README.md"
   ],
   "bin": {
-    "ag-bash-mcp": "./dist/index.js"
+    "ag-bash-mcp": "./dist/bundle.js"
   },
   "scripts": {
     "build": "rm -rf dist && tsc --noEmit && pnpm build:bundle && chmod +x dist/index.js",

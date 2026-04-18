@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Ag-Bash is an AI-native bash interpreter written in TypeScript. It is organized as a pnpm monorepo:
 
 - **`@ag-bash/bash`**: The core shell engine, filesystem, and sandboxed runtimes.
+- **`@ag-bash/agent-bridge`**: Terminal UI bridge for AI agent communication.
 - **`@ag-bash/mcp-server`**: Standalone Model Context Protocol server.
 
 ## Commands

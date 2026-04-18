@@ -328,9 +328,10 @@ function buildMergedHeaders(
   // Firewall headers override user headers (security).
   // Use set() so firewall values replace any user-supplied value for the
   // same header name (case-insensitive).
-  for (const [k, v] of firewallHeaders) {
+  // biome-ignore lint/suspicious/noExplicitAny: Headers iteration workaround
+  (firewallHeaders as any).forEach((v: string, k: string) => {
     merged.set(k, v);
-  }
+  });
   return merged;
 }
 

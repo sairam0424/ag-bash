@@ -3,7 +3,7 @@ set -e
 
 # PATHS
 BASH_EXE="node packages/bash/dist/bin/ag-bash.js"
-MCP_EXE="node packages/mcp-server/dist/index.js"
+MCP_EXE="node packages/mcp-server/dist/bundle.js"
 
 echo "------------------------------------------------"
 echo "🔍 E2E VERIFICATION: Ag-Bash Monorepo"

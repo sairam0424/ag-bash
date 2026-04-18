@@ -9,6 +9,8 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import {
@@ -223,20 +225,42 @@ type QueuedExecution = {
 const executionQueue: QueuedExecution[] = [];
 let currentExecution: QueuedExecution | null = null;
 
-let _workerPath = "worker.js";
-if (typeof import.meta !== "undefined" && import.meta.url) {
-  try {
-    const url = new URL(import.meta.url);
-    if (url.protocol === "file:") {
-      _workerPath = fileURLToPath(new URL(`./${"worker.js"}`, import.meta.url));
-    } else {
-      _workerPath = new URL("worker.js", import.meta.url).pathname;
+function findWorkerPath(): string {
+  let _workerPath = "worker.js";
+  const isNode = typeof process !== "undefined";
+
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    try {
+      const url = new URL(import.meta.url);
+      if (url.protocol === "file:") {
+        const baseDir = dirname(fileURLToPath(url));
+        const localPath = join(baseDir, "worker.js");
+
+        if (isNode) {
+          const paths = [
+            localPath,
+            join(baseDir, "js-worker.js"),
+            join(baseDir, "chunks", "js-worker.js"),
+            join(baseDir, "..", "commands", "js-exec", "worker.js"),
+            join(baseDir, "../../../dist/commands/js-exec/worker.js"),
+          ];
+
+          for (const p of paths) {
+            if (existsSync(p)) {
+              return p;
+            }
+          }
+        }
+        _workerPath = localPath;
+      }
+    } catch {
+      // ignore
     }
-  } catch {
-    _workerPath = "worker.js";
   }
+  return _workerPath;
 }
-const workerPath = _workerPath;
+
+const workerPath = findWorkerPath();
 
 function processNextExecution(): void {
   // Skip canceled entries (timed out before execution started)
