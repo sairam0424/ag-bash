@@ -1237,7 +1237,9 @@ describe("DefenseInDepthBox", () => {
 
         expect(result).toBe(42);
         expect(mutationError).toBeInstanceOf(SecurityViolationError);
-        expect(mutationError?.message).toContain("Reflect.malicious modification is blocked");
+        expect(mutationError?.message).toContain(
+          "Reflect.malicious modification is blocked",
+        );
         // Reflect is NOT frozen (it's a Proxy), but it is effectively read-only during execution
         expect(Object.isFrozen(Reflect)).toBe(false);
       });
@@ -1801,7 +1803,9 @@ describe("DefenseInDepthBox", () => {
 
         // This should now be blocked
         expect(error).toBeInstanceOf(SecurityViolationError);
-        expect(error?.message).toContain("shadowing globalThis.Function (defineProperty) is blocked");
+        expect(error?.message).toContain(
+          "shadowing globalThis.Function (defineProperty) via defineProperty is blocked during script execution",
+        );
       });
     });
 

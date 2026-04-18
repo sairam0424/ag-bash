@@ -43,6 +43,9 @@
  * is not needed (and would require require('node:module') which is blocked).
  */
 
+// Marker to detect our own proxies and prevent double-patching/recursion
+const DID_PROXY_MARKER = Symbol("DID_PROXY_MARKER");
+
 // Capture original Reflect methods early to avoid recursion if Reflect itself is proxied
 const originalReflect = {
   get: Reflect.get.bind(Reflect),
@@ -287,6 +290,10 @@ export class WorkerDefenseInDepth {
     // @banned-pattern-ignore: intentional Proxy usage for security blocking
     // Use this.originalProxy to avoid being blocked by our own patches
     return new this.originalProxy(original, {
+      get(target, prop, receiver) {
+        if (prop === DID_PROXY_MARKER) return true;
+        return originalReflect.get(target, prop, receiver);
+      },
       apply(target, thisArg, args) {
         const message = `${path} is blocked in worker context`;
         const violation = self.recordViolation(violationType, path, message);
@@ -1323,17 +1330,39 @@ export class WorkerDefenseInDepth {
         // @banned-pattern-ignore: intentional check for function type in security code
         const proxy =
           typeof original === "function"
-            ? this.createBlockingProxy(
-                original as (...args: unknown[]) => unknown,
-                path,
-                violationType,
-              )
-            : this.createBlockingObjectProxy(
-                original as object,
-                path,
-                violationType,
-                blocked.allowedKeys,
-              );
+            ? (() => {
+                // Skip if already proxied by this security layer
+                if (
+                  original &&
+                  (original as unknown as Record<symbol, unknown>)[
+                    DID_PROXY_MARKER
+                  ]
+                ) {
+                  return original;
+                }
+                return this.createBlockingProxy(
+                  original as (...args: unknown[]) => unknown,
+                  path,
+                  violationType,
+                );
+              })()
+            : (() => {
+                // Skip if already proxied by this security layer
+                if (
+                  original &&
+                  (original as unknown as Record<symbol, unknown>)[
+                    DID_PROXY_MARKER
+                  ]
+                ) {
+                  return original;
+                }
+                return this.createBlockingObjectProxy(
+                  original as object,
+                  path,
+                  violationType,
+                  blocked.allowedKeys,
+                );
+              })();
 
         Object.defineProperty(target, prop, {
           value: proxy,

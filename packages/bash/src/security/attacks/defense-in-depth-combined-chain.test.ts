@@ -132,7 +132,6 @@ describe("Defense-in-depth combined chain probes", () => {
 
     const originalBinding = Object.getOwnPropertyDescriptor(process, "binding");
     let shadowError: Error | undefined;
-    let shadowResult: string | undefined;
     let constructorValue: number | undefined;
     let constructorError: Error | undefined;
 
@@ -149,10 +148,10 @@ describe("Defense-in-depth combined chain probes", () => {
         }
 
         try {
-          shadowResult = (
-            process as unknown as { binding: (name: string) => string }
-          ).binding("fs");
-        } catch (e) {
+          (process as unknown as { binding: (name: string) => string }).binding(
+            "fs",
+          );
+        } catch (_e) {
           // Binding is also blocked during script execution
         }
 
@@ -175,7 +174,9 @@ describe("Defense-in-depth combined chain probes", () => {
     }
 
     expect(shadowError).toBeInstanceOf(SecurityViolationError);
-    expect(shadowError?.message).toContain("shadowing process.binding (defineProperty) via defineProperty is blocked during script execution");
+    expect(shadowError?.message).toContain(
+      "shadowing process.binding (defineProperty) via defineProperty is blocked during script execution",
+    );
     // shadowResult should be the original binding result (or it might fail if binding is protected)
     // In this case, original binding for "fs" works in Node if not blocked.
     // Actually, process.binding is often blocked entirely in our sandbox.

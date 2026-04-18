@@ -173,6 +173,9 @@ function resolveConfig(
   };
 }
 
+// Marker to detect our own proxies and prevent double-patching/recursion
+const DID_PROXY_MARKER = Symbol("DID_PROXY_MARKER");
+
 // Capture original Reflect methods early to avoid recursion if Reflect itself is proxied
 const originalReflect = {
   get: Reflect.get,
@@ -688,6 +691,10 @@ export class DefenseInDepthBox {
 
     // @banned-pattern-ignore: intentional Proxy usage for security blocking
     return new Proxy(original, {
+      get(target, prop, receiver) {
+        if (prop === DID_PROXY_MARKER) return true;
+        return originalReflect.get(target, prop, receiver);
+      },
       apply(target, thisArg, args) {
         if (box.shouldBlock()) {
           const message = `${path} is blocked during script execution`;
@@ -743,6 +750,19 @@ export class DefenseInDepthBox {
     // @banned-pattern-ignore: intentional Proxy usage for security blocking
     return new Proxy(original, {
       get(target, prop, receiver) {
+        if (prop === DID_PROXY_MARKER) return true;
+
+        if (!executionContext) {
+          // Allow specific keys through (e.g., Node.js internal env vars)
+          if (
+            allowedKeys &&
+            typeof prop === "string" &&
+            allowedKeys.has(prop)
+          ) {
+            return originalReflect.get(target, prop, receiver);
+          }
+        }
+
         if (box.shouldBlock()) {
           // Allow specific keys through (e.g., Node.js internal env vars)
           if (
@@ -2032,6 +2052,14 @@ export class DefenseInDepthBox {
       });
 
       const path = "Module._resolveFilename";
+      // Skip if already proxied by this security layer
+      if (
+        original &&
+        (original as unknown as Record<symbol, unknown>)[DID_PROXY_MARKER]
+      ) {
+        return;
+      }
+
       const proxy = this.createBlockingProxy(
         original,
         path,
