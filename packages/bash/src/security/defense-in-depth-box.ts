@@ -623,6 +623,13 @@ export class DefenseInDepthBox {
    * inside runTrusted(), or when the immediate caller is a Node.js bundled dep.
    */
   private shouldBlock(): boolean {
+    // If this instance is no longer the active singleton, it should be transparent.
+    // This happens between test runs when DefenseInDepthBox.resetInstance() is called
+    // but globally patched objects still carry proxies from the old instance.
+    if (this !== DefenseInDepthBox.instance) {
+      return false;
+    }
+
     if (IS_BROWSER || this.config.auditMode || !executionContext) {
       return false;
     }
