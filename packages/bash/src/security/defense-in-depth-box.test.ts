@@ -1209,26 +1209,37 @@ describe("DefenseInDepthBox", () => {
         expect(error?.message).toContain("FinalizationRegistry");
       });
 
-      it("should freeze Reflect (not block it)", async () => {
-        // Reflect uses "freeze" strategy - it's frozen to prevent modification,
-        // but its methods still work. This is intentional because:
+      it("should protect Reflect against mutation (not block it)", async () => {
+        // Reflect uses "throw" strategy with allowedKeys - it's protected to prevent modification,
+        // but its standard methods still work. This is intentional because:
         // 1. Reflect is needed by some legitimate code
-        // 2. Freezing prevents adding malicious methods
-        // 3. Primary sandboxing should prevent misuse
+        // 2. Protection prevents adding malicious methods or shadowing existing ones
+        // 3. Using Proxy instead of Object.freeze allows clean deactivation in persistent processes
         const box = DefenseInDepthBox.getInstance(true);
         const handle = box.activate();
 
         let result: unknown;
+        let mutationError: Error | undefined;
         await handle.run(async () => {
-          // Reflect still works - it's frozen, not blocked
+          // Reflect still works - it's protected, not blocked
           result = Reflect.get({ test: 42 }, "test");
+
+          try {
+            // Attempting to mutate Reflect should throw
+            // @ts-expect-error: intentional mutation for test
+            Reflect.malicious = "hack";
+          } catch (e) {
+            mutationError = e as Error;
+          }
         });
 
         handle.deactivate();
 
         expect(result).toBe(42);
-        // Verify Reflect is frozen
-        expect(Object.isFrozen(Reflect)).toBe(true);
+        expect(mutationError).toBeInstanceOf(SecurityViolationError);
+        expect(mutationError?.message).toContain("Reflect.malicious modification is blocked");
+        // Reflect is NOT frozen (it's a Proxy), but it is effectively read-only during execution
+        expect(Object.isFrozen(Reflect)).toBe(false);
       });
     });
 
@@ -1768,31 +1779,29 @@ describe("DefenseInDepthBox", () => {
         expect(error?.message).toContain("not defined");
       });
 
-      it("should allow Object.defineProperty to shadow blocked globals (known limitation)", async () => {
-        // KNOWN LIMITATION: Object.defineProperty can replace our proxy with
-        // a custom function. Primary sandboxing should prevent this.
+      it("should block Object.defineProperty from shadowing blocked globals", async () => {
+        // We now intercept defineProperty to prevent shadowing of critical globals
         const box = DefenseInDepthBox.getInstance(true);
         const handle = box.activate();
 
-        let result: string | undefined;
+        let error: Error | undefined;
         await handle.run(async () => {
-          // Replace Function with attacker's version (factory pattern)
-          Object.defineProperty(globalThis, "Function", {
-            value: () => () => "shadowed",
-            writable: true,
-            configurable: true,
-          });
-
-          // Use the shadowed version as a factory
-          // Note: can't use `new` since arrow functions aren't constructors
-          const fn = Function();
-          result = (fn as () => string)();
+          try {
+            Object.defineProperty(globalThis, "Function", {
+              value: () => () => "shadowed",
+              writable: true,
+              configurable: true,
+            });
+          } catch (e) {
+            error = e as Error;
+          }
         });
 
         handle.deactivate();
 
-        // This succeeds - defineProperty bypasses our protection
-        expect(result).toBe("shadowed");
+        // This should now be blocked
+        expect(error).toBeInstanceOf(SecurityViolationError);
+        expect(error?.message).toContain("shadowing globalThis.Function (defineProperty) is blocked");
       });
     });
 

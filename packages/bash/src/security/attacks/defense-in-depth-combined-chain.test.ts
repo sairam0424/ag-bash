@@ -131,20 +131,30 @@ describe("Defense-in-depth combined chain probes", () => {
     const handle = box.activate();
 
     const originalBinding = Object.getOwnPropertyDescriptor(process, "binding");
+    let shadowError: Error | undefined;
     let shadowResult: string | undefined;
     let constructorValue: number | undefined;
     let constructorError: Error | undefined;
 
     try {
       await handle.run(async () => {
-        Object.defineProperty(process, "binding", {
-          value: () => "shadowed-binding",
-          writable: true,
-          configurable: true,
-        });
-        shadowResult = (
-          process as unknown as { binding: (name: string) => string }
-        ).binding("fs");
+        try {
+          Object.defineProperty(process, "binding", {
+            value: () => "shadowed-binding",
+            writable: true,
+            configurable: true,
+          });
+        } catch (e) {
+          shadowError = e as Error;
+        }
+
+        try {
+          shadowResult = (
+            process as unknown as { binding: (name: string) => string }
+          ).binding("fs");
+        } catch (e) {
+          // Binding is also blocked during script execution
+        }
 
         try {
           const Fn = {}.constructor.constructor as (
@@ -164,7 +174,11 @@ describe("Defense-in-depth combined chain probes", () => {
       }
     }
 
-    expect(shadowResult).toBe("shadowed-binding");
+    expect(shadowError).toBeInstanceOf(SecurityViolationError);
+    expect(shadowError?.message).toContain("shadowing process.binding (defineProperty) via defineProperty is blocked during script execution");
+    // shadowResult should be the original binding result (or it might fail if binding is protected)
+    // In this case, original binding for "fs" works in Node if not blocked.
+    // Actually, process.binding is often blocked entirely in our sandbox.
     expect(constructorValue).toBeUndefined();
     expect(constructorError).toBeInstanceOf(SecurityViolationError);
   });
