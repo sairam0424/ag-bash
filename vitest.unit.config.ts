@@ -27,7 +27,7 @@ export default defineConfig({
       "**/sqlite3.worker-protocol-abuse.test.ts",
       "**/js-exec*.test.ts",
     ],
-    setupFiles: [resolve(__dirname, "src/vitest-setup.ts")],
+    setupFiles: [resolve(__dirname, "packages/bash/src/vitest-setup.ts")],
     // Tests that patch globalThis (defense-in-depth) or spawn workers need
     // process-level isolation. In Vitest 4, use vitest.workspace.ts for this.
   },

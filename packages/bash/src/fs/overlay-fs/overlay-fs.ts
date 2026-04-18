@@ -707,7 +707,7 @@ export class OverlayFs implements IFileSystem {
     }
 
     // Target is outside root - return sanitized basename
-    return result.safeName;
+    return (result as { withinRoot: false; safeName: string }).safeName;
   }
 
   async mkdir(path: string, options?: MkdirOptions): Promise<void> {

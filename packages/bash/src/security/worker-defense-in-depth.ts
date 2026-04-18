@@ -43,6 +43,23 @@
  * is not needed (and would require require('node:module') which is blocked).
  */
 
+// Marker to detect our own proxies and prevent double-patching/recursion
+const DID_PROXY_MARKER = Symbol("DID_PROXY_MARKER");
+
+// Capture original Reflect methods early to avoid recursion if Reflect itself is proxied
+const originalReflect = {
+  get: Reflect.get.bind(Reflect),
+  set: Reflect.set.bind(Reflect),
+  apply: Reflect.apply.bind(Reflect),
+  construct: Reflect.construct.bind(Reflect),
+  ownKeys: Reflect.ownKeys.bind(Reflect),
+  getOwnPropertyDescriptor: Reflect.getOwnPropertyDescriptor.bind(Reflect),
+  has: Reflect.has.bind(Reflect),
+  deleteProperty: Reflect.deleteProperty.bind(Reflect),
+  setPrototypeOf: Reflect.setPrototypeOf.bind(Reflect),
+  defineProperty: Reflect.defineProperty.bind(Reflect),
+};
+
 import { type BlockedGlobal, getBlockedGlobals } from "./blocked-globals.js";
 import type {
   DefenseInDepthConfig,
@@ -273,6 +290,10 @@ export class WorkerDefenseInDepth {
     // @banned-pattern-ignore: intentional Proxy usage for security blocking
     // Use this.originalProxy to avoid being blocked by our own patches
     return new this.originalProxy(original, {
+      get(target, prop, receiver) {
+        if (prop === DID_PROXY_MARKER) return true;
+        return originalReflect.get(target, prop, receiver);
+      },
       apply(target, thisArg, args) {
         const message = `${path} is blocked in worker context`;
         const violation = self.recordViolation(violationType, path, message);
@@ -281,7 +302,7 @@ export class WorkerDefenseInDepth {
           throw new WorkerSecurityViolationError(message, violation);
         }
         // Audit mode: log but allow
-        return Reflect.apply(target, thisArg, args);
+        return originalReflect.apply(target, thisArg, args);
       },
       construct(target, args, newTarget) {
         const message = `${path} constructor is blocked in worker context`;
@@ -291,7 +312,7 @@ export class WorkerDefenseInDepth {
           throw new WorkerSecurityViolationError(message, violation);
         }
         // Audit mode: log but allow
-        return Reflect.construct(target, args, newTarget);
+        return originalReflect.construct(target, args, newTarget);
       },
     }) as T;
   }
@@ -315,11 +336,11 @@ export class WorkerDefenseInDepth {
         // Recursion guard: if we're already in a trap (e.g., recordViolation
         // triggers process.env access), just return the value to avoid infinite loop
         if (self.inTrap) {
-          return Reflect.get(target, prop, receiver);
+          return originalReflect.get(target, prop, receiver);
         }
         // Allow specific keys through (e.g., Node.js internal env vars like FORCE_COLOR)
         if (allowedKeys && typeof prop === "string" && allowedKeys.has(prop)) {
-          return Reflect.get(target, prop, receiver);
+          return originalReflect.get(target, prop, receiver);
         }
         self.inTrap = true;
         try {
@@ -334,14 +355,14 @@ export class WorkerDefenseInDepth {
           if (!auditMode) {
             throw new WorkerSecurityViolationError(message, violation);
           }
-          return Reflect.get(target, prop, receiver);
+          return originalReflect.get(target, prop, receiver);
         } finally {
           self.inTrap = false;
         }
       },
       set(target, prop, value, receiver) {
         if (self.inTrap) {
-          return Reflect.set(target, prop, value, receiver);
+          return originalReflect.set(target, prop, value, receiver);
         }
         self.inTrap = true;
         try {
@@ -356,14 +377,14 @@ export class WorkerDefenseInDepth {
           if (!auditMode) {
             throw new WorkerSecurityViolationError(message, violation);
           }
-          return Reflect.set(target, prop, value, receiver);
+          return originalReflect.set(target, prop, value, receiver);
         } finally {
           self.inTrap = false;
         }
       },
       ownKeys(target) {
         if (self.inTrap) {
-          return Reflect.ownKeys(target);
+          return originalReflect.ownKeys(target);
         }
         self.inTrap = true;
         try {
@@ -373,14 +394,14 @@ export class WorkerDefenseInDepth {
           if (!auditMode) {
             throw new WorkerSecurityViolationError(message, violation);
           }
-          return Reflect.ownKeys(target);
+          return originalReflect.ownKeys(target);
         } finally {
           self.inTrap = false;
         }
       },
       getOwnPropertyDescriptor(target, prop) {
         if (self.inTrap) {
-          return Reflect.getOwnPropertyDescriptor(target, prop);
+          return originalReflect.getOwnPropertyDescriptor(target, prop);
         }
         self.inTrap = true;
         try {
@@ -395,14 +416,14 @@ export class WorkerDefenseInDepth {
           if (!auditMode) {
             throw new WorkerSecurityViolationError(message, violation);
           }
-          return Reflect.getOwnPropertyDescriptor(target, prop);
+          return originalReflect.getOwnPropertyDescriptor(target, prop);
         } finally {
           self.inTrap = false;
         }
       },
       has(target, prop) {
         if (self.inTrap) {
-          return Reflect.has(target, prop);
+          return originalReflect.has(target, prop);
         }
         self.inTrap = true;
         try {
@@ -417,14 +438,14 @@ export class WorkerDefenseInDepth {
           if (!auditMode) {
             throw new WorkerSecurityViolationError(message, violation);
           }
-          return Reflect.has(target, prop);
+          return originalReflect.has(target, prop);
         } finally {
           self.inTrap = false;
         }
       },
       deleteProperty(target, prop) {
         if (self.inTrap) {
-          return Reflect.deleteProperty(target, prop);
+          return originalReflect.deleteProperty(target, prop);
         }
         self.inTrap = true;
         try {
@@ -439,14 +460,14 @@ export class WorkerDefenseInDepth {
           if (!auditMode) {
             throw new WorkerSecurityViolationError(message, violation);
           }
-          return Reflect.deleteProperty(target, prop);
+          return originalReflect.deleteProperty(target, prop);
         } finally {
           self.inTrap = false;
         }
       },
       setPrototypeOf(target, proto) {
         if (self.inTrap) {
-          return Reflect.setPrototypeOf(target, proto);
+          return originalReflect.setPrototypeOf(target, proto);
         }
         self.inTrap = true;
         try {
@@ -456,14 +477,14 @@ export class WorkerDefenseInDepth {
           if (!auditMode) {
             throw new WorkerSecurityViolationError(message, violation);
           }
-          return Reflect.setPrototypeOf(target, proto);
+          return originalReflect.setPrototypeOf(target, proto);
         } finally {
           self.inTrap = false;
         }
       },
       defineProperty(target, prop, descriptor) {
         if (self.inTrap) {
-          return Reflect.defineProperty(target, prop, descriptor);
+          return originalReflect.defineProperty(target, prop, descriptor);
         }
         self.inTrap = true;
         try {
@@ -478,7 +499,7 @@ export class WorkerDefenseInDepth {
           if (!auditMode) {
             throw new WorkerSecurityViolationError(message, violation);
           }
-          return Reflect.defineProperty(target, prop, descriptor);
+          return originalReflect.defineProperty(target, prop, descriptor);
         } finally {
           self.inTrap = false;
         }
@@ -1309,17 +1330,39 @@ export class WorkerDefenseInDepth {
         // @banned-pattern-ignore: intentional check for function type in security code
         const proxy =
           typeof original === "function"
-            ? this.createBlockingProxy(
-                original as (...args: unknown[]) => unknown,
-                path,
-                violationType,
-              )
-            : this.createBlockingObjectProxy(
-                original as object,
-                path,
-                violationType,
-                blocked.allowedKeys,
-              );
+            ? (() => {
+                // Skip if already proxied by this security layer
+                if (
+                  original &&
+                  (original as unknown as Record<symbol, unknown>)[
+                    DID_PROXY_MARKER
+                  ]
+                ) {
+                  return original;
+                }
+                return this.createBlockingProxy(
+                  original as (...args: unknown[]) => unknown,
+                  path,
+                  violationType,
+                );
+              })()
+            : (() => {
+                // Skip if already proxied by this security layer
+                if (
+                  original &&
+                  (original as unknown as Record<symbol, unknown>)[
+                    DID_PROXY_MARKER
+                  ]
+                ) {
+                  return original;
+                }
+                return this.createBlockingObjectProxy(
+                  original as object,
+                  path,
+                  violationType,
+                  blocked.allowedKeys,
+                );
+              })();
 
         Object.defineProperty(target, prop, {
           value: proxy,

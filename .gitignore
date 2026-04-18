@@ -25,3 +25,4 @@ packages/bash/src/commands/js-exec/worker.js
 fuzz-*.log
 .claude/settings.local.json
 .npmrc
+tsconfig.tsbuildinfo

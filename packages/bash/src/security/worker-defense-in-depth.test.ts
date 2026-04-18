@@ -626,7 +626,7 @@ describe("WorkerDefenseInDepth", () => {
         expect(error?.message).toContain("Atomics");
       });
 
-      it("should freeze Reflect (not block it)", () => {
+      it("should protect Reflect via Proxy (not block it)", () => {
         defense = new WorkerDefenseInDepth({});
 
         const result = Reflect.get({ test: 42 }, "test");
@@ -634,7 +634,7 @@ describe("WorkerDefenseInDepth", () => {
 
         defense.deactivate();
         expect(result).toBe(42);
-        expect(isFrozen).toBe(true);
+        expect(isFrozen).toBe(false); // Now proxied for clean restoration
       });
     });
   });

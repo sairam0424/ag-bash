@@ -132,6 +132,13 @@ export class BridgeHandler {
     this.running = false;
   }
 
+  /**
+   * Returns current captured output.
+   */
+  getOutput(): BridgeOutput {
+    return { ...this.output };
+  }
+
   private async handleOperation(opCode: OpCodeType): Promise<void> {
     try {
       switch (opCode) {
