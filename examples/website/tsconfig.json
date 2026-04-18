@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@ag-bash/bash": ["../../packages/bash/src/index"],
+      "@ag-bash/bash/browser": ["../../packages/bash/src/browser"]
     }
   },
   "include": [
