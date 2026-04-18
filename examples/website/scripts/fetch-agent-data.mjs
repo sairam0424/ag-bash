@@ -1,42 +1,45 @@
 #!/usr/bin/env node
 
 import { execSync } from "child_process";
-import { existsSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
+import fs, { existsSync, rmSync, writeFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
-const AGENT_DATA_DIR = "app/api/agent/_agent-data";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-const repos = [
-  {
-    url: "https://github.com/sairam0424/ag-bash.git",
-    dir: "ag-bash",
-  },
-  {
-    url: "https://github.com/ag-ai/bash-tool.git",
-    dir: "bash-tool",
-  },
-];
+const AGENT_DATA_DIR = "agent-data";
 
 // Clean and create agent-data directory
 if (existsSync(AGENT_DATA_DIR)) {
   rmSync(AGENT_DATA_DIR, { recursive: true });
 }
 
-for (const repo of repos) {
-  const targetDir = join(AGENT_DATA_DIR, repo.dir);
-  console.log(`Cloning ${repo.url} into ${targetDir}...`);
+console.log("Copying local packages into agent data...");
+const rootDir = join(__dirname, "../../../");
+const targetDir = join(AGENT_DATA_DIR, "ag-bash");
 
-  execSync(
-    `git clone --depth 1 --single-branch ${repo.url} ${targetDir}`,
-    { stdio: "inherit" }
-  );
+if (!existsSync(targetDir)) {
+  fs.mkdirSync(targetDir, { recursive: true });
+}
 
-  // Remove .git directory to save space
-  const gitDir = join(targetDir, ".git");
-  if (existsSync(gitDir)) {
-    rmSync(gitDir, { recursive: true });
+// Copy packages and README/LICENSE
+const toCopy = ["packages", "README.md", "LICENSE", "package.json"];
+for (const item of toCopy) {
+  const source = join(rootDir, item);
+  const dest = join(targetDir, item);
+  console.log(`Copying ${item}...`);
+  try {
+    // Basic copy - in a real script we might want something more robust,
+    // but for the demo this is usually enough.
+    execSync(`cp -R ${source} ${dest}`);
+  } catch (e) {
+    console.error(`Failed to copy ${item}:`, e.message);
   }
 }
+// Remove node_modules from copied packages to keep it light
+execSync(`find ${targetDir} -name "node_modules" -type d -prune -exec rm -rf {} +`);
+console.log("Local sync complete.");
 
 // Create wtf-is-this.md explanation file
 const wtfContent = `# WTF Is This?

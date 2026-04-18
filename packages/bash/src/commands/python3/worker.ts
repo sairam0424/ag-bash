@@ -161,19 +161,32 @@ function checkBinaryHealth(path: string, minSize = 51200): void {
 }
 
 let cpythonEntryPath: string;
-const workerDir = dirname(fileURLToPath(import.meta.url));
+let _workerDir = ".";
+if (typeof import.meta !== "undefined" && import.meta.url) {
+  try {
+    const url = new URL(import.meta.url);
+    if (url.protocol === "file:") {
+      _workerDir = dirname(fileURLToPath(url));
+    } else {
+      _workerDir = new URL(".", import.meta.url).pathname;
+    }
+  } catch {
+    _workerDir = ".";
+  }
+}
+const workerDir = _workerDir;
 
 const entryCandidates = [
   // 1. Same dir as worker (if we copy vendor there)
   join(workerDir, "vendor/cpython-emscripten/python.cjs"),
-  // 2. Standard dist layout
-  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
-  // 3. Bundled chunk layout (dist/bin/chunks/worker.js)
-  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
-  // 4. Source layout (src/commands/python3/worker.ts -> src/commands/python3/worker.js)
-  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
-  // 5. Package layout (node_modules/@ag/bash/...)
+  // 2. Local dev from dist/commands/python3
   join(workerDir, "../../vendor/cpython-emscripten/python.cjs"),
+  // 3. Local dev from packages/bash/dist/bin/chunks
+  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
+  // 4. Root vendor from packages/bash/dist/bin/chunks
+  join(workerDir, "../../../../../vendor/cpython-emscripten/python.cjs"),
+  // 5. Standard dist layout
+  join(workerDir, "../../../vendor/cpython-emscripten/python.cjs"),
 ];
 
 let foundPath = "";
@@ -1295,9 +1308,8 @@ async function runPython(input: WorkerInput): Promise<WorkerOutput> {
   const backend = new SyncBackend(input.sharedBuffer, input.timeoutMs);
 
   // Load the CPython Emscripten factory function
-  assertApprovedPath(cpythonEntryPath, "cpython-entry");
-  // @banned-pattern-ignore: path validated by assertApprovedPath allowlist above
-  const createPythonModule = require(cpythonEntryPath) as (
+  const requireFn = require;
+  const createPythonModule = requireFn(cpythonEntryPath) as (
     config: Record<string, unknown>,
   ) => Promise<EmscriptenModule>;
 

@@ -228,33 +228,38 @@ async function getSqliteVersion(): Promise<string> {
  * - ../../../dist/commands/sqlite3/worker.js (tests from src/)
  */
 function findWorkerPath(): string {
-  const currentDir = dirname(fileURLToPath(import.meta.url));
+  let _workerPath = "worker.js";
+  const isNode = typeof process !== "undefined";
 
-  // For bundled builds, go up to find dist/commands/sqlite3/worker.js
-  // This handles both dist/bin/chunks/ and dist/bundle/chunks/ cases
-  const bundledPath = join(currentDir, "../../commands/sqlite3/worker.js");
-  if (existsSync(bundledPath)) {
-    return bundledPath;
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    try {
+      const url = new URL(import.meta.url);
+      if (url.protocol === "file:") {
+        const baseDir = dirname(fileURLToPath(url));
+        const localPath = join(baseDir, "worker.js");
+
+        if (isNode) {
+          const paths = [
+            localPath,
+            join(baseDir, "sqlite-worker.js"),
+            join(baseDir, "chunks", "sqlite-worker.js"),
+            join(baseDir, "..", "commands", "sqlite3", "worker.js"),
+            join(baseDir, "../../../dist/commands/sqlite3/worker.js"),
+          ];
+
+          for (const p of paths) {
+            if (existsSync(p)) {
+              return p;
+            }
+          }
+        }
+        _workerPath = localPath;
+      }
+    } catch {
+      // ignore
+    }
   }
-
-  // For non-bundled dist (e.g., dist/commands/sqlite3/sqlite3.js)
-  const distPath = join(currentDir, "worker.js");
-  if (existsSync(distPath)) {
-    return distPath;
-  }
-
-  // For tests running from TypeScript source
-  const srcToDistPath = join(
-    currentDir,
-    "../../../dist/commands/sqlite3/worker.js",
-  );
-  if (existsSync(srcToDistPath)) {
-    return srcToDistPath;
-  }
-
-  throw new Error(
-    "sqlite3 worker not found. Run 'pnpm build' to compile the worker.",
-  );
+  return _workerPath;
 }
 
 /** @internal Exposed for testing only */

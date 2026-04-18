@@ -1,4 +1,7 @@
 // AST types (for plugin authors)
+
+// AI Tool integration
+export { type CreateBashToolOptions, createBashTool } from "./ai.js";
 export type {
   CommandNode,
   PipelineNode,

@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/mcp-server",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "Standalone Model Context Protocol server for Ag-Bash",
   "type": "module",
   "files": [
@@ -8,11 +8,11 @@
     "README.md"
   ],
   "bin": {
-    "ag-bash-mcp": "./dist/index.js"
+    "ag-bash-mcp": "./dist/bundle.js"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc && pnpm build:bundle && chmod +x dist/index.js",
-    "build:bundle": "esbuild dist/index.js --bundle --platform=node --format=esm --minify --outfile=dist/index.js --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip"
+    "build": "rm -rf dist && tsc --noEmit && pnpm build:bundle && chmod +x dist/index.js",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --minify --outfile=dist/index.js --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip"
   },
   "keywords": [
     "mcp",

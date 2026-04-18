@@ -1,12 +1,12 @@
 {
   "name": "cjs-consumer-example",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "description": "Example of using ag-bash from a CommonJS project",
   "scripts": {
     "typecheck": "npx tsc --noEmit",
     "start": "node index.js"
   },
   "dependencies": {
-    "@ag-bash/bash": "file:../.."
+    "@ag-bash/bash": "workspace:*"
   }
 }

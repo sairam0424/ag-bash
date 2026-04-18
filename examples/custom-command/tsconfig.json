@@ -6,9 +6,13 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@ag-bash/bash": ["../../packages/bash/src/index"],
+      "@ag-bash/bash/browser": ["../../packages/bash/src/browser"]
+    }
   },
-  "include": ["*.ts", "../../src/**/*.ts"],
+  "include": ["*.ts", "../../packages/bash/src/**/*.ts"],
   "exclude": ["node_modules"]
 }
 

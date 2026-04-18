@@ -1,0 +1,35 @@
+{
+  "name": "@ag-bash/agent-bridge",
+  "version": "1.3.0",
+  "description": "Terminal bridge for Ag-Bash AI Agent communication",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ag-bash",
+    "agentic",
+    "terminal",
+    "bridge"
+  ],
+  "author": "Ag-Bash",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@ag-bash/bash": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

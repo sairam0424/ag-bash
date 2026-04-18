@@ -1,110 +1,57 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useCallback } from "react";
 import TerminalComponent from "./components/Terminal";
-import { TerminalData } from "./components/TerminalData";
+import type { InitialFiles } from "@ag-bash/bash";
+import { Dashboard } from "./components/Dashboard";
+import { VfsExplorer } from "./components/VfsExplorer";
+import { ActionPanel } from "./components/ActionPanel";
 
-const NOSCRIPT_CONTENT = `
-      _      ____            _           _
-     / \    / ___|          | |__   __ _ ___| |__
-    / _ \  | |  _   _____   | '_ \ / _` / __| '_ \
-   / ___ \ | |_| | |_____|  | |_) | (_| \__ \ | | |
-  /_/   \_\ \____|          |_.__/ \__,_|___/_| |_|
-
-  ag-bash
-
-  A simulated bash environment with an in-memory virtual filesystem.
-  Designed for AI agents needing a secure, sandboxed bash environment.
-
-  FEATURES
-  --------
-
-  - Pure TypeScript implementation
-  - In-memory virtual filesystem
-  - Secure sandboxed execution
-  - Network access with URL filtering
-  - Secure Sandbox compatible API
-
-  INSTALLATION
-  ------------
-
-  npm install @ag/bash
-
-  BASIC USAGE
-  -----------
-
-  import { Bash } from "@ag/bash";
-
-  const env = new Bash();
-  await env.exec('echo "Hello" > greeting.txt');
-  const result = await env.exec("cat greeting.txt");
-  console.log(result.stdout); // "Hello\\n"
-
-  SUPPORTED COMMANDS
-  ------------------
-
-  File Operations:
-    cat, cp, file, ln, ls, mkdir, mv, readlink, rm, rmdir,
-    split, stat, touch, tree
-
-  Text Processing:
-    awk, base64, column, comm, cut, diff, expand, fold, grep,
-    head, join, md5sum, nl, od, paste, printf, rev, rg, sed,
-    sha1sum, sha256sum, sort, strings, tac, tail, tr, unexpand,
-    uniq, wc, xargs
-
-  Data Processing:
-    jq (JSON), python3 (Pyodide), sqlite3, xan (CSV), yq (YAML)
-
-  Navigation & Environment:
-    basename, cd, dirname, du, echo, env, export, find,
-    hostname, printenv, pwd, tee
-
-  Shell Utilities:
-    alias, bash, chmod, clear, date, expr, false, help, history,
-    seq, sh, sleep, time, timeout, true, unalias, which, whoami
-
-  SHELL FEATURES
-  --------------
-
-  - Pipes: cmd1 | cmd2
-  - Redirections: >, >>, 2>, 2>&1, <
-  - Chaining: &&, ||, ;
-  - Variables: $VAR, \${VAR}, \${VAR:-default}
-  - Globs: *, ?, [...]
-  - If statements: if/then/elif/else/fi
-  - Functions: function name { ... }
-  - Loops: for, while, until
-  - Arithmetic: $((expr)), (( expr ))
-  - Tests: [[ ]], [ ]
-
-  LINKS
-  -----
-
-  GitHub: https://github.com/sairam0424/ag-bash
-  npm: https://www.npmjs.com/package/@ag/bash
-
-  License: Apache-2.0
-  Author: Ag Bash
-
-  ---
-  Enable JavaScript for an interactive terminal experience.
-`;
-
+/**
+ * Ag-Bash Playground
+ * 
+ * The main entry point for the interactive WASM sandbox.
+ * Features a split-pane dashboard with terminal, VFS explorer, and quick actions.
+ */
 export default function Home() {
-  const [mounted, setMounted] = useState(false);
+  const [terminalExecutor, setTerminalExecutor] = useState<((cmd: string) => void) | null>(null);
+  const [vfs, setVfs] = useState<InitialFiles>({});
 
-  useEffect(() => {
-    setMounted(true);
+  // Initialize terminal hook
+  const handleInit = useCallback((execute: (cmd: string) => void) => {
+    setTerminalExecutor(() => execute);
   }, []);
 
+  // Sync VFS state
+  const handleFileSystemChange = useCallback((files: InitialFiles) => {
+    setVfs(files);
+  }, []);
+
+  // Handle clicking a file in the sidebar
+  const handleFileClick = (path: string) => {
+    if (terminalExecutor) {
+      terminalExecutor(`cat ${path}`);
+    }
+  };
+
+  // Handle clicking a scenario card
+  const handleActionClick = (command: string) => {
+    if (terminalExecutor) {
+      terminalExecutor(command);
+    }
+  };
+
   return (
-    <>
-      <noscript>
-        <pre>{NOSCRIPT_CONTENT}</pre>
-      </noscript>
-      <TerminalData />
-      {mounted ? <TerminalComponent /> : null}
-    </>
+    <Dashboard 
+      sidebar={<VfsExplorer files={vfs} onFileClick={handleFileClick} />}
+      actions={<ActionPanel onActionClick={handleActionClick} />}
+    >
+      <div className="h-full w-full">
+        <TerminalComponent 
+          onInit={handleInit} 
+          onFileSystemChange={handleFileSystemChange} 
+        />
+      </div>
+    </Dashboard>
   );
 }

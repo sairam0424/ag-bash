@@ -11,6 +11,7 @@
  */
 
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
@@ -20,7 +21,6 @@ import {
   sanitizeHostErrorMessage,
 } from "../../fs/sanitize-error.js";
 import { mapToRecord } from "../../helpers/env.js";
-import { getErrorMessage } from "../../interpreter/helpers/errors.js";
 
 import { bindDefenseContextCallback } from "../../security/defense-context.js";
 import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
@@ -162,6 +162,8 @@ type QueuedExecution = {
   requireDefenseContext?: boolean;
   /** Set to true when the request times out before execution starts */
   canceled?: boolean;
+  /** Set to true when the request has been resolved or rejected */
+  resolved?: boolean;
 };
 type QueueState = {
   executionQueue: QueuedExecution[];
@@ -186,10 +188,50 @@ export function _resetExecutionQueue(): void {
   executionQueues = new WeakMap();
 }
 
-// Resolve worker path with fallbacks for bundled/minified environments
-const workerPath = join(dirname(fileURLToPath(import.meta.url)), "worker.js");
-// If we are in a chunk (ESM splitting), the worker might be in the same dir or a parent dir
-// depending on how the build script copies it.
+// Resolve worker path with fallbacks for Node.js, Vitest, and Browser contexts
+let _workerPathCache: string | URL | null = null;
+
+function findWorkerPath(): string {
+  let _workerPath = "worker.js";
+  const isNode = typeof process !== "undefined";
+
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    try {
+      const url = new URL(import.meta.url);
+      if (url.protocol === "file:") {
+        const baseDir = dirname(fileURLToPath(url));
+        const localPath = join(baseDir, "worker.js");
+
+        if (isNode) {
+          const paths = [
+            localPath,
+            join(baseDir, "python-worker.js"),
+            join(baseDir, "chunks", "python-worker.js"),
+            join(baseDir, "..", "commands", "python3", "worker.js"),
+            join(baseDir, "../../../dist/commands/python3/worker.js"),
+          ];
+
+          for (const p of paths) {
+            if (existsSync(p)) {
+              return p;
+            }
+          }
+        }
+        _workerPath = localPath;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return _workerPath;
+}
+
+async function getWorkerPath() {
+  if (_workerPathCache) return _workerPathCache;
+  const path = findWorkerPath();
+  _workerPathCache = path;
+  return path;
+}
 
 function generateWorkerProtocolToken(): string {
   return randomBytes(16).toString("hex");
@@ -253,18 +295,20 @@ function normalizeWorkerMessage(
   };
 }
 
-function processNextExecution(queueState: QueueState): void {
-  if (queueState.isExecuting || queueState.executionQueue.length === 0) {
+async function processNextExecution(queueState: QueueState): Promise<void> {
+  if (queueState.isExecuting) {
     return;
   }
 
   // Skip canceled entries (timed out before execution started)
-  while (
-    queueState.executionQueue.length > 0 &&
-    queueState.executionQueue[0].canceled
-  ) {
-    queueState.executionQueue.shift();
+  while (queueState.executionQueue.length > 0) {
+    if (queueState.executionQueue[0].canceled) {
+      queueState.executionQueue.shift();
+      continue;
+    }
+    break;
   }
+
   if (queueState.executionQueue.length === 0) {
     return;
   }
@@ -275,15 +319,126 @@ function processNextExecution(queueState: QueueState): void {
   }
   queueState.isExecuting = true;
 
-  // Create a fresh worker for each execution.
-  // CPython Emscripten uses EXIT_RUNTIME, so the module can only run once.
-  // The worker caches the stdlib zip at module scope (read from disk once
-  // per worker lifetime, not per execution).
-  let worker: Worker;
-  try {
-    worker = DefenseInDepthBox.runTrusted(
-      () => new Worker(workerPath, { workerData: next.input }),
+  const workerPath = await getWorkerPath();
+
+  // Fresh worker for each execution.
+  const attachListeners = (w: Worker) => {
+    if (next.workerRef) next.workerRef.current = w;
+
+    const onMessage = bindDefenseContextCallback(
+      next.requireDefenseContext,
+      "python3",
+      "worker message callback",
+      async (msg: unknown) => {
+        if (next.resolved) return;
+        next.resolved = true;
+        next.resolve(normalizeWorkerMessage(msg, next.input.protocolToken));
+        queueState.isExecuting = false;
+        await w.terminate();
+        void processNextExecution(queueState);
+      },
     );
+    const onError = bindDefenseContextCallback(
+      next.requireDefenseContext,
+      "python3",
+      "worker error callback",
+      async (err: Error) => {
+        if (next.resolved) return;
+        next.resolved = true;
+        const workerError = sanitizeHostErrorMessage(err.message);
+        next.resolve({
+          success: false,
+          error: workerError,
+        });
+        queueState.isExecuting = false;
+        await w.terminate();
+        void processNextExecution(queueState);
+      },
+    );
+    const onExit = bindDefenseContextCallback(
+      next.requireDefenseContext,
+      "python3",
+      "worker exit callback",
+      async (code: number) => {
+        setImmediate(async () => {
+          if (queueState.isExecuting && !next.resolved) {
+            next.resolved = true;
+            next.resolve({
+              success: false,
+              error: `Worker exited unexpectedly with code ${code}`,
+            });
+            queueState.isExecuting = false;
+            void processNextExecution(queueState);
+          }
+        });
+      },
+    );
+
+    const currentExecution = next;
+    const onErrorSync = (err: unknown) => {
+      if (currentExecution.resolved) return;
+      currentExecution.resolved = true;
+      const message = err instanceof Error ? err.message : String(err);
+      currentExecution.resolve({
+        success: false,
+        error: sanitizeHostErrorMessage(message),
+      });
+      queueState.isExecuting = false;
+      void w.terminate();
+      void processNextExecution(queueState);
+    };
+
+    w.on("message", (msg) => {
+      try {
+        void onMessage(msg);
+      } catch (err) {
+        onErrorSync(err);
+      }
+    });
+    w.on("error", (err) => {
+      try {
+        if (err instanceof Error) {
+          void onError(err);
+        } else {
+          void onError(new Error(String(err)));
+        }
+      } catch (e) {
+        onErrorSync(e);
+      }
+    });
+    w.on("exit", (code) => {
+      try {
+        void onExit(code);
+      } catch (err) {
+        onErrorSync(err);
+      }
+    });
+  };
+
+  try {
+    await DefenseInDepthBox.runTrustedAsync(async () => {
+      if (
+        typeof process !== "undefined" &&
+        process.versions &&
+        process.versions.node
+      ) {
+        const { Worker: NodeWorker } = await import("node:worker_threads");
+        const w = new NodeWorker(workerPath as string, {
+          workerData: next.input,
+        });
+        attachListeners(w);
+        return w;
+      }
+      const w = new (
+        Worker as unknown as {
+          new (url: string | URL, options?: { type: "module" }): Worker;
+        }
+      )(workerPath as string | URL, {
+        type: "module",
+      });
+      attachListeners(w);
+      return w;
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     next.resolve({
@@ -291,96 +446,8 @@ function processNextExecution(queueState: QueueState): void {
       error: sanitizeHostErrorMessage(message),
     });
     queueState.isExecuting = false;
-    processNextExecution(queueState);
-    return;
+    void processNextExecution(queueState);
   }
-
-  if (next.workerRef) next.workerRef.current = worker;
-
-  const onMessage = bindDefenseContextCallback(
-    next.requireDefenseContext,
-    "python3",
-    "worker message callback",
-    (msg: unknown) => {
-      next.resolve(normalizeWorkerMessage(msg, next.input.protocolToken));
-      queueState.isExecuting = false;
-      worker.terminate();
-      processNextExecution(queueState);
-    },
-  );
-  const onError = bindDefenseContextCallback(
-    next.requireDefenseContext,
-    "python3",
-    "worker error callback",
-    (err: Error) => {
-      const workerError = sanitizeHostErrorMessage(getErrorMessage(err));
-      next.resolve({
-        success: false,
-        error: workerError,
-      });
-      queueState.isExecuting = false;
-      processNextExecution(queueState);
-    },
-  );
-  const onExit = bindDefenseContextCallback(
-    next.requireDefenseContext,
-    "python3",
-    "worker exit callback",
-    () => {
-      if (queueState.isExecuting) {
-        next.resolve({ success: false, error: "Worker exited unexpectedly" });
-        queueState.isExecuting = false;
-        processNextExecution(queueState);
-      }
-    },
-  );
-
-  const dispatchMessage = (msg: unknown): void => {
-    try {
-      onMessage(msg);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      next.resolve({
-        success: false,
-        error: sanitizeHostErrorMessage(message),
-      });
-      queueState.isExecuting = false;
-      worker.terminate();
-      processNextExecution(queueState);
-    }
-  };
-
-  const dispatchError = (err: Error): void => {
-    try {
-      onError(err);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      next.resolve({
-        success: false,
-        error: sanitizeHostErrorMessage(message),
-      });
-      queueState.isExecuting = false;
-      processNextExecution(queueState);
-    }
-  };
-
-  const dispatchExit = (): void => {
-    try {
-      onExit();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      next.resolve({
-        success: false,
-        error: sanitizeHostErrorMessage(message),
-      });
-      queueState.isExecuting = false;
-      processNextExecution(queueState);
-    }
-  };
-
-  worker.on("message", dispatchMessage);
-  worker.on("error", dispatchError);
-  worker.on("exit", dispatchExit);
 }
 
 /**
@@ -402,8 +469,6 @@ async function executePython(
     ctx.limits?.maxOutputSize ?? 0,
   );
 
-  // Network operations need a longer timeout. resolveLimits() always populates
-  // maxPythonTimeoutMs (default 10s), so use the network default as a floor.
   const userTimeout =
     ctx.limits?.maxPythonTimeoutMs ?? DEFAULT_PYTHON_TIMEOUT_MS;
   const timeoutMs = ctx.fetch
@@ -416,8 +481,6 @@ async function executePython(
     sharedBuffer,
     pythonCode,
     cwd: ctx.cwd,
-    // Convert Map to null-prototype object for worker transfer
-    // (Maps can't be postMessage'd, and null-prototype prevents prototype pollution)
     env: mapToRecord(ctx.env),
     args: scriptArgs,
     scriptPath,
@@ -427,10 +490,9 @@ async function executePython(
   const workerRef: { current: Worker | null } = { current: null };
 
   const workerPromise = new Promise<WorkerOutput>((resolve) => {
-    // The queue entry is created here so the timeout handler can mark it canceled
     const queueEntry: QueuedExecution = {
       input: workerInput,
-      resolve: () => {}, // replaced below
+      resolve: () => {},
       workerRef,
       requireDefenseContext: ctx.requireDefenseContext,
     };
@@ -441,10 +503,8 @@ async function executePython(
       "worker timeout callback",
       () => {
         if (workerRef.current) {
-          // Worker is running — terminate it
           workerRef.current.terminate();
         } else {
-          // Worker hasn't started — mark canceled so processNextExecution skips it
           queueEntry.canceled = true;
         }
         resolve({
@@ -473,28 +533,60 @@ async function executePython(
       resolve(result);
     };
 
-    // Queue the execution (serialized — one at a time per worker)
     queueState.executionQueue.push(queueEntry);
     processNextExecution(queueState);
   });
 
-  const [bridgeOutput, workerResult] = await Promise.all([
-    bridgeHandler.run(timeoutMs).catch((e) => {
-      const bridgeError = sanitizeHostErrorMessage(getErrorMessage(e));
-      return {
-        stdout: "",
-        stderr: `python3: bridge error: ${bridgeError}\n`,
-        exitCode: 1,
-      };
-    }),
-    workerPromise.catch((e) => {
-      const workerError = sanitizeHostErrorMessage(getErrorMessage(e));
-      return {
+  let bridgeOutput: ExecResult;
+  let workerResult: { success: boolean; error?: string };
+
+  try {
+    type RaceResult =
+      | {
+          type: "both";
+          bridge: ExecResult;
+          worker: { success: boolean; error?: string };
+        }
+      | { type: "worker_fail"; error: unknown };
+
+    const result = (await Promise.race([
+      Promise.all([bridgeHandler.run(timeoutMs), workerPromise]).then(
+        ([bridge, worker]) => ({ type: "both" as const, bridge, worker }),
+      ),
+
+      workerPromise
+        .then((w) => {
+          if (!w.success) {
+            return { type: "worker_fail" as const, error: w.error };
+          }
+          return new Promise<RaceResult>(() => {});
+        })
+        .catch((err) => ({ type: "worker_fail" as const, error: err })),
+    ])) as RaceResult;
+
+    if (result.type === "both") {
+      bridgeOutput = result.bridge;
+      workerResult = result.worker;
+    } else {
+      bridgeOutput = bridgeHandler.getOutput();
+      if (bridgeOutput.exitCode === 0) bridgeOutput.exitCode = 1;
+      workerResult = {
         success: false,
-        error: workerError,
+        error: sanitizeHostErrorMessage(
+          result.error instanceof Error
+            ? result.error.message
+            : String(result.error),
+        ),
       };
-    }),
-  ]);
+    }
+  } catch (e) {
+    bridgeOutput = { stdout: "", stderr: "", exitCode: 1 };
+    const errMsg = e instanceof Error ? e.message : String(e);
+    workerResult = {
+      success: false,
+      error: sanitizeHostErrorMessage(`bridge error: ${errMsg}`),
+    };
+  }
 
   if (!workerResult.success && workerResult.error) {
     const workerError = sanitizeHostErrorMessage(workerResult.error);
@@ -534,8 +626,6 @@ export const python3Command: Command = {
       pythonCode = parsed.code;
       scriptPath = "-c";
     } else if (parsed.module !== null) {
-      // Strict validation: only allow valid Python module names
-      // (alphanumeric, underscores, dots for submodules)
       if (!/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(parsed.module)) {
         return {
           stdout: "",

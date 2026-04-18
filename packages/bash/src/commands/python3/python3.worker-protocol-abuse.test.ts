@@ -74,6 +74,9 @@ vi.mock("../worker-bridge/bridge-handler.js", () => {
       }
       return { stdout: "BRIDGE_STDOUT\n", stderr: "", exitCode: 0 };
     }
+    getOutput(): { stdout: string; stderr: string; exitCode: number } {
+      return { stdout: "BRIDGE_STDOUT\n", stderr: "", exitCode: 0 };
+    }
   }
 
   return { BridgeHandler: MockBridgeHandler };
@@ -199,7 +202,7 @@ describe("python3 worker protocol abuse", { retry: 2 }, () => {
 
     expect(result.stdout).toBe("BRIDGE_STDOUT\n");
     expect(result.stderr).toBe(
-      "python3: python3 worker message callback attempted outside defense context\n\nThis is a defense-in-depth measure and indicates a bug in ag-bash. Please report this on GitHub\n",
+      "python3: python3 worker message callback attempted outside defense context\n\nThis is a defense-in-depth measure and indicates a bug in ag-bash. Please report this to the project maintainers.\n",
     );
     expect(result.exitCode).toBe(1);
   });

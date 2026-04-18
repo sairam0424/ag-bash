@@ -10,8 +10,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@ag-bash/bash": ["../bash/src/index"]
+      "@ag-bash/bash": ["../bash/src/index.ts"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src", "../bash/src"]
 }

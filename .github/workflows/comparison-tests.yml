@@ -2,9 +2,10 @@ name: Comparison Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  workflow_dispatch: {}
 
 jobs:
   comparison-tests:
@@ -21,13 +22,15 @@ jobs:
           cache: "pnpm"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Run comparison tests
         run: pnpm test:comparison
+        working-directory: packages/bash
 
       - name: Run comparison tests in record mode
         run: pnpm test:comparison:record
+        working-directory: packages/bash
 
       - name: diff
         run: git diff

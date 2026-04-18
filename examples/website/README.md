@@ -1,6 +1,6 @@
-# @ag/bash website at 
+# @ag-bash/bash website at 
 
-This is an interactive demo of **@ag/bash** running entirely in your browser, with an AI agent that can explore the source code.
+This is an interactive demo of **@ag-bash/bash** running entirely in your browser, with an AI agent that can explore the source code.
 
 ## Architecture
 
@@ -8,7 +8,7 @@ This is an interactive demo of **@ag/bash** running entirely in your browser, wi
 +----------------------------------------------------------+
 |                        BROWSER                           |
 |  +----------+    +----------+    +----------------+      |
-|  | xterm.js |--->| @ag/bash|--->| Virtual FS     |      |
+|  | xterm.js |--->| @ag-bash/bash|--->| Virtual FS     |      |
 |  | Terminal |    | (browser)|    | (in-memory)    |      |
 |  +----------+    +----------+    +----------------+      |
 |       |                                                  |
@@ -23,19 +23,19 @@ This is an interactive demo of **@ag/bash** running entirely in your browser, wi
 +----------------------------------------------------------+
 |                        SERVER                            |
 |  +-------------+    +----------+    +----------------+   |
-|  |ToolLoopAgent|--->| bash-tool|--->| @ag/bash      |   |
+|  |ToolLoopAgent|--->| @ag-bash/bash|--->| @ag-bash/bash      |   |
 |  | (AI SDK)    |    |          |    | + OverlayFS    |   |
 |  |Claude Haiku |    | - bash   |    |                |   |
 |  +-------------+    | - read   |    | Real files:    |   |
-|                     | - write  |    | - @ag/bash/   |   |
-|                     +----------+    | - bash-tool/   |   |
+|                     | - write  |    | - @ag-bash/bash/   |   |
+|                     +----------+    | - @ag-bash/bash/   |   |
 |                                     +----------------+   |
 +----------------------------------------------------------+
 ```
 
 ## Components
 
-### 1. @ag/bash (Browser)
+### 1. @ag-bash/bash (Browser)
 - Pure TypeScript bash interpreter
 - Runs locally in browser for regular commands
 - In-memory virtual filesystem with pre-loaded files
@@ -58,24 +58,24 @@ This is an interactive demo of **@ag/bash** running entirely in your browser, wi
 - Stops after 20 tool calls or when done
 - Streams responses back to browser
 
-### 5. bash-tool (Server)
+### 5. @ag-bash/bash (Server)
 - Provides tools for the AI agent:
   - `bash` - Execute bash commands
   - `readFile` - Read file contents
   - `writeFile` - Write files (disabled in this demo)
-- Integrates with @ag/bash sandbox
+- Integrates with @ag-bash/bash sandbox
 
 ### 6. OverlayFS (Server)
 - Overlays real filesystem (this source code) as read-only
-- Agent can explore @ag/bash and bash-tool source
+- Agent can explore @ag-bash/bash and @ag-bash/bash source
 - Writes go to memory, not disk
 
 ## Data Flow
 
 1. You type `agent "how does grep work?"`
-2. Browser @ag/bash runs the `agent` command
+2. Browser @ag-bash/bash runs the `agent` command
 3. Command POSTs to `/api/agent` with message history
-4. Server creates ToolLoopAgent with bash-tool
+4. Server creates ToolLoopAgent with @ag-bash/bash
 5. Agent thinks, calls tools (bash, readFile), observes results
 6. Each step streams back as SSE events
 7. Browser displays tool calls and final response
@@ -92,7 +92,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the terminal.
 
 ## Links
 
-- **@ag/bash**: https://github.com/sairam0424/@ag/bash
-- **bash-tool**: https://github.com/ag-ai/bash-tool
+- **@ag-bash/bash**: https://github.com/sairam0424/@ag-bash/bash
+- **@ag-bash/bash**: https://github.com/ag-ai/@ag-bash/bash
 - **AI SDK**: https://ai-sdk.dev
 - **xterm.js**: https://xtermjs.org

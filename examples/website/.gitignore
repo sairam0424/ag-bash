@@ -41,4 +41,4 @@ next-env.d.ts
 .env*.local
 
 # agent data (fetched at build time)
-/app/api/agent/_agent-data/
+/agent-data/

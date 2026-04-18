@@ -444,4 +444,11 @@ export interface InterpreterContext {
    * Threaded through the context chain instead of shell env.
    */
   jsBootstrapCode?: string;
+  /**
+   * Optional handler for when a command is not found.
+   */
+  onCommandNotFound?: (
+    command: string,
+    args: string[],
+  ) => Promise<ExecResult | null>;
 }

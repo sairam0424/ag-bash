@@ -1,4 +1,4 @@
-import { defineCommand } from "ag-bash/browser";
+import { defineCommand } from "@ag-bash/bash/browser";
 import { getTerminalData } from "../TerminalData";
 
 export function createStaticCommands() {

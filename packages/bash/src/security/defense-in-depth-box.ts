@@ -173,6 +173,23 @@ function resolveConfig(
   };
 }
 
+// Marker to detect our own proxies and prevent double-patching/recursion
+const DID_PROXY_MARKER = Symbol("DID_PROXY_MARKER");
+
+// Capture original Reflect methods early to avoid recursion if Reflect itself is proxied
+const originalReflect = {
+  get: Reflect.get,
+  set: Reflect.set,
+  apply: Reflect.apply,
+  construct: Reflect.construct,
+  ownKeys: Reflect.ownKeys,
+  getOwnPropertyDescriptor: Reflect.getOwnPropertyDescriptor,
+  has: Reflect.has,
+  deleteProperty: Reflect.deleteProperty,
+  setPrototypeOf: Reflect.setPrototypeOf,
+  defineProperty: Reflect.defineProperty,
+};
+
 /**
  * Defense-in-Depth Box
  *
@@ -476,9 +493,11 @@ export class DefenseInDepthBox {
    * Use for error recovery only.
    */
   forceDeactivate(): void {
-    if (this.refCount > 0) {
+    if (this.refCount > 0 || this.originalDescriptors.length > 0) {
+      if (this.refCount > 0) {
+        this.totalActiveTimeMs += Date.now() - this.activationTime;
+      }
       this.restorePatches();
-      this.totalActiveTimeMs += Date.now() - this.activationTime;
     }
     this.activeExecutionIds.clear();
     this.contextCache.clear();
@@ -604,6 +623,13 @@ export class DefenseInDepthBox {
    * inside runTrusted(), or when the immediate caller is a Node.js bundled dep.
    */
   private shouldBlock(): boolean {
+    // If this instance is no longer the active singleton, it should be transparent.
+    // This happens between test runs when DefenseInDepthBox.resetInstance() is called
+    // but globally patched objects still carry proxies from the old instance.
+    if (this !== DefenseInDepthBox.instance) {
+      return false;
+    }
+
     if (IS_BROWSER || this.config.auditMode || !executionContext) {
       return false;
     }
@@ -672,6 +698,10 @@ export class DefenseInDepthBox {
 
     // @banned-pattern-ignore: intentional Proxy usage for security blocking
     return new Proxy(original, {
+      get(target, prop, receiver) {
+        if (prop === DID_PROXY_MARKER) return true;
+        return originalReflect.get(target, prop, receiver);
+      },
       apply(target, thisArg, args) {
         if (box.shouldBlock()) {
           const message = `${path} is blocked during script execution`;
@@ -689,7 +719,7 @@ export class DefenseInDepthBox {
             `${path} called (audit mode)`,
           );
         }
-        return Reflect.apply(target, thisArg, args);
+        return originalReflect.apply(target, thisArg, args);
       },
       construct(target, args, newTarget) {
         if (box.shouldBlock()) {
@@ -708,7 +738,7 @@ export class DefenseInDepthBox {
             `${path} constructor called (audit mode)`,
           );
         }
-        return Reflect.construct(target, args, newTarget);
+        return originalReflect.construct(target, args, newTarget);
       },
     }) as T;
   }
@@ -727,6 +757,19 @@ export class DefenseInDepthBox {
     // @banned-pattern-ignore: intentional Proxy usage for security blocking
     return new Proxy(original, {
       get(target, prop, receiver) {
+        if (prop === DID_PROXY_MARKER) return true;
+
+        if (!executionContext) {
+          // Allow specific keys through (e.g., Node.js internal env vars)
+          if (
+            allowedKeys &&
+            typeof prop === "string" &&
+            allowedKeys.has(prop)
+          ) {
+            return originalReflect.get(target, prop, receiver);
+          }
+        }
+
         if (box.shouldBlock()) {
           // Allow specific keys through (e.g., Node.js internal env vars)
           if (
@@ -734,7 +777,7 @@ export class DefenseInDepthBox {
             typeof prop === "string" &&
             allowedKeys.has(prop)
           ) {
-            return Reflect.get(target, prop, receiver);
+            return originalReflect.get(target, prop, receiver);
           }
           const fullPath = `${path}.${String(prop)}`;
           const message = `${fullPath} is blocked during script execution`;
@@ -757,7 +800,7 @@ export class DefenseInDepthBox {
             `${fullPath} accessed (audit mode)`,
           );
         }
-        return Reflect.get(target, prop, receiver);
+        return originalReflect.get(target, prop, receiver);
       },
       set(target, prop, value, receiver) {
         if (box.shouldBlock()) {
@@ -770,7 +813,7 @@ export class DefenseInDepthBox {
           );
           throw new SecurityViolationError(message, violation);
         }
-        return Reflect.set(target, prop, value, receiver);
+        return originalReflect.set(target, prop, value, receiver);
       },
       // Block enumeration (Object.keys, Object.entries, for...in, etc.)
       ownKeys(target) {
@@ -779,7 +822,7 @@ export class DefenseInDepthBox {
           const violation = box.recordViolation(violationType, path, message);
           throw new SecurityViolationError(message, violation);
         }
-        return Reflect.ownKeys(target);
+        return originalReflect.ownKeys(target);
       },
       // Block Object.getOwnPropertyDescriptor
       getOwnPropertyDescriptor(target, prop) {
@@ -793,7 +836,7 @@ export class DefenseInDepthBox {
           );
           throw new SecurityViolationError(message, violation);
         }
-        return Reflect.getOwnPropertyDescriptor(target, prop);
+        return originalReflect.getOwnPropertyDescriptor(target, prop);
       },
       // Block 'in' operator
       has(target, prop) {
@@ -807,7 +850,7 @@ export class DefenseInDepthBox {
           );
           throw new SecurityViolationError(message, violation);
         }
-        return Reflect.has(target, prop);
+        return originalReflect.has(target, prop);
       },
       // Block delete operator
       deleteProperty(target, prop) {
@@ -821,7 +864,7 @@ export class DefenseInDepthBox {
           );
           throw new SecurityViolationError(message, violation);
         }
-        return Reflect.deleteProperty(target, prop);
+        return originalReflect.deleteProperty(target, prop);
       },
       // Block Object.setPrototypeOf
       setPrototypeOf(target, proto) {
@@ -830,7 +873,7 @@ export class DefenseInDepthBox {
           const violation = box.recordViolation(violationType, path, message);
           throw new SecurityViolationError(message, violation);
         }
-        return Reflect.setPrototypeOf(target, proto);
+        return originalReflect.setPrototypeOf(target, proto);
       },
       // Block Object.defineProperty
       defineProperty(target, prop, descriptor) {
@@ -844,7 +887,7 @@ export class DefenseInDepthBox {
           );
           throw new SecurityViolationError(message, violation);
         }
-        return Reflect.defineProperty(target, prop, descriptor);
+        return originalReflect.defineProperty(target, prop, descriptor);
       },
     }) as T;
   }
@@ -910,10 +953,10 @@ export class DefenseInDepthBox {
     this.lockWellKnownSymbols();
 
     // Block Proxy.revocable to prevent bypassing Proxy constructor blocking.
-    // Runs after the main loop wraps globalThis.Proxy; property operations on
-    // the blocking proxy (which has no get/defineProperty traps) pass through
-    // to the original Proxy constructor, so we can patch revocable in place.
     this.protectProxyRevocable();
+
+    // Protect Object.defineProperty/Reflect.defineProperty against shadowing attacks (H3)
+    this.protectDefineProperty();
 
     // Note: process.connected is NOT blocked in the main thread — it is a
     // boolean primitive used by Node.js IPC internals and blocking it
@@ -1612,6 +1655,121 @@ export class DefenseInDepthBox {
   }
 
   /**
+   * Protect Object.defineProperty/Reflect.defineProperty from being used to
+   * shadow blocked globals (attack vector H3).
+   *
+   * If a script uses Object.defineProperty(process, 'binding', { value: ... }),
+   * it would normally overwrite our blocking proxy. We intercept these calls
+   * and block them if they target a dangerous property during script execution.
+   */
+  private protectDefineProperty(): void {
+    const box = this;
+
+    const prototypeTargets = new Set<unknown>([
+      Object.prototype,
+      Function.prototype,
+      Array.prototype,
+      Object,
+      Function,
+      Array,
+    ]);
+
+    const isDangerousDefine = (target: unknown, prop: PropertyKey): boolean => {
+      // 1. Any modification to shared basic prototypes is dangerous
+      if (prototypeTargets.has(target)) return true;
+
+      // 2. Specific dangerous properties on process/globalThis/Reflect
+      if (target === process || target === globalThis || target === Reflect) {
+        const sProp = String(prop);
+        return (
+          sProp === "binding" ||
+          sProp === "mainModule" ||
+          sProp === "execPath" ||
+          sProp === "eval" ||
+          sProp === "Function" ||
+          sProp === "defineProperty"
+        );
+      }
+
+      return false;
+    };
+
+    // 1. Object.defineProperty
+    try {
+      const originalDefineProperty = Object.defineProperty;
+      this.originalDescriptors.push({
+        target: Object,
+        prop: "defineProperty",
+        descriptor: Object.getOwnPropertyDescriptor(Object, "defineProperty"),
+      });
+
+      // @ts-expect-error: defining property on Object
+      Object.defineProperty = function defineProperty(
+        target: object,
+        prop: PropertyKey,
+        attributes: PropertyDescriptor & ThisType<unknown>,
+      ) {
+        if (box.shouldBlock() && isDangerousDefine(target, prop)) {
+          const path = `${box.getPathForTarget(target, String(prop))} (defineProperty)`;
+          const message = `shadowing ${path} via defineProperty is blocked during script execution`;
+          const violation = box.recordViolation(
+            "object_define_property",
+            path,
+            message,
+          );
+          throw new SecurityViolationError(message, violation);
+        }
+        return originalDefineProperty(target, prop, attributes);
+      };
+    } catch (_e) {
+      this.patchFailures.push("Object.defineProperty");
+    }
+
+    // 2. Reflect.defineProperty
+    if (
+      typeof Reflect !== "undefined" &&
+      typeof Reflect.defineProperty === "function"
+    ) {
+      try {
+        const originalReflectDefine = Reflect.defineProperty;
+        this.originalDescriptors.push({
+          target: Reflect,
+          prop: "defineProperty",
+          descriptor: Object.getOwnPropertyDescriptor(
+            Reflect,
+            "defineProperty",
+          ),
+        });
+
+        // Use Object.defineProperty to ensure the patch is restorable
+        Object.defineProperty(Reflect, "defineProperty", {
+          value: function defineProperty(
+            target: object,
+            propertyKey: PropertyKey,
+            attributes: PropertyDescriptor,
+          ) {
+            if (box.shouldBlock() && isDangerousDefine(target, propertyKey)) {
+              const path = `${box.getPathForTarget(target, String(propertyKey))} (Reflect.defineProperty)`;
+              const message = `shadowing ${path} via Reflect.defineProperty is blocked during script execution`;
+              const violation = box.recordViolation(
+                "reflect_define_property",
+                path,
+                message,
+              );
+              throw new SecurityViolationError(message, violation);
+            }
+            return originalReflectDefine(target, propertyKey, attributes);
+          },
+          writable: true,
+          configurable: true,
+        });
+      } catch (_e) {
+        this.patchFailures.push("Reflect.defineProperty");
+      }
+    }
+  }
+
+  /**
    * Block dynamic import() escape vectors via ESM loader hooks.
    *
    * Uses Node.js module.registerHooks() (23.5+, synchronous) or
@@ -1901,6 +2059,14 @@ export class DefenseInDepthBox {
       });
 
       const path = "Module._resolveFilename";
+      // Skip if already proxied by this security layer
+      if (
+        original &&
+        (original as unknown as Record<symbol, unknown>)[DID_PROXY_MARKER]
+      ) {
+        return;
+      }
+
       const proxy = this.createBlockingProxy(
         original,
         path,
@@ -1934,6 +2100,15 @@ export class DefenseInDepthBox {
       }
 
       // Store original descriptor for restoration
+      // Skip if we've already recorded a descriptor for this target/prop in this instance
+      if (
+        this.originalDescriptors.some(
+          (d) => d.target === target && d.prop === prop,
+        )
+      ) {
+        return;
+      }
+
       const descriptor = Object.getOwnPropertyDescriptor(target, prop);
       this.originalDescriptors.push({ target, prop, descriptor });
 

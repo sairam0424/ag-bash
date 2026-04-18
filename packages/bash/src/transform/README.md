@@ -13,7 +13,7 @@ Input Script --> parse() --> AST --> plugins --> serialize() --> Output Script
 Each `.use()` call intersects the plugin's metadata type into the result:
 
 ```typescript
-import { BashTransformPipeline, TeePlugin, CommandCollectorPlugin } from "@ag/bash";
+import { BashTransformPipeline, TeePlugin, CommandCollectorPlugin } from "@ag-bash/bash";
 import { execSync } from "node:child_process";
 
 const pipeline = new BashTransformPipeline()
@@ -40,7 +40,7 @@ execSync(result.script);
 Standalone function. Converts a `ScriptNode` AST back to a bash string:
 
 ```typescript
-import { parse, serialize } from "@ag/bash";
+import { parse, serialize } from "@ag-bash/bash";
 
 const ast = parse("echo hello | cat");
 const script = serialize(ast); // "echo hello | cat"
@@ -57,7 +57,7 @@ parse(serialize(parse(input)))  ===  parse(input)
 Register plugins directly on a `Bash` instance. When plugins are registered, `exec()` automatically applies them before execution and returns metadata in the result:
 
 ```typescript
-import { Bash, CommandCollectorPlugin, TeePlugin } from "@ag/bash";
+import { Bash, CommandCollectorPlugin, TeePlugin } from "@ag-bash/bash";
 
 const bash = new Bash();
 bash.registerTransformPlugin(new TeePlugin({ outputDir: "/tmp/logs" }));
@@ -100,7 +100,7 @@ Parses the script, runs all registered plugins in sequence, and serializes the f
 A plugin implements the `TransformPlugin<TMetadata>` interface:
 
 ```typescript
-import type { TransformPlugin, TransformContext, TransformResult } from "@ag/bash";
+import type { TransformPlugin, TransformContext, TransformResult } from "@ag-bash/bash";
 
 interface MyMetadata {
   myKey: string;
@@ -124,7 +124,7 @@ Plugins are synchronous. Each plugin receives the AST and metadata output by the
 
 ### AST Node Types
 
-Key types for walking/transforming the AST (all exported from `@ag/bash`):
+Key types for walking/transforming the AST (all exported from `@ag-bash/bash`):
 
 | Type                | Description                                    |
 |---------------------|------------------------------------------------|
@@ -146,7 +146,7 @@ Captures stdout from each command in a pipeline by inserting `tee` commands. Onl
 The transformed script is valid standard bash and can be executed by `/bin/bash`, `child_process.exec`, Docker, SSH, or any other runtime.
 
 ```typescript
-import { TeePlugin } from "@ag/bash";
+import { TeePlugin } from "@ag-bash/bash";
 
 // Capture stdout from all pipeline commands
 new TeePlugin({ outputDir: "/tmp/logs" });
@@ -228,7 +228,7 @@ This is not fixable at AST transform time because `lastpipe` is a runtime `shopt
 Walks the entire AST and collects all command names into sorted metadata. Does not modify the AST.
 
 ```typescript
-import { BashTransformPipeline, CommandCollectorPlugin } from "@ag/bash";
+import { BashTransformPipeline, CommandCollectorPlugin } from "@ag-bash/bash";
 
 const pipeline = new BashTransformPipeline()
   .use(new CommandCollectorPlugin());

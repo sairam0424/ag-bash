@@ -2,13 +2,12 @@
  * Minimal AI agent for exploring codebases
  *
  * This file contains only the agent logic - see shell.ts for the interactive loop.
- * Uses bash-tool with a ag-bash OverlayFS to provide read access to the real project files.
+ * Uses @ag-bash/bash with a ag-bash OverlayFS to provide read access to the real project files.
  */
 
 import * as path from "node:path";
 import { streamText, stepCountIs } from "ai";
-import { createBashTool } from "bash-tool";
-import { Bash, OverlayFs } from "@ag/bash";
+import { Bash, OverlayFs, createBashTool } from "@ag-bash/bash";
 
 export interface AgentRunner {
   chat(
@@ -56,7 +55,7 @@ export async function createAgent(
     cwd: "/workspace",
   });
 
-  const toolkit = await createBashTool({
+  const toolkit = createBashTool({
     sandbox: bash,
     destination: "/workspace",
     extraInstructions: `You have access to files and directories mounted at /workspace.
@@ -68,11 +67,11 @@ Use bash commands to explore:
 - head, tail, wc, sort, uniq for data analysis
 
 Help the user explore, search, and understand the contents.`,
-    onBeforeBashCall: (input) => {
+    onBeforeBashCall: (input: { command: string; }) => {
       options.onToolCall?.(input.command);
       return undefined;
     },
-    onAfterBashCall: (input) => {
+    onAfterBashCall: (input: { result: CommandResult; }) => {
       options.onToolResult?.(input.result);
       return undefined;
     },
@@ -88,7 +87,7 @@ Help the user explore, search, and understand the contents.`,
 
       const result = streamText({
         model: "anthropic/claude-haiku-4.5",
-        tools: { bash: toolkit.bash },
+        tools: { bash: toolkit.tools.bash },
         stopWhen: stepCountIs(50),
         messages: history,
       });

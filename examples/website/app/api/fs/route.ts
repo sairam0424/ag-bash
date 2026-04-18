@@ -86,12 +86,21 @@ async function readAllFiles(
 }
 
 export async function GET() {
-  const files = await readAllFiles(AGENT_DATA_DIR, AGENT_DATA_DIR);
-
-  return new Response(JSON.stringify(files), {
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=172800, s-maxage=172800",
-    },
-  });
+  try {
+    const files = await readAllFiles(AGENT_DATA_DIR, AGENT_DATA_DIR);
+    return new Response(JSON.stringify(files), {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=172800, s-maxage=172800",
+      },
+    });
+  } catch (error) {
+    console.error("Error reading agent data:", error);
+    // Return empty files object if directory doesn't exist yet
+    return new Response(JSON.stringify(Object.create(null)), {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  }
 }

@@ -40,3 +40,5 @@ profile-*.mjs
 bench-*.mjs
 todo/
 .docs-test-tmp/
+
+tsconfig.tsbuildinfo

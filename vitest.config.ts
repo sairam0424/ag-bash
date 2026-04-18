@@ -7,8 +7,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     globals: true,
-    testTimeout: 60000,
-    hookTimeout: 60000,
+    testTimeout: 120000,
+    hookTimeout: 120000,
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
@@ -16,7 +16,7 @@ export default defineConfig({
       "**/.pnpm-store/**",
     ],
     isolate: false,
-    setupFiles: [resolve(__dirname, "src/vitest-setup.ts")],
+    setupFiles: [resolve(__dirname, "packages/bash/src/vitest-setup.ts")],
     // Tests that spawn workers (sqlite3, python) need process-level isolation
     // because defense-in-depth patches globalThis which is shared across threads.
     // In Vitest 4, this is handled via workspaces in vitest.workspace.ts.

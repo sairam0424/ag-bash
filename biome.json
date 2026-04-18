@@ -61,8 +61,8 @@
       "!.pnpm-store",
       "!.home",
       "!.docs-test-tmp",
-      "!src/commands/python3/worker.js",
-      "!src/commands/js-exec/worker.js",
+      "!**/src/**/*.js",
+      "!**/src/**/*.d.ts",
       "!vendor"
     ]
   }

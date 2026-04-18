@@ -1,11 +1,10 @@
 import { ToolLoopAgent, createAgentUIStreamResponse, stepCountIs } from "ai";
-import { createBashTool } from "bash-tool";
-import { Bash, OverlayFs } from "@ag/bash";
+import { Bash, OverlayFs, createBashTool } from "@ag-bash/bash";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const AGENT_DATA_DIR = join(__dirname, "./_agent-data");
+const AGENT_DATA_DIR = join(__dirname, "../../../agent-data");
 
 const SYSTEM_INSTRUCTIONS = `You are an expert on ag-bash, a TypeScript bash interpreter with an in-memory virtual filesystem.
 
@@ -35,7 +34,9 @@ Keep responses concise. You do not have access to pnpm, npm, or node.`;
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
-  const lastUserMessage = messages.filter((m: { role: string }) => m.role === "user").pop();
+  const lastUserMessage = messages
+    .filter((m: { role: string }) => m.role === "user")
+    .pop();
   console.log("Prompt:", lastUserMessage?.parts?.[0]?.text);
   const overlayFs = new OverlayFs({ root: AGENT_DATA_DIR, readOnly: true });
   const sandbox = new Bash({ fs: overlayFs, cwd: overlayFs.getMountPoint() });

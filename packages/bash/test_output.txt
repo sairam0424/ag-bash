@@ -1,0 +1,49 @@
+
+ RUN  v4.1.4 /Users/sairamugge/Desktop/Ag-Bash/ag-bash/packages/bash
+
+ ❯ src/readme.test.ts (9 tests | 1 failed) 7715ms
+       ✓ should list all registered commands 2ms
+       ✓ should have a reasonable number of commands 1ms
+       ✓ should list all registered commands 0ms
+     ✓ should have TypeScript code blocks in README 0ms
+     ✓ should have TypeScript code blocks in AGENTS.npm.md 0ms
+     ✓ should have TypeScript code blocks in transform README 0ms
+     × should have valid TypeScript syntax in all examples 7091ms
+     ✓ should have bash code blocks 0ms
+     ✓ should execute bash examples without errors  617ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/readme.test.ts > Documentation TypeScript examples > should have valid TypeScript syntax in all examples
+AssertionError: TypeScript errors in documentation examples:
+AGENTS-0.ts(6,3): error TS2353: Object literal may only specify known properties, and 'files' does not exist in type 'CreateBashToolOptions'.
+transform-README-0.ts(1,74): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
+transform-README-1.ts(1,34): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
+transform-README-2.ts(1,10): error TS2300: Duplicate identifier 'Bash'.
+transform-README-2.ts(1,57): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
+transform-README-2.ts(2,10): error TS2300: Duplicate identifier 'Bash'.
+transform-README-3.ts(1,73): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
+transform-README-4.ts(1,27): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
+transform-README-6.ts(1,63): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
+ ❯ compileTypeScriptBlocks src/readme.test.ts:324:16
+    322|
+    323|       if (errorLines.length > 0) {
+    324|         expect.fail(
+       |                ^
+    325|           `TypeScript errors in documentation examples:\n${errorLines.…
+    326|             (errorLines.length > 10
+ ❯ src/readme.test.ts:481:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  21:13:23
+   Duration  8.90s (transform 1.15s, setup 76ms, import 917ms, tests 7.71s, environment 0ms)
+
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.12.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+npm notice To update run: npm install -g npm@11.12.1
+npm notice

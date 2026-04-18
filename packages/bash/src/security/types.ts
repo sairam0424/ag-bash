@@ -95,7 +95,9 @@ export type SecurityViolationType =
   | "json_mutation"
   | "math_mutation"
   | "process_report"
-  | "process_exception_handler";
+  | "process_exception_handler"
+  | "object_define_property"
+  | "reflect_define_property";
 
 /**
  * Information about a detected security violation.

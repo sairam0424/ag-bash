@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@ag-bash/agent-bridge": ["../../packages/agent-bridge/src/index"],
+      "@ag-bash/bash": ["../../packages/bash/src/index"]
     }
   },
   "include": [
