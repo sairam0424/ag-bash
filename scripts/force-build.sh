@@ -28,7 +28,7 @@ cp src/commands/js-exec/worker.js dist/commands/js-exec/worker.js
 # Build Libraries
 echo "🏗️ Building Libraries (ESM/CJS/Browser)..."
 npx esbuild dist/index.js --bundle --splitting --platform=node --format=esm --minify --outdir=dist/bundle --chunk-names=chunks/[name]-[hash] --external:diff --external:minimatch --external:sprintf-js --external:turndown --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip
-npx esbuild dist/index.js --bundle --platform=node --format=cjs --minify --outfile=dist/bundle/index.cjs --external:diff --external:minimatch --external:sprintf-js --external:turndown --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip
+npx esbuild dist/index.js --bundle --platform=node --format=cjs --minify --outfile=dist/bundle/index.cjs --define:import.meta.url='""' --external:diff --external:minimatch --external:sprintf-js --external:turndown --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip
 npx esbuild dist/browser.js --bundle --platform=browser --format=esm --minify --outfile=dist/bundle/browser.js --external:diff --external:minimatch --external:sprintf-js --external:turndown --external:node:zlib --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip --define:__BROWSER__=true --alias:node:dns=./src/shims/browser-dns.ts
 
 # Build CLI & Shell

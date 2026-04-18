@@ -43,8 +43,8 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 |---|---|---|
-| [\`@ag-bash/bash\`](./packages/bash) | \`v1.1.0\` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [\`@ag-bash/mcp-server\`](./packages/mcp-server) | \`v1.1.0\` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [\`@ag-bash/bash\`](./packages/bash) | \`v1.3.0\` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [\`@ag-bash/mcp-server\`](./packages/mcp-server) | \`v1.3.0\` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
 
 ---
 
@@ -330,7 +330,7 @@ limitations under the License.
 
 export const FILE_PACKAGE_JSON = `{
   "name": "@ag-bash/bash",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "Unified Agentic Bash for Ag-Bash",
   "repository": {
     "type": "git",
