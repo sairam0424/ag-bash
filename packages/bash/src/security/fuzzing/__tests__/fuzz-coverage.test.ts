@@ -8,7 +8,7 @@
 import fc from "fast-check";
 import { afterAll, describe, expect, it } from "vitest";
 import { createFcOptions, createFuzzConfig } from "../config.js";
-import { CoverageTracker } from "../coverage/coverage-tracker.js";
+import { CategoryReport, CoverageTracker } from "../coverage/coverage-tracker.js";
 import { coverageBoost } from "../generators/coverage-boost-generator.js";
 import {
   flagBatchCommand,
@@ -172,14 +172,16 @@ describe("Coverage-Guided Fuzzing", () => {
     console.log("======================\n");
 
     // Soft assertion: bash command coverage should be reasonable
-    const bashCmdCat = report.categories.find((c) => c.category === "bash:cmd");
+    const bashCmdCat = report.categories.find(
+      (c: CategoryReport) => c.category === "bash:cmd",
+    );
     if (bashCmdCat) {
       expect(bashCmdCat.percent).toBeGreaterThanOrEqual(30);
     }
 
     // Soft assertion: at least some builtin coverage
     const builtinCat = report.categories.find(
-      (c) => c.category === "bash:builtin",
+      (c: CategoryReport) => c.category === "bash:builtin",
     );
     if (builtinCat) {
       expect(builtinCat.covered).toBeGreaterThan(0);

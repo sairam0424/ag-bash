@@ -11,6 +11,7 @@ packages/**/pnpm-lock.yaml
 # Build Artifacts
 **/dist
 **/coverage
+!packages/bash/src/security/fuzzing/coverage
 **/*.parsed.json
 packages/bash/src/commands/python3/worker.js
 packages/bash/src/commands/js-exec/worker.js
