@@ -8,7 +8,10 @@
 import fc from "fast-check";
 import { afterAll, describe, expect, it } from "vitest";
 import { createFcOptions, createFuzzConfig } from "../config.js";
-import { CategoryReport, CoverageTracker } from "../coverage/coverage-tracker.js";
+import {
+  type CategoryReport,
+  CoverageTracker,
+} from "../coverage/coverage-tracker.js";
 import { coverageBoost } from "../generators/coverage-boost-generator.js";
 import {
   flagBatchCommand,
