@@ -8,6 +8,22 @@ import type { SecureFetch } from "./network/index.js";
 export interface FeatureCoverageWriter {
   hit(feature: string): void;
 }
+/**
+ * Structured observation about an execution failure or anomaly.
+ * Used by agents to understand failures beyond just stderr.
+ */
+export interface Observation {
+  type: "command_not_found" | "file_not_found" | "directory_not_found" | "permission_denied" | "limit_exceeded" | "syntax_error" | "security_violation" | "suggestion" | "unknown";
+  message: string;
+  /** Command name that failed */
+  command?: string;
+  /** Path related to the failure (if any) */
+  path?: string;
+  /** Corrective suggestions for the agent */
+  suggestions?: string[];
+  /** Detailed technical context */
+  context?: Record<string, unknown>;
+}
 export interface ExecResult {
   stdout: string;
   stderr: string;
@@ -21,6 +37,8 @@ export interface ExecResult {
    * When not set, the redirect system uses UTF-8 for non-ASCII text.
    */
   stdoutEncoding?: "binary";
+  /** Structured observations about the execution (Ag-Trace) */
+  observations?: Observation[];
 }
 /** Result from Bash.exec() - always includes env */
 export interface BashExecResult extends ExecResult {

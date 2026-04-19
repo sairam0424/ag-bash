@@ -8,7 +8,7 @@
  * and delegates execution to the Interpreter.
  */
 
-import type { FunctionDefNode } from "./ast/types.js";
+import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
 import {
@@ -56,10 +56,13 @@ import {
 } from "./network/index.js";
 import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
+import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
+import { TreeSitterToAst } from "./parser/tree-sitter-to-ast.js";
 import {
   DefenseInDepthBox,
   SecurityViolationError,
 } from "./security/defense-in-depth-box.js";
+import { AgTrace } from "./observability/ag-trace.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
 import { serialize } from "./transform/serialize.js";
 import type {
@@ -238,6 +241,26 @@ export interface BashOptions {
    * Individual exec calls can override this.
    */
   persistState?: boolean;
+  /**
+   * Selection of the parser engine to use. 
+   * - 'legacy': The hand-written recursive descent parser (v1.x/v2.x).
+   * - 'tree-sitter': The robust AST-based parser engine (v1.4.0+).
+   * Default: 'tree-sitter'
+   */
+  parserEngine?: 'legacy' | 'tree-sitter';
+  /**
+   * If true, enables agentic behavior for the shell.
+   * This includes automatic AI intervention on command failure if an agent gateway is configured.
+   */
+  agentic?: boolean;
+  /**
+   * Configuration for the Tree-sitter parser engine.
+   * Required if parserEngine is set to 'tree-sitter'.
+   */
+  treeSitterConfig?: {
+    webTreeSitterWasm: string | Uint8Array;
+    bashGrammarWasm: string | Uint8Array;
+  };
 }
 
 export interface ExecOptions {
@@ -302,6 +325,9 @@ export class Bash {
   // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin storage for untyped API
   private transformPlugins: TransformPlugin<any>[] = [];
   private defaultPersistState: boolean;
+  private parserEngine: 'legacy' | 'tree-sitter';
+  private treeSitterConfig?: BashOptions['treeSitterConfig'];
+  private agentic: boolean;
 
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
@@ -364,6 +390,9 @@ export class Bash {
 
     // Defense-in-depth defaults to enabled
     this.defenseInDepthConfig = options.defenseInDepth ?? true;
+
+    // Agentic behavior defaults to false
+    this.agentic = options.agentic ?? false;
 
     // Store coverage writer if provided (for fuzzing instrumentation)
     this.coverageWriter = options.coverage;
@@ -505,6 +534,8 @@ export class Bash {
     }
 
     this.defaultPersistState = options.persistState ?? false;
+    this.parserEngine = options.parserEngine ?? 'tree-sitter';
+    this.treeSitterConfig = options.treeSitterConfig;
   }
 
   registerCommand(command: Command): void {
@@ -548,6 +579,9 @@ export class Bash {
     // Invalid UTF-8 (e.g., raw compressed data) is left as binary.
     result.stdout = decodeBinaryToUtf8(result.stdout);
     result.stderr = decodeBinaryToUtf8(result.stderr);
+    if (result.observations && result.observations.length > 0) {
+      this.logger?.info("observations", { observations: result.observations });
+    }
     return result;
   }
 
@@ -561,12 +595,17 @@ export class Bash {
 
     this.state.commandCount++;
     if (this.state.commandCount > this.limits.maxCommandCount) {
-      return {
+      const error = new ExecutionLimitError(
+        `bash: maximum command count (${this.limits.maxCommandCount}) exceeded (possible infinite loop). Increase with executionLimits.maxCommandCount option.\n`,
+        "commands",
+      );
+      return this.logResult({
         stdout: "",
-        stderr: `bash: maximum command count (${this.limits.maxCommandCount}) exceeded (possible infinite loop). Increase with executionLimits.maxCommandCount option.\n`,
-        exitCode: 1,
+        stderr: error.message,
+        exitCode: ExecutionLimitError.EXIT_CODE,
         env: mapToRecordWithExtras(this.state.env, options?.env),
-      };
+        observations: [AgTrace.analyzeError(error)],
+      });
     }
 
     if (!commandLine.trim()) {
@@ -658,14 +697,37 @@ export class Bash {
     const defenseBox = this.defenseInDepthConfig
       ? DefenseInDepthBox.getInstance(this.defenseInDepthConfig)
       : null;
+
+    // Pre-initialize Tree-sitter outside of the defense-in-depth sandbox
+    // because its WASM/JS glue code uses dynamic imports (e.g., 'module', 'fs') 
+    // that are blocked during sandboxed script execution.
+    if (this.parserEngine === 'tree-sitter' && this.treeSitterConfig) {
+      await TreeSitterParser.init({
+        webTreeSitterWasm: this.treeSitterConfig.webTreeSitterWasm,
+        bashGrammarWasm: this.treeSitterConfig.bashGrammarWasm,
+      });
+    }
+
     const defenseHandle = defenseBox?.activate();
 
     try {
       // Run execution inside defense-in-depth context if enabled
       const executeScript = async (): Promise<BashExecResult> => {
-        let ast = parse(normalized, {
-          maxHeredocSize: this.limits.maxHeredocSize,
-        });
+        let ast: ScriptNode;
+
+        if (this.parserEngine === 'tree-sitter') {
+          if (!this.treeSitterConfig) {
+            throw new Error("Tree-sitter parser engine selected but treeSitterConfig was not provided in Bash options.");
+          }
+          
+          const tree = TreeSitterParser.parse(normalized);
+          const converter = new TreeSitterToAst(normalized);
+          ast = converter.convert(tree);
+        } else {
+          ast = parse(normalized, {
+            maxHeredocSize: this.limits.maxHeredocSize,
+          }) as ScriptNode;
+        }
 
         // Apply transform plugins if any are registered.
         // Keep metadata null-prototype even when plugins contribute dynamic keys.
@@ -695,6 +757,8 @@ export class Bash {
           requireDefenseContext: defenseBox?.isEnabled() === true,
           jsBootstrapCode: this.jsBootstrapCode,
           onCommandNotFound: this.onCommandNotFound,
+          agentic: this.agentic,
+          getRegisteredCommands: () => Array.from(this.commands.keys()),
         };
 
         const interpreter = new Interpreter(interpreterOptions, execState);
@@ -732,6 +796,7 @@ export class Bash {
           stderr: error.stderr,
           exitCode: error.exitCode,
           env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error)]
         });
       }
       // PosixFatalError propagates from special builtins in POSIX mode
@@ -741,6 +806,7 @@ export class Bash {
           stderr: error.stderr,
           exitCode: error.exitCode,
           env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error)]
         });
       }
       if (error instanceof ArithmeticError) {
@@ -749,6 +815,7 @@ export class Bash {
           stderr: error.stderr,
           exitCode: 1,
           env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error)]
         });
       }
       // ExecutionAbortedError is thrown when an AbortSignal fires (timeout cancellation)
@@ -758,33 +825,39 @@ export class Bash {
           stderr: error.stderr,
           exitCode: 124, // Same as timeout exit code
           env: mapToRecordWithExtras(this.state.env, options?.env),
-        });
-      }
-      // ExecutionLimitError is thrown when our conservative limits are exceeded
-      // (command count, recursion depth, loop iterations)
-      if (error instanceof ExecutionLimitError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: sanitizeErrorMessage(error.stderr),
-          exitCode: ExecutionLimitError.EXIT_CODE,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error)]
         });
       }
       // SecurityViolationError is thrown when defense-in-depth detects a blocked operation
-      if (error instanceof SecurityViolationError) {
+      const errorName = error instanceof Error ? error.name : "";
+      if (error instanceof SecurityViolationError || errorName === "SecurityViolationError") {
         return this.logResult({
           stdout: "",
-          stderr: `bash: security violation: ${sanitizeErrorMessage(error.message)}\n`,
+          stderr: `bash: security violation: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
           exitCode: 1,
           env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error as Error)],
         });
       }
+
+      // ExecutionLimitError is thrown when command limits are exceeded during interpreter loop
+      if (error instanceof ExecutionLimitError || errorName === "ExecutionLimitError") {
+        return this.logResult({
+          stdout: "",
+          stderr: `bash: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
+          exitCode: ExecutionLimitError.EXIT_CODE,
+          env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error as Error)],
+        });
+      }
+
       if ((error as ParseException).name === "ParseException") {
         return this.logResult({
           stdout: "",
           stderr: `bash: syntax error: ${sanitizeErrorMessage((error as Error).message)}\n`,
           exitCode: 2,
           env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error as Error)]
         });
       }
       // LexerError is thrown for lexer-level issues like unterminated quotes
@@ -794,6 +867,7 @@ export class Bash {
           stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
           exitCode: 2,
           env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error)]
         });
       }
       // RangeError occurs when JavaScript call stack is exceeded (deep recursion)
@@ -803,6 +877,7 @@ export class Bash {
           stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
           exitCode: 1,
           env: mapToRecordWithExtras(this.state.env, options?.env),
+          observations: [AgTrace.analyzeError(error)]
         });
       }
       throw error;
@@ -810,6 +885,43 @@ export class Bash {
       // Always deactivate defense-in-depth box when done
       defenseHandle?.deactivate();
     }
+  }
+
+  /**
+   * Create a snapshot of the current shell state, including filesystem changes.
+   * Useful for "branching" execution in agentic workflows or reverting
+   * to a known-good state after trial execution.
+   */
+  async snapshot(): Promise<BashSnapshot> {
+    return {
+      state: this.cloneState(this.state),
+      fs: await this.fs.snapshot(),
+    };
+  }
+
+  /**
+   * Restore the shell state from a previously captured snapshot.
+   */
+  async restore(snapshot: BashSnapshot): Promise<void> {
+    this.state = this.cloneState(snapshot.state);
+    await this.fs.restore(snapshot.fs);
+  }
+
+  /**
+   * Deep-clone the interpreter state to ensure isolation.
+   */
+  private cloneState(state: InterpreterState): InterpreterState {
+    return {
+      ...state,
+      env: new Map(state.env),
+      functions: new Map(state.functions),
+      localScopes: state.localScopes.map((s) => new Map(s)),
+      options: { ...state.options },
+      shoptOptions: { ...state.shoptOptions },
+      exportedVars: new Set(state.exportedVars),
+      readonlyVars: new Set(state.readonlyVars),
+      hashTable: state.hashTable ? new Map(state.hashTable) : undefined,
+    };
   }
 
   // ===========================================================================
@@ -862,6 +974,18 @@ export class Bash {
     };
   }
 }
+
+/**
+ * Snapshot of a Bash instance state.
+ */
+export interface BashSnapshot {
+  state: InterpreterState;
+  fs: unknown;
+}
+
+/**
+ * Normalizes indented multi-line scripts (like those in template literals).
+ */
 
 /**
  * Normalize a script by stripping leading whitespace from lines,

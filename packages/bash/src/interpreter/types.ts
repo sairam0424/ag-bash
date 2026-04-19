@@ -451,4 +451,10 @@ export interface InterpreterContext {
     command: string,
     args: string[],
   ) => Promise<ExecResult | null>;
+  /** Returns list of all registered command names */
+  getRegisteredCommands?: () => string[];
+  /**
+   * If true, enables agentic behavior for the shell.
+   */
+  agentic?: boolean;
 }

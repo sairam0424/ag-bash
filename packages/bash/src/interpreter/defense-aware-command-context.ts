@@ -157,6 +157,18 @@ function wrapFileSystem(
       component,
       "fs.utimes",
     ),
+    snapshot: wrapFunction(
+      fs.snapshot.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.snapshot",
+    ),
+    restore: wrapFunction(
+      fs.restore.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.restore",
+    ),
   };
 
   if (fs.readdirWithFileTypes) {

@@ -1433,4 +1433,51 @@ export class OverlayFs implements IFileSystem {
       });
     }
   }
+
+  async snapshot(): Promise<unknown> {
+    // Deep copy the memory map
+    const memoryCopy = new Map<string, MemoryEntry>();
+    for (const [path, entry] of this.memory.entries()) {
+      // Create a shallow copy of the entry
+      const entryCopy = { ...entry };
+
+      // For file entries, we need to deep copy the content buffer
+      if (entryCopy.type === "file") {
+        entryCopy.content = new Uint8Array(entryCopy.content);
+      }
+
+      memoryCopy.set(path, entryCopy);
+    }
+
+    return {
+      memory: memoryCopy,
+      deleted: new Set(this.deleted),
+    };
+  }
+
+  async restore(snapshot: unknown): Promise<void> {
+    const s = snapshot as {
+      memory: Map<string, MemoryEntry>;
+      deleted: Set<string>;
+    };
+    if (!s || !(s.memory instanceof Map) || !(s.deleted instanceof Set)) {
+      throw new Error("Invalid snapshot: expected { memory: Map, deleted: Set }");
+    }
+
+    // Restore memory layer
+    this.memory.clear();
+    for (const [path, entry] of s.memory.entries()) {
+      const entryCopy = { ...entry };
+      if (entryCopy.type === "file") {
+        entryCopy.content = new Uint8Array(entryCopy.content);
+      }
+      this.memory.set(path, entryCopy);
+    }
+
+    // Restore deleted set
+    this.deleted.clear();
+    for (const path of s.deleted) {
+      this.deleted.add(path);
+    }
+  }
 }

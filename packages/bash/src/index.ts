@@ -115,6 +115,20 @@ export type {
   TransformResult,
 } from "./transform/types.js";
 export type {
+  CallStackState,
+  CompletionSpec,
+  ControlFlowState,
+  ExpansionState,
+  InterpreterContext,
+  InterpreterState,
+  IOState,
+  LocalScopingState,
+  ProcessState,
+  ShellOptions,
+  ShoptOptions,
+  VariableAttributeState,
+} from "./interpreter/types.js";
+export type {
   BashExecResult,
   Command,
   CommandContext,

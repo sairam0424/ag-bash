@@ -75,6 +75,52 @@ export class MountableFs implements IFileSystem {
     }
   }
 
+  snapshot(): any {
+    const mountSnapshots = new Map<string, any>();
+    for (const [path, entry] of this.mounts) {
+      mountSnapshots.set(path, entry.filesystem.snapshot());
+    }
+
+    return {
+      base: this.baseFs.snapshot(),
+      mounts: mountSnapshots,
+    };
+  }
+
+  async restore(state: any): Promise<void> {
+    if (!state || typeof state !== "object") {
+      throw new Error("Invalid state for MountableFs.restore()");
+    }
+
+    // Restore base filesystem
+    await this.baseFs.restore(state.base);
+
+    // Restore mounts
+    const stateMounts = state.mounts as Map<string, any>;
+
+    // 1. Remove mounts not in state
+    for (const path of this.mounts.keys()) {
+      if (!stateMounts.has(path)) {
+        this.mounts.delete(path);
+      }
+    }
+
+    // 2. Restore/Add mounts from state
+    for (const [path, mountState] of stateMounts) {
+      const existing = this.mounts.get(path);
+      if (existing) {
+        await existing.filesystem.restore(mountState);
+      } else {
+        // Warning: Restoring a mount requires the filesystem instance to exist.
+        // For dynamic mounts, we might need a factory or to capture the config.
+        // For now, we only support restoring to existing mount paths.
+        throw new Error(
+          `Cannot restore mount at '${path}': filesystem instance missing.`,
+        );
+      }
+    }
+  }
+
   /**
    * Mount a filesystem at the specified virtual path.
    *

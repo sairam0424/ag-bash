@@ -765,4 +765,42 @@ export class InMemoryFs implements IFileSystem {
     // Update mtime on the entry
     entry.mtime = mtime;
   }
+
+  async snapshot(): Promise<unknown> {
+    // Deep copy the data map
+    const snapshotData = new Map<string, FsEntry>();
+    for (const [path, entry] of this.data.entries()) {
+      // Create a shallow copy of the entry
+      const entryCopy = { ...entry };
+
+      // For file entries, we need to deep copy the content buffer if it's not lazy
+      if (entryCopy.type === "file" && "content" in entryCopy) {
+        if (entryCopy.content instanceof Uint8Array) {
+          entryCopy.content = new Uint8Array(entryCopy.content);
+        }
+      }
+
+      snapshotData.set(path, entryCopy);
+    }
+    return snapshotData;
+  }
+
+  async restore(snapshot: unknown): Promise<void> {
+    if (!(snapshot instanceof Map)) {
+      throw new Error("Invalid snapshot: expected Map");
+    }
+
+    // Clear and restore
+    this.data.clear();
+    for (const [path, entry] of snapshot.entries()) {
+      // Deep copy back to internal state
+      const entryCopy = { ...entry as FsEntry };
+      if (entryCopy.type === "file" && "content" in entryCopy) {
+        if (entryCopy.content instanceof Uint8Array) {
+          entryCopy.content = new Uint8Array(entryCopy.content);
+        }
+      }
+      this.data.set(path, entryCopy);
+    }
+  }
 }

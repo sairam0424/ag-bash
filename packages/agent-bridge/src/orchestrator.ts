@@ -1,0 +1,176 @@
+import { Bash, InterpreterState } from "@ag-bash/bash";
+import { UIMessage, TerminalWriter, formatForTerminal } from "./index.js";
+import { AgentAdapter } from "./adapters.js";
+
+export interface OrchestratorOptions {
+  bash: Bash;
+  adapter: AgentAdapter;
+  writer: TerminalWriter;
+  maxToolOutputLines?: number;
+}
+
+/**
+ * AgentOrchestrator coordinates multi-agent workflows and manages execution state.
+ * It uses the Bash snapshot engine to allow agent branching and rollbacks.
+ */
+export class AgentOrchestrator {
+  private messages: UIMessage[] = [];
+  private snapshots: Map<string, any> = new Map();
+  private messageIdCounter = 0;
+
+  constructor(private options: OrchestratorOptions) {}
+
+  /**
+   * Run a prompt through the orchestrator
+   */
+  async run(prompt: string) {
+    const { writer, adapter, bash, maxToolOutputLines = 20 } = this.options;
+
+    // 1. Add user message
+    const userMsgId = `msg-${++this.messageIdCounter}`;
+    this.messages.push({
+      id: userMsgId,
+      role: "user",
+      parts: [{ type: "text", text: prompt }],
+    });
+
+    // 2. Prepare for streaming
+    let fullText = "";
+    let lineBuffer = "";
+    const toolCallsMap = new Map<string, { toolName: string; args: unknown; result?: string }>();
+
+    let thinkingTimeout: ReturnType<typeof setTimeout> | null = null;
+    let showingThinking = false;
+
+    const showThinking = () => {
+      if (!showingThinking) {
+        showingThinking = true;
+        writer.write("\x1b[2mThinking...\x1b[0m");
+      }
+    };
+
+    const clearThinking = (restart = true) => {
+      if (showingThinking) {
+        writer.write("\r\x1b[K");
+        showingThinking = false;
+      }
+      if (thinkingTimeout) {
+        clearTimeout(thinkingTimeout);
+        thinkingTimeout = null;
+      }
+      if (restart) {
+        thinkingTimeout = setTimeout(showThinking, 500);
+      }
+    };
+
+    const resetThinkingTimer = () => {
+      if (thinkingTimeout) clearTimeout(thinkingTimeout);
+      if (!showingThinking) {
+        thinkingTimeout = setTimeout(showThinking, 500);
+      }
+    };
+
+    const formatToolResult = (tc: { toolName: string; args: unknown; result?: string }) => {
+      if (!tc.result) return;
+      let displayResult = tc.result;
+      try {
+        const parsed = JSON.parse(tc.result);
+        if (tc.toolName === "bash") {
+          if (parsed.stderr && parsed.stderr.trim()) displayResult = `stderr: ${parsed.stderr}`;
+          else if (parsed.stdout !== undefined) displayResult = parsed.stdout;
+        }
+      } catch {}
+
+      if (displayResult && displayResult.trim()) {
+        const resultLines = displayResult.split("\n").filter(l => l.trim());
+        const linesToShow = resultLines.slice(0, maxToolOutputLines);
+        let output = linesToShow.map(line => `\x1b[2m${line}\x1b[0m`).join("\n");
+        if (resultLines.length > maxToolOutputLines) {
+          output += `\n\x1b[2m... (${resultLines.length - maxToolOutputLines} more lines)\x1b[0m`;
+        }
+        writer.write(formatForTerminal(output) + "\r\n");
+      }
+    };
+
+    resetThinkingTimer();
+
+    try {
+      // 3. Stream from adapter
+      for await (const chunk of adapter.run(this.messages)) {
+        if (chunk.type === "text-delta" && chunk.delta) {
+          fullText += chunk.delta;
+          lineBuffer += chunk.delta;
+          const lastNewline = lineBuffer.lastIndexOf("\n");
+          if (lastNewline !== -1) {
+            clearThinking();
+            writer.write(formatForTerminal(lineBuffer.slice(0, lastNewline + 1)));
+            lineBuffer = lineBuffer.slice(lastNewline + 1);
+          } else {
+            resetThinkingTimer();
+          }
+        } 
+        else if (chunk.type === "tool-input-available" && chunk.toolCallId) {
+          clearThinking();
+          if (fullText && !fullText.endsWith("\n")) {
+            writer.write("\r\n");
+            fullText += "\n";
+          }
+
+          if (chunk.toolName === "bash" && chunk.input.command) {
+            const lines = String(chunk.input.command).split("\n");
+            writer.write(`\x1b[36m$ ${lines[0]}\x1b[0m\r\n`);
+            for (let i = 1; i < lines.length; i++) writer.write(`\x1b[36m${lines[i]}\x1b[0m\r\n`);
+          } else if (chunk.toolName === "snapshot") {
+             const snap = await bash.snapshot();
+             const snapId = `snap-${this.snapshots.size}`;
+             this.snapshots.set(snapId, snap);
+             writer.write(`\x1b[35m[Orchestrator] Created snapshot ${snapId}\x1b[0m\r\n`);
+          } else if (chunk.toolName === "restore" && chunk.input.snapshotId) {
+             const snap = this.snapshots.get(chunk.input.snapshotId);
+             if (snap) {
+                await bash.restore(snap);
+                writer.write(`\x1b[35m[Orchestrator] Restored to ${chunk.input.snapshotId}\x1b[0m\r\n`);
+             }
+          } else {
+            writer.write(`\x1b[36m[${chunk.toolName}]\x1b[0m\r\n`);
+          }
+          toolCallsMap.set(chunk.toolCallId, { toolName: chunk.toolName, args: chunk.input });
+        }
+        else if (chunk.type === "tool-output-available" && chunk.toolCallId) {
+          const existing = toolCallsMap.get(chunk.toolCallId);
+          const resultStr = typeof chunk.output === "string" ? chunk.output : JSON.stringify(chunk.output, null, 2);
+          const tc = {
+            toolName: existing?.toolName || "tool",
+            args: existing?.args || {},
+            result: resultStr,
+          };
+          formatToolResult(tc);
+          if (existing) existing.result = resultStr;
+        }
+        else if (chunk.type === "text-end") {
+          clearThinking();
+          if (lineBuffer) {
+            writer.write(formatForTerminal(lineBuffer));
+            lineBuffer = "";
+          }
+          writer.write("\r\n");
+        }
+      }
+
+      clearThinking(false);
+      if (lineBuffer) writer.write(formatForTerminal(lineBuffer + "\r\n"));
+      
+      this.messages.push({
+        id: `msg-${++this.messageIdCounter}`,
+        role: "assistant",
+        parts: [{ type: "text", text: fullText }],
+      });
+
+    } catch (error) {
+       writer.write(`\x1b[31mOrchestration Error: ${error}\x1b[0m\r\n`);
+    }
+  }
+
+  getMessages() { return [...this.messages]; }
+  reset() { this.messages = []; this.snapshots.clear(); }
+}
