@@ -78,6 +78,17 @@ export class AgentOrchestrator {
         if (tc.toolName === "bash") {
           if (parsed.stderr && parsed.stderr.trim()) displayResult = `stderr: ${parsed.stderr}`;
           else if (parsed.stdout !== undefined) displayResult = parsed.stdout;
+          
+          if (parsed.observations && parsed.observations.length > 0) {
+            let obsText = "";
+            for (const obs of parsed.observations) {
+              obsText += `\n💡 ${obs.message}`;
+              if (obs.suggestions && obs.suggestions.length > 0) {
+                obsText += `\n   Suggestion: ${obs.suggestions.join(", ")}`;
+              }
+            }
+            displayResult += obsText;
+          }
         }
       } catch {}
 
