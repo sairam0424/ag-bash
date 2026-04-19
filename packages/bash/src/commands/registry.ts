@@ -96,7 +96,8 @@ export type CommandName =
   | "sqlite3"
   | "time"
   | "hello"
-  | "whoami";
+  | "whoami"
+  | "git";
 
 /** Network command names (only available when network is configured) */
 export type NetworkCommandName = "curl";
@@ -128,6 +129,10 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   {
     name: "printf",
     load: async () => (await import("./printf/printf.js")).printfCommand,
+  },
+  {
+    name: "git",
+    load: async () => (await import("./git.js")).gitCommand,
   },
 
   // File operations

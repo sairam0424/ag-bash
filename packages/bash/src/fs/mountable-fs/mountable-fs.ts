@@ -75,14 +75,14 @@ export class MountableFs implements IFileSystem {
     }
   }
 
-  snapshot(): any {
+  async snapshot(): Promise<any> {
     const mountSnapshots = new Map<string, any>();
     for (const [path, entry] of this.mounts) {
-      mountSnapshots.set(path, entry.filesystem.snapshot());
+      mountSnapshots.set(path, await entry.filesystem.snapshot());
     }
 
     return {
-      base: this.baseFs.snapshot(),
+      base: await this.baseFs.snapshot(),
       mounts: mountSnapshots,
     };
   }

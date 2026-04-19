@@ -27,7 +27,6 @@ import type { IFileSystem } from "../fs/interface.js";
 import { mapToRecord } from "../helpers/env.js";
 import type { ExecutionLimits } from "../limits.js";
 import type { SecureFetch } from "../network/index.js";
-import { ParseException } from "../parser/types.js";
 import {
   DefenseInDepthBox,
   SecurityViolationError,
@@ -38,6 +37,7 @@ import type {
   FeatureCoverageWriter,
   TraceCallback,
 } from "../types.js";
+import { ParseException } from "../parser/types.js";
 import { expandAlias as expandAliasHelper } from "./alias-expansion.js";
 import { evaluateArithmetic } from "./arithmetic.js";
 import {
@@ -909,8 +909,10 @@ export class Interpreter {
           redir.fd ??
           (redir.operator === "<" || redir.operator === "<>" ? 0 : 1);
 
-        if (!this.ctx.state.fileDescriptors) {
-          this.ctx.state.fileDescriptors = new Map();
+        let fds = this.ctx.state.fileDescriptors;
+        if (!fds) {
+          fds = new Map();
+          this.ctx.state.fileDescriptors = fds;
         }
 
         switch (redir.operator) {
@@ -923,7 +925,7 @@ export class Interpreter {
             );
             await this.ctx.fs.writeFile(filePath, "", "utf8"); // truncate
             checkFdLimit(this.ctx);
-            this.ctx.state.fileDescriptors.set(fd, `__file__:${filePath}`);
+            fds!.set(fd, `__file__:${filePath}`);
             break;
           }
           case ">>": {
@@ -933,7 +935,7 @@ export class Interpreter {
               target,
             );
             checkFdLimit(this.ctx);
-            this.ctx.state.fileDescriptors.set(
+            fds!.set(
               fd,
               `__file_append__:${filePath}`,
             );
@@ -948,7 +950,7 @@ export class Interpreter {
             try {
               const content = await this.ctx.fs.readFile(filePath);
               checkFdLimit(this.ctx);
-              this.ctx.state.fileDescriptors.set(fd, content);
+              fds!.set(fd, content);
             } catch {
               return failure(`bash: ${target}: No such file or directory\n`);
             }
@@ -966,7 +968,7 @@ export class Interpreter {
             try {
               const content = await this.ctx.fs.readFile(filePath);
               checkFdLimit(this.ctx);
-              this.ctx.state.fileDescriptors.set(
+              fds!.set(
                 fd,
                 `__rw__:${filePath.length}:${filePath}:0:${content}`,
               );
@@ -974,7 +976,7 @@ export class Interpreter {
               // File doesn't exist - create empty
               await this.ctx.fs.writeFile(filePath, "", "utf8");
               checkFdLimit(this.ctx);
-              this.ctx.state.fileDescriptors.set(
+              fds!.set(
                 fd,
                 `__rw__:${filePath.length}:${filePath}:0:`,
               );
@@ -986,7 +988,7 @@ export class Interpreter {
             // Move FD: N>&M- means duplicate M to N, then close M
             if (target === "-") {
               // Close the FD
-              this.ctx.state.fileDescriptors.delete(fd);
+              fds!.delete(fd);
             } else if (target.endsWith("-")) {
               // Move operation: N>&M- duplicates M to N then closes M
               // Net-neutral on FD count (set + delete), skip checkFdLimit
@@ -994,26 +996,26 @@ export class Interpreter {
               const sourceFd = Number.parseInt(sourceFdStr, 10);
               if (!Number.isNaN(sourceFd)) {
                 // First, duplicate: copy the FD content/info from source to target
-                const sourceInfo = this.ctx.state.fileDescriptors!.get(sourceFd);
+                const sourceInfo = fds!.get(sourceFd);
                 if (sourceInfo !== undefined) {
-                  this.ctx.state.fileDescriptors!.set(fd, sourceInfo);
+                  fds!.set(fd, sourceInfo!);
                 } else {
                   // Source FD might be 1 (stdout) or 2 (stderr) which aren't in fileDescriptors
                   // In that case, store as duplication marker
-                  this.ctx.state.fileDescriptors!.set(
+                  fds!.set(
                     fd,
                     `__dupout__:${sourceFd}`,
                   );
                 }
                 // Then close the source FD
-                this.ctx.state.fileDescriptors!.delete(sourceFd);
+                fds!.delete(sourceFd);
               }
             } else {
               const sourceFd = Number.parseInt(target, 10);
               if (!Number.isNaN(sourceFd)) {
                 // Store FD duplication: fd N points to fd M
                 checkFdLimit(this.ctx);
-                this.ctx.state.fileDescriptors!.set(
+                fds!.set(
                   fd,
                   `__dupout__:${sourceFd}`,
                 );
@@ -1026,7 +1028,7 @@ export class Interpreter {
             // Move FD: N<&M- means duplicate M to N, then close M
             if (target === "-") {
               // Close the FD
-              this.ctx.state.fileDescriptors.delete(fd);
+              fds!.delete(fd);
             } else if (target.endsWith("-")) {
               // Move operation: N<&M- duplicates M to N then closes M
               // Net-neutral on FD count (set + delete), skip checkFdLimit
@@ -1034,18 +1036,18 @@ export class Interpreter {
               const sourceFd = Number.parseInt(sourceFdStr, 10);
               if (!Number.isNaN(sourceFd)) {
                 // First, duplicate: copy the FD content/info from source to target
-                const sourceInfo = this.ctx.state.fileDescriptors!.get(sourceFd);
+                const sourceInfo = fds!.get(sourceFd);
                 if (sourceInfo !== undefined) {
-                  this.ctx.state.fileDescriptors!.set(fd, sourceInfo);
+                  fds!.set(fd, sourceInfo!);
                 } else {
                   // Source FD might be 0 (stdin) which isn't in fileDescriptors
-                  this.ctx.state.fileDescriptors!.set(
+                  fds!.set(
                     fd,
                     `__dupin__:${sourceFd}`,
                   );
                 }
                 // Then close the source FD
-                this.ctx.state.fileDescriptors!.delete(sourceFd);
+                fds!.delete(sourceFd);
               }
             } else {
               const sourceFd = Number.parseInt(target, 10);
