@@ -276,6 +276,18 @@ export function createInputHandler(term: Terminal, bash: Bash) {
           formatMarkdown(colorizeUrls(result.stdout)).replace(/\n/g, "\r\n")
         );
       if (result.stderr) term.write(result.stderr.replace(/\n/g, "\r\n"));
+
+      // Render observations/suggestions
+      if (result.observations && result.observations.length > 0) {
+        for (const obs of result.observations) {
+          term.write(`\r\n\x1b[33m💡 ${obs.message}\x1b[0m\r\n`);
+          if (obs.suggestions) {
+            for (const suggestion of obs.suggestions) {
+              term.write(`\x1b[2m   Suggestion: ${suggestion}\x1b[0m\r\n`);
+            }
+          }
+        }
+      }
     }
 
     cmd = "";

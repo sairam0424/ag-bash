@@ -80,7 +80,7 @@ import {
   checkFdLimit,
   failure,
   OK,
-  result,
+  result as createExecResult,
   testResult,
   throwExecutionLimit,
 } from "./helpers/result.js";
@@ -90,6 +90,7 @@ import {
   parseRwFdContent,
 } from "./helpers/word-matching.js";
 import { traceSimpleCommand } from "./helpers/xtrace.js";
+import { AgTrace } from "../observability/ag-trace.js";
 import { executePipeline as executePipelineHelper } from "./pipeline-execution.js";
 import {
   applyRedirections,
@@ -120,26 +121,27 @@ export interface InterpreterOptions {
       args?: string[];
     },
   ) => Promise<ExecResult>;
-  /** Optional secure fetch function for network-enabled commands */
   fetch?: SecureFetch;
-  /** Optional sleep function for testing with mock clocks */
   sleep?: (ms: number) => Promise<void>;
-  /** Optional trace callback for performance profiling */
   trace?: TraceCallback;
-  /** Optional feature coverage writer for fuzzing instrumentation */
   coverage?: FeatureCoverageWriter;
-  /**
-   * When true, fail closed if execution occurs outside defense async context.
-   */
   requireDefenseContext?: boolean;
-  /** Bootstrap JavaScript code for js-exec */
   jsBootstrapCode?: string;
   onCommandNotFound?: (
     command: string,
     args: string[],
   ) => Promise<ExecResult | null>;
+  /** Returns list of all registered command names */
+  getRegisteredCommands?: () => string[];
+  /** If true, enables agentic behavior for the shell */
+  agentic?: boolean;
 }
 
+/**
+ * Shell Interpreter
+ *
+ * Implements the core bash execution logic by traversing the AST.
+ */
 export class Interpreter {
   private ctx: InterpreterContext;
 
@@ -150,16 +152,19 @@ export class Interpreter {
       commands: options.commands,
       limits: options.limits,
       execFn: options.exec,
-      executeScript: this.executeScript.bind(this),
-      executeStatement: this.executeStatement.bind(this),
-      executeCommand: this.executeCommand.bind(this),
+      executeScript: (node: ScriptNode) => this.executeScript(node),
+      executeStatement: (node: StatementNode) => this.executeStatement(node),
+      executeCommand: (node: CommandNode, stdin: string) =>
+        this.executeCommand(node, stdin),
       fetch: options.fetch,
       sleep: options.sleep,
       trace: options.trace,
       coverage: options.coverage,
-      requireDefenseContext: options.requireDefenseContext ?? false,
+      requireDefenseContext: options.requireDefenseContext,
       jsBootstrapCode: options.jsBootstrapCode,
       onCommandNotFound: options.onCommandNotFound,
+      getRegisteredCommands: options.getRegisteredCommands,
+      agentic: options.agentic,
     };
   }
 
@@ -227,6 +232,7 @@ export class Interpreter {
     let stdout = "";
     let stderr = "";
     let exitCode = 0;
+    const observations: any[] = [];
     const maxOutputSize = this.ctx.limits.maxOutputSize;
 
     const appendOutput = (nextStdout: string, nextStderr: string): void => {
@@ -248,6 +254,9 @@ export class Interpreter {
         const result = await this.executeStatement(statement);
         appendOutput(result.stdout, result.stderr);
         exitCode = result.exitCode;
+        if (result.observations) {
+          observations.push(...result.observations);
+        }
         this.ctx.state.lastExitCode = exitCode;
         this.ctx.state.env.set("?", String(exitCode));
       } catch (error) {
@@ -269,10 +278,12 @@ export class Interpreter {
             stderr,
             exitCode,
             env: mapToRecord(this.ctx.state.env),
+            observations,
           };
         }
         // ExecutionLimitError must always propagate - these are safety limits
-        if (error instanceof ExecutionLimitError) {
+        const errorName = error instanceof Error ? error.name : "";
+        if (error instanceof ExecutionLimitError || errorName === "ExecutionLimitError") {
           throw error;
         }
         if (error instanceof ErrexitError) {
@@ -285,6 +296,7 @@ export class Interpreter {
             stderr,
             exitCode,
             env: mapToRecord(this.ctx.state.env),
+            observations,
           };
         }
         if (error instanceof NounsetError) {
@@ -297,6 +309,7 @@ export class Interpreter {
             stderr,
             exitCode,
             env: mapToRecord(this.ctx.state.env),
+            observations: [AgTrace.analyzeError(error)],
           };
         }
         if (error instanceof BadSubstitutionError) {
@@ -309,6 +322,7 @@ export class Interpreter {
             stderr,
             exitCode,
             env: mapToRecord(this.ctx.state.env),
+            observations: [AgTrace.analyzeError(error)],
           };
         }
         // ArithmeticError in expansion (e.g., echo $((42x))) - the command fails
@@ -347,6 +361,10 @@ export class Interpreter {
           error.prependOutput(stdout, stderr);
           throw error;
         }
+        // Handle SecurityViolationError - must re-throw to reach Bash.exec
+        if (error instanceof SecurityViolationError || errorName === "SecurityViolationError") {
+          throw error;
+        }
         throw error;
       }
     }
@@ -356,6 +374,7 @@ export class Interpreter {
       stderr,
       exitCode,
       env: mapToRecord(this.ctx.state.env),
+      observations,
     };
   }
 
@@ -407,6 +426,7 @@ export class Interpreter {
 
     let stdout = "";
     let stderr = "";
+    const observations: any[] = [];
 
     // verbose mode (set -v): print unevaluated source before execution
     // Don't print verbose output inside command substitutions (suppressVerbose flag)
@@ -432,6 +452,9 @@ export class Interpreter {
       stdout += result.stdout;
       stderr += result.stderr;
       exitCode = result.exitCode;
+      if (result.observations) {
+        observations.push(...result.observations);
+      }
       lastExecutedIndex = i;
       lastPipelineNegated = pipeline.negated;
 
@@ -466,7 +489,7 @@ export class Interpreter {
       throw new ErrexitError(exitCode, stdout, stderr);
     }
 
-    return result(stdout, stderr, exitCode);
+    return createExecResult(stdout, stderr, exitCode, observations);
   }
 
   private async executePipeline(node: PipelineNode): Promise<ExecResult> {
@@ -588,7 +611,7 @@ export class Interpreter {
           return redirectError;
         }
         // Apply redirections to empty result (for append, read redirects, etc.)
-        const baseResult = result("", xtraceAssignmentOutput, 0);
+        const baseResult = createExecResult("", xtraceAssignmentOutput, 0);
         return applyRedirections(this.ctx, baseResult, node.redirections);
       }
 
@@ -600,7 +623,7 @@ export class Interpreter {
       const stderrOutput =
         (this.ctx.state.expansionStderr || "") + xtraceAssignmentOutput;
       this.ctx.state.expansionStderr = "";
-      return result("", stderrOutput, this.ctx.state.lastExitCode);
+      return createExecResult("", stderrOutput, this.ctx.state.lastExitCode);
     }
 
     // Mark prefix assignment variables as temporarily exported for this command
@@ -637,7 +660,7 @@ export class Interpreter {
     if (fdVarError) {
       for (const [name, value] of tempAssignments) {
         if (value === undefined) this.ctx.state.env.delete(name);
-        else this.ctx.state.env.set(name, value);
+        else this.ctx.state.env.set(name, value as string);
       }
       return fdVarError;
     }
@@ -688,7 +711,7 @@ export class Interpreter {
           const target = await expandWord(this.ctx, redir.target as WordNode);
           for (const [name, value] of tempAssignments) {
             if (value === undefined) this.ctx.state.env.delete(name);
-            else this.ctx.state.env.set(name, value);
+            else this.ctx.state.env.set(name, value as string);
           }
           return failure(`bash: ${target}: No such file or directory\n`);
         }
@@ -794,16 +817,52 @@ export class Interpreter {
       }
     }
 
-    // Handle empty command name specially
-    // If the command word contains ONLY command substitutions/expansions and expands
-    // to empty, word-splitting removes the empty result. If there are args, the first
-    // arg becomes the command name. This matches bash behavior:
+    // Built-in commands are registered with CommandRegistry.
+    // External commands are handled by the shell path lookup.
+    let execResult: ExecResult;
+    try {
+      execResult = await this.runCommand(
+        commandName,
+        args,
+        quotedArgs,
+        stdin,
+        false, // skipFunctions
+        false, // useDefaultPath
+        stdinSourceFd
+      );
+    } catch (error) {
+       // Re-throw security and limit errors to be handled by the top-level Bash
+       const errorName = error instanceof Error ? error.name : "";
+       if (error instanceof SecurityViolationError || error instanceof ExecutionLimitError ||
+           errorName === "SecurityViolationError" || errorName === "ExecutionLimitError") {
+         throw error;
+       }
+       // Catch unexpected command internal errors and treat as failure
+       execResult = failure(`bash: ${commandName}: unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+    }
+
+    // Apply redirections if command succeeded (or even if it failed, bash applies them)
+    const finalResult = await applyRedirections(this.ctx, execResult, node.redirections);
+
+    // Ag-Trace: Analyze failure if exitCode exists and is non-zero
+    if (finalResult.exitCode !== 0) {
+      const observations = await AgTrace.analyze(this.ctx, commandName, args, finalResult);
+      if (observations && observations.length > 0) {
+        finalResult.observations = [
+          ...(finalResult.observations || []),
+          ...observations
+        ];
+      }
+    }
+
+    return finalResult;
     // - x=''; $x is a no-op (empty, no args)
     // - x=''; $x Y runs command Y (empty command name, Y becomes command)
     // - `true` X runs command X (since `true` outputs nothing)
     // However, a literal empty string (like '') is "command not found".
+    // however, a literal empty string (like '') is "command not found".
     if (!commandName) {
-      const isOnlyExpansions = node.name.parts.every(
+      const isOnlyExpansions = node.name?.parts.every(
         (p) =>
           p.type === "CommandSubstitution" ||
           p.type === "ParameterExpansion" ||
@@ -827,7 +886,7 @@ export class Interpreter {
         }
         // No args - treat as no-op (status 0)
         // Preserve lastExitCode for command subs like $(exit 42)
-        return result("", "", this.ctx.state.lastExitCode);
+        return createExecResult("", "", this.ctx.state.lastExitCode);
       }
       // Literal empty command name - command not found
       return failure("bash: : command not found\n", 127);
@@ -935,26 +994,26 @@ export class Interpreter {
               const sourceFd = Number.parseInt(sourceFdStr, 10);
               if (!Number.isNaN(sourceFd)) {
                 // First, duplicate: copy the FD content/info from source to target
-                const sourceInfo = this.ctx.state.fileDescriptors.get(sourceFd);
+                const sourceInfo = this.ctx.state.fileDescriptors!.get(sourceFd);
                 if (sourceInfo !== undefined) {
-                  this.ctx.state.fileDescriptors.set(fd, sourceInfo);
+                  this.ctx.state.fileDescriptors!.set(fd, sourceInfo);
                 } else {
                   // Source FD might be 1 (stdout) or 2 (stderr) which aren't in fileDescriptors
                   // In that case, store as duplication marker
-                  this.ctx.state.fileDescriptors.set(
+                  this.ctx.state.fileDescriptors!.set(
                     fd,
                     `__dupout__:${sourceFd}`,
                   );
                 }
                 // Then close the source FD
-                this.ctx.state.fileDescriptors.delete(sourceFd);
+                this.ctx.state.fileDescriptors!.delete(sourceFd);
               }
             } else {
               const sourceFd = Number.parseInt(target, 10);
               if (!Number.isNaN(sourceFd)) {
                 // Store FD duplication: fd N points to fd M
                 checkFdLimit(this.ctx);
-                this.ctx.state.fileDescriptors.set(
+                this.ctx.state.fileDescriptors!.set(
                   fd,
                   `__dupout__:${sourceFd}`,
                 );
@@ -975,25 +1034,25 @@ export class Interpreter {
               const sourceFd = Number.parseInt(sourceFdStr, 10);
               if (!Number.isNaN(sourceFd)) {
                 // First, duplicate: copy the FD content/info from source to target
-                const sourceInfo = this.ctx.state.fileDescriptors.get(sourceFd);
+                const sourceInfo = this.ctx.state.fileDescriptors!.get(sourceFd);
                 if (sourceInfo !== undefined) {
-                  this.ctx.state.fileDescriptors.set(fd, sourceInfo);
+                  this.ctx.state.fileDescriptors!.set(fd, sourceInfo);
                 } else {
                   // Source FD might be 0 (stdin) which isn't in fileDescriptors
-                  this.ctx.state.fileDescriptors.set(
+                  this.ctx.state.fileDescriptors!.set(
                     fd,
                     `__dupin__:${sourceFd}`,
                   );
                 }
                 // Then close the source FD
-                this.ctx.state.fileDescriptors.delete(sourceFd);
+                this.ctx.state.fileDescriptors!.delete(sourceFd);
               }
             } else {
               const sourceFd = Number.parseInt(target, 10);
               if (!Number.isNaN(sourceFd)) {
                 // Store FD duplication for input
                 checkFdLimit(this.ctx);
-                this.ctx.state.fileDescriptors.set(fd, `__dupin__:${sourceFd}`);
+                this.ctx.state.fileDescriptors!.set(fd, `__dupin__:${sourceFd}`);
               }
             }
             break;
@@ -1005,21 +1064,23 @@ export class Interpreter {
       // (like ":"), exec without a command restores temp assignments
       for (const [name, value] of tempAssignments) {
         if (value === undefined) this.ctx.state.env.delete(name);
-        else this.ctx.state.env.set(name, value);
+        else this.ctx.state.env.set(name, value as string);
       }
       // Clear temp exported vars
-      if (this.ctx.state.tempExportedVars) {
+      const tempExportedVars = this.ctx.state.tempExportedVars;
+      if (tempExportedVars) {
         for (const name of tempAssignments.keys()) {
-          this.ctx.state.tempExportedVars.delete(name);
+          (tempExportedVars as Set<string>).delete(name);
         }
       }
       return OK;
     }
 
     // Append extra args injected via exec({ args }) and consume them
-    if (this.ctx.state.extraArgs) {
-      args.push(...this.ctx.state.extraArgs);
-      for (let i = 0; i < this.ctx.state.extraArgs.length; i++) {
+    const extraArgs = this.ctx.state.extraArgs;
+    if (extraArgs) {
+      args.push(...(extraArgs as string[]));
+      for (let i = 0; i < (extraArgs as string[]).length; i++) {
         quotedArgs.push(true);
       }
       this.ctx.state.extraArgs = undefined;
@@ -1032,8 +1093,9 @@ export class Interpreter {
     // This allows `unset v` to reveal the underlying global value when
     // v was set by a prefix assignment like `v=tempenv cmd`
     if (tempAssignments.size > 0) {
-      this.ctx.state.tempEnvBindings = this.ctx.state.tempEnvBindings || [];
-      this.ctx.state.tempEnvBindings.push(new Map(tempAssignments));
+      const bindings = this.ctx.state.tempEnvBindings || [];
+      bindings.push(new Map(tempAssignments));
+      this.ctx.state.tempEnvBindings = bindings;
     }
 
     let cmdResult: ExecResult;
@@ -1053,7 +1115,7 @@ export class Interpreter {
       // For break/continue, we still need to apply redirections before propagating
       // This handles cases like "break > file" where the file should be created
       if (error instanceof BreakError || error instanceof ContinueError) {
-        controlFlowError = error;
+        controlFlowError = error as BreakError | ContinueError;
         cmdResult = OK; // break/continue have exit status 0
       } else {
         throw error;
@@ -1091,7 +1153,7 @@ export class Interpreter {
         // Extract just the variable name from array assignment
         const match = lastArg.match(/^([a-zA-Z_][a-zA-Z0-9_]*)=\(/);
         if (match) {
-          lastArg = match[1];
+          lastArg = match![1]!;
         }
       }
       this.ctx.state.lastArg = lastArg;
@@ -1120,20 +1182,22 @@ export class Interpreter {
           continue;
         }
         if (value === undefined) this.ctx.state.env.delete(name);
-        else this.ctx.state.env.set(name, value);
+        else this.ctx.state.env.set(name, value as string);
       }
     }
 
     // Clear temp exported vars after command execution
-    if (this.ctx.state.tempExportedVars) {
+    const tempExportedVarsFinal = this.ctx.state.tempExportedVars;
+    if (tempExportedVarsFinal) {
       for (const name of tempAssignments.keys()) {
-        this.ctx.state.tempExportedVars.delete(name);
+        (tempExportedVarsFinal as Set<string>).delete(name);
       }
     }
 
     // Pop tempEnvBindings from the stack
-    if (tempAssignments.size > 0 && this.ctx.state.tempEnvBindings) {
-      this.ctx.state.tempEnvBindings.pop();
+    const bindingsFinal = this.ctx.state.tempEnvBindings;
+    if (tempAssignments.size > 0 && bindingsFinal) {
+      (bindingsFinal as any[]).pop();
     }
 
     // Include any stderr from expansion errors

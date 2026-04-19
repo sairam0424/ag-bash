@@ -35,6 +35,7 @@ export async function executePipeline(
   let pipefailExitCode = 0; // Track rightmost failing command
   const pipestatusExitCodes: number[] = []; // Track all exit codes for PIPESTATUS
   let accumulatedStderr = ""; // Accumulate stderr from all pipeline commands
+  const allObservations: any[] = [];
 
   // For multi-command pipelines, save parent's $_ because pipeline commands
   // run in subshell-like contexts and should not affect parent's $_
@@ -82,6 +83,7 @@ export async function executePipeline(
           stdout: error.stdout,
           stderr: error.stderr,
           exitCode: 1,
+          observations: error.observations,
         };
       }
       // In a MULTI-command pipeline, each command runs in a subshell context
@@ -92,6 +94,7 @@ export async function executePipeline(
           stdout: error.stdout,
           stderr: error.stderr,
           exitCode: error.exitCode,
+          observations: error.observations,
         };
       } else if (error instanceof ErrexitError && node.commands.length > 1) {
         // Errexit inside a pipeline segment should only fail that segment
@@ -100,6 +103,7 @@ export async function executePipeline(
           stdout: error.stdout,
           stderr: error.stderr,
           exitCode: error.exitCode,
+          observations: error.observations,
         };
       } else {
         // Restore environment before re-throwing
@@ -121,6 +125,10 @@ export async function executePipeline(
     // Track the exit code of failing commands for pipefail
     if (result.exitCode !== 0) {
       pipefailExitCode = result.exitCode;
+    }
+
+    if (result.observations) {
+      allObservations.push(...result.observations);
     }
 
     if (!isLast) {
@@ -223,6 +231,17 @@ export async function executePipeline(
     ctx.state.lastArg = savedLastArg;
   }
   // With lastpipe, the last command already updated $_ in the main shell context
+
+  // Attach all observations collected across the pipeline
+  if (allObservations.length > 0) {
+    lastResult = {
+      ...lastResult,
+      observations: [
+        ...(lastResult.observations || []),
+        ...allObservations,
+      ],
+    };
+  }
 
   return lastResult;
 }

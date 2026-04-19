@@ -259,6 +259,17 @@ export interface IFileSystem {
    * @throws Error if path doesn't exist
    */
   utimes(path: string, atime: Date, mtime: Date): Promise<void>;
+
+  /**
+   * Create a snapshot of the current filesystem state (writable layers/memory).
+   * Used for state persistence and rollbacks in agentic workflows.
+   */
+  snapshot(): Promise<unknown>;
+
+  /**
+   * Restore the filesystem state from a previously captured snapshot.
+   */
+  restore(snapshot: unknown): Promise<void>;
 }
 
 /**

@@ -23,10 +23,11 @@ export const OK: ExecResult = Object.freeze({
  * Create a successful result with optional stdout.
  *
  * @param stdout - Output to include (default: "")
+ * @param observations - Optional failure metadata
  * @returns ExecResult with exitCode 0
  */
-export function success(stdout = ""): ExecResult {
-  return { stdout, stderr: "", exitCode: 0 };
+export function success(stdout = "", observations?: any[]): ExecResult {
+  return { stdout, stderr: "", exitCode: 0, observations };
 }
 
 /**
@@ -34,10 +35,11 @@ export function success(stdout = ""): ExecResult {
  *
  * @param stderr - Error message to include
  * @param exitCode - Exit code (default: 1)
+ * @param observations - Optional failure metadata
  * @returns ExecResult with the specified exitCode
  */
-export function failure(stderr: string, exitCode = 1): ExecResult {
-  return { stdout: "", stderr, exitCode };
+export function failure(stderr: string, exitCode = 1, observations?: any[]): ExecResult {
+  return { stdout: "", stderr, exitCode, observations };
 }
 
 /**
@@ -46,14 +48,16 @@ export function failure(stderr: string, exitCode = 1): ExecResult {
  * @param stdout - Standard output
  * @param stderr - Standard error
  * @param exitCode - Exit code
+ * @param observations - Optional failure metadata
  * @returns ExecResult with all fields
  */
 export function result(
   stdout: string,
   stderr: string,
   exitCode: number,
+  observations?: any[],
 ): ExecResult {
-  return { stdout, stderr, exitCode };
+  return { stdout, stderr, exitCode, observations };
 }
 
 /**

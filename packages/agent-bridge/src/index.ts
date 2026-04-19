@@ -1,5 +1,11 @@
 import { defineCommand } from "@ag-bash/bash";
 
+export * from "./adapters.js";
+export * from "./orchestrator.js";
+
+import { FetchAgentAdapter } from "./adapters.js";
+import { AgentOrchestrator } from "./orchestrator.js";
+
 /**
  * Terminal UI Message format
  */
@@ -54,8 +60,28 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
   const { 
     apiEndpoint = "/api/agent", 
     maxToolOutputLines = 20,
-    onStateUpdate 
-  } = options;
+    onStateUpdate,
+    bash,
+    adapter: customAdapter
+  } = options as any;
+
+  const adapter = customAdapter || new FetchAgentAdapter(apiEndpoint);
+  
+  if (bash) {
+    const orchestrator = new AgentOrchestrator({
+      bash,
+      adapter,
+      writer: term,
+      maxToolOutputLines
+    });
+    
+    return {
+      agentCmd: defineCommand("agent", (args) => orchestrator.run(args.join(" ")).then(() => ({ stdout: "", stderr: "", exitCode: 0 }))),
+      executeAgentPrompt: (prompt: string) => orchestrator.run(prompt).then(() => ({ stdout: "", stderr: "", exitCode: 0 })),
+      agentMessages: orchestrator.getMessages(),
+      orchestrator // Expose for advanced control
+    };
+  }
 
   const agentMessages: UIMessage[] = [];
   let messageIdCounter = 0;
