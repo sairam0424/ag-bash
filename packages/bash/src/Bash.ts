@@ -48,6 +48,12 @@ import {
   type InterpreterOptions,
   type InterpreterState,
 } from "./interpreter/index.js";
+import {
+  diffState,
+  diffFs,
+  applyStateDelta,
+  type BashDelta,
+} from "./state-sync/index.js";
 import { type ExecutionLimits, resolveLimits } from "./limits.js";
 import {
   createSecureFetch,
@@ -56,6 +62,7 @@ import {
 } from "./network/index.js";
 import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
+import { MountableFs, type MountConfig } from "./fs/mountable-fs/index.js";
 import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
 import { TreeSitterToAst } from "./parser/tree-sitter-to-ast.js";
 import {
@@ -101,6 +108,13 @@ export interface BashOptions {
   env?: Record<string, string>;
   cwd?: string;
   fs?: IFileSystem;
+  /**
+   * Persistence configuration for the agent workspace.
+   */
+  persistence?: {
+    root: string;
+    mountPoint?: string;
+  };
   /**
    * Execution limits to prevent runaway compute.
    * See ExecutionLimits interface for available options.
@@ -310,7 +324,7 @@ export interface ExecOptions {
 }
 
 export class Bash {
-  readonly fs: IFileSystem;
+  readonly fs: MountableFs;
   private commands: CommandRegistry = new Map();
   private useDefaultLayout: boolean = false;
   private limits: Required<ExecutionLimits>;
@@ -333,8 +347,19 @@ export class Bash {
   private state: InterpreterState;
 
   constructor(options: BashOptions = {}) {
-    const fs = options.fs ?? new InMemoryFs(options.files);
-    this.fs = fs;
+    this.fs = options.fs instanceof MountableFs 
+      ? options.fs 
+      : new MountableFs({ base: options.fs ?? new InMemoryFs(options.files) });
+
+    const fs = this.fs;
+
+    // Handle auto-persistence
+    if (options.persistence) {
+      this.usePersistence(
+        options.persistence.root,
+        options.persistence.mountPoint || "/home/user"
+      );
+    }
 
     this.useDefaultLayout = !options.cwd && !options.files;
     const cwd = options.cwd || (this.useDefaultLayout ? "/home/user" : "/");
@@ -900,11 +925,68 @@ export class Bash {
   }
 
   /**
-   * Restore the shell state from a previously captured snapshot.
+   * Creates a differential delta between a base snapshot and current state.
+   */
+  async createDelta(base: BashSnapshot): Promise<BashDelta> {
+    const current = await this.snapshot();
+    const delta = diffState(base, current);
+    delta.fsDelta = diffFs(
+      base.fs as Map<string, any>,
+      current.fs as Map<string, any>,
+    );
+    return delta;
+  }
+
+  /**
+   * Applies a differential delta to the current state.
+   */
+  async applyDelta(delta: BashDelta): Promise<void> {
+    applyStateDelta(this.state, delta);
+    if (delta.fsDelta) {
+      for (const [path, content] of Object.entries(delta.fsDelta.modified)) {
+        await this.fs.writeFile(path, content);
+      }
+      for (const path of delta.fsDelta.deleted) {
+        try {
+          await this.fs.rm(path);
+        } catch {
+          // Ignore if already deleted
+        }
+      }
+    }
+  }
+
+  /**
+   * Restores the shell to a previously captured snapshot.
    */
   async restore(snapshot: BashSnapshot): Promise<void> {
     this.state = this.cloneState(snapshot.state);
     await this.fs.restore(snapshot.fs);
+  }
+
+  /**
+   * Mount a filesystem at the specified virtual path.
+   */
+  mount(mountPoint: string, filesystem: IFileSystem): void {
+    this.fs.mount(mountPoint, filesystem);
+  }
+
+  /**
+   * Configure persistent storage for a specific path.
+   * In Node.js, this mounts a ReadWriteFs directly to the host filesystem.
+   */
+  async usePersistence(root: string, mountPoint: string = "/home/user"): Promise<void> {
+    // Dynamic import to stay isomorphic
+    const { ReadWriteFs } = await import("./fs/read-write-fs/index.js");
+    const persistentFs = new ReadWriteFs({ root });
+    this.mount(mountPoint, persistentFs);
+  }
+
+  /**
+   * Unmount the filesystem at the specified path.
+   */
+  unmount(mountPoint: string): void {
+    this.fs.unmount(mountPoint);
   }
 
   /**

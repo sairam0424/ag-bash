@@ -44,10 +44,11 @@ class AgBashServer {
               protocolVersion: this.protocolVersion,
               capabilities: {
                 tools: Object.create(null),
+                resources: { subscribe: true },
               },
               serverInfo: {
                 name: "ag-bash",
-                version: "1.3.0",
+                version: "1.4.0",
               },
             },
           });
@@ -84,6 +85,60 @@ class AgBashServer {
                   inputSchema: {
                     type: "object",
                     properties: Object.create(null),
+                  },
+                },
+                {
+                  name: "snapshot",
+                  description:
+                    "Capture a complete binary snapshot of the current shell state (filesystem + environment).",
+                  inputSchema: {
+                    type: "object",
+                    properties: Object.create(null),
+                  },
+                },
+                {
+                  name: "restore",
+                  description:
+                    "Restore the shell to a previously captured state via a snapshot.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      snapshot: {
+                        type: "string",
+                        description: "The base64 encoded snapshot state to restore.",
+                      },
+                    },
+                    required: ["snapshot"],
+                  },
+                },
+                {
+                  name: "create_delta",
+                  description:
+                    "Create a differential delta between a base snapshot and current state for efficient sync.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      baseSnapshot: {
+                        type: "string",
+                        description: "The base64 encoded base snapshot.",
+                      },
+                    },
+                    required: ["baseSnapshot"],
+                  },
+                },
+                {
+                  name: "apply_delta",
+                  description:
+                    "Apply a differential delta to the current shell state.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      delta: {
+                        type: "string",
+                        description: "The base64 encoded delta to apply.",
+                      },
+                    },
+                    required: ["delta"],
                   },
                 },
               ],
@@ -130,8 +185,79 @@ class AgBashServer {
                 ],
               },
             });
+          } else if (name === "snapshot") {
+            const state = await this.bash.snapshot();
+            const encoded = Buffer.from(JSON.stringify(state)).toString("base64");
+            return this.sendResponse(id, {
+              result: {
+                content: [{ type: "text", text: encoded }],
+              },
+            });
+            return this.sendResponse(id, {
+              result: {
+                content: [{ type: "text", text: "State restored successfully." }],
+              },
+            });
+          } else if (name === "create_delta") {
+            const encodedBase = String(args?.baseSnapshot || "");
+            const base = JSON.parse(
+              Buffer.from(encodedBase, "base64").toString("utf-8"),
+            );
+            const delta = await this.bash.createDelta(base);
+            const encodedDelta = Buffer.from(JSON.stringify(delta)).toString(
+              "base64",
+            );
+            return this.sendResponse(id, {
+              result: {
+                content: [{ type: "text", text: encodedDelta }],
+              },
+            });
+          } else if (name === "apply_delta") {
+            const encodedDelta = String(args?.delta || "");
+            const delta = JSON.parse(
+              Buffer.from(encodedDelta, "base64").toString("utf-8"),
+            );
+            await this.bash.applyDelta(delta);
+            return this.sendResponse(id, {
+              result: {
+                content: [{ type: "text", text: "Delta applied successfully." }],
+              },
+            });
           }
           break;
+        }
+
+        case "resources/list": {
+          const paths = this.bash.fs.getAllPaths();
+          return this.sendResponse(id, {
+            result: {
+              resources: paths.map((p) => ({
+                uri: `ag-bash://vfs${p}`,
+                name: p,
+                mimeType: "text/plain",
+              })),
+            },
+          });
+        }
+
+        case "resources/read": {
+          const uri = String(params?.uri || "");
+          const path = uri.replace("ag-bash://vfs", "");
+          try {
+            const content = await this.bash.fs.readFile(path);
+            return this.sendResponse(id, {
+              result: {
+                contents: [{ uri, text: content }],
+              },
+            });
+          } catch (e) {
+            return this.sendResponse(id, {
+              error: {
+                code: -32602,
+                message: `Resource not found: ${path}`,
+              },
+            });
+          }
         }
 
         case "ping": {

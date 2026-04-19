@@ -64,6 +64,22 @@ export class AgTrace {
       });
     }
 
+    // 4. Missing Dependencies (Optional Packages)
+    if (result.stderr.toLowerCase().includes("not installed") || 
+        result.stderr.toLowerCase().includes("module not found")) {
+      const pkg = result.stderr.match(/'([^']+)' not installed|module '([^']+)'/i);
+      const pkgName = pkg ? (pkg[1] || pkg[2]) : null;
+      
+      if (pkgName) {
+        observations.push({
+          type: "suggestion",
+          message: `The command requires the optional package '${pkgName}'.`,
+          suggestions: [`Run 'pnpm add ${pkgName}' in the host environment to enable this feature.`],
+          context: { pkgName }
+        });
+      }
+    }
+
     return observations;
   }
 
