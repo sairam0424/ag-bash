@@ -50,6 +50,8 @@ import {
   DebuggerBridge,
 } from "./interpreter/index.js";
 import { SemanticEngine } from "./lsp/semantic-engine.js";
+import { AgenticHealer } from "./agentic/agentic-healer.js";
+import type { AgenticHealerConfig } from "./agentic/types.js";
 import {
   diffState,
   diffFs,
@@ -270,6 +272,10 @@ export interface BashOptions {
    */
   agentic?: boolean;
   /**
+   * Configuration for the agentic healer.
+   */
+  agenticConfig?: AgenticHealerConfig;
+  /**
    * Configuration for the Tree-sitter parser engine.
    * Required if parserEngine is set to 'tree-sitter'.
    */
@@ -339,6 +345,10 @@ export interface ExecOptions {
    * Optional semantic engine for AST analysis (specific to this call).
    */
   semanticEngine?: SemanticEngine;
+  /**
+   * Optional agentic healer (specific to this call).
+   */
+  agenticHealer?: AgenticHealer;
 }
 
 export class Bash {
@@ -362,6 +372,7 @@ export class Bash {
   private agentic: boolean;
   private debugger?: DebuggerBridge;
   private semanticEngine?: SemanticEngine;
+  private agenticHealer?: AgenticHealer;
 
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
@@ -583,6 +594,10 @@ export class Bash {
     this.treeSitterConfig = options.treeSitterConfig;
     this.debugger = options.debugger;
     this.semanticEngine = options.semanticEngine;
+    this.agentic = options.agentic ?? false;
+    if (this.agentic) {
+      this.agenticHealer = new AgenticHealer(options.agenticConfig || { enableHeuristics: true });
+    }
   }
 
   registerCommand(command: Command): void {
@@ -808,6 +823,7 @@ export class Bash {
           getRegisteredCommands: () => Array.from(this.commands.keys()),
           debugger: options?.debugger ?? this.debugger,
           semanticEngine: options?.semanticEngine ?? this.semanticEngine,
+          agenticHealer: options?.agenticHealer ?? this.agenticHealer,
         };
 
         const interpreter = new Interpreter(interpreterOptions, execState);

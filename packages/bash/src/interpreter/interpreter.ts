@@ -106,6 +106,7 @@ import {
 import type { InterpreterContext, InterpreterState } from "./types.js";
 import { DebuggerBridge } from "./debugger/debugger.js";
 import { SemanticEngine } from "../lsp/semantic-engine.js";
+import { AgenticHealer } from "../agentic/agentic-healer.js";
 
 export type { InterpreterContext, InterpreterState } from "./types.js";
 
@@ -141,6 +142,8 @@ export interface InterpreterOptions {
   debugger?: DebuggerBridge;
   /** Optional semantic engine implementation */
   semanticEngine?: SemanticEngine;
+  /** Optional agentic healer implementation */
+  agenticHealer?: AgenticHealer;
 }
 
 /**
@@ -172,7 +175,8 @@ export class Interpreter {
       getRegisteredCommands: options.getRegisteredCommands,
       agentic: options.agentic,
       debugger: options.debugger,
-      semanticEngine: options.semanticEngine,
+      semanticEngine: options.semanticEngine || (options.agentic ? new SemanticEngine() : undefined),
+      agenticHealer: options.agenticHealer || (options.agentic ? new AgenticHealer() : undefined),
     };
   }
 
@@ -399,121 +403,150 @@ export class Interpreter {
     );
   }
 
-  private async executeStatement(node: StatementNode): Promise<ExecResult> {
-    this.assertDefenseContext("statement");
+  public async executeStatement(node: StatementNode): Promise<ExecResult> {
+    try {
+      this.assertDefenseContext("statement");
 
-    // Ag-Intelligence: Statement-level debugger hook
-    if (this.ctx.debugger) {
-      await this.ctx.debugger.onBeforeStatement(node, this.ctx.state);
-    }
-
-    // Ag-Intelligence: Semantic AST analysis hook
-    if (this.ctx.semanticEngine) {
-      await this.ctx.semanticEngine.indexStatement(node);
-    }
-
-    // Check for abort signal (cooperative cancellation by timeout command)
-    if (this.ctx.state.signal?.aborted) {
-      throw new ExecutionAbortedError();
-    }
-
-    this.ctx.state.commandCount++;
-    if (this.ctx.state.commandCount > this.ctx.limits.maxCommandCount) {
-      throwExecutionLimit(
-        `too many commands executed (>${this.ctx.limits.maxCommandCount}), increase executionLimits.maxCommandCount`,
-        "commands",
-      );
-    }
-
-    // Check for deferred syntax error. This is triggered when execution reaches
-    // a statement that has a syntax error (like standalone `}`), but the error
-    // was deferred to support bash's incremental parsing behavior.
-    if (node.deferredError) {
-      throw new ParseException(node.deferredError.message, node.line ?? 1, 1);
-    }
-
-    // noexec mode (set -n): parse commands but do not execute them
-    // This is used for syntax checking scripts without actually running them
-    if (this.ctx.state.options.noexec) {
-      return OK;
-    }
-
-    // Reset errexitSafe at the start of each statement
-    // It will be set by inner compound command executions if needed
-    this.ctx.state.errexitSafe = false;
-
-    let stdout = "";
-    let stderr = "";
-    const observations: any[] = [];
-
-    // verbose mode (set -v): print unevaluated source before execution
-    // Don't print verbose output inside command substitutions (suppressVerbose flag)
-    if (
-      this.ctx.state.options.verbose &&
-      !this.ctx.state.suppressVerbose &&
-      node.sourceText
-    ) {
-      stderr += `${node.sourceText}\n`;
-    }
-    let exitCode = 0;
-    let lastExecutedIndex = -1;
-    let lastPipelineNegated = false;
-
-    for (let i = 0; i < node.pipelines.length; i++) {
-      const pipeline = node.pipelines[i];
-      const operator = i > 0 ? node.operators[i - 1] : null;
-
-      if (operator === "&&" && exitCode !== 0) continue;
-      if (operator === "||" && exitCode === 0) continue;
-
-      const result = await this.executePipeline(pipeline);
-      stdout += result.stdout;
-      stderr += result.stderr;
-      exitCode = result.exitCode;
-      if (result.observations) {
-        observations.push(...result.observations);
+      // Ag-Intelligence: Statement-level debugger hook
+      if (this.ctx.debugger) {
+        await this.ctx.debugger.onBeforeStatement(node, this.ctx.state);
       }
-      lastExecutedIndex = i;
-      lastPipelineNegated = pipeline.negated;
 
-      // Update $? after each pipeline so it's available for subsequent commands
-      this.ctx.state.lastExitCode = exitCode;
-      this.ctx.state.env.set("?", String(exitCode));
+      // Ag-Intelligence: Semantic AST analysis hook
+      if (this.ctx.semanticEngine) {
+        await this.ctx.semanticEngine.indexStatement(node);
+      }
+
+      // Check for abort signal (cooperative cancellation by timeout command)
+      if (this.ctx.state.signal?.aborted) {
+        throw new ExecutionAbortedError();
+      }
+
+      this.ctx.state.commandCount++;
+      if (this.ctx.state.commandCount > this.ctx.limits.maxCommandCount) {
+        throwExecutionLimit(
+          `too many commands executed (>${this.ctx.limits.maxCommandCount}), increase executionLimits.maxCommandCount`,
+          "commands",
+        );
+      }
+
+      // Check for deferred syntax error
+      if (node.deferredError) {
+        throw new ParseException(node.deferredError.message, node.line ?? 1, 1);
+      }
+
+      // noexec mode (set -n)
+      if (this.ctx.state.options.noexec) {
+        return OK;
+      }
+
+      // Reset errexitSafe at the start of each statement
+      this.ctx.state.errexitSafe = false;
+
+      let stdout = "";
+      let stderr = "";
+      const observations: any[] = [];
+
+      // verbose mode (set -v)
+      if (
+        this.ctx.state.options.verbose &&
+        !this.ctx.state.suppressVerbose &&
+        node.sourceText
+      ) {
+        stderr += `${node.sourceText}\n`;
+      }
+      let exitCode = 0;
+      let lastExecutedIndex = -1;
+      let lastPipelineNegated = false;
+
+      for (let i = 0; i < node.pipelines.length; i++) {
+        const pipeline = node.pipelines[i];
+        const operator = i > 0 ? node.operators[i - 1] : null;
+
+        if (operator === "&&" && exitCode !== 0) continue;
+        if (operator === "||" && exitCode === 0) continue;
+
+        const result = await this.executePipeline(pipeline);
+        stdout += result.stdout;
+        stderr += result.stderr;
+        exitCode = result.exitCode;
+        if (result.observations) {
+          observations.push(...result.observations);
+        }
+        lastExecutedIndex = i;
+        lastPipelineNegated = pipeline.negated;
+
+        // Update $? after each pipeline
+        this.ctx.state.lastExitCode = exitCode;
+        this.ctx.state.env.set("?", String(exitCode));
+      }
+
+      // Track whether this exit code is "safe" for errexit purposes
+      const wasShortCircuited = lastExecutedIndex < node.pipelines.length - 1;
+      const innerWasSafe = this.ctx.state.errexitSafe;
+      this.ctx.state.errexitSafe =
+        wasShortCircuited || lastPipelineNegated || innerWasSafe;
+
+      // Check errexit (set -e)
+      if (
+        this.ctx.state.options.errexit &&
+        exitCode !== 0 &&
+        lastExecutedIndex === node.pipelines.length - 1 &&
+        !lastPipelineNegated &&
+        !this.ctx.state.inCondition &&
+        !innerWasSafe
+      ) {
+        throw new ErrexitError(exitCode, stdout, stderr, observations);
+      }
+
+      return { stdout, stderr, exitCode, observations };
+    } catch (error: any) {
+      if (
+        this.ctx.agentic &&
+        this.ctx.agenticHealer &&
+        error instanceof Error
+      ) {
+        const suggestion = await this.ctx.agenticHealer.diagnose(
+          "",
+          { stdout: "", stderr: (error as any).stderr || error.message || "", exitCode: 1 },
+          this.ctx,
+          error,
+        );
+        if (suggestion) {
+          const healerMessage = `\n[Agentic Healer] ${suggestion}\n`;
+          const anyError = error as any;
+          if (anyError.stderr !== undefined) {
+            anyError.stderr += healerMessage;
+          } else {
+            error.message += healerMessage;
+          }
+        }
+      }
+      throw error;
     }
-
-    // Track whether this exit code is "safe" for errexit purposes
-    // (i.e., the failure was from a && or || chain where the final command wasn't reached,
-    // OR the failure came from a compound command where the inner statement was errexit-safe)
-    const wasShortCircuited = lastExecutedIndex < node.pipelines.length - 1;
-    // Preserve errexitSafe if it was set by an inner compound command
-    const innerWasSafe = this.ctx.state.errexitSafe;
-    this.ctx.state.errexitSafe =
-      wasShortCircuited || lastPipelineNegated || innerWasSafe;
-
-    // Check errexit (set -e): exit if command failed
-    // Exceptions:
-    // - Command was in a && or || list and wasn't the final command (short-circuit)
-    // - Command was negated with !
-    // - Command is part of a condition in if/while/until
-    // - Exit code came from a compound command where inner execution was errexit-safe
-    if (
-      this.ctx.state.options.errexit &&
-      exitCode !== 0 &&
-      lastExecutedIndex === node.pipelines.length - 1 &&
-      !lastPipelineNegated &&
-      !this.ctx.state.inCondition &&
-      !innerWasSafe
-    ) {
-      throw new ErrexitError(exitCode, stdout, stderr);
-    }
-
-    return createExecResult(stdout, stderr, exitCode, observations);
   }
 
-  private async executePipeline(node: PipelineNode): Promise<ExecResult> {
-    return executePipelineHelper(this.ctx, node, (cmd, stdin) =>
+  public async executePipeline(node: PipelineNode): Promise<ExecResult> {
+    const result = await executePipelineHelper(this.ctx, node, (cmd, stdin) =>
       this.executeCommand(cmd, stdin),
     );
+
+    // Ag-Intelligence: Agentic Healer diagnostic hook for command-not-found failures (exit code 127)
+    if (this.ctx.agentic && this.ctx.agenticHealer && result.exitCode === 127) {
+      const suggestion = await this.ctx.agenticHealer.diagnose(
+        "",
+        result,
+        this.ctx,
+      );
+      if (suggestion) {
+        return {
+          ...result,
+          stderr: result.stderr + `\n[Agentic Healer] ${suggestion}\n`,
+        };
+      }
+    }
+
+    return result;
   }
 
   private async executeCommand(
@@ -1151,6 +1184,19 @@ export class Interpreter {
       };
     }
 
+    // If agentic behavior is enabled and the command failed, trigger healer
+    if (this.ctx.agentic && this.ctx.agenticHealer && cmdResult.exitCode !== 0) {
+      const healer = this.ctx.agenticHealer as AgenticHealer;
+      const suggestion = await healer.diagnose(
+        commandName + (args.length > 0 ? " " + args.join(" ") : ""),
+        cmdResult,
+        this.ctx,
+      );
+      if (suggestion) {
+        cmdResult.stderr += `\n[Agentic Healer] ${suggestion}\n`;
+      }
+    }
+
     cmdResult = await applyRedirections(this.ctx, cmdResult, node.redirections);
 
     // If we caught a break/continue error, re-throw it after applying redirections
@@ -1158,27 +1204,20 @@ export class Interpreter {
       throw controlFlowError;
     }
 
-    // Update $_ to the last argument of this command (after expansion)
-    // If no arguments, $_ is set to the command name
-    // Special case: for declare/local/typeset with array assignments like "a=(1 2)",
-    // bash sets $_ to just the variable name "a", not the full "a=(1 2)"
     if (args.length > 0) {
       let lastArg = args[args.length - 1];
+      // Special case for assignments in builtins
       if (
         (commandName === "declare" ||
           commandName === "local" ||
           commandName === "typeset") &&
-        /^[a-zA-Z_][a-zA-Z0-9_]*=\(/.test(lastArg)
+        lastArg.includes("=(")
       ) {
-        // Extract just the variable name from array assignment
-        const match = lastArg.match(/^([a-zA-Z_][a-zA-Z0-9_]*)=\(/);
-        if (match) {
-          lastArg = match![1]!;
-        }
+        lastArg = lastArg.split("=")[0];
       }
-      this.ctx.state.lastArg = lastArg;
+      this.ctx.state.env.set("_", lastArg);
     } else {
-      this.ctx.state.lastArg = commandName;
+      this.ctx.state.env.set("_", commandName);
     }
 
     // In POSIX mode, prefix assignments persist after special builtins
