@@ -26,3 +26,8 @@ fuzz-*.log
 .claude/settings.local.json
 .npmrc
 tsconfig.tsbuildinfo
+
+# Bash Vendor Binaries
+packages/bash/src/parser/vendor/
+packages/bash/vendor/
+
