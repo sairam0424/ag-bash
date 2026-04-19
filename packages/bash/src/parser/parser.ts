@@ -479,6 +479,7 @@ export class Parser {
 
     // Record the start position for verbose mode source text
     const startOffset = this.current().start;
+    const posBefore = this.pos;
 
     const pipelines: PipelineNode[] = [];
     const operators: ("&&" | "||" | ";")[] = [];
@@ -515,6 +516,7 @@ export class Parser {
       background,
       undefined,
       sourceText,
+      this.tokens[posBefore]?.line || this.current().line,
     );
   }
 

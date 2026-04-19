@@ -104,6 +104,8 @@ import {
   executeUserScript as executeUserScriptHelper,
 } from "./subshell-group.js";
 import type { InterpreterContext, InterpreterState } from "./types.js";
+import { DebuggerBridge } from "./debugger/debugger.js";
+import { SemanticEngine } from "../lsp/semantic-engine.js";
 
 export type { InterpreterContext, InterpreterState } from "./types.js";
 
@@ -135,6 +137,10 @@ export interface InterpreterOptions {
   getRegisteredCommands?: () => string[];
   /** If true, enables agentic behavior for the shell */
   agentic?: boolean;
+  /** Optional debugger implementation */
+  debugger?: DebuggerBridge;
+  /** Optional semantic engine implementation */
+  semanticEngine?: SemanticEngine;
 }
 
 /**
@@ -165,6 +171,8 @@ export class Interpreter {
       onCommandNotFound: options.onCommandNotFound,
       getRegisteredCommands: options.getRegisteredCommands,
       agentic: options.agentic,
+      debugger: options.debugger,
+      semanticEngine: options.semanticEngine,
     };
   }
 
@@ -393,6 +401,16 @@ export class Interpreter {
 
   private async executeStatement(node: StatementNode): Promise<ExecResult> {
     this.assertDefenseContext("statement");
+
+    // Ag-Intelligence: Statement-level debugger hook
+    if (this.ctx.debugger) {
+      await this.ctx.debugger.onBeforeStatement(node, this.ctx.state);
+    }
+
+    // Ag-Intelligence: Semantic AST analysis hook
+    if (this.ctx.semanticEngine) {
+      await this.ctx.semanticEngine.indexStatement(node);
+    }
 
     // Check for abort signal (cooperative cancellation by timeout command)
     if (this.ctx.state.signal?.aborted) {

@@ -47,7 +47,9 @@ import {
   Interpreter,
   type InterpreterOptions,
   type InterpreterState,
+  DebuggerBridge,
 } from "./interpreter/index.js";
+import { SemanticEngine } from "./lsp/semantic-engine.js";
 import {
   diffState,
   diffFs,
@@ -275,6 +277,14 @@ export interface BashOptions {
     webTreeSitterWasm: string | Uint8Array;
     bashGrammarWasm: string | Uint8Array;
   };
+  /**
+   * Optional debugger for statement-level control.
+   */
+  debugger?: DebuggerBridge;
+  /**
+   * Optional semantic engine for AST analysis.
+   */
+  semanticEngine?: SemanticEngine;
 }
 
 export interface ExecOptions {
@@ -321,6 +331,14 @@ export interface ExecOptions {
    * Persists CWD, environment variables, and functions.
    */
   persistState?: boolean;
+  /**
+   * Optional debugger for statement-level control (specific to this call).
+   */
+  debugger?: DebuggerBridge;
+  /**
+   * Optional semantic engine for AST analysis (specific to this call).
+   */
+  semanticEngine?: SemanticEngine;
 }
 
 export class Bash {
@@ -342,6 +360,8 @@ export class Bash {
   private parserEngine: 'legacy' | 'tree-sitter';
   private treeSitterConfig?: BashOptions['treeSitterConfig'];
   private agentic: boolean;
+  private debugger?: DebuggerBridge;
+  private semanticEngine?: SemanticEngine;
 
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
@@ -561,6 +581,8 @@ export class Bash {
     this.defaultPersistState = options.persistState ?? false;
     this.parserEngine = options.parserEngine ?? 'tree-sitter';
     this.treeSitterConfig = options.treeSitterConfig;
+    this.debugger = options.debugger;
+    this.semanticEngine = options.semanticEngine;
   }
 
   registerCommand(command: Command): void {
@@ -784,6 +806,8 @@ export class Bash {
           onCommandNotFound: this.onCommandNotFound,
           agentic: this.agentic,
           getRegisteredCommands: () => Array.from(this.commands.keys()),
+          debugger: options?.debugger ?? this.debugger,
+          semanticEngine: options?.semanticEngine ?? this.semanticEngine,
         };
 
         const interpreter = new Interpreter(interpreterOptions, execState);

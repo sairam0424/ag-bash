@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "langgraph-human-in-the-loop": {
+      "source": "langchain-ai/langchain-skills",
+      "sourceType": "github",
+      "computedHash": "0e81f1ef881b4c82bdcb5bece6309558f9e53681022f8347f869abc403b48637"
+    }
+  }
+}
