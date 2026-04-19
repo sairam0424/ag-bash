@@ -19,6 +19,7 @@ import type {
 } from "../types.js";
 import type { DebuggerBridge } from "./debugger/debugger.js";
 import type { SemanticEngine } from "../lsp/semantic-engine.js";
+import type { AgenticHealer } from "../agentic/agentic-healer.js";
 
 /**
  * Completion specification for a command, set by the `complete` builtin.
@@ -467,4 +468,8 @@ export interface InterpreterContext {
    * Optional semantic engine for AST symbol indexing.
    */
   semanticEngine?: SemanticEngine;
+  /**
+   * Optional agentic healer for troubleshooting and recovery.
+   */
+  agenticHealer?: AgenticHealer;
 }

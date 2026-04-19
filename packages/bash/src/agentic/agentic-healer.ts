@@ -1,5 +1,8 @@
-import type { InterpreterState } from "../interpreter/types.js";
+import type { InterpreterContext, InterpreterState } from "../interpreter/types.js";
+import { NounsetError } from "../interpreter/errors.js";
+import { SymbolType } from "../lsp/semantic-engine.js";
 import type { ExecResult } from "../types.js";
+import type { AgenticHealerConfig } from "./types.js";
 
 /**
  * Agentic Healer for Ag-Bash.
@@ -8,6 +11,10 @@ import type { ExecResult } from "../types.js";
  * failed shell commands.
  */
 export class AgenticHealer {
+  constructor(
+    private config: AgenticHealerConfig = { enableHeuristics: true },
+  ) {}
+
   /**
    * Analyzes a failed command execution and generates a recovery suggestion.
    * 
@@ -17,14 +24,49 @@ export class AgenticHealer {
    * @returns A string suggestion or null if no obvious fix is found
    */
   public async diagnose(
-    command: string, 
-    result: ExecResult, 
-    state: InterpreterState
+    command: string,
+    result: ExecResult,
+    ctx: InterpreterContext,
+    error?: Error,
   ): Promise<string | null> {
-    const stderr = result.stderr.toLowerCase();
+    const state = ctx.state;
+
+    // 1. Heuristic check
+    if (this.config.enableHeuristics !== false) {
+      const heuristicResult = await this.diagnoseHeuristically(
+        command,
+        result,
+        ctx,
+        error,
+      );
+      if (heuristicResult) return heuristicResult;
+    }
+
+    // 2. LLM check (if configured)
+    if (this.config.llm) {
+      const context = this.getTroubleshootingContext(command, result, state);
+      return await this.config.llm.generateSuggestion(context);
+    }
+
+    return null;
+  }
+
+  private async diagnoseHeuristically(
+    command: string,
+    result: ExecResult,
+    ctx: InterpreterContext,
+    error?: Error,
+  ): Promise<string | null> {
+    const state = ctx.state;
+    const stderr = (result.stderr || "").toLowerCase();
     
     // 1. Missing directory/file
     if (stderr.includes("no such file or directory")) {
+      const parts = command.split(/\s+/);
+      const possiblePath = parts.find(p => p.includes("/") || p.includes("."));
+      if (possiblePath) {
+        return `Target '${possiblePath}' in '${command}' was not found. Check if the path is correct in ${state.cwd}.`;
+      }
       return `Target in '${command}' was not found. Check if the path is correct in ${state.cwd}.`;
     }
 
@@ -33,12 +75,89 @@ export class AgenticHealer {
       return `Permission denied when executing '${command}'. Check file permissions or ownership.`;
     }
 
-    // 3. Command not found (if reached here, built-in search failed)
-    if (stderr.includes("command not found")) {
-      return `The command '${command.split(' ')[0]}' is missing. Try installing it or checking your PATH.`;
+    // 3. Command not found
+    if (
+      stderr.includes("command not found") ||
+      stderr.includes("not yet implemented")
+    ) {
+      let cmdName = "";
+      if (command.trim()) {
+        const parts = command.trim().split(/\s+/);
+        cmdName = parts[0];
+      } else {
+        // Extract command name from stderr (e.g. "bash: foo: command not found")
+        const match = result.stderr.match(/bash: (.*): command not found/);
+        if (match) {
+          cmdName = match[1];
+        }
+      }
+
+      if (!cmdName) return null;
+
+      // Use SemanticEngine for fuzzy matching if available
+      if (ctx.semanticEngine) {
+        const suggestions = ctx.semanticEngine.fuzzySearchSymbols(
+          cmdName,
+          SymbolType.Function,
+        );
+        if (suggestions.length > 0) {
+          return `Command '${cmdName}' not found. Did you mean function '${suggestions[0].name}'?`;
+        }
+      }
+
+      // Check registered commands (builtins)
+      if (ctx.getRegisteredCommands) {
+        const registered = ctx.getRegisteredCommands();
+        const { levenshtein } = await import("../lsp/semantic-engine.js");
+        
+        // Find closest among registered commands
+        const closestRegistered = registered
+          .map((c) => ({ name: c, dist: levenshtein(cmdName, c) }))
+          .filter((res) => res.dist <= 2)
+          .sort((a, b) => a.dist - b.dist)[0];
+
+        if (closestRegistered) {
+          return `Command '${cmdName}' not found. Did you mean builtin '${closestRegistered.name}'?`;
+        }
+
+        // Fallback: check SHELL_BUILTINS list as well (some might not be registered but are known)
+        const { SHELL_BUILTINS } = await import("../interpreter/helpers/shell-constants.js");
+        const closestBuiltin = Array.from(SHELL_BUILTINS)
+          .map((c) => ({ name: c, dist: levenshtein(cmdName, c) }))
+          .filter((res) => res.dist <= 2)
+          .sort((a, b) => a.dist - b.dist)[0];
+
+        if (closestBuiltin) {
+          return `Command '${cmdName}' not found. Did you mean builtin '${closestBuiltin.name}'?`;
+        }
+      }
+
+      if (stderr.includes("not yet implemented")) {
+        return `The command '${command}' uses a feature not yet implemented in Ag-Bash.`;
+      }
+
+      return `The command '${cmdName}' is missing. Try installing it or checking your PATH.`;
     }
 
-    // 4. Missing flags or arguments
+    // 4. Nounset (Unset variable)
+    if (error instanceof NounsetError || stderr.includes("unbound variable")) {
+      const varName =
+        error instanceof NounsetError
+          ? error.varName
+          : stderr.match(/bash: (.*): unbound variable/)?.[1] || "";
+
+      if (varName && ctx.semanticEngine) {
+        const suggestions = ctx.semanticEngine.fuzzySearchSymbols(
+          varName,
+          SymbolType.Variable,
+        );
+        if (suggestions.length > 0) {
+          return `Variable '${varName}' is unbound. Did you mean '${suggestions[0].name}'?`;
+        }
+      }
+    }
+
+    // 5. Missing flags or arguments
     if (stderr.includes("missing operand") || stderr.includes("requires an argument")) {
       return `'${command}' is missing required arguments. Consult the man page for usage.`;
     }
@@ -65,6 +184,7 @@ ENVIRONMENT:
 CWD: ${state.cwd}
 PATH: ${state.env.get("PATH")}
 HOME: ${state.env.get("HOME")}
+SHELL_STABLE: ${state.options.posix ? "POSIX" : "BASH"}
 `;
   }
 }
