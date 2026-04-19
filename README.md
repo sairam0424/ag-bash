@@ -11,8 +11,9 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 |---|---|---|
-| [`@ag-bash/bash`](./packages/bash) | `v1.3.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v1.3.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [`@ag-bash/bash`](./packages/bash) | `v1.4.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v1.4.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v1.4.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
 
 ---
 
@@ -76,6 +77,8 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
+- **Agentic Observability Loop**: (v1.4.0+) Built-in failure analysis and self-correction suggestions for AI models.
+- **Tree-sitter AST Parser**: (v1.4.0+) Higher-fidelity shell parsing for complex scripts and security analysis.
 - **Virtual Filesystem**: Choose between `InMemoryFs`, `OverlayFs` (COW), or `ReadWriteFs`.
 - **Integrated Runtimes**: Out-of-the-box support for `jq`, `sqlite3`, `python3` (WASM), and `js-exec` (QuickJS).
 - **Protocol First**: Full Model Context Protocol (MCP) support with persistent session state.
