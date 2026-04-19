@@ -895,12 +895,14 @@ export const AST = {
     background = false,
     deferredError?: { message: string; token: string },
     sourceText?: string,
+    line?: number,
   ): StatementNode {
     const node: StatementNode = {
       type: "Statement",
       pipelines,
       operators,
       background,
+      line,
     };
     if (deferredError) {
       node.deferredError = deferredError;

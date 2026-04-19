@@ -1,49 +1,29 @@
 
  RUN  v4.1.4 /Users/sairamugge/Desktop/Ag-Bash/ag-bash/packages/bash
 
- ❯ src/readme.test.ts (9 tests | 1 failed) 7715ms
-       ✓ should list all registered commands 2ms
-       ✓ should have a reasonable number of commands 1ms
-       ✓ should list all registered commands 0ms
-     ✓ should have TypeScript code blocks in README 0ms
-     ✓ should have TypeScript code blocks in AGENTS.npm.md 0ms
-     ✓ should have TypeScript code blocks in transform README 0ms
-     × should have valid TypeScript syntax in all examples 7091ms
-     ✓ should have bash code blocks 0ms
-     ✓ should execute bash examples without errors  617ms
+10:59:37 PM [vite] (ssr) Failed to load source map for /Users/sairamugge/Desktop/Ag-Bash/ag-bash/packages/bash/src/parser/vendor/web-tree-sitter.js.
+Error: An error occurred while trying to read the map file at web-tree-sitter.js.map
+Error: ENOENT: no such file or directory, open '/Users/sairamugge/Desktop/Ag-Bash/ag-bash/packages/bash/src/parser/vendor/web-tree-sitter.js.map'
+    at Object.readFileSync (node:fs:436:20)
+    at file:///Users/sairamugge/Desktop/Ag-Bash/ag-bash/node_modules/.pnpm/vite@8.0.8_@types+node@25.6.0_esbuild@0.27.7_jiti@2.6.1_yaml@2.8.3/node_modules/vite/dist/node/chunks/node.js:20042:13
+    at readFromFileMap (file:///Users/sairamugge/Desktop/Ag-Bash/ag-bash/node_modules/.pnpm/vite@8.0.8_@types+node@25.6.0_esbuild@0.27.7_jiti@2.6.1_yaml@2.8.3/node_modules/vite/dist/node/chunks/node.js:19821:13)
+    at Object.exports.fromMapFileComment (file:///Users/sairamugge/Desktop/Ag-Bash/ag-bash/node_modules/.pnpm/vite@8.0.8_@types+node@25.6.0_esbuild@0.27.7_jiti@2.6.1_yaml@2.8.3/node_modules/vite/dist/node/chunks/node.js:19915:12)
+    at Object.exports.fromMapFileSource (file:///Users/sairamugge/Desktop/Ag-Bash/ag-bash/node_modules/.pnpm/vite@8.0.8_@types+node@25.6.0_esbuild@0.27.7_jiti@2.6.1_yaml@2.8.3/node_modules/vite/dist/node/chunks/node.js:19926:22)
+    at extractSourcemapFromFile (file:///Users/sairamugge/Desktop/Ag-Bash/ag-bash/node_modules/.pnpm/vite@8.0.8_@types+node@25.6.0_esbuild@0.27.7_jiti@2.6.1_yaml@2.8.3/node_modules/vite/dist/node/chunks/node.js:20028:87)
+    at loadAndTransform (file:///Users/sairamugge/Desktop/Ag-Bash/ag-bash/node_modules/.pnpm/vite@8.0.8_@types+node@25.6.0_esbuild@0.27.7_jiti@2.6.1_yaml@2.8.3/node_modules/vite/dist/node/chunks/node.js:24434:22)
+stdout | verify-intelligence.test.ts > Ag-Bash Intelligence Layer Verification > should support breakpoints and stepping via DebuggerBridge
+--- TEST LOG: Breakpoint set on line 3
+--- INTERPRETER HIT: Line 1 | Text: echo "Line 1"
 
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+stdout | verify-intelligence.test.ts > Ag-Bash Intelligence Layer Verification > should support breakpoints and stepping via DebuggerBridge
+--- INTERPRETER HIT: Line 2 | Text: echo "Line 2"
 
- FAIL  src/readme.test.ts > Documentation TypeScript examples > should have valid TypeScript syntax in all examples
-AssertionError: TypeScript errors in documentation examples:
-AGENTS-0.ts(6,3): error TS2353: Object literal may only specify known properties, and 'files' does not exist in type 'CreateBashToolOptions'.
-transform-README-0.ts(1,74): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
-transform-README-1.ts(1,34): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
-transform-README-2.ts(1,10): error TS2300: Duplicate identifier 'Bash'.
-transform-README-2.ts(1,57): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
-transform-README-2.ts(2,10): error TS2300: Duplicate identifier 'Bash'.
-transform-README-3.ts(1,73): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
-transform-README-4.ts(1,27): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
-transform-README-6.ts(1,63): error TS2307: Cannot find module '@ag/bash' or its corresponding type declarations.
- ❯ compileTypeScriptBlocks src/readme.test.ts:324:16
-    322|
-    323|       if (errorLines.length > 0) {
-    324|         expect.fail(
-       |                ^
-    325|           `TypeScript errors in documentation examples:\n${errorLines.…
-    326|             (errorLines.length > 10
- ❯ src/readme.test.ts:481:5
+stdout | verify-intelligence.test.ts > Ag-Bash Intelligence Layer Verification > should support breakpoints and stepping via DebuggerBridge
+--- INTERPRETER HIT: Line 3 | Text: echo "Line 3 (Breakpoint)"
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+stdout | verify-intelligence.test.ts > Ag-Bash Intelligence Layer Verification > should support breakpoints and stepping via DebuggerBridge
+--- TEST LOG: Execution PAUSED
+--- TEST LOG: Calling step()
 
-
- Test Files  1 failed (1)
-      Tests  1 failed | 8 passed (9)
-   Start at  21:13:23
-   Duration  8.90s (transform 1.15s, setup 76ms, import 917ms, tests 7.71s, environment 0ms)
-
-npm notice
-npm notice New minor version of npm available! 11.11.0 -> 11.12.1
-npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
-npm notice To update run: npm install -g npm@11.12.1
-npm notice
+ ❯ verify-intelligence.test.ts (1 test | 1 failed) 5469ms
+     × should support breakpoints and stepping via DebuggerBridge 5466ms

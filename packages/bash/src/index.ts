@@ -128,6 +128,8 @@ export type {
   ShoptOptions,
   VariableAttributeState,
 } from "./interpreter/types.js";
+export { DebuggerBridge } from "./interpreter/index.js";
+export { SemanticEngine } from "./lsp/semantic-engine.js";
 export type {
   BashExecResult,
   Command,

@@ -17,6 +17,8 @@ import type {
   FeatureCoverageWriter,
   TraceCallback,
 } from "../types.js";
+import type { DebuggerBridge } from "./debugger/debugger.js";
+import type { SemanticEngine } from "../lsp/semantic-engine.js";
 
 /**
  * Completion specification for a command, set by the `complete` builtin.
@@ -457,4 +459,12 @@ export interface InterpreterContext {
    * If true, enables agentic behavior for the shell.
    */
   agentic?: boolean;
+  /**
+   * Optional debugger implementation for statement-level control.
+   */
+  debugger?: DebuggerBridge;
+  /**
+   * Optional semantic engine for AST symbol indexing.
+   */
+  semanticEngine?: SemanticEngine;
 }
