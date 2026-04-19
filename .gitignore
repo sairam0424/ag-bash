@@ -27,7 +27,11 @@ fuzz-*.log
 .npmrc
 tsconfig.tsbuildinfo
 
-# Bash Vendor Binaries
+# Ag-Bash Vendor & Artifacts
 packages/bash/src/parser/vendor/
 packages/bash/vendor/
+packages/bash/dist_test/
+test_output.txt
 
+# Example Lockfiles (Dynamic/Untracked)
+examples/*/pnpm-lock.yaml
