@@ -10,7 +10,7 @@ Ag-Bash is a production-grade, sandboxed Bash environment designed specifically 
 This repository is organized into a modular monorepo to support independent versioning and consumption of core engine components and protocol adapters.
 
 | Package | Version | Description |
-|---|---|---|
+| :--- | :--- | :--- |
 | [`@ag-bash/bash`](./packages/bash) | `v1.4.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
 | [`@ag-bash/mcp-server`](./packages/mcp-server) | `v1.4.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
 | [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v1.4.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
@@ -40,12 +40,14 @@ console.log(result.stdout); // "Hello Ag-Bash\n"
 For human-in-the-loop debugging and interactive use, install the Ag-Bash suite globally.
 
 #### Via Homebrew (macOS)
+
 ```bash
 brew tap ag-bash/homebrew-tap
 brew install ag-bash
 ```
 
 #### Via NPM (Cross-platform)
+
 ```bash
 npm install -g @ag-bash/bash @ag-bash/mcp-server
 ```
@@ -87,9 +89,11 @@ Then, add the server to your MCP configuration:
 
 ## 📖 Documentation
 
-- **[Shell Engine Guide](./packages/bash/README.md)**: Deep dive into shell features, custom commands, and filesystem options.
-- **[MCP Protocol Guide](./packages/mcp-server/README.md)**: Configuration and usage for agentic frameworks.
-- **[Security Architecture](./THREAT_MODEL.md)**: Detailed breakdown of the sandbox and thread model.
+- **[User Guide](./docs/user-guide.md)**: Narrative introduction to Ag-Bash, installation, and core concepts.
+- **[Command Registry](./docs/COMMAND_REGISTRY.md)**: Categorized reference for all 100+ supported tools.
+- **[Shell Engine Deep-Dive](./packages/bash/README.md)**: Technical guide for filesystem options and custom commands.
+- **[MCP Server Configuration](./packages/mcp-server/README.md)**: Agentic integration patterns and configuration.
+- **[Security & Threat Model](./THREAT_MODEL.md)**: Detailed breakdown of the sandbox architecture.
 
 ## 📜 License
 

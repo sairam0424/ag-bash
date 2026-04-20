@@ -23,7 +23,8 @@
   "author": "Ag-Bash",
   "license": "Apache-2.0",
   "dependencies": {
-    "@ag-bash/bash": "workspace:*"
+    "@ag-bash/bash": "workspace:*",
+    "seek-bzip": "^2.0.0"
   },
   "devDependencies": {
     "esbuild": "^0.27.2",
