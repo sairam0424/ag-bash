@@ -1,6 +1,6 @@
 # 📖 Ag-Bash Command Registry
 
-This registry provides a categorized index of the **100+ commands** supported by Ag-Bash. All commands are virtualized, sandboxed, and statically analyzable.
+This registry provides a categorized index of the **110+ commands** supported by Ag-Bash. All commands are virtualized, sandboxed, and statically analyzable.
 
 ---
 
@@ -38,6 +38,10 @@ This registry provides a categorized index of the **100+ commands** supported by
 | `python3` | CPython (WASM) | Complete Python 3.11 environment. | [Agentic Guide](./registry/agentic_runtimes.md) |
 | `js-exec` | QuickJS | Lightweight, extremely fast JavaScript logic. | [Agentic Guide](./registry/agentic_runtimes.md) |
 | `awk` / `sed` | POSIX | Traditional stream editing and reporting. | [Agentic Guide](./registry/agentic_runtimes.md) |
+| `ag-edit` | Nexus | Atomic, line-based file editing for autonomous agents. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-diff` | Nexus | Semantic diff engine with LLM-optimized summaries. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-snapshot`| Nexus | Persistent environment state and filesystem checkpointing. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-analyze` | Nexus | Structural script analysis and symbol extraction. | [Nexus Upgrades](./registry/nexus.md) |
 
 ---
 
