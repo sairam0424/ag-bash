@@ -64,7 +64,34 @@ export class AgenticHealer {
     if (stderr.includes("no such file or directory")) {
       const parts = command.split(/\s+/);
       const possiblePath = parts.find(p => p.includes("/") || p.includes("."));
+      
       if (possiblePath) {
+        // Attempt fuzzy match for similar files in the same directory
+        try {
+          const dir = possiblePath.includes("/") 
+            ? possiblePath.substring(0, possiblePath.lastIndexOf("/")) 
+            : ".";
+          const basename = possiblePath.includes("/")
+            ? possiblePath.substring(possiblePath.lastIndexOf("/") + 1)
+            : possiblePath;
+          
+          if (dir === "." || (await ctx.fs.stat(dir)).isDirectory) {
+            const files = await ctx.fs.readdir(dir);
+            const { levenshtein } = await import("../lsp/semantic-engine.js");
+            const closest = files
+              .map((f: string) => ({ name: f, dist: levenshtein(basename, f) }))
+              .filter((res: { name: string; dist: number }) => res.dist <= 2 && res.name !== basename)
+              .sort((a: { dist: number }, b: { dist: number }) => a.dist - b.dist)[0];
+            
+            if (closest) {
+              const suggestedPath = dir === "." ? closest.name : `${dir}/${closest.name}`;
+              return `Target '${possiblePath}' not found. Did you mean '${suggestedPath}'?`;
+            }
+          }
+        } catch (e) {
+          // Ignore FS errors during healing
+        }
+        
         return `Target '${possiblePath}' in '${command}' was not found. Check if the path is correct in ${state.cwd}.`;
       }
       return `Target in '${command}' was not found. Check if the path is correct in ${state.cwd}.`;
