@@ -63,7 +63,7 @@ export interface SemanticSymbol {
 export class SemanticEngine {
   private symbols: SemanticSymbol[] = [];
 
-  constructor(private ast?: ScriptNode) {
+  constructor(private ast: ScriptNode | undefined = undefined) {
     if (this.ast) {
       this.analyze();
     }

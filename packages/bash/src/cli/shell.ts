@@ -29,6 +29,8 @@ interface ShellOptions {
   files?: Record<string, string>;
   env?: Record<string, string>;
   network?: boolean;
+  python?: boolean;
+  javascript?: boolean;
 }
 
 class VirtualShell {
@@ -64,6 +66,8 @@ class VirtualShell {
         options.network === true
           ? { dangerouslyAllowFullInternetAccess: true }
           : undefined,
+      python: options.python ?? true,
+      javascript: options.javascript ?? true,
       parserEngine: "tree-sitter",
       treeSitterConfig: {
         webTreeSitterWasm: path.join(
@@ -251,6 +255,14 @@ function parseArgs(): ShellOptions {
       options.network = true;
     } else if (args[i] === "--no-network") {
       options.network = false;
+    } else if (args[i] === "--python") {
+      options.python = true;
+    } else if (args[i] === "--no-python") {
+      options.python = false;
+    } else if (args[i] === "--javascript") {
+      options.javascript = true;
+    } else if (args[i] === "--no-javascript") {
+      options.javascript = false;
     } else if (args[i] === "--help" || args[i] === "-h") {
       console.log(`
   ag-shell — INTERACTIVE VIRTUAL BASH ENVIRONMENT
@@ -267,6 +279,10 @@ function parseArgs(): ShellOptions {
     --cwd <path>      Initial working directory (default: /)
     --network         Enable network access (dangerouslyAllowFullInternetAccess)
     --no-network      Disable network access (default)
+    --python          Enable python3 commands (default: true)
+    --no-python       Disable python3 commands
+    --javascript      Enable js-exec commands (default: true)
+    --no-javascript   Disable js-exec commands
     -h, --help        Show this help message
 
   Example:
