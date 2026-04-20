@@ -214,7 +214,9 @@ export class ExecutionLimitError extends ControlFlowError {
       | "glob_operations"
       | "substitution_depth"
       | "output_size"
-      | "file_descriptors",
+      | "file_descriptors"
+      | "memory"
+      | "cpu_time",
     stdout: string = "",
     stderr: string = "",
     public observations?: any[],
