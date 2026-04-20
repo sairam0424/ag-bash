@@ -97,7 +97,15 @@ export type CommandName =
   | "time"
   | "hello"
   | "whoami"
-  | "git";
+  | "git"
+  | "ag-edit"
+  | "ag-diff"
+  | "ag-snapshot"
+  | "ag-analyze";
+
+
+
+
 
 /** Network command names (only available when network is configured) */
 export type NetworkCommandName = "curl";
@@ -480,7 +488,27 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
     name: "hello",
     load: async () => (await import("./hello/hello.js")).helloCommand,
   },
+  {
+    name: "ag-edit",
+    load: async () => (await import("./ag-edit/ag-edit.js")).agEditCommand,
+  },
+  {
+    name: "ag-diff",
+    load: async () => (await import("./ag-diff/ag-diff.js")).agDiffCommand,
+  },
+  {
+    name: "ag-snapshot",
+    load: async () => (await import("./ag-snapshot/ag-snapshot.js")).agSnapshotCommand,
+  },
+  {
+    name: "ag-analyze",
+    load: async () => (await import("./ag-analyze/ag-analyze.js")).agAnalyzeCommand,
+  },
 ];
+
+
+
+
 
 // tar, yq, xan, and sqlite3 don't work in browsers
 // __BROWSER__ is defined by esbuild at build time for browser bundles

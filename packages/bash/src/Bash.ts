@@ -66,6 +66,9 @@ import {
 } from "./network/index.js";
 import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
+import { ASTCache } from "./parser/ASTCache.js";
+import { SharedStateBus } from "./services/SharedStateBus.js";
+
 import { MountableFs, type MountConfig } from "./fs/mountable-fs/index.js";
 import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
 import { TreeSitterToAst } from "./parser/tree-sitter-to-ast.js";
@@ -777,19 +780,27 @@ export class Bash {
       const executeScript = async (): Promise<BashExecResult> => {
         let ast: ScriptNode;
 
-        if (this.parserEngine === 'tree-sitter') {
-          if (!this.treeSitterConfig) {
-            throw new Error("Tree-sitter parser engine selected but treeSitterConfig was not provided in Bash options.");
-          }
-          
-          const tree = TreeSitterParser.parse(normalized);
-          const converter = new TreeSitterToAst(normalized);
-          ast = converter.convert(tree);
+        const astCache = ASTCache.getInstance();
+        const cachedAst = astCache.get(normalized);
+        if (cachedAst) {
+          ast = cachedAst;
         } else {
-          ast = parse(normalized, {
-            maxHeredocSize: this.limits.maxHeredocSize,
-          }) as ScriptNode;
+          if (this.parserEngine === 'tree-sitter') {
+            if (!this.treeSitterConfig) {
+              throw new Error("Tree-sitter parser engine selected but treeSitterConfig was not provided in Bash options.");
+            }
+            
+            const tree = TreeSitterParser.parse(normalized);
+            const converter = new TreeSitterToAst(normalized);
+            ast = converter.convert(tree);
+          } else {
+            ast = parse(normalized, {
+              maxHeredocSize: this.limits.maxHeredocSize,
+            }) as ScriptNode;
+          }
+          astCache.set(normalized, ast);
         }
+
 
         // Apply transform plugins if any are registered.
         // Keep metadata null-prototype even when plugins contribute dynamic keys.
