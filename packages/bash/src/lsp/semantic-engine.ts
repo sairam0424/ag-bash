@@ -171,6 +171,13 @@ export class SemanticEngine {
   }
 
   /**
+   * Returns all indexed symbols.
+   */
+  public getAllSymbols(): SemanticSymbol[] {
+    return this.symbols;
+  }
+
+  /**
    * Resolves a symbol's definition.
    */
   public findDefinition(name: string, scope: string = "global"): SemanticSymbol | undefined {
