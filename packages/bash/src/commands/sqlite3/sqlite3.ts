@@ -231,7 +231,8 @@ function findWorkerPath(): string {
   let _workerPath = "worker.js";
   const isNode = typeof process !== "undefined";
 
-  if (typeof import.meta !== "undefined" && import.meta.url) {
+  const hasImportMeta = typeof import.meta !== "undefined";
+  if (hasImportMeta && import.meta.url) {
     try {
       const url = new URL(import.meta.url);
       if (url.protocol === "file:") {

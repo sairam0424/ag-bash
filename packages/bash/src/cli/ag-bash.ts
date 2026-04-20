@@ -37,11 +37,15 @@
  *   ag-bash -e -c 'set -e; false; echo "not reached"'
  */
 
-import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Bash } from "../Bash.js";
 import { OverlayFs } from "../fs/overlay-fs/index.js";
 import { sanitizeErrorMessage } from "../fs/real-fs-utils.js";
 import { Theme } from "./theme.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 interface CliOptions {
   script?: string;
@@ -94,7 +98,7 @@ function printVersion(): void {
   console.log(
     Theme.colors.cyan(Theme.colors.bold("ag-bash")) +
       " " +
-      Theme.colors.dim("v1.3.0"),
+      Theme.colors.dim("v1.5.0"),
   );
 }
 
@@ -276,7 +280,7 @@ async function main(): Promise<void> {
   } else {
     // No script provided - show banner if TTY, then help
     if (process.stdin.isTTY && process.stdout.isTTY) {
-      Theme.printHeader("1.3.0");
+      Theme.printHeader("1.5.0");
       Theme.printBrandManifest();
       Theme.printManifest({
         commands: 100,
@@ -310,11 +314,19 @@ async function main(): Promise<void> {
   // Normalize --cwd to prevent path traversal (resolve . and ..)
   const cwd = options.cwdOverridden ? normalizePath(options.cwd) : mountPoint;
 
+  // Load Tree-sitter WASM assets from vendor directory
+  const vendorDir = join(__dirname, "..", "parser", "vendor");
+  const treeSitterConfig = {
+    webTreeSitterWasm: readFileSync(join(vendorDir, "web-tree-sitter.wasm")),
+    bashGrammarWasm: readFileSync(join(vendorDir, "tree-sitter-bash.wasm")),
+  };
+
   const env = new Bash({
     fs,
     cwd,
     python: options.python,
     javascript: options.javascript,
+    treeSitterConfig,
   });
 
   // Prepend set -e if errexit is enabled
