@@ -63,7 +63,14 @@ export interface ExecutionLimits {
 
   /** Maximum source/. nesting depth (default: 100) */
   maxSourceDepth?: number;
+
+  /** Maximum estimated memory usage in bytes (default: 50MB) */
+  maxMemoryAccountingBytes?: number;
+
+  /** Maximum total CPU time in milliseconds (default: 30000) */
+  maxCpuMs?: number;
 }
+
 
 /**
  * Default execution limits.
@@ -89,7 +96,10 @@ const DEFAULT_LIMITS: Required<ExecutionLimits> = {
   maxOutputSize: 10485760, // 10MB
   maxFileDescriptors: 1024,
   maxSourceDepth: 100,
+  maxMemoryAccountingBytes: 52428800, // 50MB
+  maxCpuMs: 30000, // 30s
 };
+
 
 /**
  * Resolve execution limits by merging user-provided limits with defaults.
@@ -133,5 +143,10 @@ export function resolveLimits(
     maxFileDescriptors:
       userLimits.maxFileDescriptors ?? DEFAULT_LIMITS.maxFileDescriptors,
     maxSourceDepth: userLimits.maxSourceDepth ?? DEFAULT_LIMITS.maxSourceDepth,
+    maxMemoryAccountingBytes:
+      userLimits.maxMemoryAccountingBytes ??
+      DEFAULT_LIMITS.maxMemoryAccountingBytes,
+    maxCpuMs: userLimits.maxCpuMs ?? DEFAULT_LIMITS.maxCpuMs,
   };
+
 }

@@ -107,6 +107,7 @@ import type { InterpreterContext, InterpreterState } from "./types.js";
 import { DebuggerBridge } from "./debugger/debugger.js";
 import { SemanticEngine } from "../lsp/semantic-engine.js";
 import { AgenticHealer } from "../agentic/agentic-healer.js";
+import { SharedStateBus } from "../services/SharedStateBus.js";
 
 export type { InterpreterContext, InterpreterState } from "./types.js";
 
@@ -144,7 +145,10 @@ export interface InterpreterOptions {
   semanticEngine?: SemanticEngine;
   /** Optional agentic healer implementation */
   agenticHealer?: AgenticHealer;
+  /** Optional shared state bus implementation */
+  sharedBus?: SharedStateBus;
 }
+
 
 /**
  * Shell Interpreter
@@ -177,8 +181,10 @@ export class Interpreter {
       debugger: options.debugger,
       semanticEngine: options.semanticEngine || (options.agentic ? new SemanticEngine() : undefined),
       agenticHealer: options.agenticHealer || (options.agentic ? new AgenticHealer() : undefined),
+      sharedBus: options.sharedBus || SharedStateBus.getInstance(),
     };
   }
+
 
   /**
    * Fail closed if defense is expected but async context is missing.
@@ -430,6 +436,24 @@ export class Interpreter {
         );
       }
 
+      // Performance: Memory accounting
+      const memUsage = this.estimateMemoryUsage();
+      if (memUsage > this.ctx.limits.maxMemoryAccountingBytes) {
+        throwExecutionLimit(
+          `memory limit exceeded: ${Math.round(memUsage / 1024 / 1024)}MB exceeds ${Math.round(this.ctx.limits.maxMemoryAccountingBytes / 1024 / 1024)}MB limit`,
+          "memory",
+        );
+      }
+
+      // Performance: CPU time accounting (basic check)
+      const cpuTime = Date.now() - this.ctx.state.startTime;
+      if (cpuTime > this.ctx.limits.maxCpuMs) {
+        throwExecutionLimit(
+          `CPU time limit exceeded: ${cpuTime}ms exceeds ${this.ctx.limits.maxCpuMs}ms limit`,
+          "cpu_time",
+        );
+      }
+
       // Check for deferred syntax error
       if (node.deferredError) {
         throw new ParseException(node.deferredError.message, node.line ?? 1, 1);
@@ -584,6 +608,34 @@ export class Interpreter {
       default:
         return OK;
     }
+  }
+
+  /**
+   * Estimate memory usage of the current interpreter state.
+   */
+  private estimateMemoryUsage(): number {
+    let bytes = 0;
+    
+    // Estimate environment variables
+    for (const [key, value] of this.ctx.state.env) {
+      bytes += key.length * 2 + value.length * 2;
+    }
+    
+    // Estimate functions
+    for (const [name, node] of this.ctx.state.functions) {
+      bytes += name.length * 2;
+      // Rough estimate for AST node structure
+      bytes += 1000; 
+    }
+    
+    // Estimate file descriptors
+    if (this.ctx.state.fileDescriptors) {
+      for (const [fd, content] of this.ctx.state.fileDescriptors) {
+        bytes += 4 + content.length * 2;
+      }
+    }
+    
+    return bytes;
   }
 
   private async executeSimpleCommand(

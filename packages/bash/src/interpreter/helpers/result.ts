@@ -90,7 +90,9 @@ export function throwExecutionLimit(
     | "glob_operations"
     | "substitution_depth"
     | "output_size"
-    | "file_descriptors",
+    | "file_descriptors"
+    | "memory"
+    | "cpu_time",
   stdout = "",
   stderr = "",
 ): never {

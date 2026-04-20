@@ -472,4 +472,9 @@ export interface InterpreterContext {
    * Optional agentic healer for troubleshooting and recovery.
    */
   agenticHealer?: AgenticHealer;
+  /**
+   * Optional shared state bus for inter-runtime communication.
+   */
+  sharedBus?: any; // Use any to avoid circular dependency for now, or import type
 }
+
