@@ -8,6 +8,8 @@
  */
 
 import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as readline from "node:readline";
 import { Bash } from "../Bash.js";
 import { OverlayFs } from "../fs/overlay-fs/overlay-fs.js";
@@ -17,6 +19,8 @@ import {
   type ProjectBrief,
 } from "../services/DiscoveryService.js";
 import { Theme } from "./theme.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ANSI colors
 
@@ -60,6 +64,17 @@ class VirtualShell {
         options.network === true
           ? { dangerouslyAllowFullInternetAccess: true }
           : undefined,
+      parserEngine: "tree-sitter",
+      treeSitterConfig: {
+        webTreeSitterWasm: path.join(
+          __dirname,
+          "../parser/vendor/web-tree-sitter.wasm",
+        ),
+        bashGrammarWasm: path.join(
+          __dirname,
+          "../../vendor/tree-sitter-bash.wasm",
+        ),
+      },
     });
 
     // Check if stdin is a TTY (interactive mode)
