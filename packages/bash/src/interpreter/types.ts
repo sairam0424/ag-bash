@@ -17,6 +17,9 @@ import type {
   FeatureCoverageWriter,
   TraceCallback,
 } from "../types.js";
+import type { DebuggerBridge } from "./debugger/debugger.js";
+import type { SemanticEngine } from "../lsp/semantic-engine.js";
+import type { AgenticHealer } from "../agentic/agentic-healer.js";
 
 /**
  * Completion specification for a command, set by the `complete` builtin.
@@ -451,4 +454,27 @@ export interface InterpreterContext {
     command: string,
     args: string[],
   ) => Promise<ExecResult | null>;
+  /** Returns list of all registered command names */
+  getRegisteredCommands?: () => string[];
+  /**
+   * If true, enables agentic behavior for the shell.
+   */
+  agentic?: boolean;
+  /**
+   * Optional debugger implementation for statement-level control.
+   */
+  debugger?: DebuggerBridge;
+  /**
+   * Optional semantic engine for AST symbol indexing.
+   */
+  semanticEngine?: SemanticEngine;
+  /**
+   * Optional agentic healer for troubleshooting and recovery.
+   */
+  agenticHealer?: AgenticHealer;
+  /**
+   * Optional shared state bus for inter-runtime communication.
+   */
+  sharedBus?: any; // Use any to avoid circular dependency for now, or import type
 }
+

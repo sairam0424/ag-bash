@@ -83,6 +83,26 @@ export class ReadWriteFs implements IFileSystem {
     this.canonicalRoot = fs.realpathSync(this.root);
   }
 
+  snapshot(): any {
+    // ReadWriteFs directly wraps the real filesystem.
+    // Atomic snapshots of the real OS filesystem are not supported.
+    // To enable stateful branching on real files, use OverlayFs on top of ReadWriteFs.
+    return {
+      type: "ReadWriteFs",
+      root: this.root,
+      timestamp: Date.now(),
+    };
+  }
+
+  async restore(_state: unknown): Promise<void> {
+    // ReadWriteFs does not support restoration of previous states.
+    // If you need to revert changes to a real filesystem, you should have
+    // used an OverlayFs layer above it to capture those changes in memory.
+    throw new Error(
+      "ReadWriteFs does not support restore(). Use OverlayFs for stateful branching on top of real filesystems.",
+    );
+  }
+
   /**
    * Validate that a resolved real path stays within the sandbox root and
    * return the canonical (symlink-resolved) path for use in subsequent I/O.

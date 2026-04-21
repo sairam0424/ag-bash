@@ -10,9 +10,10 @@ Ag-Bash is a production-grade, sandboxed Bash environment designed specifically 
 This repository is organized into a modular monorepo to support independent versioning and consumption of core engine components and protocol adapters.
 
 | Package | Version | Description |
-|---|---|---|
-| [`@ag-bash/bash`](./packages/bash) | `v1.3.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v1.3.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| :--- | :--- | :--- |
+| [`@ag-bash/bash`](./packages/bash) | `v1.5.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v1.5.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v1.5.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
 
 ---
 
@@ -39,12 +40,14 @@ console.log(result.stdout); // "Hello Ag-Bash\n"
 For human-in-the-loop debugging and interactive use, install the Ag-Bash suite globally.
 
 #### Via Homebrew (macOS)
+
 ```bash
 brew tap ag-bash/homebrew-tap
 brew install ag-bash
 ```
 
 #### Via NPM (Cross-platform)
+
 ```bash
 npm install -g @ag-bash/bash @ag-bash/mcp-server
 ```
@@ -76,6 +79,12 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
+- **Project Nexus Agentic Suite**: (v1.5.0+) Surgical file editing (`ag-edit`), semantic diffs (`ag-diff`), and persistent environment snapshots (`ag-snapshot`).
+- **AST Performance Optimization**: (v1.5.0+) Global `ASTCache` (LRU) for high-frequency script execution.
+- **Inter-Runtime Persistence**: (v1.5.0+) Shared variable state between Bash, Python, and JS via `SharedStateBus`.
+- **Resource Governance**: (v1.5.0+) Real-time memory and CPU accounting for secure agentic execution.
+- **Agentic Observability Loop**: Built-in failure analysis and self-correction suggestions for AI models.
+- **Tree-sitter AST Parser**: High-fidelity shell parsing for complex scripts and security analysis.
 - **Virtual Filesystem**: Choose between `InMemoryFs`, `OverlayFs` (COW), or `ReadWriteFs`.
 - **Integrated Runtimes**: Out-of-the-box support for `jq`, `sqlite3`, `python3` (WASM), and `js-exec` (QuickJS).
 - **Protocol First**: Full Model Context Protocol (MCP) support with persistent session state.
@@ -84,9 +93,12 @@ Then, add the server to your MCP configuration:
 
 ## 📖 Documentation
 
-- **[Shell Engine Guide](./packages/bash/README.md)**: Deep dive into shell features, custom commands, and filesystem options.
-- **[MCP Protocol Guide](./packages/mcp-server/README.md)**: Configuration and usage for agentic frameworks.
-- **[Security Architecture](./THREAT_MODEL.md)**: Detailed breakdown of the sandbox and thread model.
+- **[User Guide](./docs/user-guide.md)**: Narrative introduction to Ag-Bash, installation, and core concepts.
+- **[Command Registry](./docs/COMMAND_REGISTRY.md)**: Categorized reference for all 110+ supported tools.
+- **[Technical Architecture](./docs/ARCHITECTURE.md)**: Deep dive into the Nexus engine, performance, and resource accounting.
+- **[Shell Engine Deep-Dive](./packages/bash/README.md)**: Technical guide for filesystem options and custom commands.
+- **[MCP Server Configuration](./packages/mcp-server/README.md)**: Agentic integration patterns and configuration.
+- **[Security & Threat Model](./THREAT_MODEL.md)**: Detailed breakdown of the sandbox architecture.
 
 ## 📜 License
 

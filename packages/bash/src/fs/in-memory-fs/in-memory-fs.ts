@@ -96,17 +96,13 @@ export class InMemoryFs implements IFileSystem {
     }
   }
 
-  private ensureParentDirs(path: string): void {
+  private checkParentExists(path: string): void {
     const dir = dirname(path);
-    if (dir === "/") return;
+    if (dir === "/" || dir === ".") return;
 
-    if (!this.data.has(dir)) {
-      this.ensureParentDirs(dir);
-      this.data.set(dir, {
-        type: "directory",
-        mode: DEFAULT_DIR_MODE,
-        mtime: new Date(),
-      });
+    const entry = this.data.get(dir);
+    if (!entry || entry.type !== "directory") {
+      throw new Error(`ENOENT: no such file or directory, open '${path}'`);
     }
   }
 
@@ -119,7 +115,7 @@ export class InMemoryFs implements IFileSystem {
   ): void {
     validatePath(path, "write");
     const normalized = normalizePath(path);
-    this.ensureParentDirs(normalized);
+    this.checkParentExists(normalized);
 
     // Store content - convert to Uint8Array for internal storage
     const encoding = getEncoding(options);
@@ -144,7 +140,7 @@ export class InMemoryFs implements IFileSystem {
   ): void {
     validatePath(path, "write");
     const normalized = normalizePath(path);
-    this.ensureParentDirs(normalized);
+    this.checkParentExists(normalized);
 
     this.data.set(normalized, {
       type: "file",
@@ -598,7 +594,7 @@ export class InMemoryFs implements IFileSystem {
     }
 
     if (srcEntry.type === "file") {
-      this.ensureParentDirs(destNorm);
+      this.checkParentExists(destNorm);
       // Deep copy: create a new Uint8Array to avoid sharing the buffer reference
       if ("content" in srcEntry) {
         const contentCopy =
@@ -612,7 +608,7 @@ export class InMemoryFs implements IFileSystem {
       }
     } else if (srcEntry.type === "symlink") {
       // Copy the symlink itself (not its target)
-      this.ensureParentDirs(destNorm);
+      this.checkParentExists(destNorm);
       this.data.set(destNorm, { ...srcEntry });
     } else if (srcEntry.type === "directory") {
       if (!options?.recursive) {
@@ -664,7 +660,7 @@ export class InMemoryFs implements IFileSystem {
       throw new Error(`EEXIST: file already exists, symlink '${linkPath}'`);
     }
 
-    this.ensureParentDirs(normalized);
+    this.checkParentExists(normalized);
     this.data.set(normalized, {
       type: "symlink",
       target,
@@ -701,7 +697,7 @@ export class InMemoryFs implements IFileSystem {
       resolved = await this.materializeLazy(existingNorm, resolved);
     }
 
-    this.ensureParentDirs(newNorm);
+    this.checkParentExists(newNorm);
     // For hard links, we create a copy (simulating inode sharing)
     // In a real fs, they'd share the same inode
     this.data.set(newNorm, {
@@ -764,5 +760,43 @@ export class InMemoryFs implements IFileSystem {
 
     // Update mtime on the entry
     entry.mtime = mtime;
+  }
+
+  async snapshot(): Promise<unknown> {
+    // Deep copy the data map
+    const snapshotData = new Map<string, FsEntry>();
+    for (const [path, entry] of this.data.entries()) {
+      // Create a shallow copy of the entry
+      const entryCopy = { ...entry };
+
+      // For file entries, we need to deep copy the content buffer if it's not lazy
+      if (entryCopy.type === "file" && "content" in entryCopy) {
+        if (entryCopy.content instanceof Uint8Array) {
+          entryCopy.content = new Uint8Array(entryCopy.content);
+        }
+      }
+
+      snapshotData.set(path, entryCopy);
+    }
+    return snapshotData;
+  }
+
+  async restore(snapshot: unknown): Promise<void> {
+    if (!(snapshot instanceof Map)) {
+      throw new Error("Invalid snapshot: expected Map");
+    }
+
+    // Clear and restore
+    this.data.clear();
+    for (const [path, entry] of snapshot.entries()) {
+      // Deep copy back to internal state
+      const entryCopy = { ...entry as FsEntry };
+      if (entryCopy.type === "file" && "content" in entryCopy) {
+        if (entryCopy.content instanceof Uint8Array) {
+          entryCopy.content = new Uint8Array(entryCopy.content);
+        }
+      }
+      this.data.set(path, entryCopy);
+    }
   }
 }

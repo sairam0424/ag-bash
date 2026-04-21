@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/mcp-server",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "description": "Standalone Model Context Protocol server for Ag-Bash",
   "type": "module",
   "files": [
@@ -23,7 +23,8 @@
   "author": "Ag-Bash",
   "license": "Apache-2.0",
   "dependencies": {
-    "@ag-bash/bash": "workspace:*"
+    "@ag-bash/bash": "workspace:*",
+    "seek-bzip": "^2.0.0"
   },
   "devDependencies": {
     "esbuild": "^0.27.2",
