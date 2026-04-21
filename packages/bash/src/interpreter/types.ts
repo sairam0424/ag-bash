@@ -279,6 +279,8 @@ export interface ProcessState {
   commandCount: number;
   /** Time when shell started (for $SECONDS) */
   startTime: number;
+  /** Time when the current command execution started (for CPU time limits) */
+  executionStartTime: number;
   /** PID of last background job (for $!) */
   lastBackgroundPid: number;
   /** Current BASHPID (changes in subshells, unlike $$) */

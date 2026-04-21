@@ -446,7 +446,7 @@ export class Interpreter {
       }
 
       // Performance: CPU time accounting (basic check)
-      const cpuTime = Date.now() - this.ctx.state.startTime;
+      const cpuTime = Date.now() - this.ctx.state.executionStartTime;
       if (cpuTime > this.ctx.limits.maxCpuMs) {
         throwExecutionLimit(
           `CPU time limit exceeded: ${cpuTime}ms exceeds ${this.ctx.limits.maxCpuMs}ms limit`,
