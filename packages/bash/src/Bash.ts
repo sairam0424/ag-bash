@@ -469,6 +469,7 @@ export class Bash {
       lastExitCode: 0,
       lastArg: "", // $_ is initially empty (or could be shell name)
       startTime: Date.now(),
+      executionStartTime: Date.now(),
       lastBackgroundPid: 0,
       virtualPid: options.processInfo?.pid ?? 1,
       virtualPpid: options.processInfo?.ppid ?? 0,
@@ -747,6 +748,7 @@ export class Bash {
       signal: options?.signal,
       // Extra arguments injected directly into first command's arg list
       extraArgs: options?.args,
+      executionStartTime: Date.now(),
     };
 
     // Normalize indented multi-line scripts (unless rawScript is true)

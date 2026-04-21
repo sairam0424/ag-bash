@@ -6,7 +6,7 @@
     "generate": "node scripts/generate-terminal-content.mjs",
     "fetch-agent-data": "node scripts/fetch-agent-data.mjs",
     "dev": "pnpm generate && next dev --turbo",
-    "build": "pnpm generate && pnpm fetch-agent-data && next build",
+    "build": "pnpm generate && pnpm fetch-agent-data && next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
