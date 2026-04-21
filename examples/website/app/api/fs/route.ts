@@ -2,10 +2,9 @@ import { readdir, readFile } from "fs/promises";
 import { dirname, join, relative } from "path";
 import { fileURLToPath } from "url";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const AGENT_DATA_DIR = join(__dirname, "../agent/_agent-data");
+const AGENT_DATA_DIR = join(process.cwd(), "public/agent-data");
 
 // Recursively read all files in a directory
 async function readAllFiles(
