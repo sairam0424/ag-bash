@@ -310,7 +310,9 @@ function parseAssignment(p: Parser): AssignmentNode {
   // The interpreter will parse this out
   const assignName = subscript !== undefined ? `${name}[${subscript}]` : name;
 
-  return AST.assignment(assignName, wordValue, append, null);
+  const node = AST.assignment(assignName, wordValue, append, null);
+  node.line = token.line;
+  return node;
 }
 
 // Tokens that are invalid inside array literals

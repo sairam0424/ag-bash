@@ -1,0 +1,517 @@
+import { z } from "zod";
+import type { Bash } from "../Bash.js";
+
+/**
+ * ToolboxTool definition.
+ */
+export interface ToolboxTool {
+  name: string;
+  description: string;
+  parameters: z.ZodObject<any>;
+  execute: (bash: Bash, args: any) => Promise<any>;
+}
+
+/**
+ * BashToolbox - Central registry for all agentic tools.
+ * 
+ * Enforces schema validation and provides metadata for AI SDKs.
+ */
+export class BashToolbox {
+  private tools: Map<string, ToolboxTool> = new Map();
+
+  constructor() {
+    this.registerCoreTools();
+  }
+
+  private registerCoreTools() {
+    this.registerTool({
+      name: "read_file",
+      description: "Read the contents of a file from the virtual filesystem.",
+      parameters: z.object({
+        path: z.string().describe("Absolute path to the file to read."),
+      }),
+      execute: async (bash, { path }) => {
+        try {
+          return await bash.readFileDirect(path);
+        } catch (error: any) {
+          return `Error reading file ${path}: ${error.message}`;
+        }
+      },
+    });
+
+    this.registerTool({
+      name: "write_file",
+      description: "Create or overwrite a file in the virtual filesystem.",
+      parameters: z.object({
+        path: z.string().describe("Absolute path to the file to write."),
+        content: z.string().describe("The content to write to the file."),
+      }),
+      execute: async (bash, { path, content }) => {
+        try {
+          await bash.fs.mkdir("/.ag-bash", { recursive: true });
+          await bash.writeFileDirect(path, content);
+          await bash.indexer.indexFile(path);
+          await bash.saveIndex();
+          return `Successfully wrote to ${path}.`;
+        } catch (error: any) {
+          return `Error writing file ${path}: ${error.message}`;
+        }
+      },
+    });
+
+    this.registerTool({
+      name: "list_dir",
+      description: "List contents of a directory.",
+      parameters: z.object({
+        path: z.string().describe("Absolute path to the directory to list."),
+      }),
+      execute: async (bash, { path }) => {
+        try {
+          const files = await bash.listDirDirect(path);
+          return files.join("\n");
+        } catch (error: any) {
+          return `Error listing directory ${path}: ${error.message}`;
+        }
+      },
+    });
+
+    this.registerTool({
+      name: "edit_file",
+      description: "Apply a text patch to a file (simple find and replace).",
+      parameters: z.object({
+        path: z.string().describe("Absolute path to the file to edit."),
+        target: z.string().describe("The exact text block to be replaced."),
+        replacement: z.string().describe("The new text to insert instead."),
+      }),
+      execute: async (bash, { path, target, replacement }) => {
+        try {
+          await bash.fs.mkdir("/.ag-bash", { recursive: true });
+          const content = await bash.readFileDirect(path);
+          if (!content.includes(target)) {
+            return `Error: target content not found in ${path}. Make sure it matches exactly, including whitespace.`;
+          }
+          const newContent = content.replace(target, replacement);
+          await bash.writeFileDirect(path, newContent);
+          await bash.indexer.indexFile(path);
+          await bash.saveIndex();
+          return `Successfully edited ${path}.`;
+        } catch (error: any) {
+          return `Error editing file ${path}: ${error.message}`;
+        }
+      },
+    });
+
+    this.registerTool({
+      name: "analyze_code",
+      description: "Perform semantic analysis on a source file.",
+      parameters: z.object({
+        path: z.string().describe("Absolute path to the file to analyze."),
+      }),
+      execute: async (bash, { path }) => {
+        try {
+          const content = await bash.readFileDirect(path);
+          const { parse } = await import("../parser/parser.js");
+          const ast = parse(content);
+          const { SemanticEngine } = await import("../lsp/semantic-engine.js");
+          const engine = new SemanticEngine(ast as any);
+          return {
+            type: "shell",
+            symbols: engine.getAllSymbols()
+          };
+        } catch (error: any) {
+          return `Error analyzing file ${path}: ${error.message}`;
+        }
+      },
+    });
+
+    this.registerTool({
+      name: "find_symbols",
+      description: "Search for symbols (functions, variables) across the workspace.",
+      parameters: z.object({
+        query: z.string().optional().describe("Query to filter symbol names."),
+      }),
+      execute: async (bash, { query }) => {
+        return await bash.indexer.findSymbols(query);
+      },
+    });
+
+    this.registerTool({
+      name: "run_command",
+      description: "Execute a shell command in the sandbox.",
+      parameters: z.object({
+        command: z.string().describe("The shell command to execute."),
+      }),
+      execute: async (bash, { command }) => {
+        const result = await bash.exec(command);
+        return result;
+      },
+    });
+
+    this.registerTool({
+      name: "grep_search",
+      description: "Search for a text pattern across multiple files.",
+      parameters: z.object({
+        path: z.string().describe("Absolute path to the directory to search in."),
+        query: z.string().describe("The text or regex pattern to search for."),
+      }),
+      execute: async (bash, { path, query }) => {
+        try {
+          const result = await bash.exec(`grep -r "${query}" ${path}`);
+          return result.stdout || result.stderr || "No matches found.";
+        } catch (error: any) {
+          return `Error searching in ${path}: ${error.message}`;
+        }
+      },
+    });
+
+    this.registerTool({
+      name: "index_workspace",
+      description: "Trigger a full scan and indexing of all supported files in the workspace.",
+      parameters: z.object({
+        path: z.string().optional().describe("Root directory to scan. Defaults to /."),
+      }),
+      execute: async (bash, { path }) => {
+        try {
+          await bash.indexer.fullScan(path || "/");
+          await bash.saveIndex();
+          return "Successfully indexed the workspace.";
+        } catch (error: any) {
+          return `Error indexing workspace: ${error.message}`;
+        }
+      },
+    });
+
+    this.registerTool({
+      name: "get_references",
+      description: "Find all references to a function or variable.",
+      parameters: z.object({
+        name: z.string().optional().describe("The name of the symbol to find"),
+        path: z.string().optional().describe("Path to the file where the symbol is referenced"),
+        line: z.number().optional().describe("1-based line number"),
+        character: z.number().optional().describe("1-based character position"),
+      }),
+      execute: async (bash, { name, path, line, character }) => {
+        let symbolName = name;
+        if (!symbolName && path && line !== undefined && character !== undefined) {
+          const content = await bash.readFileDirect(path);
+          const lines = content.split("\n");
+          const lineText = lines[line - 1] || "";
+          const symbolPattern = /[\w$!]+/g;
+          let match;
+          while ((match = symbolPattern.exec(lineText)) !== null) {
+            if (character - 1 >= match.index && character - 1 < match.index + match[0].length) {
+              symbolName = match[0];
+              break;
+            }
+          }
+        }
+
+        if (!symbolName) return "Symbol not found at position.";
+
+        const occurrences = bash.semanticEngine.getOccurrences(symbolName);
+        if (occurrences.length === 0) {
+          return `No references found for '${symbolName}'.`;
+        }
+
+        const refs = occurrences
+          .filter(o => !o.isDefinition)
+          .map(o => `  Line ${o.line}:0 [${o.scope}]`)
+          .join("\n");
+        
+        const def = occurrences.find(o => o.isDefinition);
+        let output = `Found ${occurrences.length} occurrences of '${symbolName}':\n`;
+        if (def) output += `Definition: Line ${def.line}:0\n`;
+        if (refs) output += `References:\n${refs}`;
+
+        return output;
+      },
+    });
+
+    this.registerTool({
+      name: "hover_info",
+      description: "Get information about a symbol at a specific position.",
+      parameters: z.object({
+        path: z.string().describe("Path to the file"),
+        line: z.number().describe("1-based line number"),
+        character: z.number().describe("1-based character position"),
+      }),
+      execute: async (bash, { path, line, character }) => {
+        const content = await bash.readFileDirect(path);
+        const lines = content.split("\n");
+        const lineText = lines[line - 1] || "";
+        const symbolPattern = /[\w$!]+/g;
+        let symbolName;
+        let match;
+        while ((match = symbolPattern.exec(lineText)) !== null) {
+          if (character - 1 >= match.index && character - 1 < match.index + match[0].length) {
+            symbolName = match[0];
+            break;
+          }
+        }
+
+        if (!symbolName) return "No symbol found at position.";
+
+        const definition = bash.semanticEngine.findDefinition(symbolName);
+        if (definition) {
+          return `${symbolName} (${definition.type})\nScope: ${definition.scope}\nDefined at line ${definition.line}`;
+        }
+
+        return `No info found for '${symbolName}'.`;
+      },
+    });
+
+    this.registerTool({
+      name: "query_json",
+      description: "Run a jq query against a JSON file or string.",
+      parameters: z.object({
+        query: z.string().describe("The jq filter/query string."),
+        path: z.string().optional().describe("Optional path to a JSON file to query."),
+        json: z.string().optional().describe("Optional JSON string to query directly."),
+      }),
+      execute: async (bash, { query, path, json }) => {
+        let cmd = `echo '${(json || "").replace(/'/g, "'\\''")}' | jq '${query}'`;
+        if (path) {
+          cmd = `jq '${query}' ${path}`;
+        }
+        const result = await bash.exec(cmd);
+        return result.stdout || result.stderr;
+      },
+    });
+
+    this.registerTool({
+      name: "diff_files",
+      description: "Generate a unified diff between two files.",
+      parameters: z.object({
+        file1: z.string().describe("Path to the first file."),
+        file2: z.string().describe("Path to the second file."),
+      }),
+      execute: async (bash, { file1, file2 }) => {
+        const result = await bash.exec(`diff -u ${file1} ${file2}`);
+        return result.stdout || result.stderr;
+      },
+    });
+
+    this.registerTool({
+      name: "help_builtin",
+      description: "Get detailed help for a shell builtin command.",
+      parameters: z.object({
+        command: z.string().describe("The name of the builtin command."),
+      }),
+      execute: async (bash, { command }) => {
+        const result = await bash.exec(`help ${command}`);
+        return result.stdout || result.stderr;
+      },
+    });
+
+    this.registerTool({
+      name: "find_files",
+      description: "Search for files by name or glob pattern.",
+      parameters: z.object({
+        path: z.string().describe("The directory to start searching from."),
+        pattern: z.string().describe("The filename pattern or glob (e.g., '*.ts')."),
+      }),
+      execute: async (bash, { path, pattern }) => {
+        const result = await bash.exec(`find ${path} -name "${pattern}"`);
+        return result.stdout.split("\n").filter(Boolean);
+      },
+    });
+
+    this.registerTool({
+      name: "explain_command",
+      description: "Parse and explain a shell command.",
+      parameters: z.object({
+        command: z.string().describe("The shell command to explain."),
+      }),
+      execute: async (bash, { command }) => {
+        const { parse } = await import("../parser/parser.js");
+        const ast = parse(command);
+        return {
+          type: "explanation",
+          ast: JSON.parse(JSON.stringify(ast, (k, v) => k === "parent" ? undefined : v))
+        };
+      },
+    });
+
+    this.registerTool({
+      name: "check_environment",
+      description: "Get diagnostics about the sandboxed environment.",
+      parameters: z.object({}),
+      execute: async (bash) => {
+        return {
+          // @ts-ignore
+          cwd: bash.state.cwd,
+          // @ts-ignore
+          env: Array.from(bash.state.env.keys()),
+          // @ts-ignore
+          limits: bash.limits,
+          version: "Ag-Bash vNext"
+        };
+      },
+    });
+
+    this.registerTool({
+      name: "run_js",
+      description: "Execute JavaScript code in the sandbox.",
+      parameters: z.object({
+        code: z.string().describe("The JS code to execute."),
+      }),
+      execute: async (bash, { code }) => {
+        const result = await bash.exec(`js-exec -c "${code.replace(/"/g, '\\"')}"`);
+        return result;
+      },
+    });
+
+    this.registerTool({
+      name: "run_python",
+      description: "Execute Python code in the sandbox.",
+      parameters: z.object({
+        code: z.string().describe("The Python code to execute."),
+      }),
+      execute: async (bash, { code }) => {
+        const result = await bash.exec(`python3 -c "${code.replace(/"/g, '\\"')}"`);
+        return result;
+      },
+    });
+
+    this.registerTool({
+      name: "get_definition",
+      description: "Find the definition of a symbol.",
+      parameters: z.object({
+        name: z.string().describe("The name of the symbol to find."),
+      }),
+      execute: async (bash, { name }) => {
+        const def = bash.semanticEngine.findDefinition(name);
+        return def || "Definition not found.";
+      },
+    });
+
+    this.registerTool({
+      name: "add_todo",
+      description: "Add a new todo item.",
+      parameters: z.object({
+        task: z.string().describe("The task description."),
+        status: z.enum(["pending", "doing", "done"]).optional().describe("Initial status."),
+      }),
+      execute: async (bash, { task, status }) => {
+        const todosPath = "/.ag-bash/todos.json";
+        await bash.fs.mkdir("/.ag-bash", { recursive: true });
+        let todos: any[] = [];
+        if (await bash.fs.exists(todosPath)) {
+          todos = JSON.parse(await bash.readFileDirect(todosPath));
+        }
+        const newTodo = { id: (todos.length + 1).toString(), task, status: status || "pending" };
+        todos.push(newTodo);
+        await bash.writeFileDirect(todosPath, JSON.stringify(todos, null, 2));
+        return { success: true, id: newTodo.id };
+      },
+    });
+
+    this.registerTool({
+      name: "list_todos",
+      description: "List all todo items.",
+      parameters: z.object({}),
+      execute: async (bash) => {
+        const todosPath = "/.ag-bash/todos.json";
+        if (await bash.fs.exists(todosPath)) {
+          return { todos: JSON.parse(await bash.readFileDirect(todosPath)) };
+        }
+        return { todos: [] };
+      },
+    });
+
+    this.registerTool({
+      name: "update_todo",
+      description: "Update the status of a todo item.",
+      parameters: z.object({
+        id: z.string().describe("The ID of the todo to update."),
+        status: z.enum(["pending", "doing", "done"]).describe("New status."),
+      }),
+      execute: async (bash, { id, status }) => {
+        const todosPath = "/.ag-bash/todos.json";
+        if (!(await bash.fs.exists(todosPath))) {
+          return { error: "Todo not found." };
+        }
+        const todos = JSON.parse(await bash.readFileDirect(todosPath));
+        const todo = todos.find((t: any) => t.id === id);
+        if (!todo) return { error: "Todo not found." };
+        todo.status = status;
+        await bash.writeFileDirect(todosPath, JSON.stringify(todos, null, 2));
+        return { success: true };
+      },
+    });
+  }
+
+  registerTool(tool: ToolboxTool): void {
+    this.tools.set(tool.name, tool);
+  }
+
+  getTools(): ToolboxTool[] {
+    return Array.from(this.tools.values());
+  }
+
+  getAgenticTools(bash: Bash): Record<string, any> {
+    const result: Record<string, any> = {};
+    for (const tool of this.getTools()) {
+      result[tool.name] = {
+        description: tool.description,
+        inputSchema: this.zodToJsonSchema(tool.parameters),
+        execute: (args: any) => tool.execute(bash, args),
+      };
+    }
+    return result;
+  }
+
+  /**
+   * Lightweight Zod to JSON Schema converter.
+   */
+  private zodToJsonSchema(schema: z.ZodObject<any>): any {
+    const shape = schema.shape;
+    const properties: any = {};
+    const required: string[] = [];
+
+    for (const key in shape) {
+      const field = shape[key];
+      const desc = field.description;
+      
+      let type = "string";
+      let enumValues: string[] | undefined;
+
+      if (field instanceof z.ZodString) {
+        type = "string";
+      } else if (field instanceof z.ZodNumber) {
+        type = "number";
+      } else if (field instanceof z.ZodBoolean) {
+        type = "boolean";
+      } else if (field instanceof z.ZodEnum) {
+        type = "string";
+        enumValues = (field as any)._def.values;
+      } else if (field instanceof z.ZodOptional) {
+        // Handle optional fields
+        const inner = (field as any)._def.innerType;
+        if (inner instanceof z.ZodString) type = "string";
+        else if (inner instanceof z.ZodNumber) type = "number";
+        else if (inner instanceof z.ZodBoolean) type = "boolean";
+        else if (inner instanceof z.ZodEnum) {
+           type = "string";
+           enumValues = (inner as any)._def.values;
+        }
+      }
+
+      properties[key] = {
+        type,
+        ...(desc && { description: desc }),
+        ...(enumValues && { enum: enumValues }),
+      };
+
+      if (!(field instanceof z.ZodOptional)) {
+        required.push(key);
+      }
+    }
+
+    return {
+      type: "object",
+      properties,
+      required,
+    };
+  }
+}

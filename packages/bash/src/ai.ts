@@ -1,6 +1,6 @@
 import type { Bash } from "./Bash.js";
 import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
-import { createAgenticTools } from "./agentic-tools.js";
+import { BashToolbox } from "./agentic/BashToolbox.js";
 
 /**
  * Options for creating an AI tool that wraps a Bash sandbox.
@@ -59,7 +59,8 @@ export function createBashTool(options: CreateBashToolOptions): {
   };
 } {
   const { sandbox } = options;
-  const agenticTools = createAgenticTools(sandbox);
+  const toolbox = new BashToolbox();
+  const agenticTools = toolbox.getAgenticTools(sandbox);
 
   return {
     tools: {

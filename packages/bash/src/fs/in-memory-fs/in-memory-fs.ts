@@ -79,6 +79,12 @@ export class InMemoryFs implements IFileSystem {
 
     if (initialFiles) {
       for (const [path, value] of Object.entries(initialFiles)) {
+        const normalized = normalizePath(path);
+        const parent = dirname(normalized);
+        if (parent !== "/") {
+          this.mkdirSync(parent, { recursive: true });
+        }
+
         if (typeof value === "function") {
           // Lazy file - store provider function, called on first read
           this.writeFileLazy(path, value);
