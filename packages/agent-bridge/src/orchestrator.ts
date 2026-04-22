@@ -181,6 +181,19 @@ export class AgentOrchestrator {
                             `Limits: CPU=${parsed.limits.cpuTimeout}ms, Depth=${parsed.limits.maxCallDepth}\n` +
                             `Capabilities: ${parsed.capabilities.join(", ")}`;
           }
+        } else if (tc.toolName === "run_js" || tc.toolName === "run_python") {
+          displayResult = parsed.stdout || "";
+          if (parsed.stderr) displayResult += `\nstderr: ${parsed.stderr}`;
+          if (parsed.exitCode !== 0) displayResult += `\nExit Code: ${parsed.exitCode}`;
+        } else if (tc.toolName === "query_json") {
+          displayResult = parsed.stdout || "";
+          if (parsed.stderr) displayResult += `\nstderr: ${parsed.stderr}`;
+        } else if (tc.toolName === "diff_files") {
+          displayResult = parsed.diff || "No differences found.";
+          if (parsed.stderr) displayResult += `\nstderr: ${parsed.stderr}`;
+        } else if (tc.toolName === "help_builtin") {
+          displayResult = parsed.help || "";
+          if (parsed.stderr) displayResult += `\nstderr: ${parsed.stderr}`;
         }
       } catch {}
 
