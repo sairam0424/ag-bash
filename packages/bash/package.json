@@ -98,9 +98,9 @@
     "fast-xml-parser": "^5.3.3",
     "file-type": "^21.2.0",
     "ini": "^6.0.0",
+    "isomorphic-git": "^1.25.10",
     "minimatch": "^10.1.1",
     "modern-tar": "^0.7.3",
-    "isomorphic-git": "^1.25.10",
     "papaparse": "^5.5.3",
     "quickjs-emscripten": "^0.32.0",
     "re2js": "^1.2.1",
@@ -111,7 +111,8 @@
     "tree-sitter-bash": "^0.25.1",
     "turndown": "^7.2.2",
     "web-tree-sitter": "^0.26.8",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
   },
   "optionalDependencies": {
     "@mongodb-js/zstd": "^7.0.0",

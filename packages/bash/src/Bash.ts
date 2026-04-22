@@ -92,6 +92,16 @@ import type {
   TraceCallback,
 } from "./types.js";
 
+/**
+ * Metadata for tracking file state to detect staleness and provide suggestions.
+ */
+export interface FileState {
+  content: string;
+  timestamp: number;
+  offset?: number;
+  limit?: number;
+}
+
 export type { ExecutionLimits } from "./limits.js";
 
 /**
@@ -361,6 +371,16 @@ export class Bash {
   private limits: Required<ExecutionLimits>;
   private secureFetch?: SecureFetch;
   private sleepFn?: (ms: number) => Promise<void>;
+
+  /**
+   * Tracks the state of files read or written during the session.
+   * Key is the absolute path to the file.
+   */
+  public readonly fileState: Map<string, FileState> = new Map<string, FileState>();
+
+  /**
+   * Creates a new Bash shell instance.
+   */
   private traceFn?: TraceCallback;
   private logger?: BashLogger;
   private defenseInDepthConfig?: DefenseInDepthConfig | boolean;

@@ -89,6 +89,98 @@ export class AgentOrchestrator {
             }
             displayResult += obsText;
           }
+        } else if (tc.toolName === "read_file") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+            if (parsed.suggestions) {
+              displayResult += `\nDid you mean:\n - ${parsed.suggestions.join("\n - ")}`;
+            }
+          } else {
+            displayResult = parsed.content;
+          }
+        } else if (tc.toolName === "write_file") {
+          displayResult = parsed.success ? "File written successfully." : `Error: ${parsed.error}`;
+        } else if (tc.toolName === "list_files") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else if (parsed.files) {
+            displayResult = parsed.files.join("\n");
+          } else {
+            displayResult = parsed.output;
+          }
+        } else if (tc.toolName === "edit_file") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}\nFailed Patch: ${parsed.failedPatch}\n${parsed.context || ""}`;
+          } else {
+            displayResult = parsed.message || "File updated successfully.";
+          }
+        } else if (tc.toolName === "analyze_code") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}\n${parsed.parseError || ""}`;
+          } else {
+            displayResult = `Type: ${parsed.type}\nLines: ${parsed.lineCount}\nBytes: ${parsed.byteCount}`;
+            if (parsed.symbols && parsed.symbols.length > 0) {
+              displayResult += `\n\nSymbols found:\n`;
+              for (const sym of parsed.symbols) {
+                displayResult += ` - [${sym.type}] ${sym.name} (Line ${sym.line})\n`;
+              }
+            }
+          }
+        } else if (tc.toolName === "run_command") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else {
+            displayResult = parsed.stdout || "";
+            if (parsed.stderr) displayResult += `\nstderr: ${parsed.stderr}`;
+            if (parsed.exitCode !== 0) displayResult += `\nExit Code: ${parsed.exitCode}`;
+          }
+        } else if (tc.toolName === "find_symbols") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else if (parsed.results && parsed.results.length > 0) {
+            displayResult = `Found ${parsed.results.length} symbols:\n`;
+            for (const sym of parsed.results) {
+              displayResult += ` - [${sym.type}] ${sym.name} in ${sym.path}:${sym.line}\n`;
+            }
+          } else {
+            displayResult = "No symbols found matching the query.";
+          }
+        } else if (tc.toolName === "explain_command") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else {
+            displayResult = `Explanation:\n${parsed.explanation}`;
+          }
+        } else if (tc.toolName === "find_files") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else if (parsed.results && parsed.results.length > 0) {
+            displayResult = `Found ${parsed.results.length} files:\n` + parsed.results.join("\n");
+          } else {
+            displayResult = "No files found matching the pattern.";
+          }
+        } else if (tc.toolName === "grep_search") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else if (parsed.results && parsed.results.length > 0) {
+            displayResult = `Found ${parsed.results.length} matches:\n`;
+            for (const res of parsed.results) {
+              displayResult += ` - ${res.path}:${res.line}: ${res.content}\n`;
+            }
+          } else {
+            displayResult = "No matches found.";
+          }
+        } else if (tc.toolName === "check_environment") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else {
+            displayResult = `Environment: ${parsed.version}\n` +
+                            `CWD: ${parsed.cwd}\n` +
+                            `Uptime: ${Math.floor(parsed.usage.uptime / 1000)}s\n` +
+                            `Commands: ${parsed.usage.commandCount}\n` +
+                            `Limits: CPU=${parsed.limits.cpuTimeout}ms, Depth=${parsed.limits.maxCallDepth}\n` +
+                            `Capabilities: ${parsed.capabilities.join(", ")}`;
+          }
         }
       } catch {}
 
