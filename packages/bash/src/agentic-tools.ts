@@ -494,12 +494,139 @@ export function createAgenticTools(sandbox: Bash): Record<string, any> {
               "Granular Tools",
               "Semantic Analysis",
               "Fuzzy Patching",
-              "Recursive Search"
+              "Recursive Search",
+              "Multi-Runtime (JS/Python)"
             ]
           };
         } catch (error: any) {
           return { error: sanitizeErrorMessage(error.message) };
         }
+      },
+    },
+    run_js: {
+      description: "Execute JavaScript or TypeScript code in the sandbox using the internal js-exec runtime.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          code: {
+            type: "string",
+            description: "The JavaScript/TypeScript code to execute.",
+          },
+          isModule: {
+            type: "boolean",
+            description: "Whether to run in ES module mode.",
+          },
+        },
+        required: ["code"] as const,
+      } as const,
+      execute: async ({ code, isModule }: { code: string; isModule?: boolean }): Promise<any> => {
+        const args = ["-c", code];
+        if (isModule) args.unshift("-m");
+        const result = await sandbox.exec(`js-exec ${args.map(a => `"${a.replace(/"/g, '\\"')}"`).join(" ")}`, { persistState: true });
+        return {
+          stdout: result.stdout,
+          stderr: result.stderr,
+          exitCode: result.exitCode
+        };
+      },
+    },
+    run_python: {
+      description: "Execute Python code in the sandbox using the internal python3 runtime.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          code: {
+            type: "string",
+            description: "The Python code to execute.",
+          },
+        },
+        required: ["code"] as const,
+      } as const,
+      execute: async ({ code }: { code: string }): Promise<any> => {
+        const result = await sandbox.exec(`python3 -c "${code.replace(/"/g, '\\"')}"`, { persistState: true });
+        return {
+          stdout: result.stdout,
+          stderr: result.stderr,
+          exitCode: result.exitCode
+        };
+      },
+    },
+    query_json: {
+      description: "Run a jq query against a JSON file or string.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The jq filter/query string.",
+          },
+          path: {
+            type: "string",
+            description: "Optional path to a JSON file to query.",
+          },
+          json: {
+            type: "string",
+            description: "Optional JSON string to query directly.",
+          },
+        },
+        required: ["query"] as const,
+      } as const,
+      execute: async ({ query, path, json }: { query: string; path?: string; json?: string }): Promise<any> => {
+        let cmd = `echo '${(json || "").replace(/'/g, "'\\''")}' | jq '${query}'`;
+        if (path) {
+          cmd = `jq '${query}' ${path}`;
+        }
+        const result = await sandbox.exec(cmd);
+        return {
+          stdout: result.stdout,
+          stderr: result.stderr,
+          exitCode: result.exitCode
+        };
+      },
+    },
+    diff_files: {
+      description: "Generate a unified diff between two files.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          file1: {
+            type: "string",
+            description: "Path to the first file.",
+          },
+          file2: {
+            type: "string",
+            description: "Path to the second file.",
+          },
+        },
+        required: ["file1", "file2"] as const,
+      } as const,
+      execute: async ({ file1, file2 }: { file1: string; file2: string }): Promise<any> => {
+        const result = await sandbox.exec(`diff -u ${file1} ${file2}`);
+        return {
+          diff: result.stdout,
+          stderr: result.stderr,
+          exitCode: result.exitCode
+        };
+      },
+    },
+    help_builtin: {
+      description: "Get detailed help for a shell builtin command.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          command: {
+            type: "string",
+            description: "The name of the builtin command (e.g., 'cd', 'declare').",
+          },
+        },
+        required: ["command"] as const,
+      } as const,
+      execute: async ({ command }: { command: string }): Promise<any> => {
+        const result = await sandbox.exec(`help ${command}`);
+        return {
+          help: result.stdout,
+          stderr: result.stderr
+        };
       },
     },
     run_command: {

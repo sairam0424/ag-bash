@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Bash } from "./Bash.js";
 import { createAgenticTools } from "./agentic-tools.js";
 import { InMemoryFs } from "./fs/in-memory-fs/index.js";
@@ -10,6 +10,8 @@ describe("Agentic Tools", () => {
   beforeEach(() => {
     bash = new Bash({
       parserEngine: 'legacy',
+      python: true,
+      javascript: true,
       fs: new InMemoryFs({
         "/test.txt": "hello world",
       }),
@@ -229,6 +231,49 @@ describe("Agentic Tools", () => {
       expect(result.limits).toBeDefined();
       expect(result.usage.commandCount).toBeGreaterThanOrEqual(0);
       expect(result.capabilities).toContain("Granular Tools");
+    });
+  });
+
+  describe("run_js", () => {
+    it("should execute JS code via sandbox.exec", async () => {
+      const spy = vi.spyOn(bash, "exec").mockResolvedValue({ stdout: "3", stderr: "", exitCode: 0, env: {} });
+      const result = await tools.run_js.execute({ code: "console.log(1+2)" });
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('js-exec "-c" "console.log(1+2)"'), expect.anything());
+      expect(result.stdout).toBe("3");
+    });
+  });
+
+  describe("run_python", () => {
+    it("should execute Python code via sandbox.exec", async () => {
+      const spy = vi.spyOn(bash, "exec").mockResolvedValue({ stdout: "3", stderr: "", exitCode: 0, env: {} });
+      const result = await tools.run_python.execute({ code: "print(1+2)" });
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('python3 -c "print(1+2)"'), expect.anything());
+      expect(result.stdout).toBe("3");
+    });
+  });
+
+  describe("query_json", () => {
+    it("should query JSON via jq", async () => {
+      const json = '{"a": {"b": 1}}';
+      const result = await tools.query_json.execute({ json, query: ".a.b" });
+      expect(result.stdout).toContain("1");
+    });
+  });
+
+  describe("diff_files", () => {
+    it("should diff two files", async () => {
+      await bash.fs.writeFile("/f1", "a\nb\n");
+      await bash.fs.writeFile("/f2", "a\nc\n");
+      const result = await tools.diff_files.execute({ file1: "/f1", file2: "/f2" });
+      expect(result.diff).toContain("-b");
+      expect(result.diff).toContain("+c");
+    });
+  });
+
+  describe("help_builtin", () => {
+    it("should get help for cd", async () => {
+      const result = await tools.help_builtin.execute({ command: "cd" });
+      expect(result.help).toContain("Change the current directory");
     });
   });
 });
