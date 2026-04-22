@@ -189,4 +189,46 @@ describe("Agentic Tools", () => {
       expect(result.exitCode).toBe(0);
     });
   });
+
+  describe("find_files", () => {
+    it("should find files by glob pattern", async () => {
+      await bash.fs.mkdir("/search");
+      await bash.fs.writeFile("/search/test1.ts", "content");
+      await bash.fs.writeFile("/search/test2.js", "content");
+      await bash.fs.writeFile("/search/other.ts", "content");
+      
+      const result = await tools.find_files.execute({ path: "/search", pattern: "*.ts" });
+      
+      expect(result.results.length).toBe(2);
+      expect(result.results).toContain("/search/test1.ts");
+      expect(result.results).toContain("/search/other.ts");
+    });
+  });
+
+  describe("grep_search", () => {
+    it("should search text across files", async () => {
+      await bash.fs.mkdir("/grep");
+      await bash.fs.writeFile("/grep/a.txt", "found target here");
+      await bash.fs.writeFile("/grep/b.txt", "nothing here");
+      await bash.fs.writeFile("/grep/c.txt", "another target");
+      
+      const result = await tools.grep_search.execute({ path: "/grep", query: "target" });
+      
+      expect(result.results.length).toBe(2);
+      expect(result.results[0].path).toBe("/grep/a.txt");
+      expect(result.results[1].path).toBe("/grep/c.txt");
+      expect(result.results[0].content).toContain("found target");
+    });
+  });
+
+  describe("check_environment", () => {
+    it("should return environment state and limits", async () => {
+      const result = await tools.check_environment.execute({});
+      
+      expect(result.cwd).toBeDefined();
+      expect(result.limits).toBeDefined();
+      expect(result.usage.commandCount).toBeGreaterThanOrEqual(0);
+      expect(result.capabilities).toContain("Granular Tools");
+    });
+  });
 });

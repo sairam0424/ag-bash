@@ -362,6 +362,146 @@ export function createAgenticTools(sandbox: Bash): Record<string, any> {
         }
       },
     },
+    find_files: {
+      description: "Search for files by name or glob pattern across the virtual filesystem.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Absolute path to the directory to start searching from.",
+          },
+          pattern: {
+            type: "string",
+            description: "Filename pattern or glob (e.g., '*.ts', 'config.*').",
+          },
+        },
+        required: ["path", "pattern"] as const,
+      } as const,
+      execute: async ({ path, pattern }: { path: string; pattern: string }): Promise<any> => {
+        try {
+          const results: string[] = [];
+          const regexPattern = new RegExp("^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+          
+          const walk = async (dir: string) => {
+            const entries = await sandbox.fs.readdir(dir);
+            for (const entry of entries) {
+              const fullPath = dir === "/" ? `/${entry}` : `${dir}/${entry}`;
+              try {
+                const stat = await sandbox.fs.stat(fullPath);
+                if (stat.isDirectory) {
+                  await walk(fullPath);
+                } else if (regexPattern.test(entry)) {
+                  results.push(fullPath);
+                }
+              } catch { /* ignore individual file errors */ }
+            }
+          };
+
+          await walk(path);
+          return { results };
+        } catch (error: any) {
+          return { error: sanitizeErrorMessage(error.message) };
+        }
+      },
+    },
+    grep_search: {
+      description: "Search for a text pattern across multiple files (like grep -r).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Absolute path to the directory to search in.",
+          },
+          query: {
+            type: "string",
+            description: "The text or regex pattern to search for.",
+          },
+          include: {
+            type: "string",
+            description: "Optional glob pattern for files to include (e.g., '*.sh').",
+          },
+        },
+        required: ["path", "query"] as const,
+      } as const,
+      execute: async ({ path, query, include }: { path: string; query: string; include?: string }): Promise<any> => {
+        try {
+          const results: any[] = [];
+          const searchRegex = new RegExp(query, "i");
+          const includeRegex = include ? new RegExp("^" + include.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$") : null;
+          
+          const walk = async (dir: string) => {
+            const entries = await sandbox.fs.readdir(dir);
+            for (const entry of entries) {
+              const fullPath = dir === "/" ? `/${entry}` : `${dir}/${entry}`;
+              try {
+                const stat = await sandbox.fs.stat(fullPath);
+                if (stat.isDirectory) {
+                  await walk(fullPath);
+                } else if (!includeRegex || includeRegex.test(entry)) {
+                  const content = await sandbox.fs.readFile(fullPath);
+                  const lines = content.split("\n");
+                  for (let i = 0; i < lines.length; i++) {
+                    if (searchRegex.test(lines[i])) {
+                      results.push({
+                        path: fullPath,
+                        line: i + 1,
+                        content: lines[i].trim()
+                      });
+                      if (results.length > 100) break; // Limit results
+                    }
+                  }
+                }
+              } catch { /* ignore errors */ }
+              if (results.length > 100) break;
+            }
+          };
+
+          await walk(path);
+          return { results };
+        } catch (error: any) {
+          return { error: sanitizeErrorMessage(error.message) };
+        }
+      },
+    },
+    check_environment: {
+      description: "Get diagnostics about the sandboxed environment including limits and runtime state.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      } as const,
+      execute: async (): Promise<any> => {
+        try {
+          const state = (sandbox as any).state;
+          const limits = (sandbox as any).limits;
+          
+          return {
+            cwd: state.cwd,
+            env: Array.from(state.env.keys()),
+            limits: {
+              maxCommandCount: limits.maxCommandCount,
+              maxCallDepth: limits.maxCallDepth,
+              maxLoopIterations: limits.maxLoopIterations,
+              cpuTimeout: limits.cpuTimeout,
+            },
+            usage: {
+              commandCount: state.commandCount,
+              uptime: Date.now() - state.startTime,
+            },
+            version: "Ag-Bash vNext (Alpha)",
+            capabilities: [
+              "Granular Tools",
+              "Semantic Analysis",
+              "Fuzzy Patching",
+              "Recursive Search"
+            ]
+          };
+        } catch (error: any) {
+          return { error: sanitizeErrorMessage(error.message) };
+        }
+      },
+    },
     run_command: {
       description: "Execute a shell command in the sandbox. Use this for general shell operations.",
       inputSchema: {

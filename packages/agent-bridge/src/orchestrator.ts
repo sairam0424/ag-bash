@@ -151,6 +151,36 @@ export class AgentOrchestrator {
           } else {
             displayResult = `Explanation:\n${parsed.explanation}`;
           }
+        } else if (tc.toolName === "find_files") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else if (parsed.results && parsed.results.length > 0) {
+            displayResult = `Found ${parsed.results.length} files:\n` + parsed.results.join("\n");
+          } else {
+            displayResult = "No files found matching the pattern.";
+          }
+        } else if (tc.toolName === "grep_search") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else if (parsed.results && parsed.results.length > 0) {
+            displayResult = `Found ${parsed.results.length} matches:\n`;
+            for (const res of parsed.results) {
+              displayResult += ` - ${res.path}:${res.line}: ${res.content}\n`;
+            }
+          } else {
+            displayResult = "No matches found.";
+          }
+        } else if (tc.toolName === "check_environment") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else {
+            displayResult = `Environment: ${parsed.version}\n` +
+                            `CWD: ${parsed.cwd}\n` +
+                            `Uptime: ${Math.floor(parsed.usage.uptime / 1000)}s\n` +
+                            `Commands: ${parsed.usage.commandCount}\n` +
+                            `Limits: CPU=${parsed.limits.cpuTimeout}ms, Depth=${parsed.limits.maxCallDepth}\n` +
+                            `Capabilities: ${parsed.capabilities.join(", ")}`;
+          }
         }
       } catch {}
 
