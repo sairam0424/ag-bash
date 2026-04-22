@@ -1,5 +1,6 @@
 import type { Bash } from "./Bash.js";
 import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
+import { createAgenticTools } from "./agentic-tools.js";
 
 /**
  * Options for creating an AI tool that wraps a Bash sandbox.
@@ -40,7 +41,7 @@ export interface CreateBashToolOptions {
  * that allows an AI agent to execute bash commands in a secure sandbox.
  *
  * @param options Configuration for the bash tool
- * @returns An object containing the 'bash' tool definition
+ * @returns An object containing the 'bash' tool definition and other granular tools.
  */
 export function createBashTool(options: CreateBashToolOptions): {
   tools: {
@@ -54,12 +55,15 @@ export function createBashTool(options: CreateBashToolOptions): {
       // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
       execute: (args: any) => Promise<any>;
     };
+    [key: string]: any;
   };
 } {
   const { sandbox } = options;
+  const agenticTools = createAgenticTools(sandbox);
 
   return {
     tools: {
+      ...agenticTools,
       bash: {
         description: `Execute a bash command in a secure sandbox with a virtual filesystem. You can use common commands like ls, cat, grep, awk, sed, jq, etc. to explore the environment and process data.${
           options.extraInstructions ? `\n\n${options.extraInstructions}` : ""

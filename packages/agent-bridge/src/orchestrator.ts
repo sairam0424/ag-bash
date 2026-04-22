@@ -89,6 +89,51 @@ export class AgentOrchestrator {
             }
             displayResult += obsText;
           }
+        } else if (tc.toolName === "read_file") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+            if (parsed.suggestions) {
+              displayResult += `\nDid you mean:\n - ${parsed.suggestions.join("\n - ")}`;
+            }
+          } else {
+            displayResult = parsed.content;
+          }
+        } else if (tc.toolName === "write_file") {
+          displayResult = parsed.success ? "File written successfully." : `Error: ${parsed.error}`;
+        } else if (tc.toolName === "list_files") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else if (parsed.files) {
+            displayResult = parsed.files.join("\n");
+          } else {
+            displayResult = parsed.output;
+          }
+        } else if (tc.toolName === "edit_file") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}\nFailed Patch: ${parsed.failedPatch}\n${parsed.context || ""}`;
+          } else {
+            displayResult = parsed.message || "File updated successfully.";
+          }
+        } else if (tc.toolName === "analyze_code") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}\n${parsed.parseError || ""}`;
+          } else {
+            displayResult = `Type: ${parsed.type}\nLines: ${parsed.lineCount}\nBytes: ${parsed.byteCount}`;
+            if (parsed.symbols && parsed.symbols.length > 0) {
+              displayResult += `\n\nSymbols found:\n`;
+              for (const sym of parsed.symbols) {
+                displayResult += ` - [${sym.type}] ${sym.name} (Line ${sym.line})\n`;
+              }
+            }
+          }
+        } else if (tc.toolName === "run_command") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else {
+            displayResult = parsed.stdout || "";
+            if (parsed.stderr) displayResult += `\nstderr: ${parsed.stderr}`;
+            if (parsed.exitCode !== 0) displayResult += `\nExit Code: ${parsed.exitCode}`;
+          }
         }
       } catch {}
 
