@@ -68,7 +68,7 @@ export function createAgenticTools(sandbox: Bash): Record<string, any> {
       },
     },
     edit_file: {
-      description: "Apply one or more text patches to a file. Each patch replaces 'oldText' with 'newText'.",
+      description: "Apply one or more text patches to a file. Each patch replaces 'oldText' with 'newText'. Supports fuzzy matching for whitespace and line endings.",
       inputSchema: {
         type: "object",
         properties: {
@@ -103,17 +103,38 @@ export function createAgenticTools(sandbox: Bash): Record<string, any> {
           
           for (const patch of patches) {
             if (!content.includes(patch.oldText)) {
-              // Try normalized matching if exact fails (basic normalization)
-              const normalizedContent = content.replace(/\r\n/g, "\n");
-              const normalizedOld = patch.oldText.replace(/\r\n/g, "\n");
+              // Fuzzy matching: line-by-line trimmed comparison
+              const lines = content.split("\n");
+              const oldLines = patch.oldText.split("\n").map(l => l.trim());
               
-              if (normalizedContent.includes(normalizedOld)) {
-                content = normalizedContent.replace(normalizedOld, patch.newText.replace(/\r\n/g, "\n"));
+              let foundIndex = -1;
+              for (let i = 0; i <= lines.length - oldLines.length; i++) {
+                let match = true;
+                for (let j = 0; j < oldLines.length; j++) {
+                  // Skip empty lines in patch if they don't match exactly
+                  if (oldLines[j] === "" && lines[i+j].trim() !== "") {
+                    match = false;
+                    break;
+                  }
+                  if (lines[i+j].trim() !== oldLines[j]) {
+                    match = false;
+                    break;
+                  }
+                }
+                if (match) {
+                  foundIndex = i;
+                  break;
+                }
+              }
+
+              if (foundIndex !== -1) {
+                lines.splice(foundIndex, oldLines.length, patch.newText);
+                content = lines.join("\n");
               } else {
-                return { 
-                  error: `Could not find exact match for patch in ${path}`,
+                 return { 
+                  error: `Could not find match for patch in ${path}`,
                   failedPatch: patch.oldText,
-                  context: "The text to be replaced must match exactly. Please check whitespace and line endings."
+                  context: "The text to be replaced must match closely (ignoring indentation). Please check the content."
                 };
               }
             } else {
@@ -188,6 +209,7 @@ export function createAgenticTools(sandbox: Bash): Record<string, any> {
             lineCount: lines.length,
             byteCount: Buffer.byteLength(content),
             extension: path.split(".").pop() || "",
+            summary: lines.slice(0, 10).join("\n") + (lines.length > 10 ? "\n..." : ""),
           };
 
           // Semantic analysis for shell scripts
@@ -224,6 +246,119 @@ export function createAgenticTools(sandbox: Bash): Record<string, any> {
           };
         } catch (error: any) {
           return { error: sanitizeErrorMessage(error.message) };
+        }
+      },
+    },
+    find_symbols: {
+      description: "Search for symbols (functions, variables) across all shell scripts in a directory.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Absolute path to the directory to search in.",
+          },
+          query: {
+            type: "string",
+            description: "Optional query to filter symbol names.",
+          },
+        },
+        required: ["path"] as const,
+      } as const,
+      execute: async ({ path, query }: { path: string; query?: string }): Promise<any> => {
+        try {
+          const results: any[] = [];
+          const walk = async (dir: string) => {
+            const entries = await sandbox.fs.readdir(dir);
+            for (const entry of entries) {
+              const fullPath = dir === "/" ? `/${entry}` : `${dir}/${entry}`;
+              try {
+                const stat = await sandbox.fs.stat(fullPath);
+                if (stat.isDirectory) {
+                  await walk(fullPath);
+                } else if (entry.endsWith(".sh")) {
+                  const content = await sandbox.fs.readFile(fullPath);
+                  const ast = parse(content);
+                  const engine = new SemanticEngine(ast);
+                  const symbols = engine.getAllSymbols();
+                  for (const sym of symbols) {
+                    if (!query || sym.name.toLowerCase().includes(query.toLowerCase())) {
+                      results.push({
+                        name: sym.name,
+                        type: sym.type,
+                        line: sym.line,
+                        path: fullPath
+                      });
+                    }
+                  }
+                }
+              } catch { /* ignore individual file errors */ }
+            }
+          };
+
+          await walk(path);
+          return { results };
+        } catch (error: any) {
+          return { error: sanitizeErrorMessage(error.message) };
+        }
+      },
+    },
+    explain_command: {
+      description: "Parse and explain a complex shell command.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          command: {
+            type: "string",
+            description: "The shell command to explain.",
+          },
+        },
+        required: ["command"] as const,
+      } as const,
+      execute: async ({ command }: { command: string }): Promise<any> => {
+        try {
+          const ast = parse(command);
+          
+          const wordToString = (word: any): string => {
+            if (!word) return "";
+            return word.parts.map((p: any) => p.value || "").join("");
+          };
+
+          const explain = (node: any): string => {
+             if (node.type === "Script") return node.statements.map(explain).join("\n");
+             if (node.type === "Statement") {
+                let res = node.pipelines.map(explain).join(" | ");
+                if (node.background) res += " (runs in background)";
+                return res;
+             }
+             if (node.type === "Pipeline") {
+                if (node.commands.length > 1) {
+                   return `A pipeline of ${node.commands.length} commands:\n` + node.commands.map((c: any) => `  - ${explain(c)}`).join("\n");
+                }
+                return explain(node.commands[0]);
+             }
+             if (node.type === "SimpleCommand") {
+                const name = wordToString(node.name);
+                const args = node.args.map(wordToString).join(" ");
+                let desc = `Executes '${name}'`;
+                if (args) desc += ` with arguments: ${args}`;
+                if (node.redirections && node.redirections.length > 0) {
+                  desc += ` (with ${node.redirections.length} redirections)`;
+                }
+                return desc;
+             }
+             if (node.type === "FunctionDef") {
+                return `Defines function '${node.name}'`;
+             }
+             return `Command of type ${node.type}`;
+          };
+          
+          return {
+            explanation: explain(ast),
+            ast: JSON.parse(JSON.stringify(ast, (key, value) => key === "parent" ? undefined : value))
+          };
+        } catch (error: any) {
+          return { error: `Failed to parse command: ${sanitizeErrorMessage(error.message)}` };
         }
       },
     },

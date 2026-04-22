@@ -134,6 +134,23 @@ export class AgentOrchestrator {
             if (parsed.stderr) displayResult += `\nstderr: ${parsed.stderr}`;
             if (parsed.exitCode !== 0) displayResult += `\nExit Code: ${parsed.exitCode}`;
           }
+        } else if (tc.toolName === "find_symbols") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else if (parsed.results && parsed.results.length > 0) {
+            displayResult = `Found ${parsed.results.length} symbols:\n`;
+            for (const sym of parsed.results) {
+              displayResult += ` - [${sym.type}] ${sym.name} in ${sym.path}:${sym.line}\n`;
+            }
+          } else {
+            displayResult = "No symbols found matching the query.";
+          }
+        } else if (tc.toolName === "explain_command") {
+          if (parsed.error) {
+            displayResult = `Error: ${parsed.error}`;
+          } else {
+            displayResult = `Explanation:\n${parsed.explanation}`;
+          }
         }
       } catch {}
 

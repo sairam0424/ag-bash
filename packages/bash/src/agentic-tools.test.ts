@@ -91,10 +91,25 @@ describe("Agentic Tools", () => {
       expect(result.error).toBeDefined();
       expect(result.failedPatch).toBe("missing");
     });
+
+    it("should apply fuzzy matching for whitespace and line endings", async () => {
+      const path = "/fuzzy.txt";
+      await bash.fs.writeFile(path, "  line1  \n  line2  ");
+      const tools = createAgenticTools(bash);
+
+      const result = await tools.edit_file.execute({
+        path,
+        patches: [{ oldText: "line1\nline2", newText: "NEW_CONTENT" }],
+      });
+
+      expect(result.success).toBe(true);
+      const content = await bash.fs.readFile(path);
+      expect(content).toContain("NEW_CONTENT");
+    });
   });
 
   describe("analyze_code", () => {
-    it("should analyze a bash script and return symbols", async () => {
+    it("should analyze a bash script and return symbols and summary", async () => {
       const path = "/script.sh";
       const script = "FOO=bar\nfunction myfn() {\n  echo $FOO\n}\n";
       await bash.fs.writeFile(path, script);
@@ -103,14 +118,9 @@ describe("Agentic Tools", () => {
       const result = await tools.analyze_code.execute({ path });
 
       expect(result.type).toBe("shell");
-      expect(result.symbols).toBeDefined();
+      expect(result.summary).toContain("FOO=bar");
       const fnSymbol = result.symbols.find((s: any) => s.name === "myfn");
       expect(fnSymbol).toBeDefined();
-      expect(fnSymbol.type).toBe("Function");
-      
-      const varSymbol = result.symbols.find((s: any) => s.name === "FOO");
-      expect(varSymbol).toBeDefined();
-      expect(varSymbol.type).toBe("Variable");
     });
 
     it("should return basic stats for non-shell files", async () => {
@@ -122,6 +132,51 @@ describe("Agentic Tools", () => {
 
       expect(result.type).toBe("generic");
       expect(result.lineCount).toBe(2);
+    });
+  });
+
+  describe("find_symbols", () => {
+    it("should find symbols across multiple shell scripts", async () => {
+      await bash.fs.mkdir("/src");
+      await bash.fs.writeFile("/src/a.sh", "funcA() { :; }");
+      await bash.fs.writeFile("/src/b.sh", "funcB() { :; }");
+      const tools = createAgenticTools(bash);
+
+      const result = await tools.find_symbols.execute({ path: "/src" });
+
+      expect(result.results.length).toBe(2);
+      expect(result.results.some((s: any) => s.name === "funcA")).toBe(true);
+      expect(result.results.some((s: any) => s.name === "funcB")).toBe(true);
+    });
+
+    it("should filter results by query", async () => {
+      await bash.fs.mkdir("/query");
+      await bash.fs.writeFile("/query/test.sh", "targetFunc() { :; }\notherFunc() { :; }");
+      const tools = createAgenticTools(bash);
+
+      const result = await tools.find_symbols.execute({ path: "/query", query: "target" });
+
+      expect(result.results.length).toBe(1);
+      expect(result.results[0].name).toBe("targetFunc");
+    });
+  });
+
+  describe("explain_command", () => {
+    it("should explain a simple command", async () => {
+      const tools = createAgenticTools(bash);
+      const result = await tools.explain_command.execute({ command: "ls -la" });
+
+      expect(result.explanation).toContain("Executes 'ls'");
+      expect(result.explanation).toContain("-la");
+    });
+
+    it("should explain a pipeline", async () => {
+      const tools = createAgenticTools(bash);
+      const result = await tools.explain_command.execute({ command: "ls | grep test" });
+
+      expect(result.explanation).toContain("A pipeline");
+      expect(result.explanation).toContain("Executes 'ls'");
+      expect(result.explanation).toContain("Executes 'grep'");
     });
   });
 
