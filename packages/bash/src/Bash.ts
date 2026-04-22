@@ -50,6 +50,7 @@ import {
   DebuggerBridge,
 } from "./interpreter/index.js";
 import { SemanticEngine } from "./lsp/semantic-engine.js";
+import { WorkspaceIndexer } from "./lsp/WorkspaceIndexer.js";
 import { AgenticHealer } from "./agentic/agentic-healer.js";
 import type { AgenticHealerConfig } from "./agentic/types.js";
 import {
@@ -394,11 +395,13 @@ export class Bash {
   private treeSitterConfig?: BashOptions['treeSitterConfig'];
   private agentic: boolean;
   private debugger?: DebuggerBridge;
-  private semanticEngine?: SemanticEngine;
+  public semanticEngine: SemanticEngine;
+  public indexer: WorkspaceIndexer;
   private agenticHealer?: AgenticHealer;
 
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
+  private snapshots: Map<string, BashSnapshot> = new Map();
 
   constructor(options: BashOptions = {}) {
     this.fs = options.fs instanceof MountableFs 
@@ -614,10 +617,11 @@ export class Bash {
     }
 
     this.defaultPersistState = options.persistState ?? false;
-    this.parserEngine = options.parserEngine ?? 'tree-sitter';
+    this.parserEngine = options.parserEngine ?? 'legacy';
     this.treeSitterConfig = options.treeSitterConfig;
     this.debugger = options.debugger;
-    this.semanticEngine = options.semanticEngine;
+    this.semanticEngine = options.semanticEngine ?? new SemanticEngine();
+    this.indexer = new WorkspaceIndexer(this, this.semanticEngine);
     this.agentic = options.agentic ?? false;
     if (this.agentic) {
       this.agenticHealer = new AgenticHealer(options.agenticConfig || { enableHeuristics: true });
@@ -807,10 +811,7 @@ export class Bash {
         if (cachedAst) {
           ast = cachedAst;
         } else {
-          if (this.parserEngine === 'tree-sitter') {
-            if (!this.treeSitterConfig) {
-              throw new Error("Tree-sitter parser engine selected but treeSitterConfig was not provided in Bash options.");
-            }
+          if (this.parserEngine === 'tree-sitter' && this.treeSitterConfig) {
             
             const tree = TreeSitterParser.parse(normalized);
             const converter = new TreeSitterToAst(normalized);
@@ -886,9 +887,9 @@ export class Bash {
       }
 
       return execResult;
-    } catch (error) {
+    } catch (error: any) {
       // ExitError propagates from 'exit' builtin (including via eval/source)
-      if (error instanceof ExitError) {
+      if (error instanceof ExitError || error.name === 'ExitError') {
         return this.logResult({
           stdout: error.stdout,
           stderr: error.stderr,
@@ -1038,6 +1039,48 @@ export class Bash {
   }
 
   /**
+   * Save a named snapshot of the current state.
+   */
+  async saveSnapshot(name: string): Promise<void> {
+    const snap = await this.snapshot();
+    this.snapshots.set(name, snap);
+  }
+
+  /**
+   * Restore a named snapshot.
+   */
+  async restoreSnapshot(name: string): Promise<void> {
+    const snap = this.snapshots.get(name);
+    if (!snap) {
+      throw new Error(`Snapshot '${name}' not found`);
+    }
+    await this.restore(snap);
+  }
+
+  /**
+   * Save the workspace symbol index to disk.
+   */
+  public async saveIndex(): Promise<void> {
+    const indexData = this.semanticEngine.serialize();
+    const dir = ".ag-bash";
+    if (!(await this.fs.exists(dir))) {
+      await this.fs.mkdir(dir, { recursive: true });
+    }
+    await this.fs.writeFile(`${dir}/index.json`, indexData);
+  }
+
+  /**
+   * Load the workspace symbol index from disk.
+   */
+  public async loadIndex(): Promise<void> {
+    const indexPath = ".ag-bash/index.json";
+    if (await this.fs.exists(indexPath)) {
+      const data = await this.fs.readFile(indexPath);
+      this.semanticEngine.deserialize(data);
+    }
+  }
+
+  /**
    * Mount a filesystem at the specified virtual path.
    */
   mount(mountPoint: string, filesystem: IFileSystem): void {
@@ -1092,6 +1135,35 @@ export class Bash {
       this.fs.resolvePath(this.state.cwd, path),
       content,
     );
+  }
+
+  async readFileDirect(path: string): Promise<string> {
+    return this.fs.readFile(this.fs.resolvePath(this.state.cwd, path));
+  }
+
+  async writeFileDirect(path: string, content: string): Promise<void> {
+    await this.fs.writeFile(this.fs.resolvePath(this.state.cwd, path), content);
+  }
+
+  async listDirDirect(path: string): Promise<string[]> {
+    return this.fs.readdir(this.fs.resolvePath(this.state.cwd, path));
+  }
+
+  async existsDirect(path: string): Promise<boolean> {
+    return this.fs.exists(this.fs.resolvePath(this.state.cwd, path));
+  }
+
+  async mkdirDirect(path: string, recursive = true): Promise<void> {
+    await this.fs.mkdir(this.fs.resolvePath(this.state.cwd, path), {
+      recursive,
+    });
+  }
+
+  async rmDirect(path: string, recursive = false): Promise<void> {
+    await this.fs.rm(this.fs.resolvePath(this.state.cwd, path), {
+      recursive,
+      force: true,
+    });
   }
 
   getCwd(): string {

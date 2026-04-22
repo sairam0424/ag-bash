@@ -933,11 +933,19 @@ export class Interpreter {
         false, // useDefaultPath
         stdinSourceFd
       );
-    } catch (error) {
-       // Re-throw security and limit errors to be handled by the top-level Bash
+    } catch (error: any) {
+       // Re-throw control flow and fatal errors to be handled by the top-level Bash
        const errorName = error instanceof Error ? error.name : "";
-       if (error instanceof SecurityViolationError || error instanceof ExecutionLimitError ||
-           errorName === "SecurityViolationError" || errorName === "ExecutionLimitError") {
+       if (
+         error instanceof SecurityViolationError || error instanceof ExecutionLimitError ||
+         error instanceof ExitError || error instanceof ReturnError ||
+         error instanceof BreakError || error instanceof ContinueError ||
+         error instanceof ErrexitError || error instanceof ArithmeticError ||
+         errorName === "SecurityViolationError" || errorName === "ExecutionLimitError" ||
+         errorName === "ExitError" || errorName === "ReturnError" ||
+         errorName === "BreakError" || errorName === "ContinueError" ||
+         errorName === "ErrexitError" || errorName === "ArithmeticError"
+       ) {
          throw error;
        }
        // Catch unexpected command internal errors and treat as failure

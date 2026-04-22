@@ -194,6 +194,26 @@ export class AgentOrchestrator {
         } else if (tc.toolName === "help_builtin") {
           displayResult = parsed.help || "";
           if (parsed.stderr) displayResult += `\nstderr: ${parsed.stderr}`;
+        } else if (tc.toolName === "list_todos") {
+          if (parsed.todos && Array.isArray(parsed.todos)) {
+            if (parsed.todos.length === 0) {
+              displayResult = "Todo list is empty.";
+            } else {
+              displayResult = "📋 Todo List:\n" + parsed.todos.map((t: any) => {
+                const icon = t.status === "done" ? "✅" : (t.status === "doing" ? "⏳" : "⭕");
+                return `${icon} [#${t.id}] ${t.task}`;
+              }).join("\n");
+            }
+          }
+        } else if (tc.toolName === "search_symbols") {
+          if (parsed.results && Array.isArray(parsed.results)) {
+            if (parsed.results.length === 0) {
+              displayResult = "No symbols found matching the query.";
+            } else {
+              displayResult = `🔍 Found ${parsed.results.length} symbols:\n` +
+                parsed.results.map((s: any) => ` - [${s.type}] ${s.name} (${s.path}:${s.line})`).join("\n");
+            }
+          }
         }
       } catch {}
 
@@ -247,6 +267,8 @@ export class AgentOrchestrator {
                 await bash.restore(snap);
                 writer.write(`\x1b[35m[Orchestrator] Restored to ${chunk.input.snapshotId}\x1b[0m\r\n`);
              }
+          } else if (chunk.toolName === "index_workspace") {
+            writer.write(`\x1b[36m🔨 Building workspace index...\x1b[0m\r\n`);
           } else {
             writer.write(`\x1b[36m[${chunk.toolName}]\x1b[0m\r\n`);
           }
@@ -262,6 +284,14 @@ export class AgentOrchestrator {
           };
           formatToolResult(tc);
           if (existing) existing.result = resultStr;
+
+          // Check for interruption (HITL)
+          if (chunk.output && typeof chunk.output === "object" && (chunk.output as any).interrupted) {
+            const hitl = chunk.output as any;
+            writer.write(`\r\n\x1b[33m💡 HITL Prompt: ${hitl.question}\x1b[0m\r\n`);
+            // We break the loop to allow the caller to handle the interaction
+            return { type: "interrupted", question: hitl.question, toolCallId: chunk.toolCallId };
+          }
         }
         else if (chunk.type === "text-end") {
           clearThinking();
