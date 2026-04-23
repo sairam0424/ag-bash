@@ -281,6 +281,10 @@ export interface ProcessState {
   startTime: number;
   /** Time when the current command execution started (for CPU time limits) */
   executionStartTime: number;
+  /** Cumulative network traffic in bytes (for resource accounting) */
+  networkTrafficBytes: number;
+  /** Cumulative number of MCP tool calls (for resource accounting) */
+  mcpToolCallCount: number;
   /** PID of last background job (for $!) */
   lastBackgroundPid: number;
   /** Current BASHPID (changes in subshells, unlike $$) */
@@ -408,6 +412,8 @@ export interface InterpreterState
   signal?: AbortSignal;
   /** Extra arguments injected via exec({ args }), appended to first command's args */
   extraArgs?: string[];
+  /** Current session ID for stateful REPLs (js-exec, python3) */
+  sessionId?: string;
 }
 
 export interface InterpreterContext {
@@ -478,5 +484,8 @@ export interface InterpreterContext {
    * Optional shared state bus for inter-runtime communication.
    */
   sharedBus?: any; // Use any to avoid circular dependency for now, or import type
+  sessionId?: string;
+  /** Reference to the parent Bash instance */
+  bash?: any;
 }
 
