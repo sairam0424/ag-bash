@@ -16,7 +16,6 @@ export const gitCommand: Command = {
     // and avoid node dependencies in non-git contexts.
     let git: any;
     try {
-      // @ts-expect-error
       git = await import("isomorphic-git");
     } catch (e) {
       return {

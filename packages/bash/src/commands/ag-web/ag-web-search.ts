@@ -17,17 +17,29 @@ export const WebSearchTool: ToolboxTool = {
     blocked_domains: z.array(z.string()).optional().describe("Exclude results from these domains."),
   }),
   execute: async (bash: Bash, { query, allowed_domains, blocked_domains }) => {
-    // Heuristic: Use Google Search URL or similar if no search provider is configured.
-    // In a real production environment, this would call a search API like Serper, Tavily, or Google Search API.
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-    
-    try {
-      // Log the search action
-      (bash as any).logger?.info("web_search", { query, allowed_domains });
-      
-      return `Searching for: ${query}\nDue to sandbox restrictions, please use ag_web_fetch on specific URLs to gather more information.\nSearch results would typically appear here with titles and URLs.`;
-    } catch (error: any) {
-      return `Search failed: ${error.message}`;
+    const env = bash.env;
+    const serperKey = env.SERPER_API_KEY;
+    const tavilyKey = env.TAVILY_API_KEY;
+
+    if (serperKey) {
+      try {
+        const response = await bash.exec(`curl -H "X-API-KEY: ${serperKey}" -H "Content-Type: application/json" -d '{"q": "${query}"}' https://google.serper.dev/search`);
+        return response.stdout;
+      } catch (e: any) {
+        return `Serper search failed: ${e.message}`;
+      }
     }
+
+    if (tavilyKey) {
+      try {
+        const response = await bash.exec(`curl -H "Content-Type: application/json" -d '{"api_key": "${tavilyKey}", "query": "${query}"}' https://api.tavily.com/search`);
+        return response.stdout;
+      } catch (e: any) {
+        return `Tavily search failed: ${e.message}`;
+      }
+    }
+
+    // Fallback to informative message
+    return `Searching for: ${query}\n\nNo search API keys (SERPER_API_KEY or TAVILY_API_KEY) detected. \n\nResults would typically include URLs and snippets from the web. Use ag_web_fetch to retrieve specific page content if you already have a URL.`;
   },
 };

@@ -29,7 +29,6 @@ export const agReferencesCommand: Command = {
       };
     }
 
-    // @ts-expect-error
     const occurrences = ctx.bash.semanticEngine.getOccurrences(name);
 
     if (occurrences.length === 0) {

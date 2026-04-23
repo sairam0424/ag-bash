@@ -12,6 +12,7 @@ import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
 import { AgenticHealer } from "./agentic/agentic-healer.js";
+import { LSPManager } from "./lsp/LSPManager.js";
 import { BashToolbox } from "./agentic/BashToolbox.js";
 import type { AgenticHealerConfig } from "./agentic/types.js";
 import {
@@ -425,6 +426,7 @@ export class Bash {
   constructor(options: BashOptions = {}) {
     this.nestingDepth = options.nestingDepth ?? 0;
     this.toolbox = new BashToolbox();
+    this.initLsp();
     this.fs =
       options.fs instanceof MountableFs
         ? options.fs
@@ -685,6 +687,25 @@ export class Bash {
    */
   public getMode(): BashMode {
     return this.state.mode;
+  }
+
+  public get cwd(): string {
+    return this.state.cwd;
+  }
+
+  public get env(): Record<string, string> {
+    const res: Record<string, string> = {};
+    for (const [k, v] of this.state.env) {
+      res[k] = v;
+    }
+    return res;
+  }
+
+  private async initLsp(): Promise<void> {
+    const lsp = LSPManager.getInstance();
+    // Initialize TS server if available
+    await lsp.initServer("ts", "typescript-language-server", ["--stdio"]);
+    await lsp.initServer("js", "typescript-language-server", ["--stdio"]);
   }
 
   /**
@@ -1240,6 +1261,12 @@ export class Bash {
   async writeFileDirect(path: string, content: string): Promise<void> {
     await this.fs.writeFile(path, content);
     this.updateFileState(path, { content });
+
+    // Notify LSP of change
+    LSPManager.getInstance().sendNotification(path, "textDocument/didChange", {
+      textDocument: { uri: `file://${path}`, version: 1 },
+      contentChanges: [{ text: content }],
+    });
   }
 
   async listDirDirect(path: string): Promise<string[]> {

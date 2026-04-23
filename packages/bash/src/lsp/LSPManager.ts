@@ -1,4 +1,5 @@
 import type { Bash } from "../Bash.js";
+import { LSPConnection } from "./LSPConnection.js";
 
 export interface LSPRequest {
   method: string;
@@ -11,7 +12,7 @@ export interface LSPRequest {
  */
 export class LSPManager {
   private static instance: LSPManager;
-  private servers: Map<string, any> = new Map(); // extension -> server connection
+  private connections: Map<string, LSPConnection> = new Map(); // extension -> connection
 
   private constructor() {}
 
@@ -25,10 +26,23 @@ export class LSPManager {
   /**
    * Initialize a language server for a specific file extension.
    */
-  public async initServer(extension: string, config: any): Promise<void> {
-    // In a real implementation, this would spawn a background process or connect via RPC.
-    console.log(`Initializing LSP server for ${extension}`);
-    this.servers.set(extension, { initialized: true, config });
+  public async initServer(extension: string, command: string, args: string[]): Promise<void> {
+    if (this.connections.has(extension)) return;
+
+    try {
+      const connection = new LSPConnection(command, args);
+      this.connections.set(extension, connection);
+
+      // Standard LSP initialization
+      await connection.sendRequest("initialize", {
+        processId: process.pid,
+        capabilities: {},
+        rootUri: null,
+      });
+      connection.sendNotification("initialized", {});
+    } catch (error) {
+      console.warn(`Failed to initialize LSP server for ${extension}: ${error}`);
+    }
   }
 
   /**
@@ -36,18 +50,30 @@ export class LSPManager {
    */
   public async sendRequest(bash: Bash, request: LSPRequest): Promise<any> {
     const ext = request.filePath.split(".").pop() || "";
-    const server = this.servers.get(ext);
+    const connection = this.connections.get(ext);
 
-    if (!server) {
+    if (!connection) {
       // Fallback to internal SemanticEngine if no LSP server is available
       return this.fallbackToSemanticEngine(bash, request);
     }
 
-    // Delegate to real LSP server (Mocked here)
-    return {
-      success: true,
-      data: `LSP Result for ${request.method} on ${request.filePath} (Mocked)`,
-    };
+    try {
+      return await connection.sendRequest(request.method, request.params);
+    } catch (error) {
+      console.error(`LSP Request failed: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Send a notification to the appropriate LSP server.
+   */
+  public sendNotification(filePath: string, method: string, params: any): void {
+    const ext = filePath.split(".").pop() || "";
+    const connection = this.connections.get(ext);
+    if (connection) {
+      connection.sendNotification(method, params);
+    }
   }
 
   private async fallbackToSemanticEngine(bash: Bash, request: LSPRequest): Promise<any> {

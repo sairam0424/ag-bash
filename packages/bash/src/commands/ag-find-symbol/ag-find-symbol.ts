@@ -28,7 +28,6 @@ export const agFindSymbolCommand: Command = {
     // In our current architecture, the indexer is on the Bash instance.
     // We might need to expose it to the command context.
 
-    // @ts-expect-error - Accessing indexer which should be on ctx in v2.0
     const symbols = await ctx.bash.indexer.findSymbols(query);
 
     if (symbols.length === 0) {

@@ -3,6 +3,7 @@ import type { Bash } from "../Bash.js";
 import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
 import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
 import { LspTool } from "../lsp/LspTool.js";
+import { SpawnTool } from "./OrchestratorTool.js";
 
 /**
  * ToolboxTool definition with advanced lifecycle hooks.
@@ -607,6 +608,7 @@ export class BashToolbox {
     this.registerTool(WebSearchTool);
     this.registerTool(WebFetchTool);
     this.registerTool(LspTool);
+    this.registerTool(SpawnTool);
 
     this.registerTool({
       name: "list_mcp_tools",
@@ -682,6 +684,10 @@ export class BashToolbox {
       };
     }
     return result;
+  }
+
+  public unregisterTool(name: string): void {
+    this.tools.delete(name);
   }
 
   /**
