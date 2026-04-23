@@ -92,7 +92,9 @@ export function throwExecutionLimit(
     | "output_size"
     | "file_descriptors"
     | "memory"
-    | "cpu_time",
+    | "cpu_time"
+    | "network_traffic"
+    | "sub_agents",
   stdout = "",
   stderr = "",
 ): never {

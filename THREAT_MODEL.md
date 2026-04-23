@@ -15,18 +15,21 @@ This document outlines the security architecture and threat mitigations for Ag-B
 ## 1. Threat Actors
 
 ### 1A. Untrusted Script Author (PRIMARY)
+
 - **Who**: An AI agent or user submitting arbitrary bash scripts for execution
 - **Capability**: Full control over the bash script input. Can craft any valid (or invalid) bash syntax
 - **Goal**: Escape the sandbox, access the host filesystem, exfiltrate secrets, execute arbitrary code, cause denial of service, or escalate privileges
 - **Trust level**: ZERO — the script is completely untrusted
 
 ### 1B. Malicious Data Source
+
 - **Who**: External data consumed by scripts (HTTP responses, file content, stdin)
 - **Capability**: Control over data that flows through expansion, variable assignment, command arguments
 - **Goal**: Exploit the interpreter via crafted data (prototype pollution, injection via IFS, path traversal via filenames)
 - **Trust level**: ZERO — data is untrusted
 
 ### 1C. Compromised Dependency
+
 - **Who**: A supply-chain attacker modifying an npm dependency
 - **Capability**: Arbitrary code execution at import time or via patched APIs
 - **Goal**: Bypass sandbox from within the Node.js process
@@ -100,7 +103,7 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 ### 3.1 Script Input (Parser)
 
 | Vector | Description | Defense | Files |
-|--------|-------------|---------|-------|
+| :--- | :--- | :--- | :--- |
 | Token bomb | Script with pathological tokenization | MAX_TOKENS (100K) | `src/parser/types.ts` |
 | Parser stack overflow | Deeply nested constructs | MAX_PARSER_DEPTH (200), MAX_PARSE_ITERATIONS (1M) | `src/parser/types.ts` |
 | Oversized input | Very large scripts | MAX_INPUT_SIZE (1MB) | `src/parser/types.ts` |
@@ -223,6 +226,24 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 | `__defineGetter__`/`__defineSetter__` | Inject getters/setters on prototypes | Blocked by defense-in-depth (strategy: "throw") | `src/security/blocked-globals.ts` |
 | `__lookupGetter__`/`__lookupSetter__` | Introspect prototype getters/setters | Blocked by defense-in-depth (strategy: "throw") | `src/security/blocked-globals.ts` |
 | JSON/Math mutation | Poison shared utility objects | Frozen by defense-in-depth (strategy: "freeze") | `src/security/blocked-globals.ts` |
+
+### 3.10 Orchestration (Sub-agents)
+
+| Vector | Description | Defense | Files |
+|--------|-------------|---------|-------|
+| Agent bomb | Spawning infinite sub-agents | `maxSubAgents` (10) limit in `AgentManager` | `src/limits.ts`, `src/services/AgentManager.ts` |
+| Nested agents | Agent A spawns B spawns C... | `maxAgentNesting` (3) depth tracking | `src/limits.ts`, `src/services/AgentManager.ts` |
+| State leakage | Sub-agent accessing parent's memory | Isolated `Bash` instances; shared FS is virtual only; environment filtered | `src/services/AgentManager.ts` |
+| Resource monopolization | Sub-agents consuming all host resources | Aggregate resource accounting across sub-agent tree (Residual) | `src/limits.ts` |
+
+### 3.11 MCP Integration
+
+| Vector | Description | Defense | Files |
+|--------|-------------|---------|-------|
+| Malicious tool schema | Server returns oversized or complex schema | Zod validation + parameter depth limits during registration | `src/agentic/BashToolbox.ts` |
+| Tool injection | Overwriting built-in secure tools | `registerTool` rejects overwriting core built-ins | `src/agentic/BashToolbox.ts` |
+| Unauthorized connection | Connecting to internal/private services | `ag-mcp` connection validation + standard Network allow-list | `src/commands/ag-mcp/ag-mcp.ts` |
+| Tool call pollution | Server returns malicious JSON responses | Strict JSON parsing + validation before returning to interpreter | `src/services/McpClient.ts` |
 
 ---
 
