@@ -53,6 +53,7 @@ import { SemanticEngine } from "./lsp/semantic-engine.js";
 import { WorkspaceIndexer } from "./lsp/WorkspaceIndexer.js";
 import { AgenticHealer } from "./agentic/agentic-healer.js";
 import type { AgenticHealerConfig } from "./agentic/types.js";
+import { BashToolbox } from "./agentic/BashToolbox.js";
 import {
   diffState,
   diffFs,
@@ -69,6 +70,7 @@ import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
 import { ASTCache } from "./parser/ASTCache.js";
 import { SharedStateBus } from "./services/SharedStateBus.js";
+import { SessionManager } from "./services/SessionManager.js";
 
 import { MountableFs, type MountConfig } from "./fs/mountable-fs/index.js";
 import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
@@ -133,6 +135,11 @@ export interface BashOptions {
     root: string;
     mountPoint?: string;
   };
+  /**
+   * Current nesting depth (for sub-agent orchestration).
+   * Defaults to 0 for root bash.
+   */
+  nestingDepth?: number;
   /**
    * Execution limits to prevent runaway compute.
    * See ExecutionLimits interface for available options.
@@ -295,7 +302,8 @@ export interface BashOptions {
    */
   treeSitterConfig?: {
     webTreeSitterWasm: string | Uint8Array;
-    bashGrammarWasm: string | Uint8Array;
+    bashGrammarWasm?: string | Uint8Array;
+    grammars?: Record<string, string | Uint8Array>;
   };
   /**
    * Optional debugger for statement-level control.
@@ -363,13 +371,17 @@ export interface ExecOptions {
    * Optional agentic healer (specific to this call).
    */
   agenticHealer?: AgenticHealer;
+  /**
+   * Optional session ID for stateful REPLs (js-exec, python3).
+   */
+  sessionId?: string;
 }
 
 export class Bash {
   readonly fs: MountableFs;
   private commands: CommandRegistry = new Map();
   private useDefaultLayout: boolean = false;
-  private limits: Required<ExecutionLimits>;
+  public readonly limits: Required<ExecutionLimits>;
   private secureFetch?: SecureFetch;
   private sleepFn?: (ms: number) => Promise<void>;
 
@@ -398,12 +410,16 @@ export class Bash {
   public semanticEngine: SemanticEngine;
   public indexer: WorkspaceIndexer;
   private agenticHealer?: AgenticHealer;
+  public toolbox: BashToolbox;
+  public readonly nestingDepth: number;
 
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
   private snapshots: Map<string, BashSnapshot> = new Map();
 
   constructor(options: BashOptions = {}) {
+    this.nestingDepth = options.nestingDepth ?? 0;
+    this.toolbox = new BashToolbox();
     this.fs = options.fs instanceof MountableFs 
       ? options.fs 
       : new MountableFs({ base: options.fs ?? new InMemoryFs(options.files) });
@@ -455,7 +471,12 @@ export class Bash {
     if (options.fetch) {
       this.secureFetch = options.fetch;
     } else if (options.network) {
-      this.secureFetch = createSecureFetch(options.network);
+      this.secureFetch = createSecureFetch({
+        ...options.network,
+        onTraffic: (bytes) => {
+          this.state.networkTrafficBytes += bytes;
+        },
+      });
     }
 
     // Store sleep function if provided (for mock clocks in testing)
@@ -493,6 +514,8 @@ export class Bash {
       lastArg: "", // $_ is initially empty (or could be shell name)
       startTime: Date.now(),
       executionStartTime: Date.now(),
+      networkTrafficBytes: 0,
+      mcpToolCallCount: 0,
       lastBackgroundPid: 0,
       virtualPid: options.processInfo?.pid ?? 1,
       virtualPpid: options.processInfo?.ppid ?? 0,
@@ -625,6 +648,16 @@ export class Bash {
     this.agentic = options.agentic ?? false;
     if (this.agentic) {
       this.agenticHealer = new AgenticHealer(options.agenticConfig || { enableHeuristics: true });
+    }
+  }
+
+  /**
+   * Close a persistent session and terminate its worker.
+   */
+  public async closeSession(sessionId: string): Promise<void> {
+    await SessionManager.getInstance().terminateSession(sessionId);
+    if (this.state.sessionId === sessionId) {
+      this.state.sessionId = undefined;
     }
   }
 
@@ -773,6 +806,7 @@ export class Bash {
       // Extra arguments injected directly into first command's arg list
       extraArgs: options?.args,
       executionStartTime: Date.now(),
+      sessionId: options?.sessionId ?? this.state.sessionId,
     };
 
     // Normalize indented multi-line scripts (unless rawScript is true)
@@ -793,9 +827,13 @@ export class Bash {
     // because its WASM/JS glue code uses dynamic imports (e.g., 'module', 'fs') 
     // that are blocked during sandboxed script execution.
     if (this.parserEngine === 'tree-sitter' && this.treeSitterConfig) {
+      const grammars = { ...this.treeSitterConfig.grammars };
+      if (this.treeSitterConfig.bashGrammarWasm) {
+        grammars.bash = this.treeSitterConfig.bashGrammarWasm;
+      }
       await TreeSitterParser.init({
         webTreeSitterWasm: this.treeSitterConfig.webTreeSitterWasm,
-        bashGrammarWasm: this.treeSitterConfig.bashGrammarWasm,
+        grammars,
       });
     }
 
@@ -858,6 +896,7 @@ export class Bash {
           debugger: options?.debugger ?? this.debugger,
           semanticEngine: options?.semanticEngine ?? this.semanticEngine,
           agenticHealer: options?.agenticHealer ?? this.agenticHealer,
+          bash: this,
         };
 
         const interpreter = new Interpreter(interpreterOptions, execState);

@@ -259,6 +259,11 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
           // Only include body for methods that support it
           if (options.body && !BODYLESS_METHODS.has(method)) {
             fetchOptions.body = options.body;
+            // Report request body traffic
+            if (config.onTraffic) {
+              const bodyBytes = Buffer.from(options.body).byteLength;
+              config.onTraffic(bodyBytes);
+            }
           }
 
           return fetch(currentUrl, fetchOptions);
@@ -273,6 +278,7 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
               response,
               currentUrl,
               maxResponseSize,
+              config.onTraffic,
             );
           }
 
@@ -295,7 +301,12 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
           continue;
         }
 
-        return await responseToResult(response, currentUrl, maxResponseSize);
+        return await responseToResult(
+          response,
+          currentUrl,
+          maxResponseSize,
+          config.onTraffic,
+        );
       } finally {
         _clearTimeout(timeoutId);
       }
@@ -342,6 +353,7 @@ async function responseToResult(
   response: Response,
   url: string,
   maxResponseSize: number,
+  onTraffic?: (bytes: number) => void,
 ): Promise<FetchResult> {
   // Use null-prototype to prevent prototype pollution via malicious response headers
   const headers: Record<string, string> = Object.create(null);
@@ -372,6 +384,12 @@ async function responseToResult(
       const { done, value } = await reader.read();
       if (done) break;
       totalSize += value.byteLength;
+      
+      // Report response traffic
+      if (onTraffic) {
+        onTraffic(value.byteLength);
+      }
+
       if (totalSize > maxResponseSize) {
         reader.cancel();
         throw new ResponseTooLargeError(maxResponseSize);
@@ -381,7 +399,12 @@ async function responseToResult(
     chunks.push(decoder.decode());
     body = chunks.join("");
   } else {
-    body = await response.text();
+    const text = await response.text();
+    // Report traffic for body read at once
+    if (onTraffic) {
+      onTraffic(Buffer.from(text).byteLength);
+    }
+    body = text;
   }
 
   return {

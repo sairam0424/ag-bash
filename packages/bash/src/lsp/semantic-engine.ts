@@ -8,6 +8,8 @@ export enum SymbolType {
   Function = "Function",
   Command = "Command",
   File = "File",
+  Class = "Class",
+  Module = "Module",
 }
 
 /**
@@ -258,6 +260,78 @@ export class SemanticEngine {
   }
 
   /**
+   * Traverses a Tree-sitter CST for generic symbol extraction.
+   */
+  private traverseTreeSitter(node: any, currentScope: string, path: string | undefined, language: string): void {
+    if (!node) return;
+
+    const type = node.type;
+    let name: string | undefined;
+    let symbolType: SymbolType | undefined;
+    let nextScope = currentScope;
+
+    // Language-specific mappings
+    if (language === "python") {
+      if (type === "function_definition") {
+        name = node.childForFieldName("name")?.text;
+        symbolType = SymbolType.Function;
+        nextScope = name || currentScope;
+      } else if (type === "class_definition") {
+        name = node.childForFieldName("name")?.text;
+        symbolType = SymbolType.Class;
+        nextScope = name || currentScope;
+      } else if (type === "assignment") {
+        name = node.childForFieldName("left")?.text;
+        symbolType = SymbolType.Variable;
+      }
+    } else if (language === "javascript" || language === "typescript") {
+      if (type === "function_declaration" || type === "function") {
+        name = node.childForFieldName("name")?.text;
+        symbolType = SymbolType.Function;
+        nextScope = name || currentScope;
+      } else if (type === "class_declaration" || type === "class") {
+        name = node.childForFieldName("name")?.text;
+        symbolType = SymbolType.Class;
+        nextScope = name || currentScope;
+      } else if (type === "variable_declarator") {
+        name = node.childForFieldName("id")?.text;
+        symbolType = SymbolType.Variable;
+      }
+    }
+
+    if (name && symbolType) {
+      const line = node.startPosition.row + 1;
+      const column = node.startPosition.column;
+
+      this.occurrences.push({
+        name,
+        type: symbolType,
+        line,
+        column,
+        isDefinition: true,
+        scope: currentScope,
+        path
+      });
+
+      if (!this.symbols.some(s => s.name === name && s.type === symbolType && s.path === path && s.scope === currentScope)) {
+        this.symbols.push({
+          name,
+          type: symbolType,
+          line,
+          column,
+          scope: currentScope,
+          path
+        });
+      }
+    }
+
+    // Recurse into children
+    for (const child of node.namedChildren) {
+      this.traverseTreeSitter(child, nextScope, path, language);
+    }
+  }
+
+  /**
    * Returns all symbols visible from a specific scope.
    */
   public getVisibleSymbols(scope: string = "global"): SemanticSymbol[] {
@@ -289,8 +363,12 @@ export class SemanticEngine {
   /**
    * Incremental indexer called by the interpreter or workspace indexer.
    */
-  public indexNode(node: ASTNode, path?: string): void {
-    this.traverse(node, "global", path);
+  public indexNode(node: ASTNode | any, path?: string, language: string = "bash"): void {
+    if (language === "bash" && (node as ASTNode).type) {
+      this.traverse(node as ASTNode, "global", path);
+    } else {
+      this.traverseTreeSitter(node, "global", path, language);
+    }
   }
 
   public async indexStatement(node: StatementNode, path?: string): Promise<void> {
@@ -374,3 +452,4 @@ export class SemanticEngine {
     this.occurrences = this.occurrences.filter(o => o.path !== path);
   }
 }
+

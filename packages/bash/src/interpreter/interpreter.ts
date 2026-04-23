@@ -147,6 +147,8 @@ export interface InterpreterOptions {
   agenticHealer?: AgenticHealer;
   /** Optional shared state bus implementation */
   sharedBus?: SharedStateBus;
+  /** Reference to the parent Bash instance */
+  bash?: any;
 }
 
 
@@ -182,6 +184,7 @@ export class Interpreter {
       semanticEngine: options.semanticEngine || (options.agentic ? new SemanticEngine() : undefined),
       agenticHealer: options.agenticHealer || (options.agentic ? new AgenticHealer() : undefined),
       sharedBus: options.sharedBus || SharedStateBus.getInstance(),
+      bash: options.bash,
     };
   }
 
@@ -451,6 +454,14 @@ export class Interpreter {
         throwExecutionLimit(
           `CPU time limit exceeded: ${cpuTime}ms exceeds ${this.ctx.limits.maxCpuMs}ms limit`,
           "cpu_time",
+        );
+      }
+
+      // Performance: Network traffic accounting
+      if (this.ctx.state.networkTrafficBytes > this.ctx.limits.maxNetworkTrafficBytes) {
+        throwExecutionLimit(
+          `network traffic limit exceeded: ${Math.round(this.ctx.state.networkTrafficBytes / 1024 / 1024)}MB exceeds ${Math.round(this.ctx.limits.maxNetworkTrafficBytes / 1024 / 1024)}MB limit`,
+          "network_traffic",
         );
       }
 

@@ -50,6 +50,8 @@ export interface JsExecWorkerInput {
   isModule?: boolean;
   stripTypes?: boolean;
   timeoutMs?: number;
+  persistent?: boolean;
+  sessionId?: string;
 }
 
 export interface JsExecWorkerOutput {
@@ -61,6 +63,7 @@ export interface JsExecWorkerOutput {
 
 let quickjsModule: QuickJSWASMModule | null = null;
 let quickjsLoading: Promise<QuickJSWASMModule> | null = null;
+const persistentSessions = new Map<string, { runtime: QuickJSRuntime, context: QuickJSContext, backend: SyncBackend }>();
 
 async function getQuickJSModule(): Promise<QuickJSWASMModule> {
   if (quickjsModule) {
@@ -1068,27 +1071,33 @@ async function initializeWithDefense(): Promise<void> {
 async function executeCode(
   input: JsExecWorkerInput,
 ): Promise<JsExecWorkerOutput> {
-  const qjs = await getQuickJSModule();
-  const backend = new SyncBackend(input.sharedBuffer, input.timeoutMs);
-
+  let session = input.sessionId ? persistentSessions.get(input.sessionId) : null;
   let runtime: QuickJSRuntime | undefined;
   let context: QuickJSContext | undefined;
+  const backend = new SyncBackend(input.sharedBuffer, input.timeoutMs);
+
   try {
-    runtime = qjs.newRuntime();
-    runtime.setMemoryLimit(MEMORY_LIMIT);
+    if (session) {
+      runtime = session.runtime;
+      context = session.context;
+    } else {
+      const qjs = await getQuickJSModule();
+      runtime = qjs.newRuntime();
+      runtime.setMemoryLimit(MEMORY_LIMIT);
 
-    // Set up interrupt handler for infinite loop protection.
-    // This is a loose backstop — timeouts (via worker termination) are the real
-    // guard against runaway code. The interrupt handler just provides a faster
-    // exit path for tight CPU-bound loops that don't yield to the event loop.
-    let interruptCount = 0;
-    runtime.setInterruptHandler(() => {
-      interruptCount++;
-      return interruptCount > INTERRUPT_CYCLES;
-    });
+      let interruptCount = 0;
+      runtime.setInterruptHandler(() => {
+        interruptCount++;
+        return interruptCount > INTERRUPT_CYCLES;
+      });
 
-    context = runtime.newContext();
-    setupContext(context, backend, input);
+      context = runtime.newContext();
+      setupContext(context, backend, input);
+
+      if (input.persistent && input.sessionId) {
+        persistentSessions.set(input.sessionId, { runtime, context, backend });
+      }
+    }
 
     // Defense-in-depth: remove eval(), neuter Function constructors,
     // and freeze all intrinsic prototypes to prevent prototype pollution.
@@ -1394,8 +1403,10 @@ async function executeCode(
     }
     return { success: true };
   } finally {
-    context?.dispose();
-    runtime?.dispose();
+    if (!input.persistent || !input.sessionId) {
+      context?.dispose();
+      runtime?.dispose();
+    }
   }
 }
 

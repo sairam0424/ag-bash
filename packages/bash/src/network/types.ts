@@ -131,6 +131,12 @@ export interface NetworkConfig {
    * denyPrivateRanges DNS rebinding check.
    */
   _dnsResolve?: (hostname: string) => Promise<DnsLookupResult[]>;
+
+  /**
+   * Optional callback to report network traffic in bytes.
+   * When provided, called for both request and response body sizes.
+   */
+  onTraffic?: (bytes: number) => void;
 }
 
 /**

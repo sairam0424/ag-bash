@@ -69,6 +69,21 @@ export interface ExecutionLimits {
 
   /** Maximum total CPU time in milliseconds (default: 30000) */
   maxCpuMs?: number;
+
+  /** Maximum number of parallel sub-agents (default: 10) */
+  maxSubAgents?: number;
+
+  /** Maximum sub-agent nesting depth (default: 3) */
+  maxAgentNesting?: number;
+
+  /** Maximum network traffic in bytes per execution (default: 50MB) */
+  maxNetworkTrafficBytes?: number;
+
+  /** Maximum number of simultaneous MCP server connections (default: 5) */
+  maxMcpServers?: number;
+
+  /** Maximum total MCP tool calls per execution (default: 50) */
+  maxMcpToolCalls?: number;
 }
 
 
@@ -98,6 +113,11 @@ const DEFAULT_LIMITS: Required<ExecutionLimits> = {
   maxSourceDepth: 100,
   maxMemoryAccountingBytes: 52428800, // 50MB
   maxCpuMs: 30000, // 30s
+  maxSubAgents: 10,
+  maxAgentNesting: 3,
+  maxNetworkTrafficBytes: 52428800, // 50MB
+  maxMcpServers: 5,
+  maxMcpToolCalls: 50,
 };
 
 
@@ -147,6 +167,10 @@ export function resolveLimits(
       userLimits.maxMemoryAccountingBytes ??
       DEFAULT_LIMITS.maxMemoryAccountingBytes,
     maxCpuMs: userLimits.maxCpuMs ?? DEFAULT_LIMITS.maxCpuMs,
+    maxSubAgents: userLimits.maxSubAgents ?? DEFAULT_LIMITS.maxSubAgents,
+    maxAgentNesting: userLimits.maxAgentNesting ?? DEFAULT_LIMITS.maxAgentNesting,
+    maxNetworkTrafficBytes: userLimits.maxNetworkTrafficBytes ?? DEFAULT_LIMITS.maxNetworkTrafficBytes,
+    maxMcpServers: userLimits.maxMcpServers ?? DEFAULT_LIMITS.maxMcpServers,
+    maxMcpToolCalls: userLimits.maxMcpToolCalls ?? DEFAULT_LIMITS.maxMcpToolCalls,
   };
-
 }
