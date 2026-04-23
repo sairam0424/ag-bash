@@ -36,6 +36,8 @@ export interface WorkerInput {
   args: string[];
   scriptPath?: string;
   timeoutMs?: number;
+  persistent?: boolean;
+  sessionId?: string;
 }
 
 export interface WorkerOutput {
@@ -1545,22 +1547,35 @@ let activeProtocolToken: string | null = null;
 // Handle execution from parent.
 // Each worker runs once with workerData (EXIT_RUNTIME means CPython
 // can only callMain once). Stdlib zip is cached at module scope.
+let initialized = false;
+
 if (parentPort) {
+  parentPort.on("message", async (input: WorkerInput) => {
+    activeProtocolToken = input.protocolToken;
+    try {
+      if (!initialized) {
+        // Initial setup if needed (though runPython handles it)
+        initialized = true;
+      }
+      const result = await runPython(input);
+      result.defenseStats = defense?.getStats();
+      postWorkerMessage(input.protocolToken, result);
+    } catch (e) {
+      const message = sanitizeUnknownError(e);
+      postWorkerMessage(input.protocolToken, {
+        success: false,
+        error: message,
+        defenseStats: defense?.getStats(),
+      });
+    }
+  });
+
+  // Handle initial data if provided via workerData
   if (workerData) {
     const input = workerData as WorkerInput;
-    activeProtocolToken = input.protocolToken;
-    runPython(input)
-      .then((result) => {
-        result.defenseStats = defense?.getStats();
-        postWorkerMessage(input.protocolToken, result);
-      })
-      .catch((e) => {
-        const message = sanitizeUnknownError(e);
-        postWorkerMessage(input.protocolToken, {
-          success: false,
-          error: message,
-          defenseStats: defense?.getStats(),
-        });
-      });
+    if (input.pythonCode || input.sessionId) {
+        // Just trigger the message handler logic
+        parentPort.emit("message", input);
+    }
   }
 }

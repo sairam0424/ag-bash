@@ -59,7 +59,7 @@ export function createBashTool(options: CreateBashToolOptions): {
   };
 } {
   const { sandbox } = options;
-  const toolbox = new BashToolbox();
+  const toolbox = sandbox.toolbox;
   const agenticTools = toolbox.getAgenticTools(sandbox);
 
   return {

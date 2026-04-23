@@ -30,6 +30,7 @@ import { hasHelpFlag, showHelp } from "../help.js";
 import { BridgeHandler } from "../worker-bridge/bridge-handler.js";
 import { createSharedBuffer } from "../worker-bridge/protocol.js";
 import type { WorkerInput, WorkerOutput } from "./worker.js";
+import { SessionManager } from "../../services/SessionManager.js";
 
 /** Default Python execution timeout in milliseconds */
 const DEFAULT_PYTHON_TIMEOUT_MS = 10000;
@@ -72,6 +73,7 @@ interface ParsedArgs {
   scriptFile: string | null;
   showVersion: boolean;
   scriptArgs: string[];
+  sessionId: string | null;
 }
 
 function parseArgs(args: string[]): ParsedArgs | ExecResult {
@@ -81,6 +83,7 @@ function parseArgs(args: string[]): ParsedArgs | ExecResult {
     scriptFile: null,
     showVersion: false,
     scriptArgs: [],
+    sessionId: null,
   };
 
   if (args.length === 0) {
@@ -127,6 +130,19 @@ function parseArgs(args: string[]): ParsedArgs | ExecResult {
     if (arg === "--version" || arg === "-V") {
       result.showVersion = true;
       return result;
+    }
+
+    if (arg === "--session") {
+      if (i + 1 >= args.length) {
+        return {
+          stdout: "",
+          stderr: "python3: option requires an argument -- 'session'\n",
+          exitCode: 2,
+        };
+      }
+      result.sessionId = args[i + 1];
+      i++;
+      continue;
     }
 
     if (arg.startsWith("-") && arg !== "-") {
@@ -320,9 +336,33 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
   }
   queueState.isExecuting = true;
 
-  const workerPath = await getWorkerPath();
+  const sessionManager = SessionManager.getInstance();
+  let w: Worker | null = null;
+  const sessionId = next.input.sessionId;
 
-  // Fresh worker for each execution.
+  if (sessionId) {
+    const session = sessionManager.getSession(sessionId);
+    if (session && session.type === "python") {
+      w = session.worker;
+    }
+  }
+
+  if (!w) {
+    const workerPath = await getWorkerPath();
+    w = await DefenseInDepthBox.runTrustedAsync(async () => {
+      const { Worker: NodeWorker } = await import("node:worker_threads");
+      return new NodeWorker(workerPath as string, {
+        workerData: next.input,
+      });
+    });
+    
+    if (sessionId) {
+      sessionManager.createSession("python", w, sessionId);
+    }
+  }
+
+  const worker = w;
+  // Fresh worker for each execution (unless persistent)
   const attachListeners = (w: Worker) => {
     if (next.workerRef) next.workerRef.current = w;
 
@@ -335,7 +375,9 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
         next.resolved = true;
         next.resolve(normalizeWorkerMessage(msg, next.input.protocolToken));
         queueState.isExecuting = false;
-        await w.terminate();
+        if (!next.input.persistent) {
+            await w.terminate();
+        }
         void processNextExecution(queueState);
       },
     );
@@ -423,18 +465,20 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
         process.versions &&
         process.versions.node
       ) {
+        const path = await getWorkerPath();
         const { Worker: NodeWorker } = await import("node:worker_threads");
-        const w = new NodeWorker(workerPath as string, {
+        const w = new NodeWorker(path as string, {
           workerData: next.input,
         });
         attachListeners(w);
         return w;
       }
+      const path = await getWorkerPath();
       const w = new (
         Worker as unknown as {
           new (url: string | URL, options?: { type: "module" }): Worker;
         }
-      )(workerPath as string | URL, {
+      )(path as string | URL, {
         type: "module",
       });
       attachListeners(w);
@@ -459,6 +503,7 @@ async function executePython(
   ctx: CommandContext,
   scriptPath?: string,
   scriptArgs: string[] = [],
+  sessionId?: string | null,
 ): Promise<ExecResult> {
   const sharedBuffer = createSharedBuffer();
   const bridgeHandler = new BridgeHandler(
@@ -486,6 +531,8 @@ async function executePython(
     args: scriptArgs,
     scriptPath,
     timeoutMs,
+    persistent: !!sessionId || !!ctx.sessionId,
+    sessionId: sessionId || ctx.sessionId,
   };
 
   const workerRef: { current: Worker | null } = { current: null };
@@ -670,7 +717,7 @@ export const python3Command: Command = {
       };
     }
 
-    return executePython(pythonCode, ctx, scriptPath, parsed.scriptArgs);
+    return executePython(pythonCode, ctx, scriptPath, parsed.scriptArgs, parsed.sessionId);
   },
 };
 

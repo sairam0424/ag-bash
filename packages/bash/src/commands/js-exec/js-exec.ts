@@ -27,6 +27,7 @@ import type {
   CommandExecOptions,
   ExecResult,
 } from "../../types.js";
+import { SessionManager } from "../../services/SessionManager.js";
 import { hasHelpFlag } from "../help.js";
 import { BridgeHandler } from "../worker-bridge/bridge-handler.js";
 import { createSharedBuffer } from "../worker-bridge/protocol.js";
@@ -138,6 +139,7 @@ interface ParsedArgs {
   scriptArgs: string[];
   isModule: boolean;
   stripTypes: boolean;
+  sessionId: string | null;
 }
 
 function parseArgs(args: string[]): ParsedArgs | ExecResult {
@@ -148,6 +150,7 @@ function parseArgs(args: string[]): ParsedArgs | ExecResult {
     scriptArgs: [],
     isModule: false,
     stripTypes: false,
+    sessionId: null,
   };
 
   if (args.length === 0) {
@@ -199,6 +202,19 @@ function parseArgs(args: string[]): ParsedArgs | ExecResult {
         result.scriptArgs = args.slice(i + 2);
       }
       return result;
+    }
+
+    if (arg === "--session") {
+      if (i + 1 >= args.length) {
+        return {
+          stdout: "",
+          stderr: "js-exec: option requires an argument -- 'session'\n",
+          exitCode: 2,
+        };
+      }
+      result.sessionId = args[i + 1];
+      i++;
+      continue;
     }
 
     // First non-option is script file
@@ -277,7 +293,7 @@ function processNextExecution(): void {
     return;
   }
   currentExecution = next;
-  const worker = getOrCreateWorker();
+  const worker = getOrCreateWorker(currentExecution.input.sessionId);
   worker.postMessage(currentExecution.input);
 }
 
@@ -330,19 +346,29 @@ function normalizeJsWorkerMessage(
   };
 }
 
-function getOrCreateWorker(): Worker {
+function getOrCreateWorker(sessionId?: string): Worker {
   // Clear any pending idle timeout
-  if (workerIdleTimeout) {
+  if (workerIdleTimeout && !sessionId) {
     _clearTimeout(workerIdleTimeout);
     workerIdleTimeout = null;
   }
 
-  if (sharedWorker) {
+  if (sessionId) {
+    const session = SessionManager.getInstance().getSession(sessionId);
+    if (session) return session.worker;
+  }
+
+  if (sharedWorker && !sessionId) {
     return sharedWorker;
   }
 
   const worker = DefenseInDepthBox.runTrusted(() => new Worker(workerPath));
-  sharedWorker = worker;
+  
+  if (sessionId) {
+    SessionManager.getInstance().createSession("javascript", worker, sessionId);
+  } else {
+    sharedWorker = worker;
+  }
 
   worker.on("message", (msg: unknown) => {
     // Ignore stale workers that were superseded after timeout/restart.
@@ -426,6 +452,7 @@ async function executeJS(
   bootstrapCode?: string,
   isModule?: boolean,
   stripTypes?: boolean,
+  sessionId?: string | null,
 ): Promise<ExecResult> {
   if (jsExecAsyncContext.getStore()) {
     return {
@@ -442,6 +469,7 @@ async function executeJS(
     bootstrapCode,
     isModule,
     stripTypes,
+    sessionId,
   );
 }
 
@@ -453,6 +481,7 @@ async function executeJSInner(
   bootstrapCode?: string,
   isModule?: boolean,
   stripTypes?: boolean,
+  sessionId?: string | null,
 ): Promise<ExecResult> {
   const sharedBuffer = createSharedBuffer();
 
@@ -496,6 +525,8 @@ async function executeJSInner(
     isModule,
     stripTypes,
     timeoutMs,
+    persistent: !!sessionId,
+    sessionId: sessionId || undefined,
   };
 
   // Use deferred pattern to keep queue management outside the Promise constructor
@@ -656,6 +687,7 @@ export const jsExecCommand: Command = {
       bootstrapCode,
       isModule,
       stripTypes,
+      parsed.sessionId,
     );
   },
 };
