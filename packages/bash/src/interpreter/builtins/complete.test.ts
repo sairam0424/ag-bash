@@ -17,6 +17,8 @@ function createMockCtx(): InterpreterContext {
     lastArg: "",
     startTime: Date.now(),
     executionStartTime: 0,
+    networkTrafficBytes: 0,
+    mcpToolCallCount: 0,
     lastBackgroundPid: 0,
     bashPid: 1,
     nextVirtualPid: 2,
