@@ -1,9 +1,8 @@
 import { TreeSitterParser } from "../../parser/tree-sitter-parser.js";
-import { TreeSitterToAst } from "../../parser/tree-sitter-to-ast.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 import { hasHelpFlag, showHelp } from "../help.js";
-import { SemanticEngine } from "../../lsp/semantic-engine.js";
+import { SemanticEngine, SymbolType } from "../../lsp/semantic-engine.js";
 
 const agAnalyzeHelp = {
   name: "ag-analyze",
@@ -43,24 +42,27 @@ export const agAnalyzeCommand: Command = {
     const content = await ctx.fs.readFile(filePath, "utf8");
     const lines = content.split(/\r?\n/);
 
-    const isBash = file.endsWith(".sh") || file.endsWith(".bash") || content.startsWith("#!/bin/bash") || content.startsWith("#!/bin/sh");
+    const getLanguage = (f: string) => {
+        if (f.endsWith(".py")) return "python";
+        if (f.endsWith(".js") || f.endsWith(".ts")) return "javascript";
+        if (f.endsWith(".json")) return "json";
+        return "bash";
+    };
 
-    if (!isBash) {
-       return {
-         stdout: `File: ${file}\nLines: ${lines.length}\nSize: ${content.length} bytes\n(Deep semantic analysis currently only supported for Bash scripts)\n`,
-         stderr: "",
-         exitCode: 0,
-       };
-    }
+    const language = getLanguage(file);
 
     try {
-      // 1. Initial Tree-sitter parse
-      const tree = TreeSitterParser.parse(content);
-      const converter = new TreeSitterToAst(content);
-      const ast = converter.convert(tree);
+      const engine = ctx.bash?.semanticEngine ?? new SemanticEngine();
+      
+      if (language === "bash") {
+          const { parse } = await import("../../parser/parser.js");
+          const ast = parse(content);
+          engine.indexNode(ast, filePath, "bash");
+      } else {
+          const tree = TreeSitterParser.parse(content, language);
+          engine.indexNode(tree.rootNode, filePath, language);
+      }
 
-      // 2. Semantic analysis
-      const engine = new SemanticEngine(ast);
       const symbols = engine.getAllSymbols();
 
       if (flags.symbols) {
@@ -71,25 +73,33 @@ export const agAnalyzeCommand: Command = {
         };
       }
 
-      let summary = `--- Analysis Summary for ${file} ---\n`;
+      let summary = `--- Analysis Summary for ${file} (${language}) ---\n`;
       summary += `Lines: ${lines.length}\n`;
       summary += `Size: ${content.length} bytes\n`;
 
-      const funcs = symbols.filter(s => s.type === "Function");
-      const vars = symbols.filter(s => s.type === "Variable");
+      const funcs = symbols.filter((s: any) => s.type === SymbolType.Function);
+      const classes = symbols.filter((s: any) => s.type === SymbolType.Class);
+      const vars = symbols.filter((s: any) => s.type === SymbolType.Variable);
+
+      if (classes.length > 0) {
+          summary += `\nClasses (${classes.length}):\n`;
+          classes.forEach((c: any) => {
+            summary += `  - class ${c.name} (line ${c.line})\n`;
+          });
+      }
 
       if (funcs.length > 0) {
         summary += `\nFunctions (${funcs.length}):\n`;
-        funcs.forEach(f => {
+        funcs.forEach((f: any) => {
           summary += `  - ${f.name} (line ${f.line})\n`;
         });
-      } else {
-        summary += `\nNo functions defined.\n`;
+      } else if (classes.length === 0) {
+        summary += `\nNo major symbols defined.\n`;
       }
 
       if (vars.length > 0) {
         summary += `\nVariables (${vars.length} unique):\n`;
-        const uniqueVars = Array.from(new Set(vars.map(v => v.name)));
+        const uniqueVars = Array.from(new Set(vars.map((v: any) => v.name)));
         summary += `  ${uniqueVars.slice(0, 10).join(", ")}${uniqueVars.length > 10 ? "..." : ""}\n`;
       }
 
@@ -106,4 +116,5 @@ export const agAnalyzeCommand: Command = {
     }
   },
 };
+
 
