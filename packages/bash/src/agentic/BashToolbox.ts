@@ -351,7 +351,7 @@ export class BashToolbox {
 
     this.registerTool({
       name: "run_js",
-      description: "Execute JavaScript code in the sandbox.",
+      description: "Execute JavaScript code in the sandbox. For persistent state, use run_js_session.",
       parameters: z.object({
         code: z.string().describe("The JS code to execute."),
       }),
@@ -362,14 +362,52 @@ export class BashToolbox {
     });
 
     this.registerTool({
+      name: "run_js_session",
+      description: "Execute JavaScript code in a persistent session (stateful REPL). Maintains variables and modules between calls.",
+      parameters: z.object({
+        code: z.string().describe("The JS code to execute."),
+        sessionId: z.string().describe("Session identifier (e.g., 'main', 'test')."),
+      }),
+      execute: async (bash, { code, sessionId }) => {
+        const result = await bash.exec(`js-exec --session ${sessionId} -c "${code.replace(/"/g, '\\"')}"`);
+        return result;
+      },
+    });
+
+    this.registerTool({
       name: "run_python",
-      description: "Execute Python code in the sandbox.",
+      description: "Execute Python code in the sandbox. For persistent state, use run_python_session.",
       parameters: z.object({
         code: z.string().describe("The Python code to execute."),
       }),
       execute: async (bash, { code }) => {
         const result = await bash.exec(`python3 -c "${code.replace(/"/g, '\\"')}"`);
         return result;
+      },
+    });
+
+    this.registerTool({
+      name: "run_python_session",
+      description: "Execute Python code in a persistent session (stateful REPL). Maintains variables and imports between calls.",
+      parameters: z.object({
+        code: z.string().describe("The Python code to execute."),
+        sessionId: z.string().describe("Session identifier (e.g., 'data-analysis')."),
+      }),
+      execute: async (bash, { code, sessionId }) => {
+        const result = await bash.exec(`python3 --session ${sessionId} -c "${code.replace(/"/g, '\\"')}"`);
+        return result;
+      },
+    });
+
+    this.registerTool({
+      name: "close_session",
+      description: "Terminate a persistent session and release its resources.",
+      parameters: z.object({
+        sessionId: z.string().describe("The ID of the session to close."),
+      }),
+      execute: async (bash, { sessionId }) => {
+        await bash.closeSession(sessionId);
+        return `Session ${sessionId} closed.`;
       },
     });
 
@@ -439,10 +477,61 @@ export class BashToolbox {
         return { success: true };
       },
     });
+
+    this.registerTool({
+      name: "list_mcp_tools",
+      description: "List all tools available via connected MCP servers.",
+      parameters: z.object({}),
+      execute: async (bash) => {
+        const client = (await import("../services/McpClient.js")).McpClient.getInstance();
+        return client.listConnections().map(c => ({
+          server: c.id,
+          tools: c.tools.map(t => t.name)
+        }));
+      },
+    });
   }
 
   registerTool(tool: ToolboxTool): void {
     this.tools.set(tool.name, tool);
+  }
+
+  /**
+   * Register tools from an MCP server connection.
+   */
+  registerMcpTools(connectionId: string, tools: any[]): void {
+    for (const tool of tools) {
+      this.registerTool({
+        name: `mcp_${connectionId}_${tool.name}`,
+        description: tool.description || `MCP tool from ${connectionId}`,
+        parameters: this.jsonSchemaToZod(tool.inputSchema),
+        execute: async (bash, args) => {
+          const client = (await import("../services/McpClient.js")).McpClient.getInstance();
+          return await client.callTool(connectionId, tool.name, args);
+        },
+      });
+    }
+  }
+
+  /**
+   * Simple JSON Schema to Zod converter for MCP tools.
+   */
+  private jsonSchemaToZod(schema: any): z.ZodObject<any> {
+    const shape: any = {};
+    const props = schema.properties || {};
+    for (const key in props) {
+      const prop = props[key];
+      let zType: any = z.string();
+      if (prop.type === "number") zType = z.number();
+      else if (prop.type === "boolean") zType = z.boolean();
+      
+      if (prop.description) zType = zType.describe(prop.description);
+      if (!(schema.required || []).includes(key)) {
+        zType = zType.optional();
+      }
+      shape[key] = zType;
+    }
+    return z.object(shape);
   }
 
   getTools(): ToolboxTool[] {

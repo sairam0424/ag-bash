@@ -1,6 +1,6 @@
 import type { Bash } from "../Bash.js";
 import { SemanticEngine } from "./semantic-engine.js";
-import { parse } from "../parser/parser.js";
+import { TreeSitterParser } from "../parser/tree-sitter-parser.js";
 
 export class WorkspaceIndexer {
   constructor(private bash: Bash, private engine: SemanticEngine) {}
@@ -30,8 +30,15 @@ export class WorkspaceIndexer {
   }
 
   private isSupportedFile(filename: string): boolean {
-    // Currently we only support shell scripts for symbol indexing
-    return filename.endsWith(".sh") || filename.endsWith(".bash") || filename.endsWith(".ag");
+    const supportedExtensions = [".sh", ".bash", ".ag", ".js", ".ts", ".py", ".json"];
+    return supportedExtensions.some(ext => filename.endsWith(ext));
+  }
+
+  private getLanguageFromFile(path: string): string {
+    if (path.endsWith(".py")) return "python";
+    if (path.endsWith(".js") || path.endsWith(".ts")) return "javascript";
+    if (path.endsWith(".json")) return "json";
+    return "bash";
   }
 
   /**
@@ -40,9 +47,23 @@ export class WorkspaceIndexer {
   async indexFile(path: string): Promise<void> {
     try {
       const content = await this.bash.readFileDirect(path);
-      const ast = parse(content);
+      const language = this.getLanguageFromFile(path);
+      
       this.engine.clearPath(path);
-      this.engine.indexNode(ast, path);
+      
+      if (language === "bash") {
+        const { parse } = await import("../parser/parser.js");
+        const ast = parse(content);
+        this.engine.indexNode(ast, path, "bash");
+      } else {
+        try {
+          const tree = TreeSitterParser.parse(content, language);
+          this.engine.indexNode(tree.rootNode, path, language);
+        } catch (e) {
+          console.warn(`TreeSitter failed to parse ${path} as ${language}, falling back to literal indexing.`);
+          // Fallback to basic string-based indexing if needed
+        }
+      }
     } catch (error) {
       console.error(`Failed to index file ${path}:`, error);
     }
@@ -58,3 +79,4 @@ export class WorkspaceIndexer {
     return this.engine.fuzzySearchSymbols(query);
   }
 }
+
