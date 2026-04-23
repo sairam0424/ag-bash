@@ -796,7 +796,7 @@ export class InMemoryFs implements IFileSystem {
     this.data.clear();
     for (const [path, entry] of snapshot.entries()) {
       // Deep copy back to internal state
-      const entryCopy = { ...entry as FsEntry };
+      const entryCopy = { ...(entry as FsEntry) };
       if (entryCopy.type === "file" && "content" in entryCopy) {
         if (entryCopy.content instanceof Uint8Array) {
           entryCopy.content = new Uint8Array(entryCopy.content);

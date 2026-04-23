@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { Bash } from "./Bash.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BashToolbox } from "./agentic/BashToolbox.js";
+import { Bash } from "./Bash.js";
 import { InMemoryFs } from "./fs/in-memory-fs/index.js";
 import { SymbolType } from "./lsp/semantic-engine.js";
 
@@ -10,7 +10,7 @@ describe("Agentic Tools (BashToolbox)", () => {
 
   beforeEach(() => {
     bash = new Bash({
-      parserEngine: 'legacy',
+      parserEngine: "legacy",
       python: true,
       javascript: true,
       fs: new InMemoryFs({
@@ -30,7 +30,10 @@ describe("Agentic Tools (BashToolbox)", () => {
 
   describe("write_file", () => {
     it("should write a file", async () => {
-      const result = await tools.write_file.execute({ path: "/new.txt", content: "new content" });
+      const result = await tools.write_file.execute({
+        path: "/new.txt",
+        content: "new content",
+      });
       expect(result).toContain("Successfully wrote");
       const content = await bash.readFileDirect("/new.txt");
       expect(content).toBe("new content");
@@ -48,7 +51,7 @@ describe("Agentic Tools (BashToolbox)", () => {
     it("should apply patches to a file", async () => {
       const path = "/edit.txt";
       await bash.writeFileDirect(path, "line1\nline2\nline3");
-      
+
       const result = await tools.edit_file.execute({
         path,
         target: "line2",
@@ -78,7 +81,14 @@ describe("Agentic Tools (BashToolbox)", () => {
   describe("find_symbols", () => {
     it("should find symbols via fuzzy search", async () => {
       vi.spyOn(bash.semanticEngine, "fuzzySearchSymbols").mockReturnValue([
-        { name: "myFunc", type: SymbolType.Function, line: 1, column: 0, scope: "global", path: "/a.sh" }
+        {
+          name: "myFunc",
+          type: SymbolType.Function,
+          line: 1,
+          column: 0,
+          scope: "global",
+          path: "/a.sh",
+        },
       ]);
 
       const result = await tools.find_symbols.execute({ query: "my" });
@@ -90,7 +100,9 @@ describe("Agentic Tools (BashToolbox)", () => {
 
   describe("run_command", () => {
     it("should execute a command", async () => {
-      const result = await tools.run_command.execute({ command: "echo 'hello'" });
+      const result = await tools.run_command.execute({
+        command: "echo 'hello'",
+      });
       expect(result.stdout).toBe("hello\n");
       expect(result.exitCode).toBe(0);
     });

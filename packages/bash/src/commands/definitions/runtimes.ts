@@ -1,11 +1,17 @@
 import type { LazyCommandDef } from "../lib.js";
-import type { JavaScriptCommandName, NetworkCommandName, PythonCommandName } from "../registry.js";
+import type {
+  JavaScriptCommandName,
+  NetworkCommandName,
+  PythonCommandName,
+} from "../registry.js";
 
 // __BROWSER__ is defined by esbuild at build time for browser bundles
 declare const __BROWSER__: boolean | undefined;
 const isBrowser = typeof __BROWSER__ !== "undefined" && __BROWSER__;
 
-export const runtimeLoaders: LazyCommandDef<PythonCommandName | JavaScriptCommandName>[] = [];
+export const runtimeLoaders: LazyCommandDef<
+  PythonCommandName | JavaScriptCommandName
+>[] = [];
 
 if (!isBrowser) {
   // Python commands

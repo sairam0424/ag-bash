@@ -11,6 +11,9 @@
 import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
+import { AgenticHealer } from "./agentic/agentic-healer.js";
+import { BashToolbox } from "./agentic/BashToolbox.js";
+import type { AgenticHealerConfig } from "./agentic/types.js";
 import {
   type CommandName,
   createJavaScriptCommands,
@@ -26,6 +29,7 @@ import {
 import { InMemoryFs } from "./fs/in-memory-fs/in-memory-fs.js";
 import { initFilesystem } from "./fs/init.js";
 import type { IFileSystem, InitialFiles } from "./fs/interface.js";
+import { MountableFs, type MountConfig } from "./fs/mountable-fs/index.js";
 import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
 import {
   mapToRecord,
@@ -44,43 +48,38 @@ import {
   buildShellopts,
 } from "./interpreter/helpers/shellopts.js";
 import {
+  type DebuggerBridge,
   Interpreter,
   type InterpreterOptions,
   type InterpreterState,
-  DebuggerBridge,
 } from "./interpreter/index.js";
+import { type ExecutionLimits, resolveLimits } from "./limits.js";
 import { SemanticEngine } from "./lsp/semantic-engine.js";
 import { WorkspaceIndexer } from "./lsp/WorkspaceIndexer.js";
-import { AgenticHealer } from "./agentic/agentic-healer.js";
-import type { AgenticHealerConfig } from "./agentic/types.js";
-import { BashToolbox } from "./agentic/BashToolbox.js";
-import {
-  diffState,
-  diffFs,
-  applyStateDelta,
-  type BashDelta,
-} from "./state-sync/index.js";
-import { type ExecutionLimits, resolveLimits } from "./limits.js";
 import {
   createSecureFetch,
   type NetworkConfig,
   type SecureFetch,
 } from "./network/index.js";
+import { AgTrace } from "./observability/ag-trace.js";
+import { ASTCache } from "./parser/ASTCache.js";
 import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
-import { ASTCache } from "./parser/ASTCache.js";
-import { SharedStateBus } from "./services/SharedStateBus.js";
-import { SessionManager } from "./services/SessionManager.js";
-
-import { MountableFs, type MountConfig } from "./fs/mountable-fs/index.js";
 import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
 import { TreeSitterToAst } from "./parser/tree-sitter-to-ast.js";
 import {
   DefenseInDepthBox,
   SecurityViolationError,
 } from "./security/defense-in-depth-box.js";
-import { AgTrace } from "./observability/ag-trace.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
+import { SessionManager } from "./services/SessionManager.js";
+import { SharedStateBus } from "./services/SharedStateBus.js";
+import {
+  applyStateDelta,
+  type BashDelta,
+  diffFs,
+  diffState,
+} from "./state-sync/index.js";
 import { serialize } from "./transform/serialize.js";
 import type {
   BashTransformResult,
@@ -281,12 +280,12 @@ export interface BashOptions {
    */
   persistState?: boolean;
   /**
-   * Selection of the parser engine to use. 
+   * Selection of the parser engine to use.
    * - 'legacy': The hand-written recursive descent parser (v1.x/v2.x).
    * - 'tree-sitter': The robust AST-based parser engine (v1.4.0+).
    * Default: 'tree-sitter'
    */
-  parserEngine?: 'legacy' | 'tree-sitter';
+  parserEngine?: "legacy" | "tree-sitter";
   /**
    * If true, enables agentic behavior for the shell.
    * This includes automatic AI intervention on command failure if an agent gateway is configured.
@@ -389,7 +388,10 @@ export class Bash {
    * Tracks the state of files read or written during the session.
    * Key is the absolute path to the file.
    */
-  public readonly fileState: Map<string, FileState> = new Map<string, FileState>();
+  public readonly fileState: Map<string, FileState> = new Map<
+    string,
+    FileState
+  >();
 
   /**
    * Creates a new Bash shell instance.
@@ -403,8 +405,8 @@ export class Bash {
   // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin storage for untyped API
   private transformPlugins: TransformPlugin<any>[] = [];
   private defaultPersistState: boolean;
-  private parserEngine: 'legacy' | 'tree-sitter';
-  private treeSitterConfig?: BashOptions['treeSitterConfig'];
+  private parserEngine: "legacy" | "tree-sitter";
+  private treeSitterConfig?: BashOptions["treeSitterConfig"];
   private agentic: boolean;
   private debugger?: DebuggerBridge;
   public semanticEngine: SemanticEngine;
@@ -420,9 +422,12 @@ export class Bash {
   constructor(options: BashOptions = {}) {
     this.nestingDepth = options.nestingDepth ?? 0;
     this.toolbox = new BashToolbox();
-    this.fs = options.fs instanceof MountableFs 
-      ? options.fs 
-      : new MountableFs({ base: options.fs ?? new InMemoryFs(options.files) });
+    this.fs =
+      options.fs instanceof MountableFs
+        ? options.fs
+        : new MountableFs({
+            base: options.fs ?? new InMemoryFs(options.files),
+          });
 
     const fs = this.fs;
 
@@ -430,7 +435,7 @@ export class Bash {
     if (options.persistence) {
       this.usePersistence(
         options.persistence.root,
-        options.persistence.mountPoint || "/home/user"
+        options.persistence.mountPoint || "/home/user",
       );
     }
 
@@ -640,14 +645,16 @@ export class Bash {
     }
 
     this.defaultPersistState = options.persistState ?? false;
-    this.parserEngine = options.parserEngine ?? 'legacy';
+    this.parserEngine = options.parserEngine ?? "legacy";
     this.treeSitterConfig = options.treeSitterConfig;
     this.debugger = options.debugger;
     this.semanticEngine = options.semanticEngine ?? new SemanticEngine();
     this.indexer = new WorkspaceIndexer(this, this.semanticEngine);
     this.agentic = options.agentic ?? false;
     if (this.agentic) {
-      this.agenticHealer = new AgenticHealer(options.agenticConfig || { enableHeuristics: true });
+      this.agenticHealer = new AgenticHealer(
+        options.agenticConfig || { enableHeuristics: true },
+      );
     }
   }
 
@@ -824,9 +831,9 @@ export class Bash {
       : null;
 
     // Pre-initialize Tree-sitter outside of the defense-in-depth sandbox
-    // because its WASM/JS glue code uses dynamic imports (e.g., 'module', 'fs') 
+    // because its WASM/JS glue code uses dynamic imports (e.g., 'module', 'fs')
     // that are blocked during sandboxed script execution.
-    if (this.parserEngine === 'tree-sitter' && this.treeSitterConfig) {
+    if (this.parserEngine === "tree-sitter" && this.treeSitterConfig) {
       const grammars = { ...this.treeSitterConfig.grammars };
       if (this.treeSitterConfig.bashGrammarWasm) {
         grammars.bash = this.treeSitterConfig.bashGrammarWasm;
@@ -849,8 +856,7 @@ export class Bash {
         if (cachedAst) {
           ast = cachedAst;
         } else {
-          if (this.parserEngine === 'tree-sitter' && this.treeSitterConfig) {
-            
+          if (this.parserEngine === "tree-sitter" && this.treeSitterConfig) {
             const tree = TreeSitterParser.parse(normalized);
             const converter = new TreeSitterToAst(normalized);
             ast = converter.convert(tree);
@@ -861,7 +867,6 @@ export class Bash {
           }
           astCache.set(normalized, ast);
         }
-
 
         // Apply transform plugins if any are registered.
         // Keep metadata null-prototype even when plugins contribute dynamic keys.
@@ -928,13 +933,13 @@ export class Bash {
       return execResult;
     } catch (error: any) {
       // ExitError propagates from 'exit' builtin (including via eval/source)
-      if (error instanceof ExitError || error.name === 'ExitError') {
+      if (error instanceof ExitError || error.name === "ExitError") {
         return this.logResult({
           stdout: error.stdout,
           stderr: error.stderr,
           exitCode: error.exitCode,
           env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
+          observations: [AgTrace.analyzeError(error)],
         });
       }
       // PosixFatalError propagates from special builtins in POSIX mode
@@ -944,7 +949,7 @@ export class Bash {
           stderr: error.stderr,
           exitCode: error.exitCode,
           env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
+          observations: [AgTrace.analyzeError(error)],
         });
       }
       if (error instanceof ArithmeticError) {
@@ -953,7 +958,7 @@ export class Bash {
           stderr: error.stderr,
           exitCode: 1,
           env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
+          observations: [AgTrace.analyzeError(error)],
         });
       }
       // ExecutionAbortedError is thrown when an AbortSignal fires (timeout cancellation)
@@ -963,12 +968,15 @@ export class Bash {
           stderr: error.stderr,
           exitCode: 124, // Same as timeout exit code
           env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
+          observations: [AgTrace.analyzeError(error)],
         });
       }
       // SecurityViolationError is thrown when defense-in-depth detects a blocked operation
       const errorName = error instanceof Error ? error.name : "";
-      if (error instanceof SecurityViolationError || errorName === "SecurityViolationError") {
+      if (
+        error instanceof SecurityViolationError ||
+        errorName === "SecurityViolationError"
+      ) {
         return this.logResult({
           stdout: "",
           stderr: `bash: security violation: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
@@ -979,7 +987,10 @@ export class Bash {
       }
 
       // ExecutionLimitError is thrown when command limits are exceeded during interpreter loop
-      if (error instanceof ExecutionLimitError || errorName === "ExecutionLimitError") {
+      if (
+        error instanceof ExecutionLimitError ||
+        errorName === "ExecutionLimitError"
+      ) {
         return this.logResult({
           stdout: "",
           stderr: `bash: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
@@ -995,7 +1006,7 @@ export class Bash {
           stderr: `bash: syntax error: ${sanitizeErrorMessage((error as Error).message)}\n`,
           exitCode: 2,
           env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)]
+          observations: [AgTrace.analyzeError(error as Error)],
         });
       }
       // LexerError is thrown for lexer-level issues like unterminated quotes
@@ -1005,7 +1016,7 @@ export class Bash {
           stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
           exitCode: 2,
           env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
+          observations: [AgTrace.analyzeError(error)],
         });
       }
       // RangeError occurs when JavaScript call stack is exceeded (deep recursion)
@@ -1015,7 +1026,7 @@ export class Bash {
           stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
           exitCode: 1,
           env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
+          observations: [AgTrace.analyzeError(error)],
         });
       }
       throw error;
@@ -1130,7 +1141,10 @@ export class Bash {
    * Configure persistent storage for a specific path.
    * In Node.js, this mounts a ReadWriteFs directly to the host filesystem.
    */
-  async usePersistence(root: string, mountPoint: string = "/home/user"): Promise<void> {
+  async usePersistence(
+    root: string,
+    mountPoint: string = "/home/user",
+  ): Promise<void> {
     // Dynamic import to stay isomorphic
     const { ReadWriteFs } = await import("./fs/read-write-fs/index.js");
     const persistentFs = new ReadWriteFs({ root });

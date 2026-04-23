@@ -1,8 +1,8 @@
+import { SemanticEngine, SymbolType } from "../../lsp/semantic-engine.js";
 import { TreeSitterParser } from "../../parser/tree-sitter-parser.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 import { hasHelpFlag, showHelp } from "../help.js";
-import { SemanticEngine, SymbolType } from "../../lsp/semantic-engine.js";
 
 const agAnalyzeHelp = {
   name: "ag-analyze",
@@ -31,36 +31,44 @@ export const agAnalyzeCommand: Command = {
     const file = positional[0];
 
     if (!file) {
-      return { stdout: "", stderr: "ag-analyze: missing file operand\n", exitCode: 2 };
+      return {
+        stdout: "",
+        stderr: "ag-analyze: missing file operand\n",
+        exitCode: 2,
+      };
     }
 
     const filePath = ctx.fs.resolvePath(ctx.cwd, file);
     if (!(await ctx.fs.exists(filePath))) {
-      return { stdout: "", stderr: `ag-analyze: ${file}: No such file or directory\n`, exitCode: 2 };
+      return {
+        stdout: "",
+        stderr: `ag-analyze: ${file}: No such file or directory\n`,
+        exitCode: 2,
+      };
     }
 
     const content = await ctx.fs.readFile(filePath, "utf8");
     const lines = content.split(/\r?\n/);
 
     const getLanguage = (f: string) => {
-        if (f.endsWith(".py")) return "python";
-        if (f.endsWith(".js") || f.endsWith(".ts")) return "javascript";
-        if (f.endsWith(".json")) return "json";
-        return "bash";
+      if (f.endsWith(".py")) return "python";
+      if (f.endsWith(".js") || f.endsWith(".ts")) return "javascript";
+      if (f.endsWith(".json")) return "json";
+      return "bash";
     };
 
     const language = getLanguage(file);
 
     try {
       const engine = ctx.bash?.semanticEngine ?? new SemanticEngine();
-      
+
       if (language === "bash") {
-          const { parse } = await import("../../parser/parser.js");
-          const ast = parse(content);
-          engine.indexNode(ast, filePath, "bash");
+        const { parse } = await import("../../parser/parser.js");
+        const ast = parse(content);
+        engine.indexNode(ast, filePath, "bash");
       } else {
-          const tree = TreeSitterParser.parse(content, language);
-          engine.indexNode(tree.rootNode, filePath, language);
+        const tree = TreeSitterParser.parse(content, language);
+        engine.indexNode(tree.rootNode, filePath, language);
       }
 
       const symbols = engine.getAllSymbols();
@@ -82,10 +90,10 @@ export const agAnalyzeCommand: Command = {
       const vars = symbols.filter((s: any) => s.type === SymbolType.Variable);
 
       if (classes.length > 0) {
-          summary += `\nClasses (${classes.length}):\n`;
-          classes.forEach((c: any) => {
-            summary += `  - class ${c.name} (line ${c.line})\n`;
-          });
+        summary += `\nClasses (${classes.length}):\n`;
+        classes.forEach((c: any) => {
+          summary += `  - class ${c.name} (line ${c.line})\n`;
+        });
       }
 
       if (funcs.length > 0) {
@@ -106,7 +114,6 @@ export const agAnalyzeCommand: Command = {
       summary += `-----------------------------------\n`;
 
       return { stdout: summary, stderr: "", exitCode: 0 };
-
     } catch (e: any) {
       return {
         stdout: `File: ${file}\nLines: ${lines.length}\n(Error during analysis: ${e.message})\n`,
@@ -116,5 +123,3 @@ export const agAnalyzeCommand: Command = {
     }
   },
 };
-
-

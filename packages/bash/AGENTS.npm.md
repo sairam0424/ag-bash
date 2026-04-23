@@ -76,7 +76,7 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 **File operations**: `basename`, `chmod`, `cp`, `dirname`, `du`, `file`, `find`, `ln`, `ls`, `mkdir`, `mv`, `od`, `pwd`, `readlink`, `rm`, `rmdir`, `split`, `stat`, `touch`, `tree`
 
-**Utilities**: `alias`, `base64`, `bash`, `clear`, `curl`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `hello`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `zcat`
+**Utilities**: `ag-analyze`, `ag-diff`, `ag-edit`, `ag-explain`, `ag-find-symbol`, `ag-hover`, `ag-snapshot`, `ag-todo`, `alias`, `base64`, `bash`, `clear`, `curl`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `hello`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `zcat`
 
 All commands support `--help` for usage details.
 
@@ -295,6 +295,8 @@ const bash = new Bash({
     maxJqIterations: 10000,      // Max jq loop iterations
     maxSubstitutionDepth: 50,    // Max $() nesting depth
     maxHeredocSize: 10485760,    // Max heredoc size (10MB)
+    maxAgentNesting: 3,          // Max depth of ag-spawn/sub-agents
+    maxNetworkTrafficBytes: 104857600, // Max session network traffic (100MB)
   },
 });
 ```

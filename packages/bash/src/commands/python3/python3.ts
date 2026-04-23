@@ -24,13 +24,13 @@ import { mapToRecord } from "../../helpers/env.js";
 
 import { bindDefenseContextCallback } from "../../security/defense-context.js";
 import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
+import { SessionManager } from "../../services/SessionManager.js";
 import { _clearTimeout, _setTimeout } from "../../timers.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 import { BridgeHandler } from "../worker-bridge/bridge-handler.js";
 import { createSharedBuffer } from "../worker-bridge/protocol.js";
 import type { WorkerInput, WorkerOutput } from "./worker.js";
-import { SessionManager } from "../../services/SessionManager.js";
 
 /** Default Python execution timeout in milliseconds */
 const DEFAULT_PYTHON_TIMEOUT_MS = 10000;
@@ -355,7 +355,7 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
         workerData: next.input,
       });
     });
-    
+
     if (sessionId) {
       sessionManager.createSession("python", w, sessionId);
     }
@@ -376,7 +376,7 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
         next.resolve(normalizeWorkerMessage(msg, next.input.protocolToken));
         queueState.isExecuting = false;
         if (!next.input.persistent) {
-            await w.terminate();
+          await w.terminate();
         }
         void processNextExecution(queueState);
       },
@@ -717,7 +717,13 @@ export const python3Command: Command = {
       };
     }
 
-    return executePython(pythonCode, ctx, scriptPath, parsed.scriptArgs, parsed.sessionId);
+    return executePython(
+      pythonCode,
+      ctx,
+      scriptPath,
+      parsed.scriptArgs,
+      parsed.sessionId,
+    );
   },
 };
 

@@ -3,7 +3,7 @@
 
 
 
-export const version = "1.5.0";
+export const version = "2.0.0";
 
 // Command outputs
 export const CMD_ABOUT = `ag-bash v${version}
@@ -43,9 +43,9 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 | :--- | :--- | :--- |
-| [\`@ag-bash/bash\`](./packages/bash) | \`v1.5.0\` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [\`@ag-bash/mcp-server\`](./packages/mcp-server) | \`v1.5.0\` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
-| [\`@ag-bash/agent-bridge\`](./packages/agent-bridge) | \`v1.5.0\` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
+| [\`@ag-bash/bash\`](./packages/bash) | \`v2.0.0\` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [\`@ag-bash/mcp-server\`](./packages/mcp-server) | \`v2.0.0\` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [\`@ag-bash/agent-bridge\`](./packages/agent-bridge) | \`v2.0.0\` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
 
 ---
 
@@ -111,10 +111,10 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
-- **Project Nexus Agentic Suite**: (v1.5.0+) Surgical file editing (\`ag-edit\`), semantic diffs (\`ag-diff\`), and persistent environment snapshots (\`ag-snapshot\`).
+- **Project Nexus Prime Agentic Suite**: (v2.0.0+) Surgical file editing (\`ag-edit\`), semantic diffs (\`ag-diff\`), snapshots (\`ag-snapshot\`), and semantic intelligence (\`ag-hover\`, \`ag-explain\`, \`ag-find-symbol\`, \`ag-todo\`).
 - **AST Performance Optimization**: (v1.5.0+) Global \`ASTCache\` (LRU) for high-frequency script execution.
 - **Inter-Runtime Persistence**: (v1.5.0+) Shared variable state between Bash, Python, and JS via \`SharedStateBus\`.
-- **Resource Governance**: (v1.5.0+) Real-time memory and CPU accounting for secure agentic execution.
+- **Resource Governance**: (v2.0.0+) Hardened network traffic limits and agent nesting controls.
 - **Agentic Observability Loop**: Built-in failure analysis and self-correction suggestions for AI models.
 - **Tree-sitter AST Parser**: High-fidelity shell parsing for complex scripts and security analysis.
 - **Virtual Filesystem**: Choose between \`InMemoryFs\`, \`OverlayFs\` (COW), or \`ReadWriteFs\`.
@@ -342,7 +342,7 @@ limitations under the License.
 
 export const FILE_PACKAGE_JSON = `{
   "name": "@ag-bash/bash",
-  "version": "1.5.0",
+  "version": "2.0.0",
   "description": "Unified Agentic Bash for Ag-Bash",
   "repository": {
     "type": "git",
@@ -376,7 +376,7 @@ A sandboxed bash interpreter with an in-memory virtual filesystem. Use it when y
 
 ## For AI Agents
 
-If you're building an AI agent that needs a bash tool, use [\`@ag-bash/bash\`](https://github.com/ag-ai/@ag-bash/bash) which is optimized for @ag-bash/bash:
+If you're building an AI agent that needs a bash tool, use [\`@ag-bash/bash\`](https://github.com/sairam0424/ag-bash) which is optimized for @ag-bash/bash:
 
 \`\`\`sh
 npm install @ag-bash/bash
@@ -780,8 +780,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the terminal.
 
 ## Links
 
-- **@ag-bash/bash**: https://github.com/sairam0424/@ag-bash/bash
-- **@ag-bash/bash**: https://github.com/ag-ai/@ag-bash/bash
+- **@ag-bash/bash**: https://github.com/sairam0424/ag-bash
+- **Ag-Bash Monorepo**: https://github.com/sairam0424/ag-bash
 - **AI SDK**: https://ai-sdk.dev
 - **xterm.js**: https://xtermjs.org
 `;

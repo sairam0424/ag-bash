@@ -1,4 +1,4 @@
-import { Worker } from "node:worker_threads";
+import type { Worker } from "node:worker_threads";
 
 export interface SessionInfo {
   id: string;
@@ -25,7 +25,11 @@ export class SessionManager {
     return SessionManager.instance;
   }
 
-  createSession(type: "javascript" | "python", worker: Worker, id?: string): string {
+  createSession(
+    type: "javascript" | "python",
+    worker: Worker,
+    id?: string,
+  ): string {
     const sessionId = id || Math.random().toString(36).substring(2, 11);
     this.sessions.set(sessionId, {
       id: sessionId,
@@ -56,7 +60,7 @@ export class SessionManager {
   }
 
   listSessions(): any[] {
-    return Array.from(this.sessions.values()).map(s => ({
+    return Array.from(this.sessions.values()).map((s) => ({
       id: s.id,
       type: s.type,
       age: Date.now() - s.createdAt,

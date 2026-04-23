@@ -3,9 +3,9 @@ import { parseArgs } from "../../utils/args.js";
 
 /**
  * ag-edit - Agentic line-based file editor
- * 
+ *
  * Usage: ag-edit <file> <action> [options]
- * 
+ *
  * Actions:
  *   insert-before --line <N> --text <TEXT>
  *   insert-after  --line <N> --text <TEXT>
@@ -42,7 +42,8 @@ export const agEditCommand: Command = {
     if (!action || !file) {
       return {
         stdout: "",
-        stderr: "usage: ag-edit <action> <file> [-n line] [-t to] [-x text] [--dry-run]\n",
+        stderr:
+          "usage: ag-edit <action> <file> [-n line] [-t to] [-x text] [--dry-run]\n",
         exitCode: 1,
       };
     }
@@ -69,10 +70,18 @@ export const agEditCommand: Command = {
     const endIdx = flags.to !== undefined ? flags.to - 1 : startIdx;
 
     // Validation
-    if (["insert-before", "insert-after", "replace", "delete"].includes(action)) {
-      if (startIdx === undefined || isNaN(startIdx)) return error("missing or invalid --line");
-      if (startIdx < 0 || (action !== "insert-after" && startIdx >= originalLineCount)) {
-         return error(`line ${flags.line} out of range (1-${originalLineCount})`);
+    if (
+      ["insert-before", "insert-after", "replace", "delete"].includes(action)
+    ) {
+      if (startIdx === undefined || isNaN(startIdx))
+        return error("missing or invalid --line");
+      if (
+        startIdx < 0 ||
+        (action !== "insert-after" && startIdx >= originalLineCount)
+      ) {
+        return error(
+          `line ${flags.line} out of range (1-${originalLineCount})`,
+        );
       }
     }
 
@@ -91,7 +100,8 @@ export const agEditCommand: Command = {
         if (endIdx === undefined || isNaN(endIdx) || endIdx < startIdx!) {
           return error("invalid range for replace");
         }
-        if (endIdx >= originalLineCount) return error(`range end ${flags.to} out of range`);
+        if (endIdx >= originalLineCount)
+          return error(`range end ${flags.to} out of range`);
         lines.splice(startIdx!, endIdx! - startIdx! + 1, ...newLines);
         summary = `Replaced lines ${flags.line}-${flags.to || flags.line} with ${newLines.length} line(s)`;
         break;
@@ -99,7 +109,8 @@ export const agEditCommand: Command = {
         if (endIdx === undefined || isNaN(endIdx) || endIdx < startIdx!) {
           return error("invalid range for delete");
         }
-        if (endIdx >= originalLineCount) return error(`range end ${flags.to} out of range`);
+        if (endIdx >= originalLineCount)
+          return error(`range end ${flags.to} out of range`);
         lines.splice(startIdx!, endIdx! - startIdx! + 1);
         summary = `Deleted lines ${flags.line}-${flags.to || flags.line}`;
         break;
@@ -153,4 +164,3 @@ export const agEditCommand: Command = {
     }
   },
 };
-

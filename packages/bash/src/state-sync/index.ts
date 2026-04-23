@@ -1,14 +1,14 @@
 /**
  * State-Sync - Context-Diff Bridge
- * 
- * Provides utilities for generating and applying deltas between 
- * Bash snapshots. This is used for efficient synchronization 
+ *
+ * Provides utilities for generating and applying deltas between
+ * Bash snapshots. This is used for efficient synchronization
  * of agentic workspaces.
  */
 
 import type { BashSnapshot } from "../Bash.js";
-import type { InterpreterState } from "../interpreter/types.js";
 import type { FsEntry } from "../fs/interface.js";
+import type { InterpreterState } from "../interpreter/types.js";
 
 export interface BashDelta {
   /** Map of changed environment variables. Null indicates deletion. */
@@ -31,7 +31,10 @@ export interface FsDelta {
 /**
  * Generates a delta between a base snapshot and current state.
  */
-export function diffState(base: BashSnapshot, current: BashSnapshot): BashDelta {
+export function diffState(
+  base: BashSnapshot,
+  current: BashSnapshot,
+): BashDelta {
   const delta: BashDelta = {};
 
   // 1. Diff Environment Variables (Map<string, string>)
@@ -84,7 +87,9 @@ export function diffState(base: BashSnapshot, current: BashSnapshot): BashDelta 
   if (funcChanged) delta.funcDelta = funcDelta;
 
   // 3. Diff CWD
-  console.log(`DIFFING CWD: base=${base.state.cwd}, current=${current.state.cwd}`);
+  console.log(
+    `DIFFING CWD: base=${base.state.cwd}, current=${current.state.cwd}`,
+  );
   if (base.state.cwd !== current.state.cwd) {
     delta.cwd = current.state.cwd;
   }
@@ -95,16 +100,14 @@ export function diffState(base: BashSnapshot, current: BashSnapshot): BashDelta 
 /**
  * Diffs two VFS snapshots. Handles both raw Maps and MountableFs snapshot objects.
  */
-export function diffFs(
-  baseFs: any, 
-  currentFs: any
-): FsDelta {
+export function diffFs(baseFs: any, currentFs: any): FsDelta {
   const modified: Record<string, string | Uint8Array> = {};
   const deleted: string[] = [];
 
   // Unwrap MountableFs snapshots if necessary
   const bMap = baseFs && baseFs.base instanceof Map ? baseFs.base : baseFs;
-  const cMap = currentFs && currentFs.base instanceof Map ? currentFs.base : currentFs;
+  const cMap =
+    currentFs && currentFs.base instanceof Map ? currentFs.base : currentFs;
 
   if (cMap instanceof Map && bMap instanceof Map) {
     for (const [path, entry] of cMap.entries()) {
@@ -135,7 +138,10 @@ export function diffFs(
 /**
  * Applies a delta to an interpreter state.
  */
-export function applyStateDelta(state: InterpreterState, delta: BashDelta): void {
+export function applyStateDelta(
+  state: InterpreterState,
+  delta: BashDelta,
+): void {
   // 1. Apply Env
   if (delta.envDelta) {
     for (const [key, val] of Object.entries(delta.envDelta)) {

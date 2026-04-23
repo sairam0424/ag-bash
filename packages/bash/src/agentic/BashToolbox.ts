@@ -13,7 +13,7 @@ export interface ToolboxTool {
 
 /**
  * BashToolbox - Central registry for all agentic tools.
- * 
+ *
  * Enforces schema validation and provides metadata for AI SDKs.
  */
 export class BashToolbox {
@@ -116,7 +116,7 @@ export class BashToolbox {
           const engine = new SemanticEngine(ast as any);
           return {
             type: "shell",
-            symbols: engine.getAllSymbols()
+            symbols: engine.getAllSymbols(),
           };
         } catch (error: any) {
           return `Error analyzing file ${path}: ${error.message}`;
@@ -126,7 +126,8 @@ export class BashToolbox {
 
     this.registerTool({
       name: "find_symbols",
-      description: "Search for symbols (functions, variables) across the workspace.",
+      description:
+        "Search for symbols (functions, variables) across the workspace.",
       parameters: z.object({
         query: z.string().optional().describe("Query to filter symbol names."),
       }),
@@ -151,7 +152,9 @@ export class BashToolbox {
       name: "grep_search",
       description: "Search for a text pattern across multiple files.",
       parameters: z.object({
-        path: z.string().describe("Absolute path to the directory to search in."),
+        path: z
+          .string()
+          .describe("Absolute path to the directory to search in."),
         query: z.string().describe("The text or regex pattern to search for."),
       }),
       execute: async (bash, { path, query }) => {
@@ -166,9 +169,13 @@ export class BashToolbox {
 
     this.registerTool({
       name: "index_workspace",
-      description: "Trigger a full scan and indexing of all supported files in the workspace.",
+      description:
+        "Trigger a full scan and indexing of all supported files in the workspace.",
       parameters: z.object({
-        path: z.string().optional().describe("Root directory to scan. Defaults to /."),
+        path: z
+          .string()
+          .optional()
+          .describe("Root directory to scan. Defaults to /."),
       }),
       execute: async (bash, { path }) => {
         try {
@@ -186,20 +193,31 @@ export class BashToolbox {
       description: "Find all references to a function or variable.",
       parameters: z.object({
         name: z.string().optional().describe("The name of the symbol to find"),
-        path: z.string().optional().describe("Path to the file where the symbol is referenced"),
+        path: z
+          .string()
+          .optional()
+          .describe("Path to the file where the symbol is referenced"),
         line: z.number().optional().describe("1-based line number"),
         character: z.number().optional().describe("1-based character position"),
       }),
       execute: async (bash, { name, path, line, character }) => {
         let symbolName = name;
-        if (!symbolName && path && line !== undefined && character !== undefined) {
+        if (
+          !symbolName &&
+          path &&
+          line !== undefined &&
+          character !== undefined
+        ) {
           const content = await bash.readFileDirect(path);
           const lines = content.split("\n");
           const lineText = lines[line - 1] || "";
           const symbolPattern = /[\w$!]+/g;
           let match;
           while ((match = symbolPattern.exec(lineText)) !== null) {
-            if (character - 1 >= match.index && character - 1 < match.index + match[0].length) {
+            if (
+              character - 1 >= match.index &&
+              character - 1 < match.index + match[0].length
+            ) {
               symbolName = match[0];
               break;
             }
@@ -214,11 +232,11 @@ export class BashToolbox {
         }
 
         const refs = occurrences
-          .filter(o => !o.isDefinition)
-          .map(o => `  Line ${o.line}:0 [${o.scope}]`)
+          .filter((o) => !o.isDefinition)
+          .map((o) => `  Line ${o.line}:0 [${o.scope}]`)
           .join("\n");
-        
-        const def = occurrences.find(o => o.isDefinition);
+
+        const def = occurrences.find((o) => o.isDefinition);
         let output = `Found ${occurrences.length} occurrences of '${symbolName}':\n`;
         if (def) output += `Definition: Line ${def.line}:0\n`;
         if (refs) output += `References:\n${refs}`;
@@ -243,7 +261,10 @@ export class BashToolbox {
         let symbolName;
         let match;
         while ((match = symbolPattern.exec(lineText)) !== null) {
-          if (character - 1 >= match.index && character - 1 < match.index + match[0].length) {
+          if (
+            character - 1 >= match.index &&
+            character - 1 < match.index + match[0].length
+          ) {
             symbolName = match[0];
             break;
           }
@@ -265,8 +286,14 @@ export class BashToolbox {
       description: "Run a jq query against a JSON file or string.",
       parameters: z.object({
         query: z.string().describe("The jq filter/query string."),
-        path: z.string().optional().describe("Optional path to a JSON file to query."),
-        json: z.string().optional().describe("Optional JSON string to query directly."),
+        path: z
+          .string()
+          .optional()
+          .describe("Optional path to a JSON file to query."),
+        json: z
+          .string()
+          .optional()
+          .describe("Optional JSON string to query directly."),
       }),
       execute: async (bash, { query, path, json }) => {
         let cmd = `echo '${(json || "").replace(/'/g, "'\\''")}' | jq '${query}'`;
@@ -308,7 +335,9 @@ export class BashToolbox {
       description: "Search for files by name or glob pattern.",
       parameters: z.object({
         path: z.string().describe("The directory to start searching from."),
-        pattern: z.string().describe("The filename pattern or glob (e.g., '*.ts')."),
+        pattern: z
+          .string()
+          .describe("The filename pattern or glob (e.g., '*.ts')."),
       }),
       execute: async (bash, { path, pattern }) => {
         const result = await bash.exec(`find ${path} -name "${pattern}"`);
@@ -327,7 +356,9 @@ export class BashToolbox {
         const ast = parse(command);
         return {
           type: "explanation",
-          ast: JSON.parse(JSON.stringify(ast, (k, v) => k === "parent" ? undefined : v))
+          ast: JSON.parse(
+            JSON.stringify(ast, (k, v) => (k === "parent" ? undefined : v)),
+          ),
         };
       },
     });
@@ -338,63 +369,79 @@ export class BashToolbox {
       parameters: z.object({}),
       execute: async (bash) => {
         return {
-          // @ts-ignore
+          // @ts-expect-error
           cwd: bash.state.cwd,
-          // @ts-ignore
+          // @ts-expect-error
           env: Array.from(bash.state.env.keys()),
-          // @ts-ignore
+          // @ts-expect-error
           limits: bash.limits,
-          version: "Ag-Bash vNext"
+          version: "Ag-Bash vNext",
         };
       },
     });
 
     this.registerTool({
       name: "run_js",
-      description: "Execute JavaScript code in the sandbox. For persistent state, use run_js_session.",
+      description:
+        "Execute JavaScript code in the sandbox. For persistent state, use run_js_session.",
       parameters: z.object({
         code: z.string().describe("The JS code to execute."),
       }),
       execute: async (bash, { code }) => {
-        const result = await bash.exec(`js-exec -c "${code.replace(/"/g, '\\"')}"`);
+        const result = await bash.exec(
+          `js-exec -c "${code.replace(/"/g, '\\"')}"`,
+        );
         return result;
       },
     });
 
     this.registerTool({
       name: "run_js_session",
-      description: "Execute JavaScript code in a persistent session (stateful REPL). Maintains variables and modules between calls.",
+      description:
+        "Execute JavaScript code in a persistent session (stateful REPL). Maintains variables and modules between calls.",
       parameters: z.object({
         code: z.string().describe("The JS code to execute."),
-        sessionId: z.string().describe("Session identifier (e.g., 'main', 'test')."),
+        sessionId: z
+          .string()
+          .describe("Session identifier (e.g., 'main', 'test')."),
       }),
       execute: async (bash, { code, sessionId }) => {
-        const result = await bash.exec(`js-exec --session ${sessionId} -c "${code.replace(/"/g, '\\"')}"`);
+        const result = await bash.exec(
+          `js-exec --session ${sessionId} -c "${code.replace(/"/g, '\\"')}"`,
+        );
         return result;
       },
     });
 
     this.registerTool({
       name: "run_python",
-      description: "Execute Python code in the sandbox. For persistent state, use run_python_session.",
+      description:
+        "Execute Python code in the sandbox. For persistent state, use run_python_session.",
       parameters: z.object({
         code: z.string().describe("The Python code to execute."),
       }),
       execute: async (bash, { code }) => {
-        const result = await bash.exec(`python3 -c "${code.replace(/"/g, '\\"')}"`);
+        const result = await bash.exec(
+          `python3 -c "${code.replace(/"/g, '\\"')}"`,
+        );
         return result;
       },
     });
 
     this.registerTool({
       name: "run_python_session",
-      description: "Execute Python code in a persistent session (stateful REPL). Maintains variables and imports between calls.",
+      description:
+        "Execute Python code in a persistent session (stateful REPL). Maintains variables and imports between calls.",
       parameters: z.object({
         code: z.string().describe("The Python code to execute."),
-        sessionId: z.string().describe("Session identifier (e.g., 'data-analysis')."),
+        sessionId: z
+          .string()
+          .describe("Session identifier (e.g., 'data-analysis')."),
       }),
       execute: async (bash, { code, sessionId }) => {
-        const result = await bash.exec(`python3 --session ${sessionId} -c "${code.replace(/"/g, '\\"')}"`);
+        const result = await bash.exec(
+          `python3 --session ${sessionId} -c "${code.replace(/"/g, '\\"')}"`,
+        );
         return result;
       },
     });
@@ -428,7 +475,10 @@ export class BashToolbox {
       description: "Add a new todo item.",
       parameters: z.object({
         task: z.string().describe("The task description."),
-        status: z.enum(["pending", "doing", "done"]).optional().describe("Initial status."),
+        status: z
+          .enum(["pending", "doing", "done"])
+          .optional()
+          .describe("Initial status."),
       }),
       execute: async (bash, { task, status }) => {
         const todosPath = "/.ag-bash/todos.json";
@@ -437,7 +487,11 @@ export class BashToolbox {
         if (await bash.fs.exists(todosPath)) {
           todos = JSON.parse(await bash.readFileDirect(todosPath));
         }
-        const newTodo = { id: (todos.length + 1).toString(), task, status: status || "pending" };
+        const newTodo = {
+          id: (todos.length + 1).toString(),
+          task,
+          status: status || "pending",
+        };
         todos.push(newTodo);
         await bash.writeFileDirect(todosPath, JSON.stringify(todos, null, 2));
         return { success: true, id: newTodo.id };
@@ -483,10 +537,12 @@ export class BashToolbox {
       description: "List all tools available via connected MCP servers.",
       parameters: z.object({}),
       execute: async (bash) => {
-        const client = (await import("../services/McpClient.js")).McpClient.getInstance();
-        return client.listConnections().map(c => ({
+        const client = (
+          await import("../services/McpClient.js")
+        ).McpClient.getInstance();
+        return client.listConnections().map((c) => ({
           server: c.id,
-          tools: c.tools.map(t => t.name)
+          tools: c.tools.map((t) => t.name),
         }));
       },
     });
@@ -506,7 +562,9 @@ export class BashToolbox {
         description: tool.description || `MCP tool from ${connectionId}`,
         parameters: this.jsonSchemaToZod(tool.inputSchema),
         execute: async (bash, args) => {
-          const client = (await import("../services/McpClient.js")).McpClient.getInstance();
+          const client = (
+            await import("../services/McpClient.js")
+          ).McpClient.getInstance();
           return await client.callTool(connectionId, tool.name, args);
         },
       });
@@ -524,7 +582,7 @@ export class BashToolbox {
       let zType: any = z.string();
       if (prop.type === "number") zType = z.number();
       else if (prop.type === "boolean") zType = z.boolean();
-      
+
       if (prop.description) zType = zType.describe(prop.description);
       if (!(schema.required || []).includes(key)) {
         zType = zType.optional();
@@ -561,7 +619,7 @@ export class BashToolbox {
     for (const key in shape) {
       const field = shape[key];
       const desc = field.description;
-      
+
       let type = "string";
       let enumValues: string[] | undefined;
 
@@ -581,8 +639,8 @@ export class BashToolbox {
         else if (inner instanceof z.ZodNumber) type = "number";
         else if (inner instanceof z.ZodBoolean) type = "boolean";
         else if (inner instanceof z.ZodEnum) {
-           type = "string";
-           enumValues = (inner as any)._def.values;
+          type = "string";
+          enumValues = (inner as any)._def.values;
         }
       }
 

@@ -1461,7 +1461,9 @@ export class OverlayFs implements IFileSystem {
       deleted: Set<string>;
     };
     if (!s || !(s.memory instanceof Map) || !(s.deleted instanceof Set)) {
-      throw new Error("Invalid snapshot: expected { memory: Map, deleted: Set }");
+      throw new Error(
+        "Invalid snapshot: expected { memory: Map, deleted: Set }",
+      );
     }
 
     // Restore memory layer

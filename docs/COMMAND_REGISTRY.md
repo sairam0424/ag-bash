@@ -42,6 +42,10 @@ This registry provides a categorized index of the **110+ commands** supported by
 | `ag-diff` | Nexus | Semantic diff engine with LLM-optimized summaries. | [Nexus Upgrades](./registry/nexus.md) |
 | `ag-snapshot`| Nexus | Persistent environment state and filesystem checkpointing. | [Nexus Upgrades](./registry/nexus.md) |
 | `ag-analyze` | Nexus | Structural script analysis and symbol extraction. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-hover` | Nexus Prime | Retrieve metadata and documentation for a specific symbol. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-explain` | Nexus Prime | Parse and explain the structure of complex shell commands. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-find-symbol`| Nexus Prime | Global search for symbol definitions and references. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-todo` | Nexus Prime | Persistent local task management for agent tracking. | [Nexus Upgrades](./registry/nexus.md) |
 
 ---
 

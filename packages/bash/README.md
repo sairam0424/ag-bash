@@ -94,7 +94,7 @@ Custom commands receive a `CommandContext` with `fs`, `cwd`, `env`, `stdin`, and
 
 `alias`, `bash`, `chmod`, `clear`, `date`, `expr`, `false`, `hello`, `help`, `history`, `seq`, `sh`, `sleep`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`
 
-### Agentic Operations (v1.5.0+)
+### Agentic Operations (v2.0.0+)
 
 Specialized commands designed for AI agents to interact with the environment effectively:
 
@@ -102,6 +102,10 @@ Specialized commands designed for AI agents to interact with the environment eff
 - `ag-diff`: High-fidelity, semantic diff for code changes.
 - `ag-snapshot`: Capture and restore core shell state (env, functions, CWD, and FS).
 - `ag-analyze`: Structural analysis of Bash scripts with symbol table extraction.
+- `ag-hover`: Retrieve metadata and documentation for a symbol at a specific location.
+- `ag-explain`: Parse and explain the structure of complex shell commands.
+- `ag-find-symbol`: Workspace-wide search for symbol definitions and references.
+- `ag-todo`: Persistent local task management for agentic project tracking.
 
 All commands support `--help` for usage information.
 

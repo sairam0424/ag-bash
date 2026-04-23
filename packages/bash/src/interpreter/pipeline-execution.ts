@@ -236,10 +236,7 @@ export async function executePipeline(
   if (allObservations.length > 0) {
     lastResult = {
       ...lastResult,
-      observations: [
-        ...(lastResult.observations || []),
-        ...allObservations,
-      ],
+      observations: [...(lastResult.observations || []), ...allObservations],
     };
   }
 

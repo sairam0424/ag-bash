@@ -3,7 +3,7 @@ import type { InterpreterState } from "../types.js";
 
 /**
  * Debugger Bridge for Ag-Bash.
- * 
+ *
  * Provides interactive execution control for shell scripts.
  */
 export class DebuggerBridge {
@@ -29,9 +29,12 @@ export class DebuggerBridge {
    * Called by the interpreter at each statement boundary.
    * If a breakpoint is hit or a step is active, pauses execution.
    */
-  public async onBeforeStatement(node: StatementNode, state: InterpreterState): Promise<void> {
+  public async onBeforeStatement(
+    node: StatementNode,
+    state: InterpreterState,
+  ): Promise<void> {
     const currentLine = node.line ?? 0;
-    
+
     if (this.breakpoints.has(currentLine) || this.stepRequested) {
       this.paused = true;
       this.stepRequested = false;
@@ -59,9 +62,9 @@ export class DebuggerBridge {
    */
   private async waitForResume(): Promise<void> {
     while (this.paused) {
-      // In a real implementation, this would yield to an event loop 
+      // In a real implementation, this would yield to an event loop
       // or wait for a specific signal/promise resolve.
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
 
@@ -72,8 +75,8 @@ export class DebuggerBridge {
     return {
       cwd: state.cwd,
       env: Object.fromEntries(state.env),
-      localScopes: state.localScopes.map(s => Object.fromEntries(s)),
-      lastExitCode: state.lastExitCode
+      localScopes: state.localScopes.map((s) => Object.fromEntries(s)),
+      lastExitCode: state.lastExitCode,
     };
   }
 }

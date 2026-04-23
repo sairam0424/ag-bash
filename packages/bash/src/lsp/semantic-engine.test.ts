@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { SemanticEngine, SymbolType } from "./semantic-engine.js";
+import { describe, expect, it } from "vitest";
 import { parse } from "../parser/parser.js";
+import { SemanticEngine, SymbolType } from "./semantic-engine.js";
 
 describe("SemanticEngine (Phase 6)", () => {
   it("should track symbol occurrences (definitions and references)", () => {
@@ -16,13 +16,13 @@ describe("SemanticEngine (Phase 6)", () => {
 
     const varOccurrences = engine.getOccurrences("MY_VAR");
     expect(varOccurrences).toHaveLength(2);
-    expect(varOccurrences.find(o => o.isDefinition)).toBeDefined();
-    expect(varOccurrences.find(o => !o.isDefinition)).toBeDefined();
+    expect(varOccurrences.find((o) => o.isDefinition)).toBeDefined();
+    expect(varOccurrences.find((o) => !o.isDefinition)).toBeDefined();
 
     const funcOccurrences = engine.getOccurrences("func");
     expect(funcOccurrences).toHaveLength(2);
-    expect(funcOccurrences.find(o => o.isDefinition)).toBeDefined();
-    expect(funcOccurrences.find(o => !o.isDefinition)).toBeDefined();
+    expect(funcOccurrences.find((o) => o.isDefinition)).toBeDefined();
+    expect(funcOccurrences.find((o) => !o.isDefinition)).toBeDefined();
   });
 
   it("should find definitions across scopes", () => {

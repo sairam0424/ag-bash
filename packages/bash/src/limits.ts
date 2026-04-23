@@ -86,7 +86,6 @@ export interface ExecutionLimits {
   maxMcpToolCalls?: number;
 }
 
-
 /**
  * Default execution limits.
  * These are conservative limits designed to prevent runaway execution
@@ -119,7 +118,6 @@ const DEFAULT_LIMITS: Required<ExecutionLimits> = {
   maxMcpServers: 5,
   maxMcpToolCalls: 50,
 };
-
 
 /**
  * Resolve execution limits by merging user-provided limits with defaults.
@@ -168,9 +166,13 @@ export function resolveLimits(
       DEFAULT_LIMITS.maxMemoryAccountingBytes,
     maxCpuMs: userLimits.maxCpuMs ?? DEFAULT_LIMITS.maxCpuMs,
     maxSubAgents: userLimits.maxSubAgents ?? DEFAULT_LIMITS.maxSubAgents,
-    maxAgentNesting: userLimits.maxAgentNesting ?? DEFAULT_LIMITS.maxAgentNesting,
-    maxNetworkTrafficBytes: userLimits.maxNetworkTrafficBytes ?? DEFAULT_LIMITS.maxNetworkTrafficBytes,
+    maxAgentNesting:
+      userLimits.maxAgentNesting ?? DEFAULT_LIMITS.maxAgentNesting,
+    maxNetworkTrafficBytes:
+      userLimits.maxNetworkTrafficBytes ??
+      DEFAULT_LIMITS.maxNetworkTrafficBytes,
     maxMcpServers: userLimits.maxMcpServers ?? DEFAULT_LIMITS.maxMcpServers,
-    maxMcpToolCalls: userLimits.maxMcpToolCalls ?? DEFAULT_LIMITS.maxMcpToolCalls,
+    maxMcpToolCalls:
+      userLimits.maxMcpToolCalls ?? DEFAULT_LIMITS.maxMcpToolCalls,
   };
 }

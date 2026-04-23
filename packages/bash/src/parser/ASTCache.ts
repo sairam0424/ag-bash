@@ -6,7 +6,8 @@ import type { ScriptNode } from "../ast/types.js";
  */
 export class ASTCache {
   private static instance: ASTCache;
-  private cache: Map<string, { ast: ScriptNode; timestamp: number }> = new Map();
+  private cache: Map<string, { ast: ScriptNode; timestamp: number }> =
+    new Map();
   private maxEntries = 100;
   private ttlMs = 3600000; // 1 hour
 

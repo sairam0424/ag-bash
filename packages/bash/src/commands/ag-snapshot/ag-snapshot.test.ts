@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { agSnapshotCommand } from "./ag-snapshot.js";
+import { beforeEach, describe, expect, it } from "vitest";
 import { InMemoryFs } from "../../fs/in-memory-fs/in-memory-fs.js";
+import { agSnapshotCommand } from "./ag-snapshot.js";
 
 describe("ag-snapshot", () => {
   let fs: InMemoryFs;
@@ -29,11 +29,11 @@ describe("ag-snapshot", () => {
 
   it("should restore environment from a snapshot", async () => {
     await agSnapshotCommand.execute(["create", "snap2"], ctx);
-    
+
     // Change state
     ctx.state.env.set("USER", "intruder");
     ctx.state.env.set("NEWVAR", "val");
-    
+
     const result = await agSnapshotCommand.execute(["restore", "snap2"], ctx);
     expect(result.exitCode).toBe(0);
     expect(ctx.state.env.get("USER")).toBe("tester");

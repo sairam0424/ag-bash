@@ -1,11 +1,11 @@
 /**
  * ag-spawn command - Start a sub-agent in the background
- * 
+ *
  * Usage: ag-spawn <id> <command>
  */
 
-import { Command, CommandContext, ExecResult } from "../../types.js";
 import { AgentManager } from "../../services/AgentManager.js";
+import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agSpawn: Command = {
   name: "ag-spawn",
@@ -17,20 +17,32 @@ export const agSpawn: Command = {
       return {
         stdout: "",
         stderr: "Usage: ag-spawn <id> <command>\n",
-        exitCode: 1
+        exitCode: 1,
       };
     }
 
     if (!ctx.bash) {
-      return { stdout: "", stderr: "Error: Bash reference missing in context\n", exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: "Error: Bash reference missing in context\n",
+        exitCode: 1,
+      };
     }
 
     try {
       const manager = AgentManager.getInstance();
       await manager.spawn(id, command, ctx.bash);
-      return { stdout: `Spawned sub-agent ${id} in background.\n`, stderr: "", exitCode: 0 };
+      return {
+        stdout: `Spawned sub-agent ${id} in background.\n`,
+        stderr: "",
+        exitCode: 0,
+      };
     } catch (e: any) {
-      return { stdout: "", stderr: `Spawn failed: ${e.message}\n`, exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: `Spawn failed: ${e.message}\n`,
+        exitCode: 1,
+      };
     }
-  }
+  },
 };

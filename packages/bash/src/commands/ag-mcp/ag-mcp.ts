@@ -1,6 +1,6 @@
 /**
  * ag-mcp command - Model Context Protocol integration
- * 
+ *
  * Subcommands:
  * - connect <stdio|http> <config> : Connect to an MCP server
  * - list : List connected servers and tools
@@ -8,8 +8,8 @@
  * - disconnect <server_id> : Close a connection
  */
 
-import { Command, CommandContext, ExecResult } from "../../types.js";
 import { McpClient } from "../../services/McpClient.js";
+import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agMcp: Command = {
   name: "ag-mcp",
@@ -21,7 +21,7 @@ export const agMcp: Command = {
       return {
         stdout: "",
         stderr: "Usage: ag-mcp <connect|list|call|disconnect> [args]\n",
-        exitCode: 1
+        exitCode: 1,
       };
     }
 
@@ -29,7 +29,11 @@ export const agMcp: Command = {
       case "list": {
         const conns = client.listConnections();
         if (conns.length === 0) {
-          return { stdout: "No active MCP connections.\n", stderr: "", exitCode: 0 };
+          return {
+            stdout: "No active MCP connections.\n",
+            stderr: "",
+            exitCode: 0,
+          };
         }
         let output = "Active MCP Connections:\n";
         for (const conn of conns) {
@@ -49,8 +53,9 @@ export const agMcp: Command = {
         if (!type || !id || !target) {
           return {
             stdout: "",
-            stderr: "Usage: ag-mcp connect <stdio|http> <id> <command|url> [args...]\n",
-            exitCode: 1
+            stderr:
+              "Usage: ag-mcp connect <stdio|http> <id> <command|url> [args...]\n",
+            exitCode: 1,
           };
         }
 
@@ -63,11 +68,23 @@ export const agMcp: Command = {
             const conn = await client.connectHttp(id, target, ctx.bash);
             ctx.bash?.toolbox.registerMcpTools(id, conn.tools);
           } else {
-            return { stdout: "", stderr: `Unknown connection type: ${type}\n`, exitCode: 1 };
+            return {
+              stdout: "",
+              stderr: `Unknown connection type: ${type}\n`,
+              exitCode: 1,
+            };
           }
-          return { stdout: `Successfully connected to MCP server: ${id}\n`, stderr: "", exitCode: 0 };
+          return {
+            stdout: `Successfully connected to MCP server: ${id}\n`,
+            stderr: "",
+            exitCode: 0,
+          };
         } catch (e: any) {
-          return { stdout: "", stderr: `Connection failed: ${e.message}\n`, exitCode: 1 };
+          return {
+            stdout: "",
+            stderr: `Connection failed: ${e.message}\n`,
+            exitCode: 1,
+          };
         }
       }
 
@@ -80,30 +97,51 @@ export const agMcp: Command = {
           return {
             stdout: "",
             stderr: "Usage: ag-mcp call <id> <tool_name> [args_json]\n",
-            exitCode: 1
+            exitCode: 1,
           };
         }
 
         try {
           const parsedArgs = JSON.parse(argsJson);
-          const result = await client.callTool(id, toolName, parsedArgs, ctx.bash);
-          return { stdout: JSON.stringify(result, null, 2) + "\n", stderr: "", exitCode: 0 };
+          const result = await client.callTool(
+            id,
+            toolName,
+            parsedArgs,
+            ctx.bash,
+          );
+          return {
+            stdout: JSON.stringify(result, null, 2) + "\n",
+            stderr: "",
+            exitCode: 0,
+          };
         } catch (e: any) {
-          return { stdout: "", stderr: `Tool call failed: ${e.message}\n`, exitCode: 1 };
+          return {
+            stdout: "",
+            stderr: `Tool call failed: ${e.message}\n`,
+            exitCode: 1,
+          };
         }
       }
 
       case "disconnect": {
         const id = args[1];
         if (!id) {
-          return { stdout: "", stderr: "Usage: ag-mcp disconnect <id>\n", exitCode: 1 };
+          return {
+            stdout: "",
+            stderr: "Usage: ag-mcp disconnect <id>\n",
+            exitCode: 1,
+          };
         }
         client.disconnect(id);
         return { stdout: `Disconnected from ${id}\n`, stderr: "", exitCode: 0 };
       }
 
       default:
-        return { stdout: "", stderr: `Unknown subcommand: ${subcommand}\n`, exitCode: 1 };
+        return {
+          stdout: "",
+          stderr: `Unknown subcommand: ${subcommand}\n`,
+          exitCode: 1,
+        };
     }
-  }
+  },
 };
