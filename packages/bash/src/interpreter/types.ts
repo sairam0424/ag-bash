@@ -347,6 +347,8 @@ export interface ExpansionState {
 // This provides backward compatibility while the sub-interfaces provide
 // better organization for understanding and maintaining specific features.
 
+export type BashMode = "execute" | "plan";
+
 /**
  * Complete interpreter state for bash script execution.
  *
@@ -414,6 +416,8 @@ export interface InterpreterState
   extraArgs?: string[];
   /** Current session ID for stateful REPLs (js-exec, python3) */
   sessionId?: string;
+  /** Current mode of the shell (execute or plan) */
+  mode: BashMode;
 }
 
 export interface InterpreterContext {
