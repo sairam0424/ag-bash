@@ -16,7 +16,7 @@ export type CommandName =
   | "sh" | "jq" | "base64" | "diff" | "date" | "sleep" | "timeout" | "seq" | "expr" | "md5sum" | "sha1sum"
   | "sha256sum" | "file" | "html-to-markdown" | "help" | "which" | "tac" | "hostname" | "od" | "gzip"
   | "gunzip" | "zcat" | "tar" | "yq" | "xan" | "sqlite3" | "time" | "hello" | "whoami" | "git"
-  | "ag-edit" | "ag-diff" | "ag-snapshot" | "ag-analyze";
+  | "ag-edit" | "ag-diff" | "ag-snapshot" | "ag-analyze" | "ag-find-symbol" | "ag-references" | "ag-mcp" | "ag-spawn" | "ag-wait" | "ag-list-agents" | "ag-hover" | "ag-explain" | "ag-todo";
 
 export type NetworkCommandName = "curl";
 export type PythonCommandName = "python3" | "python";
