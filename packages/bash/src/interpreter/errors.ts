@@ -92,7 +92,12 @@ export class ErrexitError extends ControlFlowError {
     stderr: string = "",
     public observations?: any[],
   ) {
-    super(`errexit: command exited with status ${exitCode}`, stdout, stderr, observations);
+    super(
+      `errexit: command exited with status ${exitCode}`,
+      stdout,
+      stderr,
+      observations,
+    );
   }
 }
 
@@ -163,7 +168,12 @@ export class ArithmeticError extends ControlFlowError {
 export class BadSubstitutionError extends ControlFlowError {
   readonly name = "BadSubstitutionError";
 
-  constructor(message: string, stdout: string = "", stderr: string = "", public observations?: any[]) {
+  constructor(
+    message: string,
+    stdout: string = "",
+    stderr: string = "",
+    public observations?: any[],
+  ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}: bad substitution\n`;
   }
@@ -176,7 +186,12 @@ export class BadSubstitutionError extends ControlFlowError {
 export class GlobError extends ControlFlowError {
   readonly name = "GlobError";
 
-  constructor(pattern: string, stdout: string = "", stderr: string = "", public observations?: any[]) {
+  constructor(
+    pattern: string,
+    stdout: string = "",
+    stderr: string = "",
+    public observations?: any[],
+  ) {
     super(`no match: ${pattern}`, stdout, stderr, observations);
     this.stderr = stderr || `bash: no match: ${pattern}\n`;
   }
@@ -189,7 +204,12 @@ export class GlobError extends ControlFlowError {
 export class BraceExpansionError extends ControlFlowError {
   readonly name = "BraceExpansionError";
 
-  constructor(message: string, stdout: string = "", stderr: string = "", public observations?: any[]) {
+  constructor(
+    message: string,
+    stdout: string = "",
+    stderr: string = "",
+    public observations?: any[],
+  ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}\n`;
   }

@@ -27,8 +27,10 @@ export function createLazyCommand(def: LazyCommandDef): Command {
 
       // Emit flag coverage hits when fuzzing (not available in browser bundles)
       // Check if we are in browser environment locally to avoid import errors
-      const isBrowser = typeof (globalThis as any).__BROWSER__ !== "undefined" && (globalThis as any).__BROWSER__;
-      
+      const isBrowser =
+        typeof (globalThis as any).__BROWSER__ !== "undefined" &&
+        (globalThis as any).__BROWSER__;
+
       if (ctx.coverage && !isBrowser) {
         try {
           const { emitFlagCoverage } = await import("./flag-coverage.js");

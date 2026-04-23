@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { Bash } from "./Bash.js";
+import { beforeEach, describe, expect, it } from "vitest";
 import { BashToolbox } from "./agentic/BashToolbox.js";
+import { Bash } from "./Bash.js";
 import { InMemoryFs } from "./fs/in-memory-fs/index.js";
 
 describe("Incremental Indexing (Phase 8)", () => {
@@ -9,7 +9,7 @@ describe("Incremental Indexing (Phase 8)", () => {
 
   beforeEach(async () => {
     bash = new Bash({
-      parserEngine: 'legacy',
+      parserEngine: "legacy",
       fs: new InMemoryFs(),
     });
     const toolbox = new BashToolbox();
@@ -17,8 +17,11 @@ describe("Incremental Indexing (Phase 8)", () => {
   });
 
   it("should index file automatically on write_file", async () => {
-    await tools.write_file.execute({ path: "/test.sh", content: "hello() { echo hi; }" });
-    
+    await tools.write_file.execute({
+      path: "/test.sh",
+      content: "hello() { echo hi; }",
+    });
+
     // Check if index.json was created
     expect(await bash.fs.exists("/.ag-bash/index.json")).toBe(true);
 
@@ -29,8 +32,11 @@ describe("Incremental Indexing (Phase 8)", () => {
   });
 
   it("should update index on edit_file", async () => {
-    await tools.write_file.execute({ path: "/test.sh", content: "old_fn() { :; }" });
-    
+    await tools.write_file.execute({
+      path: "/test.sh",
+      content: "old_fn() { :; }",
+    });
+
     // Replace old_fn with new_fn
     await tools.edit_file.execute({
       path: "/test.sh",

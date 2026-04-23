@@ -1574,8 +1574,8 @@ if (parentPort) {
   if (workerData) {
     const input = workerData as WorkerInput;
     if (input.pythonCode || input.sessionId) {
-        // Just trigger the message handler logic
-        parentPort.emit("message", input);
+      // Just trigger the message handler logic
+      parentPort.emit("message", input);
     }
   }
 }

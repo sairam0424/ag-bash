@@ -1,13 +1,16 @@
-import type { InterpreterContext, InterpreterState } from "../interpreter/types.js";
 import { NounsetError } from "../interpreter/errors.js";
+import type {
+  InterpreterContext,
+  InterpreterState,
+} from "../interpreter/types.js";
 import { SymbolType } from "../lsp/semantic-engine.js";
 import type { ExecResult } from "../types.js";
 import type { AgenticHealerConfig } from "./types.js";
 
 /**
  * Agentic Healer for Ag-Bash.
- * 
- * Provides automated troubleshooting and recovery suggestions for 
+ *
+ * Provides automated troubleshooting and recovery suggestions for
  * failed shell commands.
  */
 export class AgenticHealer {
@@ -17,7 +20,7 @@ export class AgenticHealer {
 
   /**
    * Analyzes a failed command execution and generates a recovery suggestion.
-   * 
+   *
    * @param command The command string that failed
    * @param result The execution result (containing stderr and exit code)
    * @param state The current interpreter state
@@ -59,39 +62,47 @@ export class AgenticHealer {
   ): Promise<string | null> {
     const state = ctx.state;
     const stderr = (result.stderr || "").toLowerCase();
-    
+
     // 1. Missing directory/file
     if (stderr.includes("no such file or directory")) {
       const parts = command.split(/\s+/);
-      const possiblePath = parts.find(p => p.includes("/") || p.includes("."));
-      
+      const possiblePath = parts.find(
+        (p) => p.includes("/") || p.includes("."),
+      );
+
       if (possiblePath) {
         // Attempt fuzzy match for similar files in the same directory
         try {
-          const dir = possiblePath.includes("/") 
-            ? possiblePath.substring(0, possiblePath.lastIndexOf("/")) 
+          const dir = possiblePath.includes("/")
+            ? possiblePath.substring(0, possiblePath.lastIndexOf("/"))
             : ".";
           const basename = possiblePath.includes("/")
             ? possiblePath.substring(possiblePath.lastIndexOf("/") + 1)
             : possiblePath;
-          
+
           if (dir === "." || (await ctx.fs.stat(dir)).isDirectory) {
             const files = await ctx.fs.readdir(dir);
             const { levenshtein } = await import("../lsp/semantic-engine.js");
             const closest = files
               .map((f: string) => ({ name: f, dist: levenshtein(basename, f) }))
-              .filter((res: { name: string; dist: number }) => res.dist <= 2 && res.name !== basename)
-              .sort((a: { dist: number }, b: { dist: number }) => a.dist - b.dist)[0];
-            
+              .filter(
+                (res: { name: string; dist: number }) =>
+                  res.dist <= 2 && res.name !== basename,
+              )
+              .sort(
+                (a: { dist: number }, b: { dist: number }) => a.dist - b.dist,
+              )[0];
+
             if (closest) {
-              const suggestedPath = dir === "." ? closest.name : `${dir}/${closest.name}`;
+              const suggestedPath =
+                dir === "." ? closest.name : `${dir}/${closest.name}`;
               return `Target '${possiblePath}' not found. Did you mean '${suggestedPath}'?`;
             }
           }
         } catch (e) {
           // Ignore FS errors during healing
         }
-        
+
         return `Target '${possiblePath}' in '${command}' was not found. Check if the path is correct in ${state.cwd}.`;
       }
       return `Target in '${command}' was not found. Check if the path is correct in ${state.cwd}.`;
@@ -136,7 +147,7 @@ export class AgenticHealer {
       if (ctx.getRegisteredCommands) {
         const registered = ctx.getRegisteredCommands();
         const { levenshtein } = await import("../lsp/semantic-engine.js");
-        
+
         // Find closest among registered commands
         const closestRegistered = registered
           .map((c) => ({ name: c, dist: levenshtein(cmdName, c) }))
@@ -148,7 +159,9 @@ export class AgenticHealer {
         }
 
         // Fallback: check SHELL_BUILTINS list as well (some might not be registered but are known)
-        const { SHELL_BUILTINS } = await import("../interpreter/helpers/shell-constants.js");
+        const { SHELL_BUILTINS } = await import(
+          "../interpreter/helpers/shell-constants.js"
+        );
         const closestBuiltin = Array.from(SHELL_BUILTINS)
           .map((c) => ({ name: c, dist: levenshtein(cmdName, c) }))
           .filter((res) => res.dist <= 2)
@@ -185,7 +198,10 @@ export class AgenticHealer {
     }
 
     // 5. Missing flags or arguments
-    if (stderr.includes("missing operand") || stderr.includes("requires an argument")) {
+    if (
+      stderr.includes("missing operand") ||
+      stderr.includes("requires an argument")
+    ) {
       return `'${command}' is missing required arguments. Consult the man page for usage.`;
     }
 
@@ -198,7 +214,7 @@ export class AgenticHealer {
   public getTroubleshootingContext(
     command: string,
     result: ExecResult,
-    state: InterpreterState
+    state: InterpreterState,
   ): string {
     return `
 COMMAND FAILED:

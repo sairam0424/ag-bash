@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-04-23
+
+### Added (Project Nexus Prime Upgrade)
+- **Intelligent Semantic Suite**:
+  - `ag-hover`: Contextual metadata and documentation for symbols at a specific location.
+  - `ag-explain`: AST-driven pipeline explanation for complex shell commands.
+  - `ag-find-symbol`: Global workspace indexing and search for symbol definitions and references.
+  - `ag-todo`: Persistent local task management and project tracking for agents.
+- **Hardened Governance**:
+  - `maxNetworkTrafficBytes`: Session-wide network traffic accounting and enforcement (100MB default).
+  - `maxAgentNesting`: Hard limit on agent recursion depth to prevent infinite loops in multi-agent workflows.
+  - Enhanced `ExecutionLimitError` (Exit code 126) for granular resource breach reporting.
+- **Security & Stability**:
+  - Defensive AST traversal in `ag-explain` to handle malformed or partial scripts.
+  - Improved argument parsing to resolve conflicts between shell flags and command-specific options.
+  - Comprehensive v2.0 Smoke Test suite for feature validation and regression testing.
+
+### Changed
+- Upgraded the entire monorepo to version 2.0.0.
+- Synchronized versioning across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Refactored `Interpreter` to enforce Nexus Prime resource limits.
+
 ## [1.5.0] - 2026-04-20
 
 ### Added (Project Nexus Upgrade)

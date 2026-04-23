@@ -6,9 +6,7 @@ const agHoverHelp = {
   name: "ag-hover",
   summary: "get information about a symbol at a specific position",
   usage: "ag-hover <file> <line> <character>",
-  options: [
-    "    --help        display this help and exit",
-  ],
+  options: ["    --help        display this help and exit"],
 };
 
 export const agHoverCommand: Command = {
@@ -26,35 +24,51 @@ export const agHoverCommand: Command = {
     const char = parseInt(positional[2]);
 
     if (!file || isNaN(line) || isNaN(char)) {
-      return { stdout: "", stderr: "ag-hover: missing or invalid arguments\nUsage: ag-hover <file> <line> <character>\n", exitCode: 2 };
+      return {
+        stdout: "",
+        stderr:
+          "ag-hover: missing or invalid arguments\nUsage: ag-hover <file> <line> <character>\n",
+        exitCode: 2,
+      };
     }
 
     const filePath = ctx.fs.resolvePath(ctx.cwd, file);
     if (!(await ctx.fs.exists(filePath))) {
-      return { stdout: "", stderr: `ag-hover: ${file}: No such file or directory\n`, exitCode: 2 };
+      return {
+        stdout: "",
+        stderr: `ag-hover: ${file}: No such file or directory\n`,
+        exitCode: 2,
+      };
     }
 
     try {
       const content = await ctx.fs.readFile(filePath, "utf8");
       const lines = content.split(/\r?\n/);
       const lineText = lines[line - 1] || "";
-      
+
       // Simple word detection at position
       const symbolPattern = /[\w$!]+/g;
       let symbolName: string | undefined;
       let match;
       while ((match = symbolPattern.exec(lineText)) !== null) {
-        if (char - 1 >= match.index && char - 1 < match.index + match[0].length) {
+        if (
+          char - 1 >= match.index &&
+          char - 1 < match.index + match[0].length
+        ) {
           symbolName = match[0];
           break;
         }
       }
 
       if (!symbolName) {
-        return { stdout: "No symbol found at position.\n", stderr: "", exitCode: 0 };
+        return {
+          stdout: "No symbol found at position.\n",
+          stderr: "",
+          exitCode: 0,
+        };
       }
 
-      // @ts-ignore
+      // @ts-expect-error
       const definition = ctx.bash.semanticEngine.findDefinition(symbolName);
       if (definition) {
         let output = `--- Hover Info for '${symbolName}' ---\n`;
@@ -64,10 +78,17 @@ export const agHoverCommand: Command = {
         return { stdout: output, stderr: "", exitCode: 0 };
       }
 
-      return { stdout: `No semantic info found for '${symbolName}'.\n`, stderr: "", exitCode: 0 };
-
+      return {
+        stdout: `No semantic info found for '${symbolName}'.\n`,
+        stderr: "",
+        exitCode: 0,
+      };
     } catch (e: any) {
-      return { stdout: "", stderr: `ag-hover: error: ${e.message}\n`, exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: `ag-hover: error: ${e.message}\n`,
+        exitCode: 1,
+      };
     }
   },
 };

@@ -61,6 +61,22 @@ export {
   ReadWriteFs,
   type ReadWriteFsOptions,
 } from "./fs/read-write-fs/index.js";
+export { DebuggerBridge } from "./interpreter/index.js";
+export type {
+  CallStackState,
+  CompletionSpec,
+  ControlFlowState,
+  ExpansionState,
+  InterpreterContext,
+  InterpreterState,
+  IOState,
+  LocalScopingState,
+  ProcessState,
+  ShellOptions,
+  ShoptOptions,
+  VariableAttributeState,
+} from "./interpreter/types.js";
+export { SemanticEngine } from "./lsp/semantic-engine.js";
 export type {
   AllowedUrl,
   AllowedUrlEntry,
@@ -114,22 +130,6 @@ export type {
   TransformPlugin,
   TransformResult,
 } from "./transform/types.js";
-export type {
-  CallStackState,
-  CompletionSpec,
-  ControlFlowState,
-  ExpansionState,
-  InterpreterContext,
-  InterpreterState,
-  IOState,
-  LocalScopingState,
-  ProcessState,
-  ShellOptions,
-  ShoptOptions,
-  VariableAttributeState,
-} from "./interpreter/types.js";
-export { DebuggerBridge } from "./interpreter/index.js";
-export { SemanticEngine } from "./lsp/semantic-engine.js";
 export type {
   BashExecResult,
   Command,

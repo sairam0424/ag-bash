@@ -4,7 +4,7 @@ import { Bash } from "./Bash.js";
 describe("Bash Snapshot/Restore", () => {
   it("should capture and restore environment variables", async () => {
     const bash = new Bash();
-    
+
     // 1. Set a variable
     await bash.exec("export FOO=initial", { persistState: true });
     expect((await bash.exec("echo $FOO")).stdout).toBe("initial\n");
@@ -23,7 +23,7 @@ describe("Bash Snapshot/Restore", () => {
 
   it("should capture and restore filesystem changes", async () => {
     const bash = new Bash();
-    
+
     // 1. Create a file
     await bash.exec("echo 'hello' > /test.txt");
     expect(await bash.readFile("/test.txt")).toBe("hello\n");
@@ -42,7 +42,7 @@ describe("Bash Snapshot/Restore", () => {
 
   it("should capture and restore current working directory", async () => {
     const bash = new Bash();
-    
+
     // 1. Change directory
     await bash.exec("mkdir /work; cd /work", { persistState: true });
     expect(bash.getCwd()).toBe("/work");
@@ -61,7 +61,7 @@ describe("Bash Snapshot/Restore", () => {
 
   it("should capture and restore function definitions", async () => {
     const bash = new Bash();
-    
+
     // 1. Define a function
     await bash.exec("hello() { echo 'hi'; }", { persistState: true });
     expect((await bash.exec("hello")).stdout).toBe("hi\n");
@@ -80,7 +80,7 @@ describe("Bash Snapshot/Restore", () => {
 
   it("should handle nested snapshots and independent rollbacks", async () => {
     const bash = new Bash();
-    
+
     await bash.exec("export STEP=0", { persistState: true });
     const snap0 = await bash.snapshot();
 

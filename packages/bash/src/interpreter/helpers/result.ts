@@ -38,7 +38,11 @@ export function success(stdout = "", observations?: any[]): ExecResult {
  * @param observations - Optional failure metadata
  * @returns ExecResult with the specified exitCode
  */
-export function failure(stderr: string, exitCode = 1, observations?: any[]): ExecResult {
+export function failure(
+  stderr: string,
+  exitCode = 1,
+  observations?: any[],
+): ExecResult {
   return { stdout: "", stderr, exitCode, observations };
 }
 

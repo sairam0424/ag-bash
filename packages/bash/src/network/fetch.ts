@@ -384,7 +384,7 @@ async function responseToResult(
       const { done, value } = await reader.read();
       if (done) break;
       totalSize += value.byteLength;
-      
+
       // Report response traffic
       if (onTraffic) {
         onTraffic(value.byteLength);

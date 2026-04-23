@@ -9,8 +9,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import * as readline from "node:readline";
+import { fileURLToPath } from "node:url";
 import { Bash } from "../Bash.js";
 import { OverlayFs } from "../fs/overlay-fs/overlay-fs.js";
 import { getErrorMessage } from "../interpreter/helpers/errors.js";

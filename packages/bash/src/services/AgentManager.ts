@@ -1,11 +1,11 @@
 /**
  * AgentManager - Orchestration Service for Ag-Bash
- * 
+ *
  * Manages the lifecycle of sub-agents (parallel bash instances).
  */
 
 import { Bash } from "../Bash.js";
-import { ExecResult } from "../types.js";
+import type { ExecResult } from "../types.js";
 
 export interface SubAgent {
   id: string;
@@ -31,7 +31,11 @@ export class AgentManager {
   /**
    * Spawn a new sub-agent.
    */
-  async spawn(id: string, command: string, parentBash: Bash): Promise<SubAgent> {
+  async spawn(
+    id: string,
+    command: string,
+    parentBash: Bash,
+  ): Promise<SubAgent> {
     if (this.agents.has(id)) {
       throw new Error(`Agent with ID ${id} already exists`);
     }
@@ -39,14 +43,20 @@ export class AgentManager {
     const limits = parentBash.limits;
 
     // Enforce maxSubAgents limit
-    const activeAgents = Array.from(this.agents.values()).filter(a => a.status === "running").length;
+    const activeAgents = Array.from(this.agents.values()).filter(
+      (a) => a.status === "running",
+    ).length;
     if (activeAgents >= limits.maxSubAgents) {
-      throw new Error(`Maximum number of sub-agents reached (${limits.maxSubAgents})`);
+      throw new Error(
+        `Maximum number of sub-agents reached (${limits.maxSubAgents})`,
+      );
     }
 
     // Enforce maxAgentNesting limit
     if (parentBash.nestingDepth >= limits.maxAgentNesting) {
-      throw new Error(`Maximum agent nesting depth reached (${limits.maxAgentNesting})`);
+      throw new Error(
+        `Maximum agent nesting depth reached (${limits.maxAgentNesting})`,
+      );
     }
 
     // Inherit configuration from parent (fs, env, etc.)
@@ -69,16 +79,19 @@ export class AgentManager {
     this.agents.set(id, agent);
 
     // Run the command in the background
-    agent.promise = subBash.exec(command).then(result => {
-      agent.status = "completed";
-      agent.result = result;
-      return result;
-    }).catch(error => {
-      agent.status = "error";
-      const errResult = { stdout: "", stderr: error.message, exitCode: 1 };
-      agent.result = errResult;
-      return errResult;
-    });
+    agent.promise = subBash
+      .exec(command)
+      .then((result) => {
+        agent.status = "completed";
+        agent.result = result;
+        return result;
+      })
+      .catch((error) => {
+        agent.status = "error";
+        const errResult = { stdout: "", stderr: error.message, exitCode: 1 };
+        agent.result = errResult;
+        return errResult;
+      });
 
     return agent;
   }

@@ -10,6 +10,7 @@
  * - Redirections (redirections.ts)
  */
 
+import { AgenticHealer } from "../agentic/agentic-healer.js";
 import type {
   ArithmeticCommandNode,
   CommandNode,
@@ -26,18 +27,21 @@ import type {
 import type { IFileSystem } from "../fs/interface.js";
 import { mapToRecord } from "../helpers/env.js";
 import type { ExecutionLimits } from "../limits.js";
+import { SemanticEngine } from "../lsp/semantic-engine.js";
 import type { SecureFetch } from "../network/index.js";
+import { AgTrace } from "../observability/ag-trace.js";
+import { ParseException } from "../parser/types.js";
 import {
   DefenseInDepthBox,
   SecurityViolationError,
 } from "../security/defense-in-depth-box.js";
+import { SharedStateBus } from "../services/SharedStateBus.js";
 import type {
   CommandRegistry,
   ExecResult,
   FeatureCoverageWriter,
   TraceCallback,
 } from "../types.js";
-import { ParseException } from "../parser/types.js";
 import { expandAlias as expandAliasHelper } from "./alias-expansion.js";
 import { evaluateArithmetic } from "./arithmetic.js";
 import {
@@ -59,6 +63,7 @@ import {
   executeUntil,
   executeWhile,
 } from "./control-flow.js";
+import type { DebuggerBridge } from "./debugger/debugger.js";
 import {
   ArithmeticError,
   BadSubstitutionError,
@@ -78,9 +83,9 @@ import { expandWord, expandWordWithGlob } from "./expansion.js";
 import { executeFunctionDef } from "./functions.js";
 import {
   checkFdLimit,
+  result as createExecResult,
   failure,
   OK,
-  result as createExecResult,
   testResult,
   throwExecutionLimit,
 } from "./helpers/result.js";
@@ -90,7 +95,6 @@ import {
   parseRwFdContent,
 } from "./helpers/word-matching.js";
 import { traceSimpleCommand } from "./helpers/xtrace.js";
-import { AgTrace } from "../observability/ag-trace.js";
 import { executePipeline as executePipelineHelper } from "./pipeline-execution.js";
 import {
   applyRedirections,
@@ -104,10 +108,6 @@ import {
   executeUserScript as executeUserScriptHelper,
 } from "./subshell-group.js";
 import type { InterpreterContext, InterpreterState } from "./types.js";
-import { DebuggerBridge } from "./debugger/debugger.js";
-import { SemanticEngine } from "../lsp/semantic-engine.js";
-import { AgenticHealer } from "../agentic/agentic-healer.js";
-import { SharedStateBus } from "../services/SharedStateBus.js";
 
 export type { InterpreterContext, InterpreterState } from "./types.js";
 
@@ -151,7 +151,6 @@ export interface InterpreterOptions {
   bash?: any;
 }
 
-
 /**
  * Shell Interpreter
  *
@@ -181,13 +180,16 @@ export class Interpreter {
       getRegisteredCommands: options.getRegisteredCommands,
       agentic: options.agentic,
       debugger: options.debugger,
-      semanticEngine: options.semanticEngine || (options.agentic ? new SemanticEngine() : undefined),
-      agenticHealer: options.agenticHealer || (options.agentic ? new AgenticHealer() : undefined),
+      semanticEngine:
+        options.semanticEngine ||
+        (options.agentic ? new SemanticEngine() : undefined),
+      agenticHealer:
+        options.agenticHealer ||
+        (options.agentic ? new AgenticHealer() : undefined),
       sharedBus: options.sharedBus || SharedStateBus.getInstance(),
       bash: options.bash,
     };
   }
-
 
   /**
    * Fail closed if defense is expected but async context is missing.
@@ -304,7 +306,10 @@ export class Interpreter {
         }
         // ExecutionLimitError must always propagate - these are safety limits
         const errorName = error instanceof Error ? error.name : "";
-        if (error instanceof ExecutionLimitError || errorName === "ExecutionLimitError") {
+        if (
+          error instanceof ExecutionLimitError ||
+          errorName === "ExecutionLimitError"
+        ) {
           throw error;
         }
         if (error instanceof ErrexitError) {
@@ -383,7 +388,10 @@ export class Interpreter {
           throw error;
         }
         // Handle SecurityViolationError - must re-throw to reach Bash.exec
-        if (error instanceof SecurityViolationError || errorName === "SecurityViolationError") {
+        if (
+          error instanceof SecurityViolationError ||
+          errorName === "SecurityViolationError"
+        ) {
           throw error;
         }
         throw error;
@@ -458,7 +466,10 @@ export class Interpreter {
       }
 
       // Performance: Network traffic accounting
-      if (this.ctx.state.networkTrafficBytes > this.ctx.limits.maxNetworkTrafficBytes) {
+      if (
+        this.ctx.state.networkTrafficBytes >
+        this.ctx.limits.maxNetworkTrafficBytes
+      ) {
         throwExecutionLimit(
           `network traffic limit exceeded: ${Math.round(this.ctx.state.networkTrafficBytes / 1024 / 1024)}MB exceeds ${Math.round(this.ctx.limits.maxNetworkTrafficBytes / 1024 / 1024)}MB limit`,
           "network_traffic",
@@ -543,7 +554,11 @@ export class Interpreter {
       ) {
         const suggestion = await this.ctx.agenticHealer.diagnose(
           "",
-          { stdout: "", stderr: (error as any).stderr || error.message || "", exitCode: 1 },
+          {
+            stdout: "",
+            stderr: (error as any).stderr || error.message || "",
+            exitCode: 1,
+          },
           this.ctx,
           error,
         );
@@ -626,26 +641,26 @@ export class Interpreter {
    */
   private estimateMemoryUsage(): number {
     let bytes = 0;
-    
+
     // Estimate environment variables
     for (const [key, value] of this.ctx.state.env) {
       bytes += key.length * 2 + value.length * 2;
     }
-    
+
     // Estimate functions
     for (const [name, node] of this.ctx.state.functions) {
       bytes += name.length * 2;
       // Rough estimate for AST node structure
-      bytes += 1000; 
+      bytes += 1000;
     }
-    
+
     // Estimate file descriptors
     if (this.ctx.state.fileDescriptors) {
       for (const [fd, content] of this.ctx.state.fileDescriptors) {
         bytes += 4 + content.length * 2;
       }
     }
-    
+
     return bytes;
   }
 
@@ -942,37 +957,56 @@ export class Interpreter {
         stdin,
         false, // skipFunctions
         false, // useDefaultPath
-        stdinSourceFd
+        stdinSourceFd,
       );
     } catch (error: any) {
-       // Re-throw control flow and fatal errors to be handled by the top-level Bash
-       const errorName = error instanceof Error ? error.name : "";
-       if (
-         error instanceof SecurityViolationError || error instanceof ExecutionLimitError ||
-         error instanceof ExitError || error instanceof ReturnError ||
-         error instanceof BreakError || error instanceof ContinueError ||
-         error instanceof ErrexitError || error instanceof ArithmeticError ||
-         errorName === "SecurityViolationError" || errorName === "ExecutionLimitError" ||
-         errorName === "ExitError" || errorName === "ReturnError" ||
-         errorName === "BreakError" || errorName === "ContinueError" ||
-         errorName === "ErrexitError" || errorName === "ArithmeticError"
-       ) {
-         throw error;
-       }
-       // Catch unexpected command internal errors and treat as failure
-       execResult = failure(`bash: ${commandName}: unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+      // Re-throw control flow and fatal errors to be handled by the top-level Bash
+      const errorName = error instanceof Error ? error.name : "";
+      if (
+        error instanceof SecurityViolationError ||
+        error instanceof ExecutionLimitError ||
+        error instanceof ExitError ||
+        error instanceof ReturnError ||
+        error instanceof BreakError ||
+        error instanceof ContinueError ||
+        error instanceof ErrexitError ||
+        error instanceof ArithmeticError ||
+        errorName === "SecurityViolationError" ||
+        errorName === "ExecutionLimitError" ||
+        errorName === "ExitError" ||
+        errorName === "ReturnError" ||
+        errorName === "BreakError" ||
+        errorName === "ContinueError" ||
+        errorName === "ErrexitError" ||
+        errorName === "ArithmeticError"
+      ) {
+        throw error;
+      }
+      // Catch unexpected command internal errors and treat as failure
+      execResult = failure(
+        `bash: ${commandName}: unexpected error: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
     }
 
     // Apply redirections if command succeeded (or even if it failed, bash applies them)
-    const finalResult = await applyRedirections(this.ctx, execResult, node.redirections);
+    const finalResult = await applyRedirections(
+      this.ctx,
+      execResult,
+      node.redirections,
+    );
 
     // Ag-Trace: Analyze failure if exitCode exists and is non-zero
     if (finalResult.exitCode !== 0) {
-      const observations = await AgTrace.analyze(this.ctx, commandName, args, finalResult);
+      const observations = await AgTrace.analyze(
+        this.ctx,
+        commandName,
+        args,
+        finalResult,
+      );
       if (observations && observations.length > 0) {
         finalResult.observations = [
           ...(finalResult.observations || []),
-          ...observations
+          ...observations,
         ];
       }
     }
@@ -1057,10 +1091,7 @@ export class Interpreter {
               target,
             );
             checkFdLimit(this.ctx);
-            fds!.set(
-              fd,
-              `__file_append__:${filePath}`,
-            );
+            fds!.set(fd, `__file_append__:${filePath}`);
             break;
           }
           case "<": {
@@ -1098,10 +1129,7 @@ export class Interpreter {
               // File doesn't exist - create empty
               await this.ctx.fs.writeFile(filePath, "", "utf8");
               checkFdLimit(this.ctx);
-              fds!.set(
-                fd,
-                `__rw__:${filePath.length}:${filePath}:0:`,
-              );
+              fds!.set(fd, `__rw__:${filePath.length}:${filePath}:0:`);
             }
             break;
           }
@@ -1124,10 +1152,7 @@ export class Interpreter {
                 } else {
                   // Source FD might be 1 (stdout) or 2 (stderr) which aren't in fileDescriptors
                   // In that case, store as duplication marker
-                  fds!.set(
-                    fd,
-                    `__dupout__:${sourceFd}`,
-                  );
+                  fds!.set(fd, `__dupout__:${sourceFd}`);
                 }
                 // Then close the source FD
                 fds!.delete(sourceFd);
@@ -1137,10 +1162,7 @@ export class Interpreter {
               if (!Number.isNaN(sourceFd)) {
                 // Store FD duplication: fd N points to fd M
                 checkFdLimit(this.ctx);
-                fds!.set(
-                  fd,
-                  `__dupout__:${sourceFd}`,
-                );
+                fds!.set(fd, `__dupout__:${sourceFd}`);
               }
             }
             break;
@@ -1163,10 +1185,7 @@ export class Interpreter {
                   fds!.set(fd, sourceInfo!);
                 } else {
                   // Source FD might be 0 (stdin) which isn't in fileDescriptors
-                  fds!.set(
-                    fd,
-                    `__dupin__:${sourceFd}`,
-                  );
+                  fds!.set(fd, `__dupin__:${sourceFd}`);
                 }
                 // Then close the source FD
                 fds!.delete(sourceFd);
@@ -1176,7 +1195,10 @@ export class Interpreter {
               if (!Number.isNaN(sourceFd)) {
                 // Store FD duplication for input
                 checkFdLimit(this.ctx);
-                this.ctx.state.fileDescriptors!.set(fd, `__dupin__:${sourceFd}`);
+                this.ctx.state.fileDescriptors!.set(
+                  fd,
+                  `__dupin__:${sourceFd}`,
+                );
               }
             }
             break;
@@ -1256,7 +1278,11 @@ export class Interpreter {
     }
 
     // If agentic behavior is enabled and the command failed, trigger healer
-    if (this.ctx.agentic && this.ctx.agenticHealer && cmdResult.exitCode !== 0) {
+    if (
+      this.ctx.agentic &&
+      this.ctx.agenticHealer &&
+      cmdResult.exitCode !== 0
+    ) {
       const healer = this.ctx.agenticHealer as AgenticHealer;
       const suggestion = await healer.diagnose(
         commandName + (args.length > 0 ? " " + args.join(" ") : ""),

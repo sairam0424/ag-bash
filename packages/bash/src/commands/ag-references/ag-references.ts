@@ -6,9 +6,7 @@ const agReferencesHelp = {
   name: "ag-references",
   summary: "find all references to a symbol",
   usage: "ag-references <symbol_name>",
-  options: [
-    "    --help        display this help and exit",
-  ],
+  options: ["    --help        display this help and exit"],
 };
 
 export const agReferencesCommand: Command = {
@@ -24,21 +22,29 @@ export const agReferencesCommand: Command = {
     const name = positional[0];
 
     if (!name) {
-      return { stdout: "", stderr: "ag-references: missing symbol name\n", exitCode: 2 };
+      return {
+        stdout: "",
+        stderr: "ag-references: missing symbol name\n",
+        exitCode: 2,
+      };
     }
 
-    // @ts-ignore
+    // @ts-expect-error
     const occurrences = ctx.bash.semanticEngine.getOccurrences(name);
-    
+
     if (occurrences.length === 0) {
-      return { stdout: `No references found for '${name}'.\n`, stderr: "", exitCode: 0 };
+      return {
+        stdout: `No references found for '${name}'.\n`,
+        stderr: "",
+        exitCode: 0,
+      };
     }
 
     const refs = occurrences
       .filter((o: any) => !o.isDefinition)
       .map((o: any) => `  - ${o.path}: line ${o.line} (in ${o.scope})`)
       .join("\n");
-    
+
     const def = occurrences.find((o: any) => o.isDefinition);
     let output = `Found ${occurrences.length} occurrences of '${name}':\n`;
     if (def) output += `Definition: ${def.path}: line ${def.line}\n`;

@@ -2,6 +2,7 @@
  * Interpreter Types
  */
 
+import type { AgenticHealer } from "../agentic/agentic-healer.js";
 import type {
   CommandNode,
   FunctionDefNode,
@@ -10,6 +11,7 @@ import type {
 } from "../ast/types.js";
 import type { IFileSystem } from "../fs/interface.js";
 import type { ExecutionLimits } from "../limits.js";
+import type { SemanticEngine } from "../lsp/semantic-engine.js";
 import type { SecureFetch } from "../network/index.js";
 import type {
   CommandRegistry,
@@ -18,8 +20,6 @@ import type {
   TraceCallback,
 } from "../types.js";
 import type { DebuggerBridge } from "./debugger/debugger.js";
-import type { SemanticEngine } from "../lsp/semantic-engine.js";
-import type { AgenticHealer } from "../agentic/agentic-healer.js";
 
 /**
  * Completion specification for a command, set by the `complete` builtin.
@@ -488,4 +488,3 @@ export interface InterpreterContext {
   /** Reference to the parent Bash instance */
   bash?: any;
 }
-

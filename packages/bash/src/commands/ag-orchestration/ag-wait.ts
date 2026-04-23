@@ -1,11 +1,11 @@
 /**
  * ag-wait command - Synchronize with a sub-agent
- * 
+ *
  * Usage: ag-wait <id>
  */
 
-import { Command, CommandContext, ExecResult } from "../../types.js";
 import { AgentManager } from "../../services/AgentManager.js";
+import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agWait: Command = {
   name: "ag-wait",
@@ -16,21 +16,21 @@ export const agWait: Command = {
       return {
         stdout: "",
         stderr: "Usage: ag-wait <id>\n",
-        exitCode: 1
+        exitCode: 1,
       };
     }
 
     try {
       const manager = AgentManager.getInstance();
       const result = await manager.wait(id);
-      
+
       let output = `Sub-agent ${id} completed with exit code ${result.exitCode}.\n`;
       if (result.stdout) output += `Stdout:\n${result.stdout}\n`;
       if (result.stderr) output += `Stderr:\n${result.stderr}\n`;
-      
+
       return { stdout: output, stderr: "", exitCode: 0 };
     } catch (e: any) {
       return { stdout: "", stderr: `Wait failed: ${e.message}\n`, exitCode: 1 };
     }
-  }
+  },
 };

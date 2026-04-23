@@ -1,11 +1,11 @@
 /**
  * ag-list-agents command - List all active sub-agents
- * 
+ *
  * Usage: ag-list-agents
  */
 
-import { Command, CommandContext, ExecResult } from "../../types.js";
 import { AgentManager } from "../../services/AgentManager.js";
+import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agListAgents: Command = {
   name: "ag-list-agents",
@@ -23,5 +23,5 @@ export const agListAgents: Command = {
     }
 
     return { stdout: output, stderr: "", exitCode: 0 };
-  }
+  },
 };

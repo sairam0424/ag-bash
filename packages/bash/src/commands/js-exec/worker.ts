@@ -63,7 +63,10 @@ export interface JsExecWorkerOutput {
 
 let quickjsModule: QuickJSWASMModule | null = null;
 let quickjsLoading: Promise<QuickJSWASMModule> | null = null;
-const persistentSessions = new Map<string, { runtime: QuickJSRuntime, context: QuickJSContext, backend: SyncBackend }>();
+const persistentSessions = new Map<
+  string,
+  { runtime: QuickJSRuntime; context: QuickJSContext; backend: SyncBackend }
+>();
 
 async function getQuickJSModule(): Promise<QuickJSWASMModule> {
   if (quickjsModule) {
@@ -1071,7 +1074,9 @@ async function initializeWithDefense(): Promise<void> {
 async function executeCode(
   input: JsExecWorkerInput,
 ): Promise<JsExecWorkerOutput> {
-  let session = input.sessionId ? persistentSessions.get(input.sessionId) : null;
+  const session = input.sessionId
+    ? persistentSessions.get(input.sessionId)
+    : null;
   let runtime: QuickJSRuntime | undefined;
   let context: QuickJSContext | undefined;
   const backend = new SyncBackend(input.sharedBuffer, input.timeoutMs);

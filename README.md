@@ -11,9 +11,9 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 | :--- | :--- | :--- |
-| [`@ag-bash/bash`](./packages/bash) | `v1.5.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v1.5.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
-| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v1.5.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
+| [`@ag-bash/bash`](./packages/bash) | `v2.0.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v2.0.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v2.0.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
 
 ---
 
@@ -79,10 +79,10 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
-- **Project Nexus Agentic Suite**: (v1.5.0+) Surgical file editing (`ag-edit`), semantic diffs (`ag-diff`), and persistent environment snapshots (`ag-snapshot`).
-- **AST Performance Optimization**: (v1.5.0+) Global `ASTCache` (LRU) for high-frequency script execution.
-- **Inter-Runtime Persistence**: (v1.5.0+) Shared variable state between Bash, Python, and JS via `SharedStateBus`.
-- **Resource Governance**: (v1.5.0+) Real-time memory and CPU accounting for secure agentic execution.
+- **Project Nexus Prime Suite**: (v2.0.0+) Intelligent semantic analysis (`ag-hover`, `ag-explain`), symbol discovery (`ag-find-symbol`), and persistent project management (`ag-todo`).
+- **AST Performance Optimization**: (v2.0.0+) Global `ASTCache` (LRU) for high-frequency script execution.
+- **Inter-Runtime Persistence**: (v2.0.0+) Shared variable state between Bash, Python, and JS via `SharedStateBus`.
+- **Resource Governance**: (v2.0.0+) Hardened network traffic accounting, agent nesting limits, and memory monitoring.
 - **Agentic Observability Loop**: Built-in failure analysis and self-correction suggestions for AI models.
 - **Tree-sitter AST Parser**: High-fidelity shell parsing for complex scripts and security analysis.
 - **Virtual Filesystem**: Choose between `InMemoryFs`, `OverlayFs` (COW), or `ReadWriteFs`.

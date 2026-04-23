@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Bash } from "./Bash.js";
 
 describe("Agentic Healer - Semantic Integration", () => {
@@ -38,7 +38,7 @@ describe("Agentic Healer - Semantic Integration", () => {
   });
 
   it("should suggest builtin commands for typos", async () => {
-     const bash = new Bash({
+    const bash = new Bash({
       agentic: true,
       parserEngine: "legacy",
     });

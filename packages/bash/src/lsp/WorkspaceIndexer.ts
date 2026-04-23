@@ -1,9 +1,12 @@
 import type { Bash } from "../Bash.js";
-import { SemanticEngine } from "./semantic-engine.js";
 import { TreeSitterParser } from "../parser/tree-sitter-parser.js";
+import type { SemanticEngine } from "./semantic-engine.js";
 
 export class WorkspaceIndexer {
-  constructor(private bash: Bash, private engine: SemanticEngine) {}
+  constructor(
+    private bash: Bash,
+    private engine: SemanticEngine,
+  ) {}
 
   /**
    * Performs a full scan of the workspace.
@@ -17,7 +20,12 @@ export class WorkspaceIndexer {
           const stat = await this.bash.fs.stat(fullPath);
           if (stat.isDirectory) {
             // Skip common large/system directories
-            if (entry === "node_modules" || entry === ".git" || entry === ".ag-bash") continue;
+            if (
+              entry === "node_modules" ||
+              entry === ".git" ||
+              entry === ".ag-bash"
+            )
+              continue;
             await this.fullScan(fullPath);
           } else if (this.isSupportedFile(entry)) {
             await this.indexFile(fullPath);
@@ -30,8 +38,16 @@ export class WorkspaceIndexer {
   }
 
   private isSupportedFile(filename: string): boolean {
-    const supportedExtensions = [".sh", ".bash", ".ag", ".js", ".ts", ".py", ".json"];
-    return supportedExtensions.some(ext => filename.endsWith(ext));
+    const supportedExtensions = [
+      ".sh",
+      ".bash",
+      ".ag",
+      ".js",
+      ".ts",
+      ".py",
+      ".json",
+    ];
+    return supportedExtensions.some((ext) => filename.endsWith(ext));
   }
 
   private getLanguageFromFile(path: string): string {
@@ -48,9 +64,9 @@ export class WorkspaceIndexer {
     try {
       const content = await this.bash.readFileDirect(path);
       const language = this.getLanguageFromFile(path);
-      
+
       this.engine.clearPath(path);
-      
+
       if (language === "bash") {
         const { parse } = await import("../parser/parser.js");
         const ast = parse(content);
@@ -60,7 +76,9 @@ export class WorkspaceIndexer {
           const tree = TreeSitterParser.parse(content, language);
           this.engine.indexNode(tree.rootNode, path, language);
         } catch (e) {
-          console.warn(`TreeSitter failed to parse ${path} as ${language}, falling back to literal indexing.`);
+          console.warn(
+            `TreeSitter failed to parse ${path} as ${language}, falling back to literal indexing.`,
+          );
           // Fallback to basic string-based indexing if needed
         }
       }
@@ -79,4 +97,3 @@ export class WorkspaceIndexer {
     return this.engine.fuzzySearchSymbols(query);
   }
 }
-

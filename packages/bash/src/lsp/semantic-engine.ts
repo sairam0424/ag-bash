@@ -1,4 +1,13 @@
-import type { ScriptNode, StatementNode, ASTNode, FunctionDefNode, SimpleCommandNode, AssignmentNode, WordNode, ParameterExpansionPart } from "../ast/types.js";
+import type {
+  ASTNode,
+  AssignmentNode,
+  FunctionDefNode,
+  ParameterExpansionPart,
+  ScriptNode,
+  SimpleCommandNode,
+  StatementNode,
+  WordNode,
+} from "../ast/types.js";
 
 /**
  * Semantic symbol type for bash scripts.
@@ -73,7 +82,7 @@ export interface SymbolOccurrence {
 
 /**
  * Semantic Engine for Ag-Bash.
- * 
+ *
  * Analyzes ASTs to provide semantic intelligence for shell scripts.
  */
 export class SemanticEngine {
@@ -98,10 +107,12 @@ export class SemanticEngine {
 
   private traverse(node: ASTNode, currentScope: string, path?: string): void {
     if (!node) return;
-    
+
     switch (node.type) {
       case "Script":
-        (node as ScriptNode).statements.forEach(s => this.traverse(s, currentScope, path));
+        (node as ScriptNode).statements.forEach((s) =>
+          this.traverse(s, currentScope, path),
+        );
         break;
       case "Statement":
         (node as StatementNode).pipelines.forEach((p) =>
@@ -122,18 +133,25 @@ export class SemanticEngine {
           column: 0,
           isDefinition: true,
           scope: "global",
-          path
+          path,
         };
         this.occurrences.push(occ);
 
-        if (!this.symbols.some(s => s.name === fnNode.name && s.type === SymbolType.Function && s.path === path)) {
+        if (
+          !this.symbols.some(
+            (s) =>
+              s.name === fnNode.name &&
+              s.type === SymbolType.Function &&
+              s.path === path,
+          )
+        ) {
           this.symbols.push({
             name: fnNode.name,
             type: SymbolType.Function,
             line: fnNode.line ?? 0,
             column: 0,
             scope: "global",
-            path
+            path,
           });
         }
         this.traverse(fnNode.body, fnNode.name, path);
@@ -141,10 +159,16 @@ export class SemanticEngine {
       }
       case "SimpleCommand": {
         const cmdNode = node as SimpleCommandNode;
-        cmdNode.assignments.forEach(a => this.traverse(a, currentScope, path));
-        
+        cmdNode.assignments.forEach((a) =>
+          this.traverse(a, currentScope, path),
+        );
+
         // Track function calls as references
-        if (cmdNode.name && cmdNode.name.parts.length === 1 && cmdNode.name.parts[0].type === "Literal") {
+        if (
+          cmdNode.name &&
+          cmdNode.name.parts.length === 1 &&
+          cmdNode.name.parts[0].type === "Literal"
+        ) {
           const name = (cmdNode.name.parts[0] as any).value;
           this.occurrences.push({
             name,
@@ -153,11 +177,11 @@ export class SemanticEngine {
             column: 0,
             isDefinition: false,
             scope: currentScope,
-            path
+            path,
           });
         }
-        
-        cmdNode.args.forEach(arg => this.traverse(arg, currentScope, path));
+
+        cmdNode.args.forEach((arg) => this.traverse(arg, currentScope, path));
         break;
       }
       case "Assignment": {
@@ -169,18 +193,26 @@ export class SemanticEngine {
           column: 0,
           isDefinition: true,
           scope: currentScope,
-          path
+          path,
         };
         this.occurrences.push(occ);
 
-        if (!this.symbols.some(s => s.name === assignNode.name && s.type === SymbolType.Variable && s.scope === currentScope && s.path === path)) {
+        if (
+          !this.symbols.some(
+            (s) =>
+              s.name === assignNode.name &&
+              s.type === SymbolType.Variable &&
+              s.scope === currentScope &&
+              s.path === path,
+          )
+        ) {
           this.symbols.push({
             name: assignNode.name,
             type: SymbolType.Variable,
             line: assignNode.line ?? 0,
             column: 0,
             scope: currentScope,
-            path
+            path,
           });
         }
         if (assignNode.value) {
@@ -190,7 +222,7 @@ export class SemanticEngine {
       }
       case "Word": {
         const wordNode = node as WordNode;
-        wordNode.parts.forEach(p => this.traverse(p, currentScope, path));
+        wordNode.parts.forEach((p) => this.traverse(p, currentScope, path));
         break;
       }
       case "ParameterExpansion": {
@@ -202,12 +234,14 @@ export class SemanticEngine {
           column: 0,
           isDefinition: false,
           scope: currentScope,
-          path
+          path,
         });
         break;
       }
       case "DoubleQuoted": {
-        (node as any).parts.forEach((p: any) => this.traverse(p, currentScope, path));
+        (node as any).parts.forEach((p: any) =>
+          this.traverse(p, currentScope, path),
+        );
         break;
       }
       case "Group":
@@ -236,7 +270,9 @@ export class SemanticEngine {
         (node as any).condition.forEach((s: any) =>
           this.traverse(s, currentScope, path),
         );
-        (node as any).body.forEach((s: any) => this.traverse(s, currentScope, path));
+        (node as any).body.forEach((s: any) =>
+          this.traverse(s, currentScope, path),
+        );
         break;
       case "For": {
         const forNode = node as any;
@@ -248,10 +284,12 @@ export class SemanticEngine {
           column: 0,
           isDefinition: true,
           scope: currentScope,
-          path
+          path,
         });
         if (forNode.words) {
-          forNode.words.forEach((w: any) => this.traverse(w, currentScope, path));
+          forNode.words.forEach((w: any) =>
+            this.traverse(w, currentScope, path),
+          );
         }
         forNode.body.forEach((s: any) => this.traverse(s, currentScope, path));
         break;
@@ -262,7 +300,12 @@ export class SemanticEngine {
   /**
    * Traverses a Tree-sitter CST for generic symbol extraction.
    */
-  private traverseTreeSitter(node: any, currentScope: string, path: string | undefined, language: string): void {
+  private traverseTreeSitter(
+    node: any,
+    currentScope: string,
+    path: string | undefined,
+    language: string,
+  ): void {
     if (!node) return;
 
     const type = node.type;
@@ -310,17 +353,25 @@ export class SemanticEngine {
         column,
         isDefinition: true,
         scope: currentScope,
-        path
+        path,
       });
 
-      if (!this.symbols.some(s => s.name === name && s.type === symbolType && s.path === path && s.scope === currentScope)) {
+      if (
+        !this.symbols.some(
+          (s) =>
+            s.name === name &&
+            s.type === symbolType &&
+            s.path === path &&
+            s.scope === currentScope,
+        )
+      ) {
         this.symbols.push({
           name,
           type: symbolType,
           line,
           column,
           scope: currentScope,
-          path
+          path,
         });
       }
     }
@@ -335,7 +386,9 @@ export class SemanticEngine {
    * Returns all symbols visible from a specific scope.
    */
   public getVisibleSymbols(scope: string = "global"): SemanticSymbol[] {
-    return this.symbols.filter(s => s.scope === "global" || s.scope === scope);
+    return this.symbols.filter(
+      (s) => s.scope === "global" || s.scope === scope,
+    );
   }
 
   /**
@@ -349,21 +402,30 @@ export class SemanticEngine {
    * Returns all occurrences of a symbol.
    */
   public getOccurrences(name: string): SymbolOccurrence[] {
-    return this.occurrences.filter(o => o.name === name);
+    return this.occurrences.filter((o) => o.name === name);
   }
 
   /**
    * Resolves a symbol's definition.
    */
-  public findDefinition(name: string, scope: string = "global"): SemanticSymbol | undefined {
-    return this.symbols.find(s => s.name === name && s.scope === scope) 
-      || this.symbols.find(s => s.name === name && s.scope === "global");
+  public findDefinition(
+    name: string,
+    scope: string = "global",
+  ): SemanticSymbol | undefined {
+    return (
+      this.symbols.find((s) => s.name === name && s.scope === scope) ||
+      this.symbols.find((s) => s.name === name && s.scope === "global")
+    );
   }
 
   /**
    * Incremental indexer called by the interpreter or workspace indexer.
    */
-  public indexNode(node: ASTNode | any, path?: string, language: string = "bash"): void {
+  public indexNode(
+    node: ASTNode | any,
+    path?: string,
+    language: string = "bash",
+  ): void {
     if (language === "bash" && (node as ASTNode).type) {
       this.traverse(node as ASTNode, "global", path);
     } else {
@@ -371,7 +433,10 @@ export class SemanticEngine {
     }
   }
 
-  public async indexStatement(node: StatementNode, path?: string): Promise<void> {
+  public async indexStatement(
+    node: StatementNode,
+    path?: string,
+  ): Promise<void> {
     this.traverse(node, "global", path);
   }
 
@@ -401,7 +466,7 @@ export class SemanticEngine {
   public serialize(): string {
     return JSON.stringify({
       symbols: this.symbols,
-      occurrences: this.occurrences
+      occurrences: this.occurrences,
     });
   }
 
@@ -418,26 +483,35 @@ export class SemanticEngine {
    * Merges another set of symbols into the current index.
    * Useful for incremental workspace indexing.
    */
-  public merge(other: { symbols: SemanticSymbol[], occurrences: SymbolOccurrence[] }): void {
+  public merge(other: {
+    symbols: SemanticSymbol[];
+    occurrences: SymbolOccurrence[];
+  }): void {
     // Basic deduplication based on name, type, scope and path
     for (const s of other.symbols) {
-      if (!this.symbols.some(existing => 
-        existing.name === s.name && 
-        existing.type === s.type && 
-        existing.scope === s.scope &&
-        existing.path === s.path
-      )) {
+      if (
+        !this.symbols.some(
+          (existing) =>
+            existing.name === s.name &&
+            existing.type === s.type &&
+            existing.scope === s.scope &&
+            existing.path === s.path,
+        )
+      ) {
         this.symbols.push(s);
       }
     }
     // Occurrences are generally unique by location
     for (const o of other.occurrences) {
-      if (!this.occurrences.some(existing =>
-        existing.name === o.name &&
-        existing.line === o.line &&
-        existing.column === o.column &&
-        existing.path === o.path
-      )) {
+      if (
+        !this.occurrences.some(
+          (existing) =>
+            existing.name === o.name &&
+            existing.line === o.line &&
+            existing.column === o.column &&
+            existing.path === o.path,
+        )
+      ) {
         this.occurrences.push(o);
       }
     }
@@ -448,8 +522,7 @@ export class SemanticEngine {
    * Used for incremental updates when a file is modified.
    */
   public clearPath(path: string): void {
-    this.symbols = this.symbols.filter(s => s.path !== path);
-    this.occurrences = this.occurrences.filter(o => o.path !== path);
+    this.symbols = this.symbols.filter((s) => s.path !== path);
+    this.occurrences = this.occurrences.filter((o) => o.path !== path);
   }
 }
-

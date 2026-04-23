@@ -61,13 +61,22 @@ Retrieves the current state of the shell session.
     - Active environment variables.
     - Defined functions.
 
+### 3. `agentic_suite` (Nexus Prime)
+Full access to the Nexus Prime toolset for high-fidelity code manipulation and analysis.
+- **Tools**: `ag-hover`, `ag-explain`, `ag-find-symbol`, `ag-todo`, `ag-analyze`, `ag-edit`, `ag-diff`.
+- **Features**: 
+    - Semantic code intelligence.
+    - Persistent task tracking.
+    - Surgical file modifications.
+
 ---
 
 ## 🛡️ Security Features
 
 - **Read-Only Root**: By default, the server mounts your current project root as a **Read-Only** overlay. Any changes made by the agent stay in the virtual memory and never touch your real files.
 - **In-Process Sandbox**: No external VM required; execution is isolated using Ag-Bash's internal security logic.
-- **Resource Limits**: Protects against infinite loops and excessive memory consumption.
+- **Resource Limits**: Protects against infinite loops, excessive memory, and now includes session-wide network traffic accounting (v2.0.0+).
+- **Orchestration Governance**: Enforces agent nesting limits to prevent recursive loops in multi-agent workflows.
 
 ## 📜 License
 

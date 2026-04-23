@@ -20,6 +20,7 @@ import {
 import { mapToRecord } from "../../helpers/env.js";
 import { getErrorMessage } from "../../interpreter/helpers/errors.js";
 import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
+import { SessionManager } from "../../services/SessionManager.js";
 import { _clearTimeout, _setTimeout } from "../../timers.js";
 import type {
   Command,
@@ -27,7 +28,6 @@ import type {
   CommandExecOptions,
   ExecResult,
 } from "../../types.js";
-import { SessionManager } from "../../services/SessionManager.js";
 import { hasHelpFlag } from "../help.js";
 import { BridgeHandler } from "../worker-bridge/bridge-handler.js";
 import { createSharedBuffer } from "../worker-bridge/protocol.js";
@@ -363,7 +363,7 @@ function getOrCreateWorker(sessionId?: string): Worker {
   }
 
   const worker = DefenseInDepthBox.runTrusted(() => new Worker(workerPath));
-  
+
   if (sessionId) {
     SessionManager.getInstance().createSession("javascript", worker, sessionId);
   } else {

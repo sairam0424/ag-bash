@@ -1,6 +1,6 @@
-# 🏛️ Ag-Bash Architecture: Project Nexus (v1.5.0)
+# 🏛️ Ag-Bash Architecture: Project Nexus Prime (v2.0.0)
 
-This document provides a deep dive into the high-performance architectural components introduced in the **v1.5.0 "Nexus"** release.
+This document provides a deep dive into the high-performance architectural components introduced in the **v2.0.0 "Nexus Prime"** release.
 
 ---
 
@@ -16,7 +16,8 @@ graph TD
     subgraph "Nexus Core Engine"
         Interpreter --> Parser["Tree-sitter Parser"]
         Parser --> ASTCache["ASTCache (LRU)"]
-        Interpreter --> Accounting["Resource Accounting (CPU/Mem)"]
+        Interpreter --> Semantic["Semantic Intelligence Engine"]
+        Interpreter --> Accounting["Resource Accounting (CPU/Mem/Net)"]
         Interpreter --> SharedBus["SharedStateBus"]
     end
     
@@ -69,7 +70,7 @@ The `SharedStateBus` is a singleton event bus that allows different runtimes to 
 
 ## 🛡️ Resource Governance & Accounting
 
-Ag-Bash v1.5.0 introduces strict **Resource Accounting** to prevent runaway compute or memory exhaustion in agentic loops.
+Ag-Bash v2.0.0 introduces hardened **Resource Accounting** to prevent runaway compute, memory, or network exhaustion in agentic loops.
 
 ### Performance Accounting
 
@@ -77,6 +78,20 @@ The `Interpreter` now accounts for resources in real-time:
 
 - **Memory Tracking**: Estimates total object graph size during evaluation. If memory exceeds `maxMemoryAccountingBytes` (default 50MB), execution is aborted with an `ExecutionLimitError`.
 - **CPU Time**: Tracks total execution time in milliseconds. If a script exceeds `maxCpuMs` (default 30s), the process is forcefully terminated.
+- **Network Traffic**: Monitors total bytes sent/received via `curl`. Exceeding `maxNetworkTrafficBytes` (default 100MB) triggers immediate cancellation.
+- **Agentic Nesting**: Prevents recursive agent loops by enforcing a maximum sub-agent depth via `maxAgentNesting` (default 3).
+
+---
+
+## 🔍 Semantic Intelligence Engine
+
+Nexus Prime introduces a native semantic analysis layer built directly into the shell evaluation loop.
+
+### Capabilities
+
+- **Command Explanation**: The `ag-explain` tool utilizes the Tree-sitter AST to provide structural breakdowns of complex pipelines, identifying flags, redirections, and subshells.
+- **Symbol Indexing**: Global symbol discovery via `ag-find-symbol` allows agents to map function definitions and variable usages across the entire virtual filesystem.
+- **Contextual Metadata**: `ag-hover` provides real-time documentation and type-hints for built-in and user-defined symbols.
 
 ---
 

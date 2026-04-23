@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { Bash } from "./Bash.js";
 import { InMemoryFs } from "./fs/in-memory-fs/index.js";
 
@@ -7,7 +7,7 @@ describe("State Management (Phase 7)", () => {
 
   beforeEach(() => {
     bash = new Bash({
-      parserEngine: 'legacy',
+      parserEngine: "legacy",
       fs: new InMemoryFs({
         "/file1.txt": "initial",
       }),
@@ -36,20 +36,22 @@ describe("State Management (Phase 7)", () => {
     // Verify restoration
     expect(await bash.fs.readFile("/file1.txt")).toBe("initial");
     expect(await bash.fs.exists("/file2.txt")).toBe(false);
-    
+
     // Check env restoration
     const res = await bash.exec("echo $VAR1; echo $VAR2");
     expect(res.stdout).toBe("initial\n\n");
   });
 
   it("should throw error for non-existent snapshot", async () => {
-    await expect(bash.restoreSnapshot("ghost")).rejects.toThrow("Snapshot 'ghost' not found");
+    await expect(bash.restoreSnapshot("ghost")).rejects.toThrow(
+      "Snapshot 'ghost' not found",
+    );
   });
 
   it("should handle multiple snapshots", async () => {
     await bash.saveSnapshot("s1");
     await bash.fs.writeFile("/s1.txt", "s1");
-    
+
     await bash.saveSnapshot("s2");
     await bash.fs.writeFile("/s2.txt", "s2");
 
