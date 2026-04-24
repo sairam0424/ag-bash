@@ -6,29 +6,62 @@ import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 
 const agConvertHelp = {
-  name: "ag-convert v2.1.0 (Hyperion-Debug)",
-  summary: "Hybrid high-fidelity document-to-markdown converter (Hyperion)",
+  name: "ag-convert v2.3.0 (Hyperion Phase 4: Visual Intelligence)",
+  summary: "Intelligent document and image-to-markdown converter with AI vision",
   usage: "ag-convert [OPTIONS] <FILE>",
   description: [
-    "Convert any document (PDF, DOCX, XLSX, Images) to Markdown using a hybrid",
-    "routing engine powered by IBM Docling and Microsoft MarkItDown.",
+    "Convert documents using smart routing between IBM Docling (precision) and",
+    "Microsoft MarkItDown (speed). Phase 4 adds AI-powered visual intelligence",
+    "for images with multi-provider LLM support and specialized vision modes.",
+    "",
+    "Smart Routing Criteria:",
+    "  - PDFs >1MB or with tables → Docling (high precision)",
+    "  - Images, Office docs, simple files → MarkItDown (fast)",
+    "",
+    "Phase 4 Visual Intelligence:",
+    "  - Multi-provider LLM support (OpenAI, Anthropic, Google, Local)",
+    "  - Specialized vision modes (OCR, diagram, chart, UI analysis)",
+    "  - Custom vision prompts for tailored image descriptions",
     "",
     "This is a 'superpower' command that requires a host Python environment",
     "with 'docling' and 'markitdown' installed.",
   ],
   options: [
+    "    --analyze         Show complexity analysis without converting",
     "    --engine <auto|docling|markitdown>",
-    "                      Select conversion engine (default: auto)",
-    "    --high-fidelity   Favor structural precision (Docling) for tables/PDFs",
+    "                      Override smart routing (default: auto)",
+    "    --high-fidelity   Favor precision over speed (influences routing)",
     "    --json            Output raw structured JSON instead of Markdown",
+    "",
+    "  Phase 4: Visual Intelligence",
+    "    --describe-images Use LLM to describe images",
+    "    --llm-provider <openai|anthropic|google|local>",
+    "                      LLM provider (default: openai)",
+    "    --llm-model <name>",
+    "                      Specific model (e.g., gpt-4o, claude-3-5-sonnet)",
+    "    --vision-mode <default|ocr|diagram|chart|screenshot|document|technical>",
+    "                      Prompt template for image analysis",
+    "    --vision-prompt <text>",
+    "                      Custom vision prompt (overrides --vision-mode)",
+    "",
+    "  Other",
     "    --setup           Attempt to install required Python dependencies",
     "    --help            Display this help and exit",
   ],
   examples: [
-    "ag-convert report.pdf",
-    "ag-convert data.xlsx --high-fidelity",
-    "ag-convert --engine markitdown image.png",
-    "ag-convert --setup",
+    "# Basic conversion",
+    "ag-convert report.pdf                    # Auto-selects best engine",
+    "ag-convert data.xlsx --analyze           # Show complexity score",
+    "",
+    "# Phase 4: Visual Intelligence",
+    "ag-convert photo.jpg --describe-images   # AI-powered image description",
+    "ag-convert diagram.png --describe-images --vision-mode diagram",
+    "ag-convert chart.png --vision-mode chart --llm-provider anthropic",
+    "ag-convert scan.jpg --vision-mode ocr    # Extract text from image",
+    "ag-convert ui.png --vision-mode screenshot --llm-model claude-3-5-sonnet",
+    "",
+    "# Setup",
+    "ag-convert --setup                       # Install dependencies",
   ],
 };
 
@@ -47,6 +80,12 @@ export const agConvertCommand: Command = {
     let engine = "auto";
     let highFidelity = false;
     let useJson = false;
+    let analyze = false;
+    let describeImages = false;
+    let llmProvider = "openai";
+    let llmModel: string | null = null;
+    let visionMode = "default";
+    let visionPrompt: string | null = null;
     const files: string[] = [];
 
     for (let i = 0; i < args.length; i++) {
@@ -57,6 +96,18 @@ export const agConvertCommand: Command = {
         highFidelity = true;
       } else if (arg === "--json") {
         useJson = true;
+      } else if (arg === "--analyze") {
+        analyze = true;
+      } else if (arg === "--describe-images") {
+        describeImages = true;
+      } else if (arg === "--llm-provider") {
+        llmProvider = args[++i];
+      } else if (arg === "--llm-model") {
+        llmModel = args[++i];
+      } else if (arg === "--vision-mode") {
+        visionMode = args[++i];
+      } else if (arg === "--vision-prompt") {
+        visionPrompt = args[++i];
       } else if (!arg.startsWith("-")) {
         files.push(arg);
       }
@@ -122,6 +173,22 @@ export const agConvertCommand: Command = {
     ];
     if (highFidelity) pythonArgs.push("--high-fidelity");
     if (useJson) pythonArgs.push("--json");
+    if (analyze) pythonArgs.push("--analyze");
+    if (describeImages) pythonArgs.push("--describe-images");
+
+    // Phase 4: Visual Intelligence parameters
+    if (llmProvider && describeImages) {
+      pythonArgs.push("--llm-provider", llmProvider);
+    }
+    if (llmModel && describeImages) {
+      pythonArgs.push("--llm-model", llmModel);
+    }
+    if (visionMode && describeImages) {
+      pythonArgs.push("--vision-mode", visionMode);
+    }
+    if (visionPrompt && describeImages) {
+      pythonArgs.push("--vision-prompt", visionPrompt);
+    }
 
     try {
       const result = spawnSync(pythonExe, pythonArgs, {

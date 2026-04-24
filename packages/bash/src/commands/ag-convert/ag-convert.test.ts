@@ -97,7 +97,17 @@ describe("ag-convert command", () => {
       const result = await env.exec("ag-convert --help");
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("v2.1.0");
+      expect(result.stdout).toContain("v2.2.0");
+    });
+
+    it("should show smart routing information in help", async () => {
+      const env = new Bash();
+      const result = await env.exec("ag-convert --help");
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Smart Routing");
+      expect(result.stdout).toContain("--analyze");
+      expect(result.stdout).toContain("--describe-images");
     });
   });
 
@@ -214,6 +224,63 @@ describe("ag-convert command", () => {
       // Long notes should be preserved
       expect(result.stdout).toContain("Senior Developer with focus on WASM and AI Integration");
       expect(result.stdout).toContain("ML Researcher working on the Hyperion Document Intelligence layer");
+    });
+  });
+
+  describe("smart routing (v2.2.0)", () => {
+    it("should show complexity analysis with --analyze flag", async () => {
+      const env = new Bash();
+      const result = await env.exec(`ag-convert ${testCsvPath} --analyze`);
+
+      expect(result.exitCode).toBe(0);
+      // Should output JSON
+      expect(() => JSON.parse(result.stdout)).not.toThrow();
+
+      const analysis = JSON.parse(result.stdout);
+      expect(analysis).toHaveProperty("file_size_mb");
+      expect(analysis).toHaveProperty("complexity_score");
+      expect(analysis).toHaveProperty("recommended_engine");
+    });
+
+    it("should recommend markitdown for small CSV", async () => {
+      const env = new Bash();
+      const result = await env.exec(`ag-convert ${testCsvPath} --analyze`);
+
+      expect(result.exitCode).toBe(0);
+      const analysis = JSON.parse(result.stdout);
+
+      // Small CSV should have low complexity
+      expect(analysis.complexity_score).toBeLessThan(5);
+      expect(analysis.recommended_engine).toBe("markitdown");
+    });
+
+    it("should use smart routing by default (auto engine)", async () => {
+      const env = new Bash();
+      // Without --engine flag, should use auto (smart routing)
+      const result = await env.exec(`ag-convert ${testCsvPath}`);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("John Doe");
+    });
+
+    it("should respect --engine override with smart routing", async () => {
+      const env = new Bash();
+      // Even though small CSV would route to markitdown,
+      // explicit --engine docling should override
+      const result = await env.exec(`ag-convert ${testCsvPath} --engine docling`);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("John Doe");
+    });
+
+    it("should work with --analyze and --json together", async () => {
+      const env = new Bash();
+      const result = await env.exec(`ag-convert ${testCsvPath} --analyze`);
+
+      expect(result.exitCode).toBe(0);
+      // Analyze always outputs JSON
+      const analysis = JSON.parse(result.stdout);
+      expect(analysis).toBeDefined();
     });
   });
 });
