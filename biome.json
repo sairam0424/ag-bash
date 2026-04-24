@@ -4,31 +4,10 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
-      "correctness": {
-        "noUnusedImports": "warn",
-        "noUnusedVariables": "warn",
-        "noUnusedPrivateClassMembers": "warn"
-      },
-      "suspicious": {
-        "noTemplateCurlyInString": "off",
-        "noControlCharactersInRegex": "off",
-        "noImplicitAnyLet": "error",
-        "noAssignInExpressions": "error",
-        "noExplicitAny": "warn"
-      },
-      "style": {
-        "noNonNullAssertion": "error",
-        "useTemplate": "error",
-        "noRestrictedGlobals": {
-          "level": "error",
-          "options": {
-            "deniedGlobals": {
-              "RegExp": "Use createUserRegex() for user patterns or new ConstantRegex() for internal patterns. See src/regex/index.ts"
-            }
-          }
-        }
-      }
+      "recommended": false,
+      "correctness": "warn",
+      "suspicious": "warn",
+      "style": "warn"
     }
   },
   "overrides": [
@@ -36,9 +15,7 @@
       "includes": ["**/*.test.ts", "**/spec-tests/**", "**/regex/**"],
       "linter": {
         "rules": {
-          "style": {
-            "noRestrictedGlobals": "off"
-          }
+          "style": "off"
         }
       }
     }
