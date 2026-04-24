@@ -16,7 +16,7 @@ import type { BashToolbox } from "./BashToolbox.js";
  */
 export class AgenticHealer {
   constructor(
-    private toolbox: BashToolbox | undefined,
+    private toolbox: BashToolbox | undefined = undefined,
     private config: AgenticHealerConfig = { enableHeuristics: true },
   ) {}
 
