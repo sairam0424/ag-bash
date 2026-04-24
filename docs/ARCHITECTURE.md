@@ -1,6 +1,6 @@
-# 🏛️ Ag-Bash Architecture: Project Nexus Prime (v2.0.0)
+# 🏛️ Ag-Bash Architecture: Project V-Next (v2.4.0)
 
-This document provides a deep dive into the high-performance architectural components introduced in the **v2.0.0 "Nexus Prime"** release.
+This document provides a deep dive into the high-performance architectural components introduced in the **v2.4.0 "Project V-Next"** and **v2.0.0 "Nexus Prime"** releases.
 
 ---
 
@@ -19,6 +19,7 @@ graph TD
         Interpreter --> Semantic["Semantic Intelligence Engine"]
         Interpreter --> Accounting["Resource Accounting (CPU/Mem/Net)"]
         Interpreter --> SharedBus["SharedStateBus"]
+        Interpreter --> Events["EventEmitter (Observability)"]
     end
     
     subgraph "Runtimes"
@@ -48,6 +49,7 @@ The `ASTCache` is a global LRU (Least Recently Used) cache that stores parsed Tr
 
 - **Keying**: Input script strings are hashed using SHA-256 to create unique cache keys.
 - **TTL**: Entries have a default TTL of 1 hour to prevent stale state in dynamic scripts.
+
 - **Eviction**: A fixed memory footprint (default 100 entries) ensures the cache doesn't grow unbounded.
 
 ---
@@ -83,6 +85,36 @@ The `Interpreter` now accounts for resources in real-time:
 
 ---
 
+## 📡 Tooling 2.0: High-Fidelity Observability
+
+Ag-Bash v2.4.0 introduces a standard **EventEmitter** interface for the `Bash` class, enabling real-time integration with external orchestrators and IDEs.
+
+### Tool Lifecycle Events
+
+The `BashToolbox` now emits structured events during tool execution:
+
+- `tool:start`: Emitted before tool validation. Includes `toolName` and `args`.
+- `tool:progress`: Emitted during long-running tool execution (if supported by the tool).
+- `tool:end`: Emitted after tool completion. Includes `duration`, `status`, and `resultSummary`.
+
+These hooks allow host applications to drive UI progress bars, performance telemetry, and audit logs without polling the interpreter state.
+
+---
+
+## 🩹 Agentic Healer 2.0: Semantic Discovery
+
+The `AgenticHealer` has been refactored to be **environment-aware**, leveraging the full power of the tool registry for recovery.
+
+### Tool-Aware Remediation
+
+When a shell command fails, the healer doesn't just suggest text fixes. It now performs a **Semantic Discovery** pass:
+
+1. **Failure Analysis**: Captures `stderr` and exit codes.
+2. **Registry Scoring**: Uses a multi-keyword semantic scoring engine to find tools in the registry that match the failure context (e.g., `no such file` -> `analyze_code` or `ag-find-symbol`).
+3. **Structured Remediation**: Provides the agent with a prioritized list of executable tools to fix the environment state.
+
+---
+
 ## 🔍 Semantic Intelligence Engine
 
 Nexus Prime introduces a native semantic analysis layer built directly into the shell evaluation loop.
@@ -98,6 +130,7 @@ Nexus Prime introduces a native semantic analysis layer built directly into the 
 ## 📁 Virtual Filesystem (OverlayFS)
 
 Ag-Bash utilizes an **Overlay Filesystem (CoW)** to ensure host safety.
+
 - **Lower Layer**: Your actual project files (Read-only).
 - **Upper Layer**: An ephemeral, in-memory layer for all writes.
 - **Resolution**: Filename lookups merge these layers, giving the agent a seamless view while protecting the underlying disk.
