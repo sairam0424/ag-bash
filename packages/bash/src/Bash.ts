@@ -125,6 +125,17 @@ export interface JavaScriptConfig {
   bootstrap?: string;
 }
 
+/**
+ * Interface for interactive permission approval.
+ */
+export interface PermissionHandler {
+  /**
+   * Ask the user for permission.
+   * Returns true if granted, false otherwise.
+   */
+  ask(message: string): Promise<boolean>;
+}
+
 export interface BashOptions {
   files?: InitialFiles;
   env?: Record<string, string>;
@@ -295,6 +306,14 @@ export interface BashOptions {
    */
   agentic?: boolean;
   /**
+   * Healer configuration for automatic troubleshooting.
+   */
+  healer?: AgenticHealerConfig;
+  /**
+   * Optional permission handler for interactive approval.
+   */
+  permissionHandler?: PermissionHandler;
+  /**
    * Configuration for the agentic healer.
    */
   agenticConfig?: AgenticHealerConfig;
@@ -421,8 +440,10 @@ export class Bash {
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
   private snapshots: Map<string, BashSnapshot> = new Map();
+  public readonly options: BashOptions;
 
   constructor(options: BashOptions = {}) {
+    this.options = options;
     this.nestingDepth = options.nestingDepth ?? 0;
     this.toolbox = new BashToolbox();
     this.initLsp();
