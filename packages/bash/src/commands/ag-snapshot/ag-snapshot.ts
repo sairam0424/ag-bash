@@ -52,10 +52,13 @@ export const agSnapshotCommand: Command = {
             id: snapshotId,
             timestamp: Date.now(),
             cwd: ctx.cwd,
-            env: Object.fromEntries(ictx.state.env),
-            functions: Object.fromEntries(
-              Array.from(ictx.state.functions.entries() as [string, any][]).map(
-                ([name, node]) => [name, node],
+            env: Object.assign(Object.create(null), Object.fromEntries(ictx.state.env)),
+            functions: Object.assign(
+              Object.create(null),
+              Object.fromEntries(
+                Array.from(ictx.state.functions.entries() as [string, any][]).map(
+                  ([name, node]) => [name, node],
+                ),
               ),
             ),
             fs: fsSnapshot,

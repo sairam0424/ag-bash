@@ -74,8 +74,10 @@ export class DebuggerBridge {
   public getInspectState(state: InterpreterState): any {
     return {
       cwd: state.cwd,
-      env: Object.fromEntries(state.env),
-      localScopes: state.localScopes.map((s) => Object.fromEntries(s)),
+      env: Object.assign(Object.create(null), Object.fromEntries(state.env)),
+      localScopes: state.localScopes.map((s) =>
+        Object.assign(Object.create(null), Object.fromEntries(s)),
+      ),
       lastExitCode: state.lastExitCode,
     };
   }
