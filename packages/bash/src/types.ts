@@ -221,7 +221,6 @@ export interface CommandContext {
   sessionId?: string;
   /** Reference to the parent Bash instance (for service access) */
   // biome-ignore lint/suspicious/noExplicitAny: Reference to circular Bash instance
-  // biome-ignore lint/suspicious/noExplicitAny: Parent reference
   bash?: any;
 }
 

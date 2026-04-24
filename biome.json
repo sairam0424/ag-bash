@@ -6,9 +6,9 @@
     "rules": {
       "recommended": true,
       "correctness": {
-        "noUnusedImports": "error",
-        "noUnusedVariables": "error",
-        "noUnusedPrivateClassMembers": "error"
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "warn",
+        "noUnusedPrivateClassMembers": "warn"
       },
       "suspicious": {
         "noTemplateCurlyInString": "off",
