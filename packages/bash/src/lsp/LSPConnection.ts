@@ -1,4 +1,4 @@
-import { ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 
 /**
@@ -7,14 +7,17 @@ import { EventEmitter } from "node:events";
 export class LSPConnection extends EventEmitter {
   private process: ChildProcess;
   private idCounter = 0;
-  private pendingRequests = new Map<number, { resolve: Function; reject: Function }>();
+  private pendingRequests = new Map<
+    number,
+    { resolve: Function; reject: Function }
+  >();
   private buffer = Buffer.alloc(0);
 
   constructor(command: string, args: string[]) {
     super();
     this.process = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
     this.process.on("error", (err: any) => {
-      // If the language server isn't installed (ENOENT), silence the warning 
+      // If the language server isn't installed (ENOENT), silence the warning
       // as it's expected in many environments. For other errors, log it.
       if (err.code !== "ENOENT") {
         console.warn(`LSP process error: ${err.message}`);
@@ -76,7 +79,11 @@ export class LSPConnection extends EventEmitter {
 
       if (this.buffer.length < headerLength + contentLength) break;
 
-      const messageJson = this.buffer.toString("utf-8", headerLength, headerLength + contentLength);
+      const messageJson = this.buffer.toString(
+        "utf-8",
+        headerLength,
+        headerLength + contentLength,
+      );
       this.buffer = this.buffer.subarray(headerLength + contentLength);
 
       try {

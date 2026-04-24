@@ -7,7 +7,8 @@ import { hasHelpFlag, showHelp } from "../help.js";
 
 const agConvertHelp = {
   name: "ag-convert v2.3.0 (Hyperion Phase 4: Visual Intelligence)",
-  summary: "Intelligent document and image-to-markdown converter with AI vision",
+  summary:
+    "Intelligent document and image-to-markdown converter with AI vision",
   usage: "ag-convert [OPTIONS] <FILE>",
   description: [
     "Convert documents using smart routing between IBM Docling (precision) and",
@@ -116,7 +117,8 @@ export const agConvertCommand: Command = {
     if (files.length === 0) {
       return {
         stdout: "",
-        stderr: "ag-convert: missing file operand\nTry 'ag-convert --help' for more information.\n",
+        stderr:
+          "ag-convert: missing file operand\nTry 'ag-convert --help' for more information.\n",
         exitCode: 2,
       };
     }
@@ -128,7 +130,7 @@ export const agConvertCommand: Command = {
 
     // For host-side tools like Hyperion, we need to translate the virtual path back to a real host path
     let realFilePath = virtualPath;
-    
+
     if (typeof ctx.fs.toRealPath === "function") {
       const resolved = ctx.fs.toRealPath(virtualPath);
       if (resolved) {
@@ -160,17 +162,17 @@ export const agConvertCommand: Command = {
     // Resolve the absolute path of python3 to avoid shim mismatches
     let pythonExe = "python3";
     try {
-      const resolve = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], { encoding: "utf-8" });
+      const resolve = spawnSync(
+        "python3",
+        ["-c", "import sys; print(sys.executable)"],
+        { encoding: "utf-8" },
+      );
       if (resolve.status === 0 && resolve.stdout.trim()) {
         pythonExe = resolve.stdout.trim();
       }
     } catch (e) {}
 
-    const pythonArgs = [
-      bridgePath,
-      realFilePath,
-      "--engine", engine
-    ];
+    const pythonArgs = [bridgePath, realFilePath, "--engine", engine];
     if (highFidelity) pythonArgs.push("--high-fidelity");
     if (useJson) pythonArgs.push("--json");
     if (analyze) pythonArgs.push("--analyze");
@@ -194,7 +196,7 @@ export const agConvertCommand: Command = {
       const result = spawnSync(pythonExe, pythonArgs, {
         encoding: "utf-8",
         maxBuffer: 50 * 1024 * 1024, // 50MB
-        env: { ...process.env }
+        env: { ...process.env },
       });
 
       if (result.error) {
@@ -222,12 +224,16 @@ export const agConvertCommand: Command = {
 
 function setupDependencies(): ExecResult {
   console.log("Hyperion Setup: Installing docling and markitdown using uv...");
-  
+
   // Try to find uv in common locations if not in PATH
   // Resolve the absolute path of python3 to avoid shim mismatches
   let pythonExe = "python3";
   try {
-    const resolve = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], { encoding: "utf-8" });
+    const resolve = spawnSync(
+      "python3",
+      ["-c", "import sys; print(sys.executable)"],
+      { encoding: "utf-8" },
+    );
     if (resolve.status === 0 && resolve.stdout.trim()) {
       pythonExe = resolve.stdout.trim();
     }
@@ -235,14 +241,14 @@ function setupDependencies(): ExecResult {
 
   console.log(`Hyperion Setup: Targeting Python at ${pythonExe}`);
   console.log("Installing docling and markitdown...");
-  
+
   const commonPaths = [
     "/opt/homebrew/bin/uv",
     "/usr/local/bin/uv",
     "/opt/homebrew/Caskroom/miniconda/base/bin/uv",
-    process.env.HOME + "/.cargo/bin/uv"
+    process.env.HOME + "/.cargo/bin/uv",
   ];
-  
+
   // Try uv first if available, otherwise fallback to pip
   let uvPath = "uv";
   let foundUv = false;
@@ -264,23 +270,48 @@ function setupDependencies(): ExecResult {
   let result;
   if (foundUv) {
     console.log(`Using uv at: ${uvPath}`);
-    result = spawnSync(uvPath, ["pip", "install", "--system", "--python", pythonExe, "docling", "markitdown"], { 
-      encoding: "utf-8",
-      shell: true,
-      env: { ...process.env }
-    });
+    result = spawnSync(
+      uvPath,
+      [
+        "pip",
+        "install",
+        "--system",
+        "--python",
+        pythonExe,
+        "docling",
+        "markitdown",
+      ],
+      {
+        encoding: "utf-8",
+        shell: true,
+        env: { ...process.env },
+      },
+    );
   }
 
   if (!result || result.status !== 0) {
     if (result && result.status !== 0) {
-      console.log(`uv failed with exit code ${result.status}. Error: ${result.stderr}`);
+      console.log(
+        `uv failed with exit code ${result.status}. Error: ${result.stderr}`,
+      );
     }
     console.log(`Trying ${pythonExe} -m pip install...`);
-    result = spawnSync(pythonExe, ["-m", "pip", "install", "docling", "markitdown", "--break-system-packages"], { 
-      encoding: "utf-8",
-      shell: true,
-      env: { ...process.env }
-    });
+    result = spawnSync(
+      pythonExe,
+      [
+        "-m",
+        "pip",
+        "install",
+        "docling",
+        "markitdown",
+        "--break-system-packages",
+      ],
+      {
+        encoding: "utf-8",
+        shell: true,
+        env: { ...process.env },
+      },
+    );
   }
 
   if (result.status === 0) {

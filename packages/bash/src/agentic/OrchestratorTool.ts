@@ -11,7 +11,10 @@ export const SpawnTool: ToolboxTool = {
   parameters: z.object({
     name: z.string().describe("Unique name for the sub-agent."),
     instruction: z.string().describe("Initial instruction for the sub-agent."),
-    toolSubset: z.array(z.string()).optional().describe("Names of tools allowed for this agent."),
+    toolSubset: z
+      .array(z.string())
+      .optional()
+      .describe("Names of tools allowed for this agent."),
     cwd: z.string().optional().describe("Working directory for the sub-agent."),
   }),
   execute: async (bash, args) => {
@@ -25,7 +28,7 @@ export const SpawnTool: ToolboxTool = {
 
       // Execute initial instruction
       const result = await subAgent.exec(args.instruction);
-      
+
       return {
         agent: args.name,
         status: "spawned",

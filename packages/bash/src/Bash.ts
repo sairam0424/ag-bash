@@ -12,7 +12,6 @@ import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
 import { AgenticHealer } from "./agentic/agentic-healer.js";
-import { LSPManager } from "./lsp/LSPManager.js";
 import { BashToolbox } from "./agentic/BashToolbox.js";
 import type { AgenticHealerConfig } from "./agentic/types.js";
 import {
@@ -55,6 +54,7 @@ import {
   type InterpreterState,
 } from "./interpreter/index.js";
 import { type ExecutionLimits, resolveLimits } from "./limits.js";
+import { LSPManager } from "./lsp/LSPManager.js";
 import { SemanticEngine } from "./lsp/semantic-engine.js";
 import { WorkspaceIndexer } from "./lsp/WorkspaceIndexer.js";
 import {
@@ -74,7 +74,6 @@ import {
 } from "./security/defense-in-depth-box.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
 import { SessionManager } from "./services/SessionManager.js";
-import { SharedStateBus } from "./services/SharedStateBus.js";
 import {
   applyStateDelta,
   type BashDelta,

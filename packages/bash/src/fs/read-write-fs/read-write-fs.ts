@@ -141,7 +141,7 @@ export class ReadWriteFs implements IFileSystem {
     const normalized = normalizePath(virtualPath);
     const realPath = nodePath.join(this.root, normalized);
     const resolved = nodePath.resolve(realPath);
-    
+
     // Safety check: ensure it's within root (canonicalRoot is safer check)
     try {
       const canonical = fs.realpathSync(resolved);

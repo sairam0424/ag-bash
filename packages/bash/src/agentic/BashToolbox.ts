@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Bash } from "../Bash.js";
-import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
 import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
+import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
 import { LspTool } from "../lsp/LspTool.js";
 import { SpawnTool } from "./OrchestratorTool.js";
 
@@ -135,7 +135,7 @@ export class BashToolbox {
           // Staleness check
           const state = bash.getFileState(path);
           const currentContent = await bash.readFileDirect(path);
-          
+
           if (state && state.content !== currentContent) {
             return `Stale Edit Error: The file ${path} has changed since you last read it. Please read it again before applying edits.`;
           }

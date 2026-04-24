@@ -1,7 +1,7 @@
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { Bash } from "../../Bash.js";
-import { writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Bash } from "../../Bash.js";
 
 describe("ag-convert command", () => {
   const testCsvPath = join(process.cwd(), "test_ag_convert_data.csv");
@@ -26,7 +26,9 @@ describe("ag-convert command", () => {
   describe("basic conversion", () => {
     it("should convert CSV with high-fidelity flag", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --high-fidelity`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --high-fidelity`,
+      );
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("ID");
@@ -49,7 +51,9 @@ describe("ag-convert command", () => {
 
     it("should respect --engine markitdown flag", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --engine markitdown`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --engine markitdown`,
+      );
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("John Doe");
@@ -58,7 +62,9 @@ describe("ag-convert command", () => {
 
     it("should respect --engine docling flag", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --engine docling`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --engine docling`,
+      );
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("John Doe");
@@ -67,7 +73,9 @@ describe("ag-convert command", () => {
 
     it("should output JSON when --json flag is used with docling", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --json --engine docling`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --json --engine docling`,
+      );
 
       expect(result.exitCode).toBe(0);
       // Should be valid JSON
@@ -132,7 +140,9 @@ describe("ag-convert command", () => {
     it("should handle invalid engine gracefully", async () => {
       const env = new Bash();
       // Invalid engine values are passed to argparse which will error
-      const result = await env.exec(`ag-convert ${testCsvPath} --engine invalid_engine`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --engine invalid_engine`,
+      );
 
       // Python argparse will catch this
       expect(result.exitCode).not.toBe(0);
@@ -162,7 +172,9 @@ describe("ag-convert command", () => {
   describe("option combinations", () => {
     it("should handle --high-fidelity with --engine docling", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --high-fidelity --engine docling`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --high-fidelity --engine docling`,
+      );
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("John Doe");
@@ -170,7 +182,9 @@ describe("ag-convert command", () => {
 
     it("should handle --high-fidelity with --json", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --high-fidelity --json`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --high-fidelity --json`,
+      );
 
       expect(result.exitCode).toBe(0);
       // Should be valid JSON
@@ -179,7 +193,9 @@ describe("ag-convert command", () => {
 
     it("should handle all flags together", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --engine docling --high-fidelity --json`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --engine docling --high-fidelity --json`,
+      );
 
       expect(result.exitCode).toBe(0);
       // Should be valid JSON
@@ -190,17 +206,21 @@ describe("ag-convert command", () => {
   describe("output format validation", () => {
     it("should produce markdown table with proper formatting", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --high-fidelity`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --high-fidelity`,
+      );
 
       expect(result.exitCode).toBe(0);
       // Should contain table structure
       expect(result.stdout).toMatch(/\|.*\|/); // Contains pipe characters (table)
-      expect(result.stdout).toMatch(/[-]+/);    // Contains dashes (table separator)
+      expect(result.stdout).toMatch(/[-]+/); // Contains dashes (table separator)
     });
 
     it("should preserve data integrity", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --high-fidelity`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --high-fidelity`,
+      );
 
       expect(result.exitCode).toBe(0);
 
@@ -217,13 +237,19 @@ describe("ag-convert command", () => {
 
     it("should handle long text fields properly", async () => {
       const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --high-fidelity`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --high-fidelity`,
+      );
 
       expect(result.exitCode).toBe(0);
 
       // Long notes should be preserved
-      expect(result.stdout).toContain("Senior Developer with focus on WASM and AI Integration");
-      expect(result.stdout).toContain("ML Researcher working on the Hyperion Document Intelligence layer");
+      expect(result.stdout).toContain(
+        "Senior Developer with focus on WASM and AI Integration",
+      );
+      expect(result.stdout).toContain(
+        "ML Researcher working on the Hyperion Document Intelligence layer",
+      );
     });
   });
 
@@ -267,7 +293,9 @@ describe("ag-convert command", () => {
       const env = new Bash();
       // Even though small CSV would route to markitdown,
       // explicit --engine docling should override
-      const result = await env.exec(`ag-convert ${testCsvPath} --engine docling`);
+      const result = await env.exec(
+        `ag-convert ${testCsvPath} --engine docling`,
+      );
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("John Doe");

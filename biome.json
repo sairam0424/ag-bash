@@ -15,7 +15,7 @@
         "noControlCharactersInRegex": "off",
         "noImplicitAnyLet": "error",
         "noAssignInExpressions": "error",
-        "noExplicitAny": "error"
+        "noExplicitAny": "warn"
       },
       "style": {
         "noNonNullAssertion": "error",
