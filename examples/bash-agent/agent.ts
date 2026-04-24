@@ -9,6 +9,16 @@ import * as path from "node:path";
 import { streamText, stepCountIs } from "ai";
 import { Bash, OverlayFs, createBashTool } from "@ag-bash/bash";
 
+const colors = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+};
+
 export interface AgentRunner {
   chat(
     message: string,
@@ -56,21 +66,22 @@ export async function createAgent(
   });
 
   // [NEW in v2.4.0] High-fidelity tool observability
-  bash.on("tool:start", (data) => {
-    console.log(`\n${colors.dim}[Tool] Starting: ${colors.reset}${colors.yellow}${data.toolName}${colors.reset}`);
+  bash.on("tool:start", (data: any) => {
+    console.log(`\n${colors.dim}[Tool] Starting: ${colors.reset}${colors.yellow}${data.name}${colors.reset}`);
   });
 
-  bash.on("tool:progress", (data) => {
+  bash.on("tool:progress", (data: any) => {
     // Optional: Log progress for long-running tools
-    if (data.message) {
-      console.log(`${colors.dim}[Tool] Progress: ${data.message}${colors.reset}`);
+    const message = typeof data.progress === "string" ? data.progress : data.progress?.message;
+    if (message) {
+      console.log(`${colors.dim}[Tool] Progress: ${message}${colors.reset}`);
     }
   });
 
-  bash.on("tool:end", (data) => {
+  bash.on("tool:end", (data: any) => {
     const duration = data.duration ? `${data.duration}ms` : "unknown";
-    const status = data.status === "success" ? colors.green : colors.yellow;
-    console.log(`${colors.dim}[Tool] Completed: ${colors.reset}${status}${data.toolName}${colors.reset} ${colors.dim}(${duration})${colors.reset}\n`);
+    const status = data.result?.error ? colors.yellow : colors.green;
+    console.log(`${colors.dim}[Tool] Completed: ${colors.reset}${status}${data.name}${colors.reset} ${colors.dim}(${duration})${colors.reset}\n`);
   });
 
   const toolkit = createBashTool({
@@ -104,7 +115,7 @@ Help the user explore, search, and understand the contents.`,
       let fullText = "";
 
       const result = streamText({
-        model: "anthropic/claude-haiku-4.5",
+        model: "anthropic:claude-3-5-sonnet-latest",
         tools: { bash: toolkit.tools.bash },
         stopWhen: stepCountIs(50),
         messages: history,
