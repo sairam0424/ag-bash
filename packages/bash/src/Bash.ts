@@ -11,7 +11,7 @@
 import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { AgenticHealer } from "./agentic/agentic-healer.js";
 import { BashToolbox } from "./agentic/BashToolbox.js";
 import type { AgenticHealerConfig } from "./agentic/types.js";

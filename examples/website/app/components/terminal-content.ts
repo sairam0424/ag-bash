@@ -111,14 +111,13 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
-- **Project V-Next Suite**: (v2.4.0+) High-fidelity tool lifecycle observability, Agentic Healer 2.0, and semantic tool suggestions.
-- **Project Nexus Prime Agentic Suite**: (v2.0.0+) Surgical file editing (\`ag-edit\`), semantic diffs (\`ag-diff\`), snapshots (\`ag-snapshot\`), and semantic intelligence (\`ag-hover\`, \`ag-explain\`, \`ag-find-symbol\`, \`ag-todo\`).
-- **AST Performance Optimization**: (v1.5.0+) Global \`ASTCache\` (LRU) for high-frequency script execution.
-- **Inter-Runtime Persistence**: (v1.5.0+) Shared variable state between Bash, Python, and JS via \`SharedStateBus\`.
-- **Resource Governance**: (v2.0.0+) Hardened network traffic limits and agent nesting controls.
+- **Project V-Next Upgrade**: (v2.4.0+) High-fidelity tool lifecycle observability, Agentic Healer 2.0, and semantic tool suggestions.
+- **Project Nexus Prime Suite**: (v2.0.0+) Intelligent semantic analysis (\`ag-hover\`, \`ag-explain\`), symbol discovery (\`ag-find-symbol\`), and persistent project management (\`ag-todo\`).
+- **AST Performance Optimization**: (v2.0.0+) Global \`ASTCache\` (LRU) for high-frequency script execution.
+- **Inter-Runtime Persistence**: (v2.0.0+) Shared variable state between Bash, Python, and JS via \`SharedStateBus\`.
+- **Resource Governance**: (v2.0.0+) Hardened network traffic accounting, agent nesting limits, and memory monitoring.
 - **Agentic Healer 2.0**: (v2.4.0+) Tool-aware recovery loop with multi-keyword semantic scoring for automated remediation.
 - **High-Fidelity Observability**: (v2.4.0+) EventEmitter-driven tool tracking with \`tool:start\`, \`tool:progress\`, and \`tool:end\` hooks.
-- **Agentic Observability Loop**: Built-in failure analysis and self-correction suggestions for AI models.
 - **Tree-sitter AST Parser**: High-fidelity shell parsing for complex scripts and security analysis.
 - **Virtual Filesystem**: Choose between \`InMemoryFs\`, \`OverlayFs\` (COW), or \`ReadWriteFs\`.
 - **Integrated Runtimes**: Out-of-the-box support for \`jq\`, \`sqlite3\`, \`python3\` (WASM), and \`js-exec\` (QuickJS).
@@ -379,7 +378,7 @@ A sandboxed bash interpreter with an in-memory virtual filesystem. Use it when y
 
 ## For AI Agents
 
-If you're building an AI agent that needs a bash tool, use [\`@ag-bash/bash\`](https://github.com/sairam0424/ag-bash) which is optimized for @ag-bash/bash:
+If you're building an AI agent that needs a bash tool, use [\`@ag-bash/bash\`](https://github.com/ag-ai/@ag-bash/bash) which is optimized for @ag-bash/bash:
 
 \`\`\`sh
 npm install @ag-bash/bash
@@ -436,7 +435,7 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 **File operations**: \`basename\`, \`chmod\`, \`cp\`, \`dirname\`, \`du\`, \`file\`, \`find\`, \`ln\`, \`ls\`, \`mkdir\`, \`mv\`, \`od\`, \`pwd\`, \`readlink\`, \`rm\`, \`rmdir\`, \`split\`, \`stat\`, \`touch\`, \`tree\`
 
-**Utilities**: \`alias\`, \`base64\`, \`bash\`, \`clear\`, \`curl\`, \`date\`, \`diff\`, \`echo\`, \`env\`, \`expr\`, \`false\`, \`gzip\`, \`gunzip\`, \`hello\`, \`help\`, \`history\`, \`hostname\`, \`html-to-markdown\`, \`md5sum\`, \`printenv\`, \`printf\`, \`seq\`, \`sh\`, \`sha1sum\`, \`sha256sum\`, \`sleep\`, \`tar\`, \`tee\`, \`time\`, \`timeout\`, \`true\`, \`unalias\`, \`which\`, \`whoami\`, \`zcat\`
+**Utilities**: \`ag-analyze\`, \`ag-diff\`, \`ag-edit\`, \`ag-explain\`, \`ag-find-symbol\`, \`ag-hover\`, \`ag-snapshot\`, \`ag-todo\`, \`alias\`, \`base64\`, \`bash\`, \`clear\`, \`curl\`, \`date\`, \`diff\`, \`echo\`, \`env\`, \`expr\`, \`false\`, \`gzip\`, \`gunzip\`, \`hello\`, \`help\`, \`history\`, \`hostname\`, \`html-to-markdown\`, \`md5sum\`, \`printenv\`, \`printf\`, \`seq\`, \`sh\`, \`sha1sum\`, \`sha256sum\`, \`sleep\`, \`tar\`, \`tee\`, \`time\`, \`timeout\`, \`true\`, \`unalias\`, \`which\`, \`whoami\`, \`zcat\`
 
 All commands support \`--help\` for usage details.
 
@@ -655,6 +654,8 @@ const bash = new Bash({
     maxJqIterations: 10000,      // Max jq loop iterations
     maxSubstitutionDepth: 50,    // Max $() nesting depth
     maxHeredocSize: 10485760,    // Max heredoc size (10MB)
+    maxAgentNesting: 3,          // Max depth of ag-spawn/sub-agents
+    maxNetworkTrafficBytes: 104857600, // Max session network traffic (100MB)
   },
 });
 \`\`\`
@@ -783,8 +784,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the terminal.
 
 ## Links
 
-- **@ag-bash/bash**: https://github.com/sairam0424/ag-bash
-- **Ag-Bash Monorepo**: https://github.com/sairam0424/ag-bash
+- **@ag-bash/bash**: https://github.com/sairam0424/@ag-bash/bash
+- **@ag-bash/bash**: https://github.com/ag-ai/@ag-bash/bash
 - **AI SDK**: https://ai-sdk.dev
 - **xterm.js**: https://xtermjs.org
 `;
