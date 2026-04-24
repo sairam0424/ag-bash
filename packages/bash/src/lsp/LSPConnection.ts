@@ -13,6 +13,13 @@ export class LSPConnection extends EventEmitter {
   constructor(command: string, args: string[]) {
     super();
     this.process = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+    this.process.on("error", (err: any) => {
+      // If the language server isn't installed (ENOENT), silence the warning 
+      // as it's expected in many environments. For other errors, log it.
+      if (err.code !== "ENOENT") {
+        console.warn(`LSP process error: ${err.message}`);
+      }
+    });
 
     this.process.stdout?.on("data", (data) => this.handleData(data));
     this.process.stderr?.on("data", (data) => {

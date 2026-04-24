@@ -60,4 +60,9 @@ export const agenticLoaders: LazyCommandDef<CommandName>[] = [
     name: "ag-todo" as CommandName,
     load: async () => (await import("../ag-todo/ag-todo.js")).agTodoCommand,
   },
+  {
+    name: "ag-convert" as CommandName,
+    load: async () =>
+      (await import("../ag-convert/ag-convert.js")).agConvertCommand,
+  },
 ];

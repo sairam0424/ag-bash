@@ -265,7 +265,7 @@ export class OverlayFs implements IFileSystem {
    * Convert a virtual path to a real filesystem path.
    * Returns null if the path is not under the mount point or would escape the root.
    */
-  private toRealPath(virtualPath: string): string | null {
+  toRealPath(virtualPath: string): string | null {
     const normalized = normalizePath(virtualPath);
 
     // Check if path is under the mount point
@@ -274,7 +274,7 @@ export class OverlayFs implements IFileSystem {
       return null;
     }
 
-    const realPath = nodePath.join(this.root, relativePath);
+    const realPath = nodePath.join(this.root, relativePath.startsWith("/") ? relativePath.slice(1) : relativePath);
 
     // Security check: ensure path doesn't escape root
     const resolvedReal = nodePath.resolve(realPath);
@@ -364,7 +364,8 @@ export class OverlayFs implements IFileSystem {
     // of files outside the sandbox.
     // Validate only the parent directory since lstat doesn't follow the final component.
     // Use the canonical path for I/O to close the TOCTOU gap.
-    const canonical = this.resolveRealPathParent_(this.toRealPath(normalized));
+    const realPath = this.toRealPath(normalized);
+    const canonical = this.resolveRealPathParent_(realPath);
     if (!canonical) {
       return false;
     }
