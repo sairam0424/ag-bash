@@ -12,6 +12,7 @@ import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
 import { AgenticHealer } from "./agentic/agentic-healer.js";
+import { LSPManager } from "./lsp/LSPManager.js";
 import { BashToolbox } from "./agentic/BashToolbox.js";
 import type { AgenticHealerConfig } from "./agentic/types.js";
 import {
@@ -102,7 +103,10 @@ export interface FileState {
   timestamp: number;
   offset?: number;
   limit?: number;
+  isPartialView?: boolean;
 }
+
+export type BashMode = "execute" | "plan";
 
 export type { ExecutionLimits } from "./limits.js";
 
@@ -422,6 +426,7 @@ export class Bash {
   constructor(options: BashOptions = {}) {
     this.nestingDepth = options.nestingDepth ?? 0;
     this.toolbox = new BashToolbox();
+    this.initLsp();
     this.fs =
       options.fs instanceof MountableFs
         ? options.fs
@@ -572,6 +577,7 @@ export class Bash {
       readonlyVars: new Set(["SHELLOPTS", "BASHOPTS"]),
       // Hash table for PATH command lookup caching
       hashTable: new Map(),
+      mode: "execute",
     };
 
     // Initialize SHELLOPTS to reflect current shell options (initially empty string since all are false)
@@ -666,6 +672,62 @@ export class Bash {
     if (this.state.sessionId === sessionId) {
       this.state.sessionId = undefined;
     }
+  }
+
+  /**
+   * Sets the current mode of the shell (execute or plan).
+   */
+  public setMode(mode: BashMode): void {
+    this.state.mode = mode;
+    this.logger?.info("mode_change", { mode });
+  }
+
+  /**
+   * Gets the current mode of the shell.
+   */
+  public getMode(): BashMode {
+    return this.state.mode;
+  }
+
+  public get cwd(): string {
+    return this.state.cwd;
+  }
+
+  public get env(): Record<string, string> {
+    const res: Record<string, string> = {};
+    for (const [k, v] of this.state.env) {
+      res[k] = v;
+    }
+    return res;
+  }
+
+  private async initLsp(): Promise<void> {
+    const lsp = LSPManager.getInstance();
+    // Initialize TS server if available
+    await lsp.initServer("ts", "typescript-language-server", ["--stdio"]);
+    await lsp.initServer("js", "typescript-language-server", ["--stdio"]);
+  }
+
+  /**
+   * Updates the tracked state for a file.
+   */
+  public updateFileState(path: string, state: Partial<FileState>): void {
+    const existing = this.fileState.get(path) || {
+      content: "",
+      timestamp: Date.now(),
+    };
+    this.fileState.set(path, {
+      ...existing,
+      ...state,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Gets the tracked state for a file.
+   */
+  public getFileState(path: string): FileState | undefined {
+    return this.fileState.get(path);
   }
 
   registerCommand(command: Command): void {
@@ -1191,11 +1253,20 @@ export class Bash {
   }
 
   async readFileDirect(path: string): Promise<string> {
-    return this.fs.readFile(this.fs.resolvePath(this.state.cwd, path));
+    const content = await this.fs.readFile(path, "utf-8");
+    this.updateFileState(path, { content });
+    return content;
   }
 
   async writeFileDirect(path: string, content: string): Promise<void> {
-    await this.fs.writeFile(this.fs.resolvePath(this.state.cwd, path), content);
+    await this.fs.writeFile(path, content);
+    this.updateFileState(path, { content });
+
+    // Notify LSP of change
+    LSPManager.getInstance().sendNotification(path, "textDocument/didChange", {
+      textDocument: { uri: `file://${path}`, version: 1 },
+      contentChanges: [{ text: content }],
+    });
   }
 
   async listDirDirect(path: string): Promise<string[]> {

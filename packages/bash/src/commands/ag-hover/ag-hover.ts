@@ -68,7 +68,6 @@ export const agHoverCommand: Command = {
         };
       }
 
-      // @ts-expect-error
       const definition = ctx.bash.semanticEngine.findDefinition(symbolName);
       if (definition) {
         let output = `--- Hover Info for '${symbolName}' ---\n`;

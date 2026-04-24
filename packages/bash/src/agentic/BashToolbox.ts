@@ -1,14 +1,39 @@
 import { z } from "zod";
 import type { Bash } from "../Bash.js";
+import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
+import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
+import { LspTool } from "../lsp/LspTool.js";
+import { SpawnTool } from "./OrchestratorTool.js";
 
 /**
- * ToolboxTool definition.
+ * ToolboxTool definition with advanced lifecycle hooks.
  */
 export interface ToolboxTool {
   name: string;
   description: string;
   parameters: z.ZodObject<any>;
   execute: (bash: Bash, args: any) => Promise<any>;
+
+  /**
+   * Optional hook to validate input before execution.
+   */
+  validateInput?: (
+    bash: Bash,
+    args: any,
+  ) => Promise<{ result: boolean; message?: string }>;
+
+  /**
+   * Optional hook to check permissions before execution.
+   */
+  checkPermissions?: (
+    bash: Bash,
+    args: any,
+  ) => Promise<{ result: boolean; message?: string }>;
+
+  /**
+   * Optional hook for reporting progress during long-running operations.
+   */
+  onProgress?: (bash: Bash, progress: any) => void;
 }
 
 /**
@@ -32,9 +57,11 @@ export class BashToolbox {
       }),
       execute: async (bash, { path }) => {
         try {
-          return await bash.readFileDirect(path);
+          const content = await bash.fs.readFile(path, "utf-8");
+          bash.updateFileState(path, { content });
+          return content;
         } catch (error: any) {
-          return `Error reading file ${path}: ${error.message}`;
+          return `Error reading file: ${error.message}`;
         }
       },
     });
@@ -46,6 +73,16 @@ export class BashToolbox {
         path: z.string().describe("Absolute path to the file to write."),
         content: z.string().describe("The content to write to the file."),
       }),
+      checkPermissions: async (bash) => {
+        if (bash.getMode() === "plan") {
+          return {
+            result: false,
+            message:
+              "Cannot write files in plan mode. Switch to execute mode first.",
+          };
+        }
+        return { result: true };
+      },
       execute: async (bash, { path, content }) => {
         try {
           await bash.fs.mkdir("/.ag-bash", { recursive: true });
@@ -83,14 +120,32 @@ export class BashToolbox {
         target: z.string().describe("The exact text block to be replaced."),
         replacement: z.string().describe("The new text to insert instead."),
       }),
+      checkPermissions: async (bash) => {
+        if (bash.getMode() === "plan") {
+          return {
+            result: false,
+            message:
+              "Cannot edit files in plan mode. Switch to execute mode first.",
+          };
+        }
+        return { result: true };
+      },
       execute: async (bash, { path, target, replacement }) => {
         try {
-          await bash.fs.mkdir("/.ag-bash", { recursive: true });
-          const content = await bash.readFileDirect(path);
-          if (!content.includes(target)) {
+          // Staleness check
+          const state = bash.getFileState(path);
+          const currentContent = await bash.readFileDirect(path);
+          
+          if (state && state.content !== currentContent) {
+            return `Stale Edit Error: The file ${path} has changed since you last read it. Please read it again before applying edits.`;
+          }
+
+          if (!currentContent.includes(target)) {
             return `Error: target content not found in ${path}. Make sure it matches exactly, including whitespace.`;
           }
-          const newContent = content.replace(target, replacement);
+
+          const newContent = currentContent.replace(target, replacement);
+          await bash.fs.mkdir("/.ag-bash", { recursive: true });
           await bash.writeFileDirect(path, newContent);
           await bash.indexer.indexFile(path);
           await bash.saveIndex();
@@ -369,11 +424,8 @@ export class BashToolbox {
       parameters: z.object({}),
       execute: async (bash) => {
         return {
-          // @ts-expect-error
-          cwd: bash.state.cwd,
-          // @ts-expect-error
-          env: Array.from(bash.state.env.keys()),
-          // @ts-expect-error
+          cwd: (bash as any).state.cwd,
+          env: Array.from((bash as any).state.env.keys()),
           limits: bash.limits,
           version: "Ag-Bash vNext",
         };
@@ -533,6 +585,32 @@ export class BashToolbox {
     });
 
     this.registerTool({
+      name: "plan_enter",
+      description:
+        "Enter plan mode to design an approach before making changes.",
+      parameters: z.object({}),
+      execute: async (bash) => {
+        bash.setMode("plan");
+        return "Entered plan mode. You are now in read-only mode. Use plan_exit to return to execute mode when ready.";
+      },
+    });
+
+    this.registerTool({
+      name: "plan_exit",
+      description: "Exit plan mode and return to execution mode.",
+      parameters: z.object({}),
+      execute: async (bash) => {
+        bash.setMode("execute");
+        return "Exited plan mode. You can now make changes to the codebase.";
+      },
+    });
+
+    this.registerTool(WebSearchTool);
+    this.registerTool(WebFetchTool);
+    this.registerTool(LspTool);
+    this.registerTool(SpawnTool);
+
+    this.registerTool({
       name: "list_mcp_tools",
       description: "List all tools available via connected MCP servers.",
       parameters: z.object({}),
@@ -602,10 +680,59 @@ export class BashToolbox {
       result[tool.name] = {
         description: tool.description,
         inputSchema: this.zodToJsonSchema(tool.parameters),
-        execute: (args: any) => tool.execute(bash, args),
+        execute: (args: any) => this.callTool(bash, tool.name, args),
       };
     }
     return result;
+  }
+
+  public unregisterTool(name: string): void {
+    this.tools.delete(name);
+  }
+
+  /**
+   * Orchestrates the tool execution lifecycle:
+   * validation -> permissions -> execution.
+   */
+  public async callTool(
+    bash: Bash,
+    toolName: string,
+    args: any,
+    onProgress?: (progress: any) => void,
+  ): Promise<any> {
+    const tool = this.tools.get(toolName);
+    if (!tool) {
+      throw new Error(`Tool not found: ${toolName}`);
+    }
+
+    // 1. Validate Input
+    if (tool.validateInput) {
+      const validation = await tool.validateInput(bash, args);
+      if (!validation.result) {
+        return `Validation Error: ${validation.message || "Invalid input"}`;
+      }
+    }
+
+    // 2. Check Permissions
+    if (tool.checkPermissions) {
+      const permission = await tool.checkPermissions(bash, args);
+      if (!permission.result) {
+        return `Permission Denied: ${permission.message || "Execution blocked"}`;
+      }
+    }
+
+    // 3. Register progress callback
+    if (onProgress && tool.onProgress) {
+      // In a real implementation, we'd hook this up to the tool's internal progress reporting
+      tool.onProgress(bash, onProgress);
+    }
+
+    // 4. Execute
+    try {
+      return await tool.execute(bash, args);
+    } catch (error: any) {
+      return `Execution Error: ${error.message}`;
+    }
   }
 
   /**
