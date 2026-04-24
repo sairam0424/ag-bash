@@ -6,7 +6,7 @@ import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 
 const agConvertHelp = {
-  name: "ag-convert v2.3.0 (Hyperion Phase 4: Visual Intelligence)",
+  name: "ag-convert v2.3.1 (Hyperion Phase 4: Visual Intelligence)",
   summary:
     "Intelligent document and image-to-markdown converter with AI vision",
   usage: "ag-convert [OPTIONS] <FILE>",

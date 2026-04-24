@@ -29,7 +29,7 @@ import {
 import { InMemoryFs } from "./fs/in-memory-fs/in-memory-fs.js";
 import { initFilesystem } from "./fs/init.js";
 import type { IFileSystem, InitialFiles } from "./fs/interface.js";
-import { MountableFs, type MountConfig } from "./fs/mountable-fs/index.js";
+import { MountableFs } from "./fs/mountable-fs/index.js";
 import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
 import {
   mapToRecord,
