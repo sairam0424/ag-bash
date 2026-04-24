@@ -11,6 +11,7 @@
 import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
+import { EventEmitter } from "node:events";
 import { AgenticHealer } from "./agentic/agentic-healer.js";
 import { BashToolbox } from "./agentic/BashToolbox.js";
 import type { AgenticHealerConfig } from "./agentic/types.js";
@@ -398,7 +399,7 @@ export interface ExecOptions {
   sessionId?: string;
 }
 
-export class Bash {
+export class Bash extends EventEmitter {
   readonly fs: MountableFs;
   private commands: CommandRegistry = new Map();
   private useDefaultLayout: boolean = false;
@@ -443,6 +444,7 @@ export class Bash {
   public readonly options: BashOptions;
 
   constructor(options: BashOptions = {}) {
+    super();
     this.options = options;
     this.nestingDepth = options.nestingDepth ?? 0;
     this.toolbox = new BashToolbox();
@@ -679,6 +681,7 @@ export class Bash {
     this.agentic = options.agentic ?? false;
     if (this.agentic) {
       this.agenticHealer = new AgenticHealer(
+        this.toolbox,
         options.agenticConfig || { enableHeuristics: true },
       );
     }
