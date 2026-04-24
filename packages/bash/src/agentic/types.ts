@@ -28,3 +28,98 @@ export interface AgenticHealerConfig {
    */
   allowAutoFix?: boolean;
 }
+
+/**
+ * Result from a tool execution.
+ */
+export interface ToolResult<T = any> {
+  data: T;
+  /**
+   * Optional message to display to the user/model alongside the data.
+   */
+  message?: string;
+}
+
+/**
+ * Validation result for tool inputs.
+ */
+export type ValidationResult =
+  | { result: true }
+  | {
+      result: false;
+      message: string;
+      errorCode?: number;
+    };
+
+/**
+ * Permission result for tool execution.
+ */
+export type PermissionResult =
+  | { behavior: "allow"; updatedInput?: any }
+  | { behavior: "deny"; message: string }
+  | { behavior: "ask"; message: string };
+
+/**
+ * ToolboxTool definition with advanced lifecycle hooks and metadata.
+ */
+export interface ToolboxTool {
+  name: string;
+  description: string;
+  parameters: import("zod").ZodType<any>;
+  
+  /**
+   * Optional aliases for backwards compatibility.
+   */
+  aliases?: string[];
+  
+  /**
+   * Metadata for tool discovery and search.
+   */
+  searchHint?: string;
+
+  /**
+   * Maximum size in characters for tool result before it gets persisted.
+   */
+  maxResultSizeChars?: number;
+
+  /**
+   * Implementation of the tool logic.
+   */
+  execute: (bash: any, args: any) => Promise<any>;
+
+  /**
+   * Optional hook to validate input before execution.
+   */
+  validateInput?: (
+    bash: any,
+    args: any,
+  ) => Promise<ValidationResult>;
+
+  /**
+   * Optional hook to check permissions before execution.
+   */
+  checkPermissions?: (
+    bash: any,
+    args: any,
+  ) => Promise<PermissionResult>;
+
+  /**
+   * Optional hook for reporting progress during long-running operations.
+   */
+  onProgress?: (bash: any, progress: any) => void;
+
+  /**
+   * Indicates if the tool is read-only (doesn't modify state).
+   */
+  isReadOnly?: (args: any) => boolean;
+
+  /**
+   * Indicates if the tool is destructive (e.g., delete, overwrite).
+   */
+  isDestructive?: (args: any) => boolean;
+
+  /**
+   * Indicates if the tool is safe to run in parallel.
+   */
+  isConcurrencySafe?: (args: any) => boolean;
+}

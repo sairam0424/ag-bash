@@ -14,10 +14,13 @@ export const LspTool: ToolboxTool = {
     operation: z
       .enum([
         "goToDefinition",
+        "typeDefinition",
+        "implementation",
         "findReferences",
         "hover",
         "documentSymbol",
         "workspaceSymbol",
+        "diagnostics",
       ])
       .describe("The LSP operation to perform."),
     filePath: z.string().describe("Path to the file."),
@@ -38,16 +41,20 @@ export const LspTool: ToolboxTool = {
       .optional()
       .describe("Name of the symbol (optional if position is provided)."),
   }),
+  isReadOnly: () => true,
   execute: async (bash, args) => {
     const manager = LSPManager.getInstance();
 
     // Map operation names to LSP methods
     const methodMap: Record<string, string> = {
       goToDefinition: "textDocument/definition",
+      typeDefinition: "textDocument/typeDefinition",
+      implementation: "textDocument/implementation",
       findReferences: "textDocument/references",
       hover: "textDocument/hover",
       documentSymbol: "textDocument/documentSymbol",
       workspaceSymbol: "workspace/symbol",
+      diagnostics: "textDocument/publishDiagnostics", // Note: This is usually a notification, but we might simulate a poll
     };
 
     const request = {
