@@ -220,6 +220,8 @@ export interface CommandContext {
   /** Current session ID for stateful REPLs */
   sessionId?: string;
   /** Reference to the parent Bash instance (for service access) */
+  // biome-ignore lint/suspicious/noExplicitAny: Reference to circular Bash instance
+  // biome-ignore lint/suspicious/noExplicitAny: Parent reference
   bash?: any;
 }
 

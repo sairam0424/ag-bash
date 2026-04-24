@@ -52,6 +52,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/dist_test",
       "!**/node_modules",
       "!**/coverage",
       "!**/*.md",
