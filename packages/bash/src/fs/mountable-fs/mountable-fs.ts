@@ -267,6 +267,21 @@ export class MountableFs implements IFileSystem {
   }
 
   /**
+   * Convert a virtual path to a real filesystem path.
+   */
+  public toRealPath(path: string): string | null {
+    try {
+      const { fs, relativePath } = this.routePath(path);
+      if (typeof fs.toRealPath === "function") {
+        return fs.toRealPath(relativePath);
+      }
+    } catch {
+      // Ignore errors in path routing
+    }
+    return null;
+  }
+
+  /**
    * Get mount points that are immediate children of a directory.
    */
   private getChildMountPoints(dirPath: string): string[] {

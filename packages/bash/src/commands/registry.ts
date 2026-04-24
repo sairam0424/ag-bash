@@ -109,7 +109,8 @@ export type CommandName =
   | "ag-list-agents"
   | "ag-hover"
   | "ag-explain"
-  | "ag-todo";
+  | "ag-todo"
+  | "ag-convert";
 
 export type NetworkCommandName = "curl";
 export type PythonCommandName = "python3" | "python";

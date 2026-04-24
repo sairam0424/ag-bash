@@ -605,6 +605,30 @@ export class BashToolbox {
       },
     });
 
+    this.registerTool({
+      name: "convert_document",
+      description:
+        "Convert any document (PDF, DOCX, XLSX, Images) to high-quality Markdown. Uses a hybrid engine (Docling + MarkItDown) for maximum structural fidelity.",
+      parameters: z.object({
+        path: z.string().describe("Absolute path to the document file."),
+        highFidelity: z
+          .boolean()
+          .optional()
+          .describe("Favor precision (Docling) for complex tables/PDFs."),
+        engine: z
+          .enum(["auto", "docling", "markitdown"])
+          .optional()
+          .describe("Force a specific conversion engine."),
+      }),
+      execute: async (bash, { path, highFidelity, engine }) => {
+        let cmd = `ag-convert ${path}`;
+        if (highFidelity) cmd += " --high-fidelity";
+        if (engine && engine !== "auto") cmd += ` --engine ${engine}`;
+        const result = await bash.exec(cmd);
+        return result.stdout || result.stderr;
+      },
+    });
+
     this.registerTool(WebSearchTool);
     this.registerTool(WebFetchTool);
     this.registerTool(LspTool);

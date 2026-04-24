@@ -261,6 +261,12 @@ export interface IFileSystem {
   utimes(path: string, atime: Date, mtime: Date): Promise<void>;
 
   /**
+   * Convert a virtual path to a real filesystem path.
+   * Returns null if the path is not backed by a real filesystem or is outside the root.
+   */
+  toRealPath?(path: string): string | null;
+
+  /**
    * Create a snapshot of the current filesystem state (writable layers/memory).
    * Used for state persistence and rollbacks in agentic workflows.
    */

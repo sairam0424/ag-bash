@@ -1,0 +1,3 @@
+#!/bin/bash
+# Shortcut to run ag-convert in development mode
+npx tsx packages/bash/src/cli/ag-bash.ts -c "ag-convert $*"
