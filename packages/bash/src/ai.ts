@@ -1,4 +1,3 @@
-import { BashToolbox } from "./agentic/BashToolbox.js";
 import type { Bash } from "./Bash.js";
 import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
 

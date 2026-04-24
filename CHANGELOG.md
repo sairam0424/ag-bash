@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-24
+
+
+### Added (Project Hyperion Upgrade)
+
+- **High-Fidelity Document Intelligence**:
+  - `ag-convert`: Intelligent document-to-markdown converter powered by **Hyperion** (IBM Docling + Microsoft MarkItDown).
+  - **Smart Routing**: Automated engine selection based on document complexity and structural requirements.
+  - **Visual Intelligence (Phase 4)**: AI-powered image description support with multi-provider LLM integration (OpenAI, Anthropic, Google, Local).
+  - **Vision Modes**: Specialized prompts for OCR, diagram analysis, chart decoding, and UI screenshot breakdown.
+- **Environment Stability**:
+  - Absolute Python path resolution to ensure consistent dependency access across `pyenv` and `conda` environments.
+  - Hardened OverlayFS path translation for seamless host-side tool integration.
+- **Maintenance**:
+  - Silenced redundant LSP `ENOENT` warnings to improve CLI output clarity.
+  - Comprehensive v2.1 test suite for Document Intelligence validation.
+
 ## [2.0.0] - 2026-04-23
 
 ### Added (Project Nexus Prime Upgrade)

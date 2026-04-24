@@ -99,7 +99,7 @@ export class AgenticHealer {
               return `Target '${possiblePath}' not found. Did you mean '${suggestedPath}'?`;
             }
           }
-        } catch (e) {
+        } catch (_e) {
           // Ignore FS errors during healing
         }
 

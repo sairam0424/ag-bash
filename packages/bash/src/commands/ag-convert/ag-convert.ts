@@ -6,29 +6,63 @@ import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 
 const agConvertHelp = {
-  name: "ag-convert v2.1.0 (Hyperion-Debug)",
-  summary: "Hybrid high-fidelity document-to-markdown converter (Hyperion)",
+  name: "ag-convert v2.3.1 (Hyperion Phase 4: Visual Intelligence)",
+  summary:
+    "Intelligent document and image-to-markdown converter with AI vision",
   usage: "ag-convert [OPTIONS] <FILE>",
   description: [
-    "Convert any document (PDF, DOCX, XLSX, Images) to Markdown using a hybrid",
-    "routing engine powered by IBM Docling and Microsoft MarkItDown.",
+    "Convert documents using smart routing between IBM Docling (precision) and",
+    "Microsoft MarkItDown (speed). Phase 4 adds AI-powered visual intelligence",
+    "for images with multi-provider LLM support and specialized vision modes.",
+    "",
+    "Smart Routing Criteria:",
+    "  - PDFs >1MB or with tables → Docling (high precision)",
+    "  - Images, Office docs, simple files → MarkItDown (fast)",
+    "",
+    "Phase 4 Visual Intelligence:",
+    "  - Multi-provider LLM support (OpenAI, Anthropic, Google, Local)",
+    "  - Specialized vision modes (OCR, diagram, chart, UI analysis)",
+    "  - Custom vision prompts for tailored image descriptions",
     "",
     "This is a 'superpower' command that requires a host Python environment",
     "with 'docling' and 'markitdown' installed.",
   ],
   options: [
+    "    --analyze         Show complexity analysis without converting",
     "    --engine <auto|docling|markitdown>",
-    "                      Select conversion engine (default: auto)",
-    "    --high-fidelity   Favor structural precision (Docling) for tables/PDFs",
+    "                      Override smart routing (default: auto)",
+    "    --high-fidelity   Favor precision over speed (influences routing)",
     "    --json            Output raw structured JSON instead of Markdown",
+    "",
+    "  Phase 4: Visual Intelligence",
+    "    --describe-images Use LLM to describe images",
+    "    --llm-provider <openai|anthropic|google|local>",
+    "                      LLM provider (default: openai)",
+    "    --llm-model <name>",
+    "                      Specific model (e.g., gpt-4o, claude-3-5-sonnet)",
+    "    --vision-mode <default|ocr|diagram|chart|screenshot|document|technical>",
+    "                      Prompt template for image analysis",
+    "    --vision-prompt <text>",
+    "                      Custom vision prompt (overrides --vision-mode)",
+    "",
+    "  Other",
     "    --setup           Attempt to install required Python dependencies",
     "    --help            Display this help and exit",
   ],
   examples: [
-    "ag-convert report.pdf",
-    "ag-convert data.xlsx --high-fidelity",
-    "ag-convert --engine markitdown image.png",
-    "ag-convert --setup",
+    "# Basic conversion",
+    "ag-convert report.pdf                    # Auto-selects best engine",
+    "ag-convert data.xlsx --analyze           # Show complexity score",
+    "",
+    "# Phase 4: Visual Intelligence",
+    "ag-convert photo.jpg --describe-images   # AI-powered image description",
+    "ag-convert diagram.png --describe-images --vision-mode diagram",
+    "ag-convert chart.png --vision-mode chart --llm-provider anthropic",
+    "ag-convert scan.jpg --vision-mode ocr    # Extract text from image",
+    "ag-convert ui.png --vision-mode screenshot --llm-model claude-3-5-sonnet",
+    "",
+    "# Setup",
+    "ag-convert --setup                       # Install dependencies",
   ],
 };
 
@@ -47,6 +81,12 @@ export const agConvertCommand: Command = {
     let engine = "auto";
     let highFidelity = false;
     let useJson = false;
+    let analyze = false;
+    let describeImages = false;
+    let llmProvider = "openai";
+    let llmModel: string | null = null;
+    let visionMode = "default";
+    let visionPrompt: string | null = null;
     const files: string[] = [];
 
     for (let i = 0; i < args.length; i++) {
@@ -57,6 +97,18 @@ export const agConvertCommand: Command = {
         highFidelity = true;
       } else if (arg === "--json") {
         useJson = true;
+      } else if (arg === "--analyze") {
+        analyze = true;
+      } else if (arg === "--describe-images") {
+        describeImages = true;
+      } else if (arg === "--llm-provider") {
+        llmProvider = args[++i];
+      } else if (arg === "--llm-model") {
+        llmModel = args[++i];
+      } else if (arg === "--vision-mode") {
+        visionMode = args[++i];
+      } else if (arg === "--vision-prompt") {
+        visionPrompt = args[++i];
       } else if (!arg.startsWith("-")) {
         files.push(arg);
       }
@@ -65,7 +117,8 @@ export const agConvertCommand: Command = {
     if (files.length === 0) {
       return {
         stdout: "",
-        stderr: "ag-convert: missing file operand\nTry 'ag-convert --help' for more information.\n",
+        stderr:
+          "ag-convert: missing file operand\nTry 'ag-convert --help' for more information.\n",
         exitCode: 2,
       };
     }
@@ -77,7 +130,7 @@ export const agConvertCommand: Command = {
 
     // For host-side tools like Hyperion, we need to translate the virtual path back to a real host path
     let realFilePath = virtualPath;
-    
+
     if (typeof ctx.fs.toRealPath === "function") {
       const resolved = ctx.fs.toRealPath(virtualPath);
       if (resolved) {
@@ -109,25 +162,41 @@ export const agConvertCommand: Command = {
     // Resolve the absolute path of python3 to avoid shim mismatches
     let pythonExe = "python3";
     try {
-      const resolve = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], { encoding: "utf-8" });
+      const resolve = spawnSync(
+        "python3",
+        ["-c", "import sys; print(sys.executable)"],
+        { encoding: "utf-8" },
+      );
       if (resolve.status === 0 && resolve.stdout.trim()) {
         pythonExe = resolve.stdout.trim();
       }
     } catch (e) {}
 
-    const pythonArgs = [
-      bridgePath,
-      realFilePath,
-      "--engine", engine
-    ];
+    const pythonArgs = [bridgePath, realFilePath, "--engine", engine];
     if (highFidelity) pythonArgs.push("--high-fidelity");
     if (useJson) pythonArgs.push("--json");
+    if (analyze) pythonArgs.push("--analyze");
+    if (describeImages) pythonArgs.push("--describe-images");
+
+    // Phase 4: Visual Intelligence parameters
+    if (llmProvider && describeImages) {
+      pythonArgs.push("--llm-provider", llmProvider);
+    }
+    if (llmModel && describeImages) {
+      pythonArgs.push("--llm-model", llmModel);
+    }
+    if (visionMode && describeImages) {
+      pythonArgs.push("--vision-mode", visionMode);
+    }
+    if (visionPrompt && describeImages) {
+      pythonArgs.push("--vision-prompt", visionPrompt);
+    }
 
     try {
       const result = spawnSync(pythonExe, pythonArgs, {
         encoding: "utf-8",
         maxBuffer: 50 * 1024 * 1024, // 50MB
-        env: { ...process.env }
+        env: { ...process.env },
       });
 
       if (result.error) {
@@ -155,12 +224,16 @@ export const agConvertCommand: Command = {
 
 function setupDependencies(): ExecResult {
   console.log("Hyperion Setup: Installing docling and markitdown using uv...");
-  
+
   // Try to find uv in common locations if not in PATH
   // Resolve the absolute path of python3 to avoid shim mismatches
   let pythonExe = "python3";
   try {
-    const resolve = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], { encoding: "utf-8" });
+    const resolve = spawnSync(
+      "python3",
+      ["-c", "import sys; print(sys.executable)"],
+      { encoding: "utf-8" },
+    );
     if (resolve.status === 0 && resolve.stdout.trim()) {
       pythonExe = resolve.stdout.trim();
     }
@@ -168,14 +241,14 @@ function setupDependencies(): ExecResult {
 
   console.log(`Hyperion Setup: Targeting Python at ${pythonExe}`);
   console.log("Installing docling and markitdown...");
-  
+
   const commonPaths = [
     "/opt/homebrew/bin/uv",
     "/usr/local/bin/uv",
     "/opt/homebrew/Caskroom/miniconda/base/bin/uv",
-    process.env.HOME + "/.cargo/bin/uv"
+    process.env.HOME + "/.cargo/bin/uv",
   ];
-  
+
   // Try uv first if available, otherwise fallback to pip
   let uvPath = "uv";
   let foundUv = false;
@@ -197,23 +270,48 @@ function setupDependencies(): ExecResult {
   let result;
   if (foundUv) {
     console.log(`Using uv at: ${uvPath}`);
-    result = spawnSync(uvPath, ["pip", "install", "--system", "--python", pythonExe, "docling", "markitdown"], { 
-      encoding: "utf-8",
-      shell: true,
-      env: { ...process.env }
-    });
+    result = spawnSync(
+      uvPath,
+      [
+        "pip",
+        "install",
+        "--system",
+        "--python",
+        pythonExe,
+        "docling",
+        "markitdown",
+      ],
+      {
+        encoding: "utf-8",
+        shell: true,
+        env: { ...process.env },
+      },
+    );
   }
 
   if (!result || result.status !== 0) {
     if (result && result.status !== 0) {
-      console.log(`uv failed with exit code ${result.status}. Error: ${result.stderr}`);
+      console.log(
+        `uv failed with exit code ${result.status}. Error: ${result.stderr}`,
+      );
     }
     console.log(`Trying ${pythonExe} -m pip install...`);
-    result = spawnSync(pythonExe, ["-m", "pip", "install", "docling", "markitdown", "--break-system-packages"], { 
-      encoding: "utf-8",
-      shell: true,
-      env: { ...process.env }
-    });
+    result = spawnSync(
+      pythonExe,
+      [
+        "-m",
+        "pip",
+        "install",
+        "docling",
+        "markitdown",
+        "--break-system-packages",
+      ],
+      {
+        encoding: "utf-8",
+        shell: true,
+        env: { ...process.env },
+      },
+    );
   }
 
   if (result.status === 0) {

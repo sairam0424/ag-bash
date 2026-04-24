@@ -274,7 +274,10 @@ export class OverlayFs implements IFileSystem {
       return null;
     }
 
-    const realPath = nodePath.join(this.root, relativePath.startsWith("/") ? relativePath.slice(1) : relativePath);
+    const realPath = nodePath.join(
+      this.root,
+      relativePath.startsWith("/") ? relativePath.slice(1) : relativePath,
+    );
 
     // Security check: ensure path doesn't escape root
     const resolvedReal = nodePath.resolve(realPath);

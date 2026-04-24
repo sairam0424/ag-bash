@@ -1,9 +1,10 @@
 {
   "name": "@ag-bash/bash",
-  "version": "2.0.0",
+  "version": "2.3.1",
   "description": "Unified Agentic Bash for Ag-Bash",
   "files": [
     "dist/",
+    "scripts/",
     "README.md",
     "LICENSE"
   ],

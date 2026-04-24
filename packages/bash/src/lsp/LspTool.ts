@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { Bash } from "../Bash.js";
 import type { ToolboxTool } from "../agentic/BashToolbox.js";
+import type { Bash } from "../Bash.js";
 import { LSPManager } from "./LSPManager.js";
 
 /**
@@ -8,23 +8,39 @@ import { LSPManager } from "./LSPManager.js";
  */
 export const LspTool: ToolboxTool = {
   name: "ag_lsp",
-  description: "Advanced code intelligence: goToDefinition, findReferences, hover, etc.",
+  description:
+    "Advanced code intelligence: goToDefinition, findReferences, hover, etc.",
   parameters: z.object({
-    operation: z.enum([
-      "goToDefinition",
-      "findReferences",
-      "hover",
-      "documentSymbol",
-      "workspaceSymbol",
-    ]).describe("The LSP operation to perform."),
+    operation: z
+      .enum([
+        "goToDefinition",
+        "findReferences",
+        "hover",
+        "documentSymbol",
+        "workspaceSymbol",
+      ])
+      .describe("The LSP operation to perform."),
     filePath: z.string().describe("Path to the file."),
-    line: z.number().int().positive().optional().describe("1-based line number."),
-    character: z.number().int().positive().optional().describe("1-based character position."),
-    symbolName: z.string().optional().describe("Name of the symbol (optional if position is provided)."),
+    line: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("1-based line number."),
+    character: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("1-based character position."),
+    symbolName: z
+      .string()
+      .optional()
+      .describe("Name of the symbol (optional if position is provided)."),
   }),
   execute: async (bash, args) => {
     const manager = LSPManager.getInstance();
-    
+
     // Map operation names to LSP methods
     const methodMap: Record<string, string> = {
       goToDefinition: "textDocument/definition",
@@ -38,7 +54,10 @@ export const LspTool: ToolboxTool = {
       method: methodMap[args.operation],
       params: {
         ...args,
-        position: args.line && args.character ? { line: args.line - 1, character: args.character - 1 } : undefined,
+        position:
+          args.line && args.character
+            ? { line: args.line - 1, character: args.character - 1 }
+            : undefined,
       },
       filePath: args.filePath,
     };

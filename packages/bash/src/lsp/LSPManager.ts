@@ -26,7 +26,11 @@ export class LSPManager {
   /**
    * Initialize a language server for a specific file extension.
    */
-  public async initServer(extension: string, command: string, args: string[]): Promise<void> {
+  public async initServer(
+    extension: string,
+    command: string,
+    args: string[],
+  ): Promise<void> {
     if (this.connections.has(extension)) return;
 
     try {
@@ -41,7 +45,9 @@ export class LSPManager {
       });
       connection.sendNotification("initialized", {});
     } catch (error) {
-      console.warn(`Failed to initialize LSP server for ${extension}: ${error}`);
+      console.warn(
+        `Failed to initialize LSP server for ${extension}: ${error}`,
+      );
     }
   }
 
@@ -76,7 +82,10 @@ export class LSPManager {
     }
   }
 
-  private async fallbackToSemanticEngine(bash: Bash, request: LSPRequest): Promise<any> {
+  private async fallbackToSemanticEngine(
+    bash: Bash,
+    request: LSPRequest,
+  ): Promise<any> {
     const engine = bash.semanticEngine;
     if (!engine) return null;
 

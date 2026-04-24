@@ -1,5 +1,3 @@
-import type { ExecResult } from "../types.js";
-
 /**
  * Interface for LLM-based troubleshooting.
  * Allows the host environment to provide AI-powered diagnostics.

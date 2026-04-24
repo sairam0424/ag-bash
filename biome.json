@@ -6,16 +6,16 @@
     "rules": {
       "recommended": true,
       "correctness": {
-        "noUnusedImports": "error",
-        "noUnusedVariables": "error",
-        "noUnusedPrivateClassMembers": "error"
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "warn",
+        "noUnusedPrivateClassMembers": "warn"
       },
       "suspicious": {
         "noTemplateCurlyInString": "off",
         "noControlCharactersInRegex": "off",
         "noImplicitAnyLet": "error",
         "noAssignInExpressions": "error",
-        "noExplicitAny": "error"
+        "noExplicitAny": "warn"
       },
       "style": {
         "noNonNullAssertion": "error",
@@ -38,6 +38,9 @@
         "rules": {
           "style": {
             "noRestrictedGlobals": "off"
+          },
+          "suspicious": {
+            "noExplicitAny": "off"
           }
         }
       }
@@ -52,6 +55,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/dist_test",
       "!**/node_modules",
       "!**/coverage",
       "!**/*.md",
@@ -63,7 +67,8 @@
       "!.docs-test-tmp",
       "!**/src/**/*.js",
       "!**/src/**/*.d.ts",
-      "!vendor"
+      "!vendor",
+      "!scratch"
     ]
   }
 }

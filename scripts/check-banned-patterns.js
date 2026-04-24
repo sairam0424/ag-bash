@@ -531,6 +531,7 @@ const SCAN_DIRS = ["."];
 const SKIP_DIRS = new Set([
   "node_modules",
   "dist",
+  "dist_test",
   "vendor",
   ".git",
   ".pnpm-store",
