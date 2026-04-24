@@ -85,7 +85,7 @@ export interface ToolboxTool {
   /**
    * Implementation of the tool logic.
    */
-  execute: (bash: any, args: any) => Promise<any>;
+  execute: (bash: any, args: any, onProgress?: (progress: any) => void) => Promise<any>;
 
   /**
    * Optional hook to validate input before execution.
@@ -103,10 +103,6 @@ export interface ToolboxTool {
     args: any,
   ) => Promise<PermissionResult>;
 
-  /**
-   * Optional hook for reporting progress during long-running operations.
-   */
-  onProgress?: (bash: any, progress: any) => void;
 
   /**
    * Indicates if the tool is read-only (doesn't modify state).

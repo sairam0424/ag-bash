@@ -6,6 +6,7 @@ import type {
 import { SymbolType } from "../lsp/semantic-engine.js";
 import type { ExecResult } from "../types.js";
 import type { AgenticHealerConfig } from "./types.js";
+import type { BashToolbox } from "./BashToolbox.js";
 
 /**
  * Agentic Healer for Ag-Bash.
@@ -15,6 +16,7 @@ import type { AgenticHealerConfig } from "./types.js";
  */
 export class AgenticHealer {
   constructor(
+    private toolbox: BashToolbox | undefined,
     private config: AgenticHealerConfig = { enableHeuristics: true },
   ) {}
 
@@ -34,7 +36,11 @@ export class AgenticHealer {
   ): Promise<string | null> {
     const state = ctx.state;
 
-    // 1. Heuristic check
+    // 1. Tool-based recovery (Healer 2.0)
+    const toolResult = await this.diagnoseWithTools(command, result, ctx);
+    if (toolResult) return toolResult;
+
+    // 2. Heuristic check
     if (this.config.enableHeuristics !== false) {
       const heuristicResult = await this.diagnoseHeuristically(
         command,
@@ -45,7 +51,7 @@ export class AgenticHealer {
       if (heuristicResult) return heuristicResult;
     }
 
-    // 2. LLM check (if configured)
+    // 3. LLM check (if configured)
     if (this.config.llm) {
       const context = this.getTroubleshootingContext(command, result, state);
       return await this.config.llm.generateSuggestion(context);
@@ -229,5 +235,27 @@ PATH: ${state.env.get("PATH")}
 HOME: ${state.env.get("HOME")}
 SHELL_STABLE: ${state.options.posix ? "POSIX" : "BASH"}
 `;
+  }
+
+  /**
+   * Healer 2.0: Suggests Agentic Tools based on failure context.
+   */
+  private async diagnoseWithTools(
+    command: string,
+    result: ExecResult,
+    ctx: InterpreterContext,
+  ): Promise<string | null> {
+    if (!this.toolbox) return null;
+
+    // Semantic search for tools that might help with this specific error
+    const query = `${command} failed with: ${result.stderr || "unknown error"}`;
+    const tools = await this.toolbox.searchTools(query);
+
+    if (tools.length > 0) {
+      const bestTool = tools[0];
+      return `Command failed. Based on the context, you might want to use the agentic tool '${bestTool.name}': ${bestTool.description}`;
+    }
+
+    return null;
   }
 }

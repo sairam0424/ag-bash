@@ -96,8 +96,10 @@ Custom commands receive a `CommandContext` with `fs`, `cwd`, `env`, `stdin`, and
 
 ### Agentic Operations (v2.0.0+)
 
-Specialized commands designed for AI agents to interact with the environment effectively:
+Specialized commands and lifecycle hooks designed for AI agents to interact with the environment effectively:
 
+- **Observability (v2.4.0+)**: `Bash` instance now emits `tool:start`, `tool:progress`, and `tool:end` events for real-time tracking.
+- **Agentic Healer 2.0 (v2.4.0+)**: Tool-aware automated remediation loop with semantic tool discovery.
 - `ag-edit`: Robust, line-based file editing (insert/replace/delete).
 - `ag-diff`: High-fidelity, semantic diff for code changes.
 - `ag-snapshot`: Capture and restore core shell state (env, functions, CWD, and FS).

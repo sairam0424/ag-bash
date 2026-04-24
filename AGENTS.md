@@ -4,7 +4,8 @@
 
 Ag-Bash is a pnpm monorepo with three primary packages: `@ag-bash/bash` (core shell engine, filesystem, sandboxed runtimes), `@ag-bash/mcp-server` (standalone Model Context Protocol server), and `@ag-bash/agent-bridge` (terminal UI bridge). The core execution pipeline flows from input script through the tree-sitter parser (`src/parser/`) to AST (`src/ast/`) to interpreter (`src/interpreter/`) yielding execution results. Key modules include the Parser (with ASTCache), Interpreter (SharedStateBus and resource accounting), pluggable Filesystem (InMemory, Overlay, ReadWrite), and WASM Runtimes (CPython and QuickJS with SharedStateBus bridge).
 
-## Build, Test, and Development Commands
+## Build, Test, and Development
+#### Via Homebrew (macOS)
 
 ```bash
 # Full monorepo force build
@@ -78,10 +79,12 @@ Enforced by **Biome** with strict rules:
 
 ## Security & Architecture Constraints
 
+
 - **Null prototypes required**: All `Record<string, T>` must use `Object.create(null)` or `nullPrototype()` to prevent prototype pollution.
 - **Filesystem security gates**: All filesystem access must go through `resolveAndValidate` security gates in the respective FS implementation.
 - **Sandbox purity**: No Node.js native dependencies allowed in the core package (except optional WASM runtimes).
-- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v2.0.0).
+
+- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v2.4.0).
 - **E2E verification**: Always verify changes with `bash scripts/e2e-verify.sh` to ensure protocol and persistence stability.
 
 ## CI/CD

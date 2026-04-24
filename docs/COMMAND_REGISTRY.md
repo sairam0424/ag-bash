@@ -1,10 +1,11 @@
-# 📖 Ag-Bash Command Registry
+# 📖 Ag-Bash Command Registry (v2.4.0)
 
-This registry provides a categorized index of the **110+ commands** supported by Ag-Bash. All commands are virtualized, sandboxed, and statically analyzable.
+This registry provides a categorized index of the **120+ commands** supported by Ag-Bash. All commands are virtualized, sandboxed, and optimized for Project V-Next.
 
 ---
 
 ## 📁 Core Operations & Filesystem
+
 *Standard POSIX-compliant tools for file management and navigation.*
 
 | Command | Description | Registry Link |
@@ -18,6 +19,7 @@ This registry provides a categorized index of the **110+ commands** supported by
 ---
 
 ## 🧠 Data Intelligence
+
 *Advanced structured data processing tools running natively in WASM.*
 
 | Command | Category | Best For | Registry Link |
@@ -31,6 +33,7 @@ This registry provides a categorized index of the **110+ commands** supported by
 ---
 
 ## 🤖 Agentic Runtimes
+
 *Sandbox isolation for arbitrary code execution.*
 
 | Command | Runtime | Description | Registry Link |
@@ -40,16 +43,17 @@ This registry provides a categorized index of the **110+ commands** supported by
 | `awk` / `sed` | POSIX | Traditional stream editing and reporting. | [Agentic Guide](./registry/agentic_runtimes.md) |
 | `ag-edit` | Nexus | Atomic, line-based file editing for autonomous agents. | [Nexus Upgrades](./registry/nexus.md) |
 | `ag-diff` | Nexus | Semantic diff engine with LLM-optimized summaries. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-snapshot`| Nexus | Persistent environment state and filesystem checkpointing. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-snapshot` | Nexus | Persistent environment state and filesystem checkpointing. | [Nexus Upgrades](./registry/nexus.md) |
 | `ag-analyze` | Nexus | Structural script analysis and symbol extraction. | [Nexus Upgrades](./registry/nexus.md) |
 | `ag-hover` | Nexus Prime | Retrieve metadata and documentation for a specific symbol. | [Nexus Upgrades](./registry/nexus.md) |
 | `ag-explain` | Nexus Prime | Parse and explain the structure of complex shell commands. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-find-symbol`| Nexus Prime | Global search for symbol definitions and references. | [Nexus Upgrades](./registry/nexus.md) |
+| `ag-find-symbol` | Nexus Prime | Global search for symbol definitions and references. | [Nexus Upgrades](./registry/nexus.md) |
 | `ag-todo` | Nexus Prime | Persistent local task management for agent tracking. | [Nexus Upgrades](./registry/nexus.md) |
 
 ---
 
 ## 🔒 Security & Proof
+
 *Tools for cryptographic verification and auditing.*
 
 | Command | Use Case |
@@ -61,6 +65,7 @@ This registry provides a categorized index of the **110+ commands** supported by
 ---
 
 ## 🌐 External Integration
+
 *Bridging the virtual sandbox with the outside world.*
 
 | Command | Use Case |
@@ -72,4 +77,5 @@ This registry provides a categorized index of the **110+ commands** supported by
 ---
 
 ## 💡 Pro Tip: Command Discovery
+
 Run `help` or `ag-bash --help` inside the shell to see the dynamic list of commands available in your current permission scope.

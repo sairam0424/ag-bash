@@ -55,6 +55,24 @@ export async function createAgent(
     cwd: "/workspace",
   });
 
+  // [NEW in v2.4.0] High-fidelity tool observability
+  bash.on("tool:start", (data) => {
+    console.log(`\n${colors.dim}[Tool] Starting: ${colors.reset}${colors.yellow}${data.toolName}${colors.reset}`);
+  });
+
+  bash.on("tool:progress", (data) => {
+    // Optional: Log progress for long-running tools
+    if (data.message) {
+      console.log(`${colors.dim}[Tool] Progress: ${data.message}${colors.reset}`);
+    }
+  });
+
+  bash.on("tool:end", (data) => {
+    const duration = data.duration ? `${data.duration}ms` : "unknown";
+    const status = data.status === "success" ? colors.green : colors.yellow;
+    console.log(`${colors.dim}[Tool] Completed: ${colors.reset}${status}${data.toolName}${colors.reset} ${colors.dim}(${duration})${colors.reset}\n`);
+  });
+
   const toolkit = createBashTool({
     sandbox: bash,
     destination: "/workspace",

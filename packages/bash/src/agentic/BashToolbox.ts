@@ -833,10 +833,44 @@ export class BashToolbox {
   }
 
   public getTools(): ToolboxTool[] {
-    // Sort tools by name for prompt-cache stability.
     return Array.from(this.tools.values()).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
+  }
+
+  /**
+   * Performs a semantic search over the registered tools.
+   */
+  public async searchTools(query: string, limit = 3): Promise<ToolboxTool[]> {
+    const tools = this.getTools();
+    const queryLower = query.toLowerCase();
+    const keywords = queryLower.split(/\s+/).filter((k) => k.length > 3);
+
+    return tools
+      .map((tool) => {
+        const toolName = tool.name.toLowerCase();
+        const toolDesc = tool.description.toLowerCase();
+        const toolHint = (tool.searchHint || "").toLowerCase();
+
+        // Count keyword matches
+        const matchCount = keywords.filter(
+          (k) =>
+            toolName.includes(k) || toolDesc.includes(k) || toolHint.includes(k),
+        ).length;
+
+        // Check if tool name is mentioned in query
+        const isNamedInQuery = queryLower.includes(toolName.replace(/_/g, " "));
+
+        let score = 100; // Lower is better
+        if (isNamedInQuery) score = 0;
+        else if (matchCount > 0) score = 50 - matchCount; // More matches = lower score
+
+        return { tool, score };
+      })
+      .filter((res) => res.score < 100)
+      .sort((a, b) => a.score - b.score)
+      .slice(0, limit)
+      .map((res) => res.tool);
   }
   
   public getTool(name: string): ToolboxTool | undefined {
@@ -912,7 +946,16 @@ export class BashToolbox {
       throw new Error(`Tool not found: ${toolName}`);
     }
 
-    // 1. Validate Input
+    // 2. Lifecycle Events (Start)
+    const startTime = Date.now();
+    bash.emit("tool:start", { name: toolName, args });
+
+    const onToolProgress = (progress: any) => {
+      bash.emit("tool:progress", { name: toolName, progress });
+      if (onProgress) onProgress(progress);
+    };
+
+    // 3. Validate Input
     if (tool.validateInput) {
       const validation = await tool.validateInput(bash, args);
       if (!validation.result) {
@@ -941,17 +984,20 @@ export class BashToolbox {
       }
     }
 
-    // 3. Register progress callback
-    if (onProgress && tool.onProgress) {
-      // In a real implementation, we'd hook this up to the tool's internal progress reporting
-      tool.onProgress(bash, onProgress);
-    }
 
     // 4. Execute
+    let result: any;
     try {
-      const result = await tool.execute(bash, args);
-      
-      // 5. Resource Governance (Size Check)
+      result = await tool.execute(bash, args, onToolProgress);
+    } catch (error: any) {
+      result = `Execution Error in ${toolName}: ${error.message}`;
+    }
+
+    // 5. Lifecycle Events (End)
+    const duration = Date.now() - startTime;
+    bash.emit("tool:end", { name: toolName, result, duration });
+
+    // 6. Resource Governance (Size Check)
       const stringResult = typeof result === "string" ? result : JSON.stringify(result);
       const maxSize = tool.maxResultSizeChars || MAX_TOOL_RESULT_SIZE;
 
@@ -971,9 +1017,6 @@ export class BashToolbox {
       }
 
       return result;
-    } catch (error: any) {
-      return `Execution Error: ${error.message}`;
-    }
   }
 
   /**

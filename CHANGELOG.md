@@ -5,8 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2026-04-24
+## [2.4.0] - 2026-04-24
 
+### Added (Project V-Next Upgrade)
+
+- **Tooling 2.0 & Orchestration**:
+  - **Full Observability**: Integrated `EventEmitter` into `Bash` for real-time tool lifecycle tracking.
+  - **Precision Hooks**: Standardized `tool:start`, `tool:progress`, and `tool:end` events with duration telemetry.
+  - **Telemetry Reports**: Automated generation of high-fidelity tool execution reports for host monitoring.
+- **Agentic Healer 2.0**:
+  - **Context-Aware Healing**: Injected `BashToolbox` into the healer for deeper environment introspection.
+  - **Semantic Discovery**: Automated tool suggestions (e.g., `analyze_code`, `fix_missing_file`) when shell commands fail.
+  - **Smart Scoring**: Multi-keyword semantic scoring engine for reliable tool recovery from complex failure strings.
+- **Resource & Security Hardening**:
+  - **Artifact Spillover**: Automated persistence for large tool outputs (>100kb) to ensure stability and reduce token pressure.
+  - **Gated Permissions**: Enhanced `behavior: 'ask'` support for secure, interactive approval of sensitive operations.
+  - **MCP Namespacing**: Improved tool synchronization and resource isolation across multi-namespace registries.
+
+## [2.1.0] - 2026-04-24
 
 ### Added (Project Hyperion Upgrade)
 
@@ -25,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0] - 2026-04-23
 
 ### Added (Project Nexus Prime Upgrade)
+
 - **Intelligent Semantic Suite**:
   - `ag-hover`: Contextual metadata and documentation for symbols at a specific location.
   - `ag-explain`: AST-driven pipeline explanation for complex shell commands.
@@ -40,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive v2.0 Smoke Test suite for feature validation and regression testing.
 
 ### Changed
+
 - Upgraded the entire monorepo to version 2.0.0.
 - Synchronized versioning across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
 - Refactored `Interpreter` to enforce Nexus Prime resource limits.
@@ -47,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.5.0] - 2026-04-20
 
 ### Added (Project Nexus Upgrade)
+
 - **Agentic Command Suite**:
   - `ag-edit`: Robust line-based file editor for precise surgical edits.
   - `ag-diff`: High-fidelity diff tool with semantic summaries optimized for LLMs.
@@ -60,24 +79,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configurable `maxMemoryAccountingBytes` and `maxCpuMs` limits.
 
 ### Changed
+
 - Refactored `Interpreter` to support `SharedStateBus` event hooks.
 - Updated `SemanticEngine` to expose `getAllSymbols()` for automated analysis.
 - Hardened prototype pollution defenses in command argument parsing.
 
-## [1.4.0] - Previously Released
+## [1.4.0] - 2026-04-15
 
 ### Added
+
 - Tree-sitter parser integration for improved Bash script understanding.
 - Support for Python and JavaScript runtimes within the shell.
 - Integrated `AgenticHealer` for automated troubleshooting and recovery.
 
 ### Changed
+
 - Migrated default parser engine from `legacy` to `tree-sitter`.
 - Improved monorepo build pipeline and distribution artifacts.
 
-## [1.3.0] - Legacy Release
+## [1.3.0] - 2026-04-10
 
 ### Added
+
 - Initial support for `InMemoryFs` and `OverlayFs`.
 - Basic command registry and lazy loading mechanism.
 - Core shell integration for agentic environments.
