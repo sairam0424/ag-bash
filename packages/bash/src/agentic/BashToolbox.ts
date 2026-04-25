@@ -811,7 +811,7 @@ export class BashToolbox {
 
         for (const conn of connections) {
           for (const tool of conn.tools) {
-            const namespacedName = `${conn.id}__${tool.name}`;
+            const namespacedName = `mcp:${conn.id}:${tool.name}`;
             this.registerTool({
               name: namespacedName,
               description: `[MCP: ${conn.id}] ${tool.description || ""}`,
@@ -879,14 +879,17 @@ export class BashToolbox {
   registerMcpTools(connectionId: string, tools: any[]): void {
     for (const tool of tools) {
       this.registerTool({
-        name: `mcp_${connectionId}_${tool.name}`,
+        name: `mcp:${connectionId}:${tool.name}`,
         description: tool.description || `MCP tool from ${connectionId}`,
         parameters: this.jsonSchemaToZod(tool.inputSchema),
-        execute: async (bash: Bash, args: any) => {
+        execute: async (bash: Bash, args: any, onProgress?: (progress: any) => void) => {
           const client = (
             await import("../services/McpClient.js")
           ).McpClient.getInstance();
-          return await client.callTool(connectionId, tool.name, args);
+          // We can't easily pass onProgress to the current McpClient implementation
+          // without adding notification support to the JSON-RPC client.
+          // For now, we'll just call the tool.
+          return await client.callTool(connectionId, tool.name, args, bash);
         },
       });
     }
@@ -964,24 +967,23 @@ export class BashToolbox {
     }
 
     // 2. Check Permissions
-    if (tool.checkPermissions) {
-      const permission = await tool.checkPermissions(bash, args);
-      if (permission.behavior === "deny") {
-        return `Permission Denied: ${permission.message || "Execution blocked"}`;
-      }
-      if (permission.behavior === "ask") {
-        if (bash.options.permissionHandler) {
-          const granted = await bash.options.permissionHandler.ask(permission.message);
-          if (!granted) {
-            return `Permission Denied: User declined the request.`;
-          }
-        } else {
-          return `Permission Required: ${permission.message || "This operation requires user approval."}`;
-        }
-      }
-      if (permission.behavior === "allow" && permission.updatedInput) {
-        args = permission.updatedInput;
-      }
+    const permission = await bash.permissionManager.checkPermission(
+      bash,
+      toolName,
+      args,
+      tool.checkPermissions,
+    );
+
+    if (permission.behavior === "deny") {
+      return `Permission Denied: ${permission.message || "Execution blocked"}`;
+    }
+
+    if (permission.behavior === "ask") {
+      return `Permission Required: ${permission.message || "This operation requires user approval."}`;
+    }
+
+    if (permission.behavior === "allow" && permission.updatedInput) {
+      args = permission.updatedInput;
     }
 
 

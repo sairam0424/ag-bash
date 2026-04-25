@@ -110,7 +110,9 @@ export type CommandName =
   | "ag-hover"
   | "ag-explain"
   | "ag-todo"
-  | "ag-convert";
+  | "ag-convert"
+  | "ag-plan"
+  | "ag-notebook";
 
 export type NetworkCommandName = "curl";
 export type PythonCommandName = "python3" | "python";

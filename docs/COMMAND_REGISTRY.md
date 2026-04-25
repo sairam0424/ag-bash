@@ -1,4 +1,4 @@
-# 📖 Ag-Bash Command Registry (v2.4.0)
+# 📖 Ag-Bash Command Registry (v2.4.1)
 
 This registry provides a categorized index of the **120+ commands** supported by Ag-Bash. All commands are virtualized, sandboxed, and optimized for Project V-Next.
 

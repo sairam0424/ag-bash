@@ -100,6 +100,8 @@ Specialized commands and lifecycle hooks designed for AI agents to interact with
 
 - **Observability (v2.4.0+)**: `Bash` instance now emits `tool:start`, `tool:progress`, and `tool:end` events for real-time tracking.
 - **Agentic Healer 2.0 (v2.4.0+)**: Tool-aware automated remediation loop with semantic tool discovery.
+- **Unified Permissions (v2.5.0+)**: Centralized `PermissionManager` for managing tool access and interactive prompts.
+- **Real MCP Support (v2.5.0+)**: Full JSON-RPC 2.0 client for connecting to external tool servers via Stdio or HTTP.
 - `ag-edit`: Robust, line-based file editing (insert/replace/delete).
 - `ag-diff`: High-fidelity, semantic diff for code changes.
 - `ag-snapshot`: Capture and restore core shell state (env, functions, CWD, and FS).
@@ -108,6 +110,9 @@ Specialized commands and lifecycle hooks designed for AI agents to interact with
 - `ag-explain`: Parse and explain the structure of complex shell commands.
 - `ag-find-symbol`: Workspace-wide search for symbol definitions and references.
 - `ag-todo`: Persistent local task management for agentic project tracking.
+- `ag-plan`: Manage multi-step designs with checkpoints and read-only "plan mode".
+- `ag-notebook`: Direct manipulation of Jupyter Notebooks (.ipynb) with cell editing.
+- `ag-mcp`: Connect, list, and call tools from Model Context Protocol servers.
 
 All commands support `--help` for usage information.
 

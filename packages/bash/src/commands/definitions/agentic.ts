@@ -65,4 +65,13 @@ export const agenticLoaders: LazyCommandDef<CommandName>[] = [
     load: async () =>
       (await import("../ag-convert/ag-convert.js")).agConvertCommand,
   },
+  {
+    name: "ag-plan" as CommandName,
+    load: async () => (await import("../ag-plan/ag-plan.js")).agPlanCommand,
+  },
+  {
+    name: "ag-notebook" as CommandName,
+    load: async () =>
+      (await import("../ag-notebook/ag-notebook.js")).agNotebookCommand,
+  },
 ];
