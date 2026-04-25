@@ -832,8 +832,16 @@ export class Bash extends EventEmitter {
       };
     }
 
+    // Heredoc normalization (ensure delimiters are trimmed if not in raw mode)
+    const normalizedCommandLine = options?.rawScript
+      ? commandLine
+      : commandLine.replace(
+          /<<-?\s*["']?(\w+)["']?/g,
+          (_match, delimiter) => `<<${delimiter}`,
+        );
+
     // Log command execution
-    this.logger?.info("exec", { command: commandLine });
+    this.logger?.info("exec", { command: normalizedCommandLine });
 
     // Each exec call gets an isolated state copy - like starting a new shell
     // This ensures exec calls never interfere with each other
@@ -904,9 +912,9 @@ export class Bash extends EventEmitter {
     // Normalize indented multi-line scripts (unless rawScript is true)
     // This allows writing indented bash scripts in template literals
     // BUT we must preserve whitespace inside heredoc content
-    let normalized = commandLine;
+    let normalized = normalizedCommandLine;
     if (!options?.rawScript) {
-      normalized = normalizeScript(commandLine);
+      normalized = normalizeScript(normalizedCommandLine);
     }
 
     // Activate defense-in-depth box if configured
