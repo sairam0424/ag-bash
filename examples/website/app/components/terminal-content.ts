@@ -3,7 +3,7 @@
 
 
 
-export const version = "2.4.0";
+export const version = "2.4.1";
 
 // Command outputs
 export const CMD_ABOUT = `ag-bash v${version}
@@ -344,7 +344,7 @@ limitations under the License.
 
 export const FILE_PACKAGE_JSON = `{
   "name": "@ag-bash/bash",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Unified Agentic Bash for Ag-Bash",
   "repository": {
     "type": "git",
