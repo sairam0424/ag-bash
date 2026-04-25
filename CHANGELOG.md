@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-04-25
+
+### Fixed (Stability & Compatibility)
+
+- **Build Pipeline**: Resolved Tree-Sitter WASM resolution issues in browser and Next.js environments by ensuring proper asset propagation to `dist/bundle/`.
+- **Browser Compatibility**: Implemented a functional `EventEmitter` shim for browser bundles, fixing the `Class extends value undefined` runtime error.
+- **Interpreter Refinements**: Fixed an issue with indented heredocs (`<<-EOF`) normalization in `Bash.exec`.
+- **Log Hygiene**: Suppressed `direct-eval` and `empty-import-meta` warnings in the build output for cleaner logs.
+
 ## [2.4.0] - 2026-04-24
 
 ### Added (Project V-Next Upgrade)

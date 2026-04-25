@@ -1,6 +1,6 @@
-# 🏛️ Ag-Bash Architecture: Project V-Next (v2.4.0)
+# 🏛️ Ag-Bash Architecture: Project V-Next (v2.4.1)
 
-This document provides a deep dive into the high-performance architectural components introduced in the **v2.4.0 "Project V-Next"** and **v2.0.0 "Nexus Prime"** releases.
+This document provides a deep dive into the high-performance architectural components introduced in the **v2.4.1 "Project V-Next"** and **v2.0.0 "Nexus Prime"** releases.
 
 ---
 

@@ -11,9 +11,9 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 | :--- | :--- | :--- |
-| [`@ag-bash/bash`](./packages/bash) | `v2.4.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v2.4.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
-| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v2.4.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
+| [`@ag-bash/bash`](./packages/bash) | `v2.4.1` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v2.4.1` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v2.4.1` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
 
 ---
 
