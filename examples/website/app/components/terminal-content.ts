@@ -3,7 +3,7 @@
 
 
 
-export const version = "2.4.1";
+export const version = "2.5.0";
 
 // Command outputs
 export const CMD_ABOUT = `ag-bash v${version}
@@ -43,9 +43,9 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 | :--- | :--- | :--- |
-| [\`@ag-bash/bash\`](./packages/bash) | \`v2.4.0\` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [\`@ag-bash/mcp-server\`](./packages/mcp-server) | \`v2.4.0\` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
-| [\`@ag-bash/agent-bridge\`](./packages/agent-bridge) | \`v2.4.0\` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
+| [\`@ag-bash/bash\`](./packages/bash) | \`v2.5.0\` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [\`@ag-bash/mcp-server\`](./packages/mcp-server) | \`v2.5.0\` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [\`@ag-bash/agent-bridge\`](./packages/agent-bridge) | \`v2.5.0\` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
 
 ---
 
@@ -111,7 +111,7 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
-- **Project V-Next Upgrade**: (v2.4.0+) High-fidelity tool lifecycle observability, Agentic Healer 2.0, and semantic tool suggestions.
+- **Project V-Next Upgrade**: (v2.5.0+) Unified Permission Architecture, Real JSON-RPC MCP Client (Stdio/HTTP), and multi-step Planning Mode.
 - **Project Nexus Prime Suite**: (v2.0.0+) Intelligent semantic analysis (\`ag-hover\`, \`ag-explain\`), symbol discovery (\`ag-find-symbol\`), and persistent project management (\`ag-todo\`).
 - **AST Performance Optimization**: (v2.0.0+) Global \`ASTCache\` (LRU) for high-frequency script execution.
 - **Inter-Runtime Persistence**: (v2.0.0+) Shared variable state between Bash, Python, and JS via \`SharedStateBus\`.
@@ -344,7 +344,7 @@ limitations under the License.
 
 export const FILE_PACKAGE_JSON = `{
   "name": "@ag-bash/bash",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "Unified Agentic Bash for Ag-Bash",
   "repository": {
     "type": "git",
@@ -435,7 +435,7 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 **File operations**: \`basename\`, \`chmod\`, \`cp\`, \`dirname\`, \`du\`, \`file\`, \`find\`, \`ln\`, \`ls\`, \`mkdir\`, \`mv\`, \`od\`, \`pwd\`, \`readlink\`, \`rm\`, \`rmdir\`, \`split\`, \`stat\`, \`touch\`, \`tree\`
 
-**Utilities**: \`ag-analyze\`, \`ag-diff\`, \`ag-edit\`, \`ag-explain\`, \`ag-find-symbol\`, \`ag-hover\`, \`ag-snapshot\`, \`ag-todo\`, \`alias\`, \`base64\`, \`bash\`, \`clear\`, \`curl\`, \`date\`, \`diff\`, \`echo\`, \`env\`, \`expr\`, \`false\`, \`gzip\`, \`gunzip\`, \`hello\`, \`help\`, \`history\`, \`hostname\`, \`html-to-markdown\`, \`md5sum\`, \`printenv\`, \`printf\`, \`seq\`, \`sh\`, \`sha1sum\`, \`sha256sum\`, \`sleep\`, \`tar\`, \`tee\`, \`time\`, \`timeout\`, \`true\`, \`unalias\`, \`which\`, \`whoami\`, \`zcat\`
+**Utilities**: \`ag-analyze\`, \`ag-diff\`, \`ag-edit\`, \`ag-explain\`, \`ag-find-symbol\`, \`ag-hover\`, \`ag-mcp\`, \`ag-notebook\`, \`ag-plan\`, \`ag-snapshot\`, \`ag-todo\`, \`alias\`, \`base64\`, \`bash\`, \`clear\`, \`curl\`, \`date\`, \`diff\`, \`echo\`, \`env\`, \`expr\`, \`false\`, \`gzip\`, \`gunzip\`, \`hello\`, \`help\`, \`history\`, \`hostname\`, \`html-to-markdown\`, \`md5sum\`, \`printenv\`, \`printf\`, \`seq\`, \`sh\`, \`sha1sum\`, \`sha256sum\`, \`sleep\`, \`tar\`, \`tee\`, \`time\`, \`timeout\`, \`true\`, \`unalias\`, \`which\`, \`whoami\`, \`zcat\`
 
 All commands support \`--help\` for usage details.
 

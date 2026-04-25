@@ -11,9 +11,9 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 | :--- | :--- | :--- |
-| [`@ag-bash/bash`](./packages/bash) | `v2.4.1` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v2.4.1` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
-| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v2.4.1` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
+| [`@ag-bash/bash`](./packages/bash) | `v2.5.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v2.5.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v2.5.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
 
 ---
 
@@ -79,7 +79,7 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
-- **Project V-Next Upgrade**: (v2.4.0+) High-fidelity tool lifecycle observability, Agentic Healer 2.0, and semantic tool suggestions.
+- **Project V-Next Upgrade**: (v2.5.0+) Unified Permission Architecture, Real JSON-RPC MCP Client (Stdio/HTTP), and multi-step Planning Mode.
 - **Project Nexus Prime Suite**: (v2.0.0+) Intelligent semantic analysis (`ag-hover`, `ag-explain`), symbol discovery (`ag-find-symbol`), and persistent project management (`ag-todo`).
 - **AST Performance Optimization**: (v2.0.0+) Global `ASTCache` (LRU) for high-frequency script execution.
 - **Inter-Runtime Persistence**: (v2.0.0+) Shared variable state between Bash, Python, and JS via `SharedStateBus`.

@@ -75,6 +75,7 @@ import {
 } from "./security/defense-in-depth-box.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
 import { SessionManager } from "./services/SessionManager.js";
+import { PermissionManager } from "./services/PermissionManager.js";
 import {
   applyStateDelta,
   type BashDelta,
@@ -436,6 +437,7 @@ export class Bash extends EventEmitter {
   public indexer: WorkspaceIndexer;
   private agenticHealer?: AgenticHealer;
   public toolbox: BashToolbox;
+  public permissionManager: PermissionManager;
   public readonly nestingDepth: number;
 
   // Interpreter state (shared with interpreter instances)
@@ -447,6 +449,7 @@ export class Bash extends EventEmitter {
     super();
     this.options = options;
     this.nestingDepth = options.nestingDepth ?? 0;
+    this.permissionManager = new PermissionManager(options.permissionHandler);
     this.toolbox = new BashToolbox();
     this.initLsp();
     this.fs =

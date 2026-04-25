@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-04-25
+
+### Added (Project V-Next Upgrade - Final)
+
+- **Advanced Tooling & Protocol Support**:
+  - **Real MCP Client**: Implemented a full JSON-RPC 2.0 client for Model Context Protocol servers. Supports high-performance **Stdio** (process spawning) and **HTTP** (fetch) transports.
+  - **Dynamic Tool Discovery**: Automated tool registration from MCP servers with JSON-schema mapping to internal Zod schemas.
+  - **Interactive Permissions**: Centralized `PermissionManager` for managing sensitive tool access with support for `allow`, `deny`, and `ask` behaviors.
+- **New Agentic Command Suite**:
+  - `ag-plan`: Dedicated Planning Mode for multi-step designs with checkpoints and read-only state safety.
+  - `ag-notebook`: Direct manipulation of Jupyter Notebooks (`.ipynb`) with cell-level editing and structural analysis.
+  - `ag-mcp`: Comprehensive management CLI for MCP server lifecycles and tool execution.
+- **Observability & Diagnostics**:
+  - **AgTrace Heuristics**: Added specialized failure analysis for MCP connection issues and Notebook malformations.
+  - **Path Safety**: Standardized path resolution across all new commands to ensure sandbox integrity.
+
+### Changed
+
+- Synchronized monorepo versions to **v2.5.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Refactored `McpClient` to handle asynchronous transport initialization and eliminate race conditions.
+
 ## [2.4.1] - 2026-04-25
 
 ### Fixed (Stability & Compatibility)

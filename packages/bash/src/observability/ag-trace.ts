@@ -94,6 +94,24 @@ export class AgTrace {
       }
     }
 
+    // 5. MCP Tool Call Failures
+    if (result.stderr.includes("MCP error") || result.stderr.includes("Connection") && result.stderr.includes("not found")) {
+      observations.push({
+        type: "suggestion",
+        message: "An MCP tool call failed. This might be due to a disconnected server or missing tool.",
+        suggestions: ["Run 'ag-mcp list' to check active connections.", "Run 'ag-mcp connect' to reconnect to the server."],
+      });
+    }
+
+    // 6. Notebook Errors
+    if (result.stderr.toLowerCase().includes("notebook") && result.stderr.toLowerCase().includes("invalid")) {
+      observations.push({
+        type: "suggestion",
+        message: "The notebook file might be malformed or the cell index is out of bounds.",
+        suggestions: ["Run 'ag-notebook read <path>' to check the cell structure."],
+      });
+    }
+
     return observations;
   }
 
