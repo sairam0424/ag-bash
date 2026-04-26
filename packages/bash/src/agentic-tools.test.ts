@@ -3,6 +3,7 @@ import { BashToolbox } from "./agentic/BashToolbox.js";
 import { Bash } from "./Bash.js";
 import { InMemoryFs } from "./fs/in-memory-fs/index.js";
 import { SymbolType } from "./lsp/semantic-engine.js";
+import { hashString } from "./utils/crypto.js";
 
 describe("Agentic Tools (BashToolbox)", () => {
   let bash: Bash;
@@ -61,6 +62,58 @@ describe("Agentic Tools (BashToolbox)", () => {
       expect(result).toContain("Successfully edited");
       const content = await bash.readFileDirect(path);
       expect(content).toBe("line1\nMIDDLE\nline3");
+    });
+  });
+
+  describe("ag_edit", () => {
+    it("should apply multiple edits in order", async () => {
+      const path = "/edit_multi.txt";
+      await bash.writeFileDirect(path, "A\nB\nC");
+
+      const result = await tools.ag_edit.execute({
+        filePath: path,
+        edits: [
+          { action: "replace", line: 2, text: "B2" },
+          { action: "append", text: "D" }
+        ]
+      });
+
+      expect(result).toContain("Successfully updated");
+      const content = await bash.readFileDirect(path);
+      expect(content).toBe("A\nB2\nC\nD");
+    });
+
+    it("should fail if the hash does not match", async () => {
+      const path = "/stale.txt";
+      await bash.writeFileDirect(path, "v1");
+      
+      const wrongHash = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+      const result = await tools.ag_edit.execute({
+        filePath: path,
+        edits: [{ action: "replace", line: 1, text: "v2" }],
+        expectedHash: wrongHash
+      });
+
+      expect(result).toContain("Stale Edit Error");
+      const content = await bash.readFileDirect(path);
+      expect(content).toBe("v1");
+    });
+
+    it("should succeed if the hash matches", async () => {
+      const path = "/fresh.txt";
+      const initialContent = "v1";
+      await bash.writeFileDirect(path, initialContent);
+      const currentHash = hashString(initialContent);
+      
+      const result = await tools.ag_edit.execute({
+        filePath: path,
+        edits: [{ action: "replace", line: 1, text: "v2" }],
+        expectedHash: currentHash
+      });
+
+      expect(result).not.toContain("Stale Edit Error");
+      const content = await bash.readFileDirect(path);
+      expect(content).toBe("v2");
     });
   });
 
