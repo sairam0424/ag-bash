@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Bash } from "../Bash.js";
-import { ConvertTool } from "./ConvertTool.js";
 import { agConvertCommand } from "../commands/ag-convert/ag-convert.js";
+import { ConvertTool } from "./ConvertTool.js";
 
 describe("ConvertTool", () => {
   let bash: Bash;
@@ -26,7 +26,7 @@ describe("ConvertTool", () => {
 
     expect(agConvertCommand.execute).toHaveBeenCalledWith(
       ["test.pdf", "--engine", "docling", "--high-fidelity"],
-      expect.any(Object)
+      expect.any(Object),
     );
     expect(result).toBe("Converted Markdown Content");
   });
@@ -39,8 +39,9 @@ describe("ConvertTool", () => {
       env: {},
     });
 
-    await expect(ConvertTool.execute(bash, { filePath: "missing.pdf" }))
-      .rejects.toThrow("File not found");
+    await expect(
+      ConvertTool.execute(bash, { filePath: "missing.pdf" }),
+    ).rejects.toThrow("File not found");
   });
 
   it("should have correct metadata", () => {

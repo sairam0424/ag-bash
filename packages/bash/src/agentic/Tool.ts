@@ -1,4 +1,4 @@
-import { z } from "zod";
+import type { z } from "zod";
 import type { Bash } from "../Bash.js";
 import type { PermissionResult, ValidationResult } from "./types.js";
 
@@ -73,8 +73,52 @@ export abstract class Tool implements ToolboxTool {
    */
   protected truncateResult(result: string, maxLength = 50000): string {
     if (result.length > maxLength) {
-      return result.substring(0, maxLength) + "\n... [Result truncated]";
+      return `${result.substring(0, maxLength)}\n... [Result truncated]`;
     }
     return result;
   }
+}
+
+/**
+ * Factory function to build a tool from a plain object.
+ * Breaks circular dependencies by living in the base Tool file.
+ */
+export function buildTool(
+  tool: Partial<ToolboxTool> &
+    Pick<ToolboxTool, "name" | "description" | "parameters" | "execute">,
+): ToolboxTool {
+  const isDestructive =
+    typeof tool.isDestructive === "function"
+      ? tool.isDestructive
+      : () => !!tool.isDestructive;
+
+  return {
+    isReadOnly: false,
+    isDestructive: false,
+    isConcurrencySafe: false,
+    ...tool,
+    checkPermissions:
+      tool.checkPermissions ||
+      (async (bash: Bash, args: any) => {
+        if (isDestructive(args) && bash.getMode() === "plan") {
+          return {
+            behavior: "deny",
+            message: `Cannot execute destructive tool '${tool.name}' in plan mode.`,
+          };
+        }
+        return { behavior: "allow" };
+      }),
+    validateInput:
+      tool.validateInput ||
+      (async (args: any) => {
+        const result = tool.parameters.safeParse(args);
+        if (!result.success) {
+          return {
+            result: false,
+            message: `Invalid parameters for '${tool.name}': ${result.error.message}`,
+          };
+        }
+        return { result: true };
+      }),
+  } as ToolboxTool;
 }

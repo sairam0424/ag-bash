@@ -17,7 +17,7 @@ export const gitCommand: Command = {
     let git: any;
     try {
       git = await import("isomorphic-git");
-    } catch (e) {
+    } catch (_e) {
       return {
         exitCode: 1,
         stdout: "",

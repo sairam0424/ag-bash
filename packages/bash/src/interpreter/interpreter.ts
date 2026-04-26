@@ -591,7 +591,7 @@ export class Interpreter {
       if (suggestion) {
         return {
           ...result,
-          stderr: result.stderr + `\n[Agentic Healer] ${suggestion}\n`,
+          stderr: `${result.stderr}\n[Agentic Healer] ${suggestion}\n`,
         };
       }
     }
@@ -648,7 +648,7 @@ export class Interpreter {
     }
 
     // Estimate functions
-    for (const [name, node] of this.ctx.state.functions) {
+    for (const [name, _node] of this.ctx.state.functions) {
       bytes += name.length * 2;
       // Rough estimate for AST node structure
       bytes += 1000;
@@ -656,7 +656,7 @@ export class Interpreter {
 
     // Estimate file descriptors
     if (this.ctx.state.fileDescriptors) {
-      for (const [fd, content] of this.ctx.state.fileDescriptors) {
+      for (const [_fd, content] of this.ctx.state.fileDescriptors) {
         bytes += 4 + content.length * 2;
       }
     }
@@ -1081,7 +1081,7 @@ export class Interpreter {
             );
             await this.ctx.fs.writeFile(filePath, "", "utf8"); // truncate
             checkFdLimit(this.ctx);
-            fds!.set(fd, `__file__:${filePath}`);
+            fds?.set(fd, `__file__:${filePath}`);
             break;
           }
           case ">>": {
@@ -1091,7 +1091,7 @@ export class Interpreter {
               target,
             );
             checkFdLimit(this.ctx);
-            fds!.set(fd, `__file_append__:${filePath}`);
+            fds?.set(fd, `__file_append__:${filePath}`);
             break;
           }
           case "<": {
@@ -1103,7 +1103,7 @@ export class Interpreter {
             try {
               const content = await this.ctx.fs.readFile(filePath);
               checkFdLimit(this.ctx);
-              fds!.set(fd, content);
+              fds?.set(fd, content);
             } catch {
               return failure(`bash: ${target}: No such file or directory\n`);
             }
@@ -1121,7 +1121,7 @@ export class Interpreter {
             try {
               const content = await this.ctx.fs.readFile(filePath);
               checkFdLimit(this.ctx);
-              fds!.set(
+              fds?.set(
                 fd,
                 `__rw__:${filePath.length}:${filePath}:0:${content}`,
               );
@@ -1129,7 +1129,7 @@ export class Interpreter {
               // File doesn't exist - create empty
               await this.ctx.fs.writeFile(filePath, "", "utf8");
               checkFdLimit(this.ctx);
-              fds!.set(fd, `__rw__:${filePath.length}:${filePath}:0:`);
+              fds?.set(fd, `__rw__:${filePath.length}:${filePath}:0:`);
             }
             break;
           }
@@ -1138,7 +1138,7 @@ export class Interpreter {
             // Move FD: N>&M- means duplicate M to N, then close M
             if (target === "-") {
               // Close the FD
-              fds!.delete(fd);
+              fds?.delete(fd);
             } else if (target.endsWith("-")) {
               // Move operation: N>&M- duplicates M to N then closes M
               // Net-neutral on FD count (set + delete), skip checkFdLimit
@@ -1146,23 +1146,23 @@ export class Interpreter {
               const sourceFd = Number.parseInt(sourceFdStr, 10);
               if (!Number.isNaN(sourceFd)) {
                 // First, duplicate: copy the FD content/info from source to target
-                const sourceInfo = fds!.get(sourceFd);
+                const sourceInfo = fds?.get(sourceFd);
                 if (sourceInfo !== undefined) {
-                  fds!.set(fd, sourceInfo!);
+                  fds?.set(fd, sourceInfo!);
                 } else {
                   // Source FD might be 1 (stdout) or 2 (stderr) which aren't in fileDescriptors
                   // In that case, store as duplication marker
-                  fds!.set(fd, `__dupout__:${sourceFd}`);
+                  fds?.set(fd, `__dupout__:${sourceFd}`);
                 }
                 // Then close the source FD
-                fds!.delete(sourceFd);
+                fds?.delete(sourceFd);
               }
             } else {
               const sourceFd = Number.parseInt(target, 10);
               if (!Number.isNaN(sourceFd)) {
                 // Store FD duplication: fd N points to fd M
                 checkFdLimit(this.ctx);
-                fds!.set(fd, `__dupout__:${sourceFd}`);
+                fds?.set(fd, `__dupout__:${sourceFd}`);
               }
             }
             break;
@@ -1172,7 +1172,7 @@ export class Interpreter {
             // Move FD: N<&M- means duplicate M to N, then close M
             if (target === "-") {
               // Close the FD
-              fds!.delete(fd);
+              fds?.delete(fd);
             } else if (target.endsWith("-")) {
               // Move operation: N<&M- duplicates M to N then closes M
               // Net-neutral on FD count (set + delete), skip checkFdLimit
@@ -1180,22 +1180,22 @@ export class Interpreter {
               const sourceFd = Number.parseInt(sourceFdStr, 10);
               if (!Number.isNaN(sourceFd)) {
                 // First, duplicate: copy the FD content/info from source to target
-                const sourceInfo = fds!.get(sourceFd);
+                const sourceInfo = fds?.get(sourceFd);
                 if (sourceInfo !== undefined) {
-                  fds!.set(fd, sourceInfo!);
+                  fds?.set(fd, sourceInfo!);
                 } else {
                   // Source FD might be 0 (stdin) which isn't in fileDescriptors
-                  fds!.set(fd, `__dupin__:${sourceFd}`);
+                  fds?.set(fd, `__dupin__:${sourceFd}`);
                 }
                 // Then close the source FD
-                fds!.delete(sourceFd);
+                fds?.delete(sourceFd);
               }
             } else {
               const sourceFd = Number.parseInt(target, 10);
               if (!Number.isNaN(sourceFd)) {
                 // Store FD duplication for input
                 checkFdLimit(this.ctx);
-                this.ctx.state.fileDescriptors!.set(
+                this.ctx.state.fileDescriptors?.set(
                   fd,
                   `__dupin__:${sourceFd}`,
                 );
@@ -1285,7 +1285,7 @@ export class Interpreter {
     ) {
       const healer = this.ctx.agenticHealer as AgenticHealer;
       const suggestion = await healer.diagnose(
-        commandName + (args.length > 0 ? " " + args.join(" ") : ""),
+        commandName + (args.length > 0 ? ` ${args.join(" ")}` : ""),
         cmdResult,
         this.ctx,
       );

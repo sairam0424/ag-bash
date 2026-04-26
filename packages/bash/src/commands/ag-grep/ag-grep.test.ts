@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
 import { agGrepCommand } from "./ag-grep.js";
 
@@ -7,7 +7,10 @@ describe("ag-grep command", () => {
 
   beforeEach(async () => {
     bash = new Bash();
-    await bash.fs.writeFile("/test.txt", "Hello World\nThis is Ag-Bash\nTesting grep");
+    await bash.fs.writeFile(
+      "/test.txt",
+      "Hello World\nThis is Ag-Bash\nTesting grep",
+    );
     await bash.fs.mkdir("/src");
     await bash.fs.writeFile("/src/code.ts", "const x = 10;\nconsole.log(x);");
   });

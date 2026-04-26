@@ -1,5 +1,5 @@
-import type { Bash } from "../Bash.js";
 import type { PermissionResult } from "../agentic/types.js";
+import type { Bash } from "../Bash.js";
 
 export interface PermissionHandler {
   ask(message: string): Promise<boolean>;
@@ -35,10 +35,12 @@ export class PermissionManager {
   private initDefaultRules(): void {
     // In 'plan' mode, deny all destructive operations by default unless overridden
     this.addRule({
-      toolPattern: /^(write|edit|delete|rm|mkdir|mv|cp|multi_replace|ag_edit|multi_replace)/,
+      toolPattern:
+        /^(write|edit|delete|rm|mkdir|mv|cp|multi_replace|ag_edit|multi_replace)/,
       mode: "plan",
       behavior: "deny",
-      reason: "Destructive operations are not allowed while in 'plan' mode. Use 'ag-plan' to exit plan mode if you are ready to apply changes.",
+      reason:
+        "Destructive operations are not allowed while in 'plan' mode. Use 'ag-plan' to exit plan mode if you are ready to apply changes.",
     });
   }
 
@@ -73,7 +75,9 @@ export class PermissionManager {
             if (rule.behavior === "deny") {
               return {
                 behavior: "deny",
-                message: rule.reason || `Permission denied by rule: ${rule.toolPattern}`,
+                message:
+                  rule.reason ||
+                  `Permission denied by rule: ${rule.toolPattern}`,
               };
             }
             if (rule.behavior === "ask") {

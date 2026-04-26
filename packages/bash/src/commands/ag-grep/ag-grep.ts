@@ -33,7 +33,7 @@ export const agGrepCommand: Command = {
 
     const searchRecursive = async (currentPath: string) => {
       const stat = await ctx.fs.stat(currentPath);
-      
+
       if (!stat.isDirectory) {
         const content = await ctx.fs.readFile(currentPath, "utf8");
         const lines = content.split("\n");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "../parser/parser.js";
-import { SemanticEngine, SymbolType } from "./semantic-engine.js";
+import { SemanticEngine } from "./semantic-engine.js";
 
 describe("SemanticEngine (Phase 6)", () => {
   it("should track symbol occurrences (definitions and references)", () => {

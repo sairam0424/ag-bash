@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
-import { resolve, dirname } from "node:path";
-import { promisify } from "node:util";
-import { describe, expect, it, beforeAll } from "vitest";
-import { fileURLToPath } from "node:url";
 import fs from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -18,7 +18,11 @@ async function runBin(
       process.execPath,
       [binPath, ...args],
       {
-        env: { ...process.env, AZURE_OPENAI_API_KEY: "mock", AZURE_OPENAI_ENDPOINT: "https://mock.azure.com" },
+        env: {
+          ...process.env,
+          AZURE_OPENAI_API_KEY: "mock",
+          AZURE_OPENAI_ENDPOINT: "https://mock.azure.com",
+        },
       },
     );
     return { stdout, stderr, exitCode: 0 };
@@ -38,7 +42,10 @@ describe("Ag-Bash V-Next E2E Tests", () => {
       fs.mkdirSync(testDir, { recursive: true });
     }
     fs.writeFileSync(join(testDir, "hello.txt"), "Hello World\n");
-    fs.writeFileSync(join(testDir, "edit_me.ts"), "export const a = 1;\nexport const b = 2;\n");
+    fs.writeFileSync(
+      join(testDir, "edit_me.ts"),
+      "export const a = 1;\nexport const b = 2;\n",
+    );
   });
 
   it("should show agentic status in help", async () => {
@@ -47,13 +54,25 @@ describe("Ag-Bash V-Next E2E Tests", () => {
   });
 
   it("should support ag-grep command", async () => {
-    const result = await runBin(["--agentic", "--root", testDir, "-c", "ag-grep Hello ."]);
+    const result = await runBin([
+      "--agentic",
+      "--root",
+      testDir,
+      "-c",
+      "ag-grep Hello .",
+    ]);
     expect(result.stdout).toContain("hello.txt");
     expect(result.stdout).toContain("Hello World");
   });
 
   it("should support ag-find-files command", async () => {
-    const result = await runBin(["--agentic", "--root", testDir, "-c", "ag-find-files . *.ts"]);
+    const result = await runBin([
+      "--agentic",
+      "--root",
+      testDir,
+      "-c",
+      "ag-find-files . *.ts",
+    ]);
     expect(result.stdout).toContain("edit_me.ts");
   });
 

@@ -1,4 +1,4 @@
-import Parser, { type Node, type Tree } from "web-tree-sitter";
+import type { Node, Tree } from "web-tree-sitter";
 import {
   AST,
   type AssignmentNode,
@@ -19,8 +19,6 @@ import {
  * Handles node mapping, source location tracking, and bash-specific syntax quirks.
  */
 export class TreeSitterToAst {
-  private source: string;
-
   constructor(source: string) {
     this.source = source;
   }
@@ -286,7 +284,7 @@ export class TreeSitterToAst {
 
     return {
       type: "Redirection",
-      fd: fdNode ? parseInt(fdNode.text) : null,
+      fd: fdNode ? parseInt(fdNode.text, 10) : null,
       operator,
       target,
       line: node.startPosition.row + 1,
@@ -460,7 +458,7 @@ export class TreeSitterToAst {
   }
 
   private convertForStatement(node: Node): CommandNode | null {
-    const variable = node.childForFieldName("variable")!.text;
+    const variable = node.childForFieldName("variable")?.text;
     const valueNode = node.childForFieldName("value");
     const bodyNode = node.childForFieldName("body")!;
 
@@ -504,7 +502,7 @@ export class TreeSitterToAst {
 
     for (const child of node.namedChildren) {
       if (child.type === "case_item") {
-        const patternNode = child.childForFieldName("value")!; // TS matches multiple patterns in one word or separate?
+        const _patternNode = child.childForFieldName("value")!; // TS matches multiple patterns in one word or separate?
         const bodyNode = child.childForFieldName("body")!;
 
         const patterns: WordNode[] = [];
@@ -572,7 +570,7 @@ export class TreeSitterToAst {
     };
   }
 
-  private convertConditionalCommand(node: Node): CommandNode | null {
+  private convertConditionalCommand(_node: Node): CommandNode | null {
     // [[ ... ]]
     // Simplified for now, just capturing the text for the expander/interpreter
     // In a real implementation we might want a full CondNode tree

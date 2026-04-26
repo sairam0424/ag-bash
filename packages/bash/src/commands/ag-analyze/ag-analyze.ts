@@ -75,7 +75,7 @@ export const agAnalyzeCommand: Command = {
 
       if (flags.symbols) {
         return {
-          stdout: JSON.stringify(symbols, null, 2) + "\n",
+          stdout: `${JSON.stringify(symbols, null, 2)}\n`,
           stderr: "",
           exitCode: 0,
         };

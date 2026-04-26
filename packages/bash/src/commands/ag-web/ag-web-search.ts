@@ -25,9 +25,20 @@ export const WebSearchTool: ToolboxTool = {
   }),
   isReadOnly: true,
   isDestructive: false,
-  checkPermissions: async (bash: Bash, args: any) => ({ behavior: "allow" }),
-  validateInput: async (args: any) => ({ result: true }),
-  execute: async (bash: Bash, { query, allowed_domains, blocked_domains }: { query: string; allowed_domains?: string[]; blocked_domains?: string[] }) => {
+  checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
+  validateInput: async (_args: any) => ({ result: true }),
+  execute: async (
+    bash: Bash,
+    {
+      query,
+      allowed_domains,
+      blocked_domains,
+    }: {
+      query: string;
+      allowed_domains?: string[];
+      blocked_domains?: string[];
+    },
+  ) => {
     const env = bash.env;
     const serperKey = env.SERPER_API_KEY;
     const tavilyKey = env.TAVILY_API_KEY;

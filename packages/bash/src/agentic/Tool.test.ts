@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { buildTool } from "./BashToolbox.js";
 import { Bash } from "../Bash.js";
+import { buildTool } from "./Tool.js";
 
 describe("Unified Tooling Architecture", () => {
   it("should validate input using Zod schema", async () => {
@@ -11,7 +11,7 @@ describe("Unified Tooling Architecture", () => {
       parameters: z.object({
         foo: z.string(),
       }),
-      execute: async (bash, args) => `Hello ${args.foo}`,
+      execute: async (_bash, args) => `Hello ${args.foo}`,
     });
 
     const validResult = await tool.validateInput({ foo: "world" });
@@ -20,7 +20,9 @@ describe("Unified Tooling Architecture", () => {
     const invalidResult = await tool.validateInput({ foo: 123 });
     expect(invalidResult.result).toBe(false);
     if (invalidResult.result === false) {
-      expect(invalidResult.message.toLowerCase()).toContain("expected string, received number");
+      expect(invalidResult.message.toLowerCase()).toContain(
+        "expected string, received number",
+      );
     }
   });
 
@@ -39,7 +41,9 @@ describe("Unified Tooling Architecture", () => {
     const result = await tool.checkPermissions(bash, {});
     expect(result.behavior).toBe("deny");
     if (result.behavior === "deny") {
-      expect(result.message).toContain("Cannot execute destructive tool 'destructive_tool' in plan mode");
+      expect(result.message).toContain(
+        "Cannot execute destructive tool 'destructive_tool' in plan mode",
+      );
     }
 
     // Should allow in execute mode

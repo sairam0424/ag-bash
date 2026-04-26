@@ -110,7 +110,7 @@ export const agMcp: Command = {
             ctx.bash,
           );
           return {
-            stdout: JSON.stringify(result, null, 2) + "\n",
+            stdout: `${JSON.stringify(result, null, 2)}\n`,
             stderr: "",
             exitCode: 0,
           };

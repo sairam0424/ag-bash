@@ -343,7 +343,7 @@ async function main(): Promise<void> {
     agentic: options.agentic,
     treeSitterConfig,
   });
-  
+
   if (options.plan) {
     env.setMode("plan");
   }

@@ -66,12 +66,12 @@ export interface ToolboxTool {
   name: string;
   description: string;
   parameters: import("zod").ZodObject<any>;
-  
+
   /**
    * Optional aliases for backwards compatibility.
    */
   aliases?: string[];
-  
+
   /**
    * Metadata for tool discovery and search.
    */
@@ -90,17 +90,12 @@ export interface ToolboxTool {
   /**
    * Optional hook to validate input before execution.
    */
-  validateInput: (
-    args: any,
-  ) => Promise<ValidationResult>;
+  validateInput: (args: any) => Promise<ValidationResult>;
 
   /**
    * Optional hook to check permissions before execution.
    */
-  checkPermissions: (
-    bash: any,
-    args: any,
-  ) => Promise<PermissionResult>;
+  checkPermissions: (bash: any, args: any) => Promise<PermissionResult>;
 
   /**
    * Indicates if the tool is read-only (doesn't modify state).

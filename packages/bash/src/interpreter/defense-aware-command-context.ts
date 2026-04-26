@@ -1,4 +1,7 @@
-import { assertDefenseContext, SecurityViolationError } from "../security/defense-context.js";
+import {
+  assertDefenseContext,
+  SecurityViolationError,
+} from "../security/defense-context.js";
 import type { CommandContext } from "../types.js";
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -20,7 +23,10 @@ function wrapFunction<TArgs extends unknown[], TResult>(
   return ((...args: TArgs): TResult => {
     // If this is a write-related operation and we are in plan mode, block it.
     // This provides defense-in-depth for all shell commands (touch, rm, mkdir, etc.)
-    const isWriteOp = /^(writeFile|appendFile|mkdir|rm|cp|mv|chmod|symlink|link|utimes|restore)$/.test(phase.replace(/^fs\./, ""));
+    const isWriteOp =
+      /^(writeFile|appendFile|mkdir|rm|cp|mv|chmod|symlink|link|utimes|restore)$/.test(
+        phase.replace(/^fs\./, ""),
+      );
     if (isWriteOp && ctx?.bash?.getMode?.() === "plan") {
       const message = `security violation: Destructive operation '${phase}' blocked in 'plan' mode.`;
       const error = new SecurityViolationError(message, {
@@ -125,9 +131,27 @@ function wrapFileSystem(
       "fs.readdir",
       ctx,
     ),
-    rm: wrapFunction(fs.rm.bind(fs), requireDefenseContext, component, "fs.rm", ctx),
-    cp: wrapFunction(fs.cp.bind(fs), requireDefenseContext, component, "fs.cp", ctx),
-    mv: wrapFunction(fs.mv.bind(fs), requireDefenseContext, component, "fs.mv", ctx),
+    rm: wrapFunction(
+      fs.rm.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.rm",
+      ctx,
+    ),
+    cp: wrapFunction(
+      fs.cp.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.cp",
+      ctx,
+    ),
+    mv: wrapFunction(
+      fs.mv.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.mv",
+      ctx,
+    ),
     resolvePath: wrapFunction(
       fs.resolvePath.bind(fs),
       requireDefenseContext,

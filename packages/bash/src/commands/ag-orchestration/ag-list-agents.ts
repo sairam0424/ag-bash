@@ -9,7 +9,10 @@ import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agListAgents: Command = {
   name: "ag-list-agents",
-  execute: async (args: string[], ctx: CommandContext): Promise<ExecResult> => {
+  execute: async (
+    _args: string[],
+    _ctx: CommandContext,
+  ): Promise<ExecResult> => {
     const manager = AgentManager.getInstance();
     const agents = manager.listAgents();
 

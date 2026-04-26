@@ -1,5 +1,4 @@
 import type { Command, CommandContext, ExecResult } from "../../types.js";
-import { parseArgs } from "../../utils/args.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 
 const agTodoHelp = {

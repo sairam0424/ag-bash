@@ -20,10 +20,10 @@ export const agHoverCommand: Command = {
 
     const { positional } = parsed.result;
     const file = positional[0];
-    const line = parseInt(positional[1]);
-    const char = parseInt(positional[2]);
+    const line = parseInt(positional[1], 10);
+    const char = parseInt(positional[2], 10);
 
-    if (!file || isNaN(line) || isNaN(char)) {
+    if (!file || Number.isNaN(line) || Number.isNaN(char)) {
       return {
         stdout: "",
         stderr:

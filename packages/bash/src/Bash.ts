@@ -74,8 +74,8 @@ import {
   SecurityViolationError,
 } from "./security/defense-in-depth-box.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
-import { SessionManager } from "./services/SessionManager.js";
 import { PermissionManager } from "./services/PermissionManager.js";
+import { SessionManager } from "./services/SessionManager.js";
 import {
   applyStateDelta,
   type BashDelta,

@@ -74,8 +74,8 @@ describe("Agentic Tools (BashToolbox)", () => {
         filePath: path,
         edits: [
           { action: "replace", line: 2, text: "B2" },
-          { action: "append", text: "D" }
-        ]
+          { action: "append", text: "D" },
+        ],
       });
 
       expect(result).toContain("Successfully updated");
@@ -86,12 +86,13 @@ describe("Agentic Tools (BashToolbox)", () => {
     it("should fail if the hash does not match", async () => {
       const path = "/stale.txt";
       await bash.writeFileDirect(path, "v1");
-      
-      const wrongHash = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+      const wrongHash =
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
       const result = await tools.ag_edit.execute({
         filePath: path,
         edits: [{ action: "replace", line: 1, text: "v2" }],
-        expectedHash: wrongHash
+        expectedHash: wrongHash,
       });
 
       expect(result).toContain("Stale Edit Error");
@@ -104,11 +105,11 @@ describe("Agentic Tools (BashToolbox)", () => {
       const initialContent = "v1";
       await bash.writeFileDirect(path, initialContent);
       const currentHash = hashString(initialContent);
-      
+
       const result = await tools.ag_edit.execute({
         filePath: path,
         edits: [{ action: "replace", line: 1, text: "v2" }],
-        expectedHash: currentHash
+        expectedHash: currentHash,
       });
 
       expect(result).not.toContain("Stale Edit Error");

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { ToolboxTool } from "./Tool.js";
-import { Orchestrator } from "./Orchestrator.js";
 import type { Bash } from "../Bash.js";
+import { Orchestrator } from "./Orchestrator.js";
+import type { ToolboxTool } from "./Tool.js";
 
 /**
  * ag_spawn: Spawn a sub-agent to handle a specific task.
@@ -20,8 +20,8 @@ export const SpawnTool: ToolboxTool = {
   }),
   isReadOnly: false,
   isDestructive: false,
-  checkPermissions: async (bash: Bash, args: any) => ({ behavior: "allow" }),
-  validateInput: async (args: any) => ({ result: true }),
+  checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
+  validateInput: async (_args: any) => ({ result: true }),
   execute: async (bash: Bash, args: any) => {
     const orchestrator = Orchestrator.getInstance();
     try {

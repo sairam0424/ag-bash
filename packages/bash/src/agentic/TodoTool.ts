@@ -1,24 +1,35 @@
 import { z } from "zod";
-import { buildTool } from "./BashToolbox.js";
-import { agTodoCommand } from "../commands/ag-todo/ag-todo.js";
 import type { Bash } from "../Bash.js";
-import type { ToolboxTool } from "./Tool.js";
+import { agTodoCommand } from "../commands/ag-todo/ag-todo.js";
+import { buildTool, type ToolboxTool } from "./Tool.js";
 
 /**
  * ag_todo - Agentic tool for managing project tasks and todos.
  */
 export const TodoTool: ToolboxTool = buildTool({
   name: "ag_todo",
-  description: "Manage project tasks and todos. Support for listing, adding, updating, and removing tasks.",
+  description:
+    "Manage project tasks and todos. Support for listing, adding, updating, and removing tasks.",
   parameters: z.object({
-    operation: z.enum(["list", "add", "update", "rm"]).describe("The operation to perform."),
-    task: z.string().optional().describe("The task description (required for 'add')."),
-    id: z.string().optional().describe("The todo ID (required for 'update' and 'rm')."),
-    status: z.enum(["pending", "doing", "done"]).optional().describe("The status to set (required for 'update')."),
+    operation: z
+      .enum(["list", "add", "update", "rm"])
+      .describe("The operation to perform."),
+    task: z
+      .string()
+      .optional()
+      .describe("The task description (required for 'add')."),
+    id: z
+      .string()
+      .optional()
+      .describe("The todo ID (required for 'update' and 'rm')."),
+    status: z
+      .enum(["pending", "doing", "done"])
+      .optional()
+      .describe("The status to set (required for 'update')."),
   }),
   execute: async (bash: Bash, args: any) => {
     const cmdArgs: string[] = [args.operation];
-    
+
     if (args.operation === "add" && args.task) {
       cmdArgs.push(args.task);
     } else if (args.operation === "update") {

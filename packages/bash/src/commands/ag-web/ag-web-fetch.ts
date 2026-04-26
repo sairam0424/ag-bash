@@ -14,8 +14,8 @@ export const WebFetchTool: ToolboxTool = {
   }),
   isReadOnly: true,
   isDestructive: false,
-  checkPermissions: async (bash: Bash, args: any) => ({ behavior: "allow" }),
-  validateInput: async (args: any) => ({ result: true }),
+  checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
+  validateInput: async (_args: any) => ({ result: true }),
   execute: async (bash: Bash, { url }: { url: string }) => {
     try {
       // Use curl to fetch the content

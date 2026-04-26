@@ -14,7 +14,7 @@ const agExplainHelp = {
 export const agExplainCommand: Command = {
   name: "ag-explain",
 
-  async execute(args: string[], ctx: CommandContext): Promise<ExecResult> {
+  async execute(args: string[], _ctx: CommandContext): Promise<ExecResult> {
     if (args.includes("--help") || args.includes("-h"))
       return showHelp(agExplainHelp);
 
@@ -77,7 +77,7 @@ export const agExplainCommand: Command = {
                 text += `${indent}Pipeline with ${node.commands.length} stages:\n`;
                 node.commands.forEach((c: any, i: number) => {
                   text += `${indent}  [Stage ${i + 1}]:\n`;
-                  text += explainNode(c, indent + "    ");
+                  text += explainNode(c, `${indent}    `);
                 });
               } else if (node.commands && node.commands.length === 1) {
                 text += explainNode(node.commands[0], indent);

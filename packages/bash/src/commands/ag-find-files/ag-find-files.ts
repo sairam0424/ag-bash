@@ -32,7 +32,7 @@ export const agFindFilesCommand: Command = {
 
     const findRecursive = async (currentPath: string) => {
       const stat = await ctx.fs.stat(currentPath);
-      
+
       const fileName = currentPath.split("/").pop() || "";
       if (fileName.includes(namePattern)) {
         results.push(currentPath);
