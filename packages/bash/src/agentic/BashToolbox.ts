@@ -3,14 +3,18 @@ import type { Bash } from "../Bash.js";
 import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
 import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
 import { LspTool } from "../lsp/LspTool.js";
+import { ConvertTool } from "./ConvertTool.js";
+import { EditTool } from "./EditTool.js";
+import { MultiReplaceTool } from "./MultiReplaceTool.js";
+import { FindFilesTool, GrepTool } from "./SearchTool.js";
+import { ExplainTool, FindSymbolTool, HoverTool } from "./SemanticTool.js";
+import { TodoTool } from "./TodoTool.js";
 import { SpawnTool } from "./OrchestratorTool.js";
+import { Tool, type ToolboxTool } from "./Tool.js";
 import type {
   PermissionResult,
-  ToolboxTool,
   ValidationResult,
 } from "./types.js";
-
-export type { ToolboxTool };
 
 /**
  * Defaults for all tools (fail-closed where it matters).
@@ -40,10 +44,43 @@ function normalizeQuotes(text: string): string {
 /**
  * Helper to build a tool with safe defaults.
  */
-export function buildTool(tool: Partial<ToolboxTool> & Pick<ToolboxTool, "name" | "description" | "parameters" | "execute">): ToolboxTool {
+export function buildTool(
+  tool: Partial<ToolboxTool> &
+    Pick<ToolboxTool, "name" | "description" | "parameters" | "execute">,
+): ToolboxTool {
+  const isDestructive =
+    typeof tool.isDestructive === "function"
+      ? tool.isDestructive
+      : () => !!tool.isDestructive;
+
   return {
-    ...TOOL_DEFAULTS,
+    isReadOnly: false,
+    isDestructive: false,
+    isConcurrencySafe: false,
     ...tool,
+    checkPermissions:
+      tool.checkPermissions ||
+      (async (bash: Bash, args: any) => {
+        if (isDestructive(args) && bash.getMode() === "plan") {
+          return {
+            behavior: "deny",
+            message: `Cannot execute destructive tool '${tool.name}' in plan mode.`,
+          };
+        }
+        return { behavior: "allow" };
+      }),
+    validateInput:
+      tool.validateInput ||
+      (async (args: any) => {
+        const result = tool.parameters.safeParse(args);
+        if (!result.success) {
+          return {
+            result: false,
+            message: `Invalid parameters for '${tool.name}': ${result.error.message}`,
+          };
+        }
+        return { result: true };
+      }),
   } as ToolboxTool;
 }
 
@@ -60,13 +97,13 @@ export class BashToolbox {
   }
 
   private registerCoreTools() {
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "read_file",
       description: "Read the contents of a file from the virtual filesystem.",
       parameters: z.object({
         path: z.string().describe("Absolute path to the file to read."),
       }),
-      isReadOnly: () => true,
+      isReadOnly: true,
       execute: async (bash: Bash, { path }: { path: string }) => {
         try {
           const content = await bash.fs.readFile(path, "utf-8");
@@ -76,46 +113,37 @@ export class BashToolbox {
           return `Error reading file: ${error.message}`;
         }
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "write_file",
       description: "Create or overwrite a file in the virtual filesystem.",
       parameters: z.object({
         path: z.string().describe("Absolute path to the file to write."),
         content: z.string().describe("The content to write to the file."),
       }),
-      isDestructive: () => true,
-      checkPermissions: async (bash: Bash): Promise<PermissionResult> => {
-        if (bash.getMode() === "plan") {
-          return {
-            behavior: "deny",
-            message:
-              "Cannot write files in plan mode. Switch to execute mode first.",
-          };
-        }
-        return { behavior: "allow" };
-      },
+      isDestructive: true,
       execute: async (bash: Bash, { path, content }: { path: string; content: string }) => {
         try {
           await bash.fs.mkdir("/.ag-bash", { recursive: true });
           await bash.writeFileDirect(path, content);
           await bash.indexer.indexFile(path);
           await bash.saveIndex();
+          await bash.lsp.notifyDidChange(path, content);
           return `Successfully wrote to ${path}.`;
         } catch (error: any) {
           return `Error writing file ${path}: ${error.message}`;
         }
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "list_dir",
       description: "List contents of a directory.",
       parameters: z.object({
         path: z.string().describe("Absolute path to the directory to list."),
       }),
-      isReadOnly: () => true,
+      isReadOnly: true,
       execute: async (bash: Bash, { path }: { path: string }) => {
         try {
           const files = await bash.listDirDirect(path);
@@ -124,9 +152,9 @@ export class BashToolbox {
           return `Error listing directory ${path}: ${error.message}`;
         }
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "edit_file",
       description: "Apply a text patch to a file (simple find and replace).",
       parameters: z.object({
@@ -138,17 +166,7 @@ export class BashToolbox {
           .optional()
           .describe("If true, replaces all occurrences instead of just the first one."),
       }),
-      isDestructive: () => true,
-      checkPermissions: async (bash: Bash): Promise<PermissionResult> => {
-        if (bash.getMode() === "plan") {
-          return {
-            behavior: "deny",
-            message:
-              "Cannot edit files in plan mode. Switch to execute mode first.",
-          };
-        }
-        return { behavior: "allow" };
-      },
+      isDestructive: true,
       execute: async (
         bash: Bash,
         {
@@ -210,9 +228,9 @@ export class BashToolbox {
           return `Error editing file ${path}: ${error.message}`;
         }
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "analyze_code",
       description: "Perform semantic analysis on a source file.",
       parameters: z.object({
@@ -233,9 +251,9 @@ export class BashToolbox {
           return `Error analyzing file ${path}: ${error.message}`;
         }
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "find_symbols",
       description:
         "Search for symbols (functions, variables) across the workspace.",
@@ -245,9 +263,9 @@ export class BashToolbox {
       execute: async (bash: Bash, { query }: { query?: string }) => {
         return await bash.indexer.findSymbols(query);
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "run_command",
       description: "Execute a shell command in the sandbox.",
       parameters: z.object({
@@ -267,9 +285,9 @@ export class BashToolbox {
         const result = await bash.exec(command);
         return result;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "grep_search",
       description: "Search for a text pattern across multiple files.",
       parameters: z.object({
@@ -286,9 +304,9 @@ export class BashToolbox {
           return `Error searching in ${path}: ${error.message}`;
         }
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "index_workspace",
       description:
         "Trigger a full scan and indexing of all supported files in the workspace.",
@@ -307,9 +325,9 @@ export class BashToolbox {
           return `Error indexing workspace: ${error.message}`;
         }
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "get_references",
       description: "Find all references to a function or variable.",
       parameters: z.object({
@@ -364,9 +382,9 @@ export class BashToolbox {
 
         return output;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "hover_info",
       description: "Get information about a symbol at a specific position.",
       parameters: z.object({
@@ -400,9 +418,9 @@ export class BashToolbox {
 
         return `No info found for '${symbolName}'.`;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "query_json",
       description: "Run a jq query against a JSON file or string.",
       parameters: z.object({
@@ -424,9 +442,9 @@ export class BashToolbox {
         const result = await bash.exec(cmd);
         return result.stdout || result.stderr;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "diff_files",
       description: "Generate a unified diff between two files.",
       parameters: z.object({
@@ -437,9 +455,9 @@ export class BashToolbox {
         const result = await bash.exec(`diff -u ${file1} ${file2}`);
         return result.stdout || result.stderr;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "help_builtin",
       description: "Get detailed help for a shell builtin command.",
       parameters: z.object({
@@ -449,9 +467,9 @@ export class BashToolbox {
         const result = await bash.exec(`help ${command}`);
         return result.stdout || result.stderr;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "find_files",
       description: "Search for files by name or glob pattern.",
       parameters: z.object({
@@ -464,9 +482,9 @@ export class BashToolbox {
         const result = await bash.exec(`find ${path} -name "${pattern}"`);
         return result.stdout.split("\n").filter(Boolean);
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "explain_command",
       description: "Parse and explain a shell command.",
       parameters: z.object({
@@ -482,9 +500,9 @@ export class BashToolbox {
           ),
         };
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "check_environment",
       description: "Get diagnostics about the sandboxed environment.",
       parameters: z.object({}),
@@ -496,9 +514,9 @@ export class BashToolbox {
           version: "Ag-Bash vNext",
         };
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "run_js",
       description:
         "Execute JavaScript code in the sandbox. For persistent state, use run_js_session.",
@@ -511,9 +529,9 @@ export class BashToolbox {
         );
         return result;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "run_js_session",
       description:
         "Execute JavaScript code in a persistent session (stateful REPL). Maintains variables and modules between calls.",
@@ -529,9 +547,9 @@ export class BashToolbox {
         );
         return result;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "run_python",
       description:
         "Execute Python code in the sandbox. For persistent state, use run_python_session.",
@@ -544,9 +562,9 @@ export class BashToolbox {
         );
         return result;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "run_python_session",
       description:
         "Execute Python code in a persistent session (stateful REPL). Maintains variables and imports between calls.",
@@ -562,9 +580,9 @@ export class BashToolbox {
         );
         return result;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "close_session",
       description: "Terminate a persistent session and release its resources.",
       parameters: z.object({
@@ -574,9 +592,9 @@ export class BashToolbox {
         await bash.closeSession(sessionId);
         return `Session ${sessionId} closed.`;
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "get_definition",
       description: "Find the definition of a symbol.",
       parameters: z.object({
@@ -586,9 +604,9 @@ export class BashToolbox {
         const def = bash.semanticEngine.findDefinition(name);
         return def || "Definition not found.";
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "add_todo",
       description: "Add a new todo item.",
       parameters: z.object({
@@ -614,9 +632,9 @@ export class BashToolbox {
         await bash.writeFileDirect(todosPath, JSON.stringify(todos, null, 2));
         return { success: true, id: newTodo.id };
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "list_todos",
       description: "List all todo items.",
       parameters: z.object({}),
@@ -627,9 +645,9 @@ export class BashToolbox {
         }
         return { todos: [] };
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "update_todo",
       description: "Update the status of a todo item.",
       parameters: z.object({
@@ -648,9 +666,9 @@ export class BashToolbox {
         await bash.writeFileDirect(todosPath, JSON.stringify(todos, null, 2));
         return { success: true };
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "plan_enter",
       description:
         "Enter plan mode to design an approach before making changes.",
@@ -659,9 +677,9 @@ export class BashToolbox {
         bash.setMode("plan");
         return "Entered plan mode. You are now in read-only mode. Use plan_exit to return to execute mode when ready.";
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "plan_exit",
       description: "Exit plan mode and return to execution mode.",
       parameters: z.object({}),
@@ -669,99 +687,28 @@ export class BashToolbox {
         bash.setMode("execute");
         return "Exited plan mode. You can now make changes to the codebase.";
       },
-    });
+    }));
 
-    this.registerTool({
-      name: "convert_document",
-      description:
-        "Convert any document (PDF, DOCX, XLSX, Images) to high-quality Markdown. Uses a hybrid engine (Docling + MarkItDown) for maximum structural fidelity.",
-      parameters: z.object({
-        path: z.string().describe("Absolute path to the document file."),
-        highFidelity: z
-          .boolean()
-          .optional()
-          .describe("Favor precision (Docling) for complex tables/PDFs."),
-        engine: z
-          .enum(["auto", "docling", "markitdown"])
-          .optional()
-          .describe("Force a specific conversion engine."),
-        analyze: z
-          .boolean()
-          .optional()
-          .describe("Show complexity analysis without converting."),
-        describeImages: z
-          .boolean()
-          .optional()
-          .describe("Use AI to describe images found in the document."),
-        llmProvider: z
-          .enum(["openai", "anthropic", "google", "local"])
-          .optional()
-          .describe("LLM provider for image analysis."),
-        llmModel: z
-          .string()
-          .optional()
-          .describe("Specific LLM model to use (e.g., gpt-4o)."),
-        visionMode: z
-          .enum(["default", "ocr", "diagram", "chart", "screenshot", "document", "technical"])
-          .optional()
-          .describe("Analysis mode for visual elements."),
-        visionPrompt: z
-          .string()
-          .optional()
-          .describe("Custom prompt for image analysis."),
-      }),
-      isReadOnly: () => true,
-      execute: async (
-        bash: Bash,
-        {
-          path,
-          highFidelity,
-          engine,
-          analyze,
-          describeImages,
-          llmProvider,
-          llmModel,
-          visionMode,
-          visionPrompt,
-        }: {
-          path: string;
-          highFidelity?: boolean;
-          engine?: "auto" | "docling" | "markitdown";
-          analyze?: boolean;
-          describeImages?: boolean;
-          llmProvider?: "openai" | "anthropic" | "google" | "local";
-          llmModel?: string;
-          visionMode?: "default" | "ocr" | "diagram" | "chart" | "screenshot" | "document" | "technical";
-          visionPrompt?: string;
-        },
-      ) => {
-        let cmd = `ag-convert ${path}`;
-        if (highFidelity) cmd += " --high-fidelity";
-        if (engine && engine !== "auto") cmd += ` --engine ${engine}`;
-        if (analyze) cmd += " --analyze";
-        if (describeImages) cmd += " --describe-images";
-        if (llmProvider) cmd += ` --llm-provider ${llmProvider}`;
-        if (llmModel) cmd += ` --llm-model ${llmModel}`;
-        if (visionMode) cmd += ` --vision-mode ${visionMode}`;
-        if (visionPrompt) cmd += ` --vision-prompt "${visionPrompt.replace(/"/g, '\\"')}"`;
-
-        const result = await bash.exec(cmd);
-        return result.stdout || result.stderr;
-      },
-    });
-
-    this.registerTool(WebSearchTool);
-    this.registerTool(WebFetchTool);
+    this.registerTool(GrepTool);
+    this.registerTool(FindFilesTool);
+    this.registerTool(EditTool);
+    this.registerTool(HoverTool);
+    this.registerTool(FindSymbolTool);
+    this.registerTool(ExplainTool);
+    this.registerTool(TodoTool);
+    this.registerTool(buildTool(WebSearchTool as any));
+    this.registerTool(buildTool(WebFetchTool as any));
     this.registerTool(LspTool);
-    this.registerTool(SpawnTool);
+    this.registerTool(MultiReplaceTool);
+    this.registerTool(ConvertTool);
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "search_tools",
       description: "Search for available tools by keyword or description.",
       parameters: z.object({
         query: z.string().describe("Keyword to search for in tool names and descriptions."),
       }),
-      isReadOnly: () => true,
+      isReadOnly: true,
       execute: async (bash: Bash, { query }: { query: string }) => {
         const tools = this.getTools();
         const results = tools.filter(t => 
@@ -780,9 +727,9 @@ export class BashToolbox {
           aliases: t.aliases
         }));
       }
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "list_mcp_tools",
       description: "List all tools available via connected MCP servers.",
       parameters: z.object({}),
@@ -795,13 +742,13 @@ export class BashToolbox {
           tools: c.tools.map((t) => `${c.id}__${t.name}`),
         }));
       },
-    });
+    }));
 
-    this.registerTool({
+    this.registerTool(buildTool({
       name: "sync_mcp_tools",
       description: "Synchronize and register all MCP tools into the central toolbox.",
       parameters: z.object({}),
-      isReadOnly: () => true,
+      isReadOnly: true,
       execute: async (bash: Bash) => {
         const client = (
           await import("../services/McpClient.js")
@@ -812,20 +759,20 @@ export class BashToolbox {
         for (const conn of connections) {
           for (const tool of conn.tools) {
             const namespacedName = `mcp:${conn.id}:${tool.name}`;
-            this.registerTool({
+            this.registerTool(buildTool({
               name: namespacedName,
               description: `[MCP: ${conn.id}] ${tool.description || ""}`,
               parameters: z.any(), // MCP schemas are dynamic
               execute: async (b, args) => {
                 return await client.callTool(conn.id, tool.name, args, b);
               }
-            });
+            }));
             count++;
           }
         }
         return `Successfully synchronized ${count} tools from ${connections.length} MCP servers.`;
       }
-    });
+    }));
   }
 
   public registerTool(tool: ToolboxTool): void {
@@ -878,20 +825,17 @@ export class BashToolbox {
   }
   registerMcpTools(connectionId: string, tools: any[]): void {
     for (const tool of tools) {
-      this.registerTool({
+      this.registerTool(buildTool({
         name: `mcp:${connectionId}:${tool.name}`,
         description: tool.description || `MCP tool from ${connectionId}`,
         parameters: this.jsonSchemaToZod(tool.inputSchema),
-        execute: async (bash: Bash, args: any, onProgress?: (progress: any) => void) => {
+        execute: async (bash: Bash, args: any) => {
           const client = (
             await import("../services/McpClient.js")
           ).McpClient.getInstance();
-          // We can't easily pass onProgress to the current McpClient implementation
-          // without adding notification support to the JSON-RPC client.
-          // For now, we'll just call the tool.
           return await client.callTool(connectionId, tool.name, args, bash);
         },
-      });
+      }));
     }
   }
 
@@ -924,6 +868,8 @@ export class BashToolbox {
       result[tool.name] = {
         description: tool.description,
         inputSchema: this.zodToJsonSchema(tool.parameters),
+        effort: tool.effort,
+        composeHooks: tool.composeHooks,
         execute: (args: any) => this.callTool(bash, tool.name, args),
       };
     }
@@ -938,47 +884,36 @@ export class BashToolbox {
    * Orchestrates the tool execution lifecycle:
    * validation -> permissions -> execution.
    */
+  /**
+   * Orchestrates the tool execution lifecycle:
+   * validation -> permissions -> execution.
+   */
   public async callTool(
     bash: Bash,
     toolName: string,
     args: any,
-    onProgress?: (progress: any) => void,
   ): Promise<any> {
     const tool = this.tools.get(toolName);
     if (!tool) {
       throw new Error(`Tool not found: ${toolName}`);
     }
 
-    // 2. Lifecycle Events (Start)
-    const startTime = Date.now();
-    bash.emit("tool:start", { name: toolName, args });
-
-    const onToolProgress = (progress: any) => {
-      bash.emit("tool:progress", { name: toolName, progress });
-      if (onProgress) onProgress(progress);
-    };
-
-    // 3. Validate Input
-    if (tool.validateInput) {
-      const validation = await tool.validateInput(bash, args);
-      if (!validation.result) {
-        return `Validation Error: ${validation.message || "Invalid input"}`;
-      }
+    // 1. Validate Input
+    const validation = await tool.validateInput(args);
+    if (!validation.result) {
+      return `Validation Error: ${validation.message || "Invalid input"}`;
     }
 
     // 2. Check Permissions
-    const permission = await bash.permissionManager.checkPermission(
-      bash,
-      toolName,
-      args,
-      tool.checkPermissions,
-    );
+    const permission = await tool.checkPermissions(bash, args);
 
     if (permission.behavior === "deny") {
       return `Permission Denied: ${permission.message || "Execution blocked"}`;
     }
 
     if (permission.behavior === "ask") {
+      // In the current architecture, we might need to delegate this back to bash
+      // or handle it via a UI prompt if available.
       return `Permission Required: ${permission.message || "This operation requires user approval."}`;
     }
 
@@ -986,11 +921,14 @@ export class BashToolbox {
       args = permission.updatedInput;
     }
 
+    // 3. Lifecycle Events (Start)
+    const startTime = Date.now();
+    bash.emit("tool:start", { name: toolName, args });
 
     // 4. Execute
     let result: any;
     try {
-      result = await tool.execute(bash, args, onToolProgress);
+      result = await tool.execute(bash, args);
     } catch (error: any) {
       result = `Execution Error in ${toolName}: ${error.message}`;
     }
@@ -1000,25 +938,25 @@ export class BashToolbox {
     bash.emit("tool:end", { name: toolName, result, duration });
 
     // 6. Resource Governance (Size Check)
-      const stringResult = typeof result === "string" ? result : JSON.stringify(result);
-      const maxSize = tool.maxResultSizeChars || MAX_TOOL_RESULT_SIZE;
+    const stringResult = typeof result === "string" ? result : JSON.stringify(result);
+    const maxSize = tool.maxResultSizeChars || MAX_TOOL_RESULT_SIZE;
 
-      if (stringResult.length > maxSize) {
-        const artifactId = Math.random().toString(36).substring(2, 10);
-        const artifactPath = `${ARTIFACT_DIR}/${toolName}_${artifactId}.txt`;
-        
-        await bash.fs.mkdir(ARTIFACT_DIR, { recursive: true });
-        await bash.writeFileDirect(artifactPath, stringResult);
-        
-        return {
-          type: "artifact",
-          message: `Tool output was too large (${stringResult.length} chars). It has been saved to an artifact file.`,
-          path: artifactPath,
-          preview: stringResult.substring(0, 1000) + "..."
-        };
-      }
+    if (stringResult.length > maxSize) {
+      const artifactId = Math.random().toString(36).substring(2, 10);
+      const artifactPath = `${ARTIFACT_DIR}/${toolName}_${artifactId}.txt`;
+      
+      await bash.fs.mkdir(ARTIFACT_DIR, { recursive: true });
+      await bash.writeFileDirect(artifactPath, stringResult);
+      
+      return {
+        type: "artifact",
+        message: `Tool output was too large (${stringResult.length} chars). It has been saved to an artifact file.`,
+        path: artifactPath,
+        preview: stringResult.substring(0, 1000) + "..."
+      };
+    }
 
-      return result;
+    return result;
   }
 
   /**

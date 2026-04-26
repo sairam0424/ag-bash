@@ -51,6 +51,10 @@ export interface ExecResult {
   stdoutEncoding?: "binary";
   /** Structured observations about the execution (Ag-Trace) */
   observations?: Observation[];
+  /** Reasoning effort level applied as a context modifier for subsequent turns */
+  effort?: "low" | "medium" | "high";
+  /** Advanced composition hooks for the orchestration layer */
+  composeHooks?: { before?: string[]; after?: string[]; parallel?: string[] };
 }
 
 /** Result from Bash.exec() - always includes env */
