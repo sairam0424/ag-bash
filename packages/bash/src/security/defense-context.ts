@@ -3,6 +3,8 @@ import {
   SecurityViolationError,
 } from "./defense-in-depth-box.js";
 
+export { SecurityViolationError };
+
 /**
  * Fail closed when execution is expected to run inside defense async context.
  */

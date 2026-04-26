@@ -727,6 +727,10 @@ export class Bash extends EventEmitter {
     return res;
   }
 
+  public get lsp(): LSPManager {
+    return LSPManager.getInstance();
+  }
+
   private async initLsp(): Promise<void> {
     const lsp = LSPManager.getInstance();
     // Initialize TS server if available
