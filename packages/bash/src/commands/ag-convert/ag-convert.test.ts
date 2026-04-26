@@ -2,9 +2,11 @@ import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
+import { OverlayFs } from "../../fs/overlay-fs/index.js";
 
 describe("ag-convert command", () => {
-  const testCsvPath = join(process.cwd(), "test_ag_convert_data.csv");
+  const testCsvName = "test_ag_convert_data.csv";
+  const testCsvPath = join(process.cwd(), testCsvName);
   const testCsvContent = `ID,Name,Department,Salary,Performance_Rating,Notes
 101,John Doe,Engineering,125000,Exceeds Expectations,Senior Developer with focus on WASM and AI Integration
 102,Jane Smith,Product,115000,Outstanding,Product Manager for Ag-Bash project. Great at cross-functional communication.
@@ -23,11 +25,17 @@ describe("ag-convert command", () => {
     }
   });
 
+  const createEnv = () =>
+    new Bash({
+      fs: new OverlayFs({ root: process.cwd(), mountPoint: "/" }),
+      cwd: "/",
+    });
+
   describe("basic conversion", () => {
     it("should convert CSV with high-fidelity flag", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --high-fidelity`,
+        `ag-convert /${testCsvName} --high-fidelity`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -41,8 +49,8 @@ describe("ag-convert command", () => {
     });
 
     it("should convert CSV without high-fidelity flag", async () => {
-      const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath}`);
+      const env = createEnv();
+      const result = await env.exec(`ag-convert /${testCsvName}`);
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("John Doe");
@@ -50,9 +58,9 @@ describe("ag-convert command", () => {
     });
 
     it("should respect --engine markitdown flag", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --engine markitdown`,
+        `ag-convert /${testCsvName} --engine markitdown`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -61,9 +69,9 @@ describe("ag-convert command", () => {
     });
 
     it("should respect --engine docling flag", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --engine docling`,
+        `ag-convert /${testCsvName} --engine docling`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -72,9 +80,9 @@ describe("ag-convert command", () => {
     });
 
     it("should output JSON when --json flag is used with docling", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --json --engine docling`,
+        `ag-convert /${testCsvName} --json --engine docling`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -105,7 +113,7 @@ describe("ag-convert command", () => {
       const result = await env.exec("ag-convert --help");
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("v2.2.0");
+      expect(result.stdout).toContain("v2.3.1");
     });
 
     it("should show smart routing information in help", async () => {
@@ -138,10 +146,10 @@ describe("ag-convert command", () => {
     });
 
     it("should handle invalid engine gracefully", async () => {
-      const env = new Bash();
+      const env = createEnv();
       // Invalid engine values are passed to argparse which will error
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --engine invalid_engine`,
+        `ag-convert /${testCsvName} --engine invalid_engine`,
       );
 
       // Python argparse will catch this
@@ -151,18 +159,25 @@ describe("ag-convert command", () => {
 
   describe("file format detection", () => {
     it("should handle relative paths", async () => {
-      const env = new Bash();
-      // Copy file to a relative location in the virtual fs
-      await env.exec(`echo "${testCsvContent}" > relative_test.csv`);
+      const env = createEnv();
+      const fileName = "relative_test_manual.csv";
+      const realPath = join(process.cwd(), fileName);
+      writeFileSync(realPath, testCsvContent);
 
-      const result = await env.exec("ag-convert relative_test.csv");
-
-      expect(result.stdout).toContain("John Doe");
+      try {
+        // Current working directory in env is '/', which maps to process.cwd()
+        const result = await env.exec(`ag-convert ${fileName}`);
+        expect(result.stdout).toContain("John Doe");
+      } finally {
+        if (existsSync(realPath)) {
+          unlinkSync(realPath);
+        }
+      }
     });
 
     it("should handle absolute paths", async () => {
-      const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath}`);
+      const env = createEnv();
+      const result = await env.exec(`ag-convert /${testCsvName}`);
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("John Doe");
@@ -171,9 +186,9 @@ describe("ag-convert command", () => {
 
   describe("option combinations", () => {
     it("should handle --high-fidelity with --engine docling", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --high-fidelity --engine docling`,
+        `ag-convert /${testCsvName} --high-fidelity --engine docling`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -181,9 +196,9 @@ describe("ag-convert command", () => {
     });
 
     it("should handle --high-fidelity with --json", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --high-fidelity --json`,
+        `ag-convert /${testCsvName} --high-fidelity --json`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -192,9 +207,9 @@ describe("ag-convert command", () => {
     });
 
     it("should handle all flags together", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --engine docling --high-fidelity --json`,
+        `ag-convert /${testCsvName} --engine docling --high-fidelity --json`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -205,9 +220,9 @@ describe("ag-convert command", () => {
 
   describe("output format validation", () => {
     it("should produce markdown table with proper formatting", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --high-fidelity`,
+        `ag-convert /${testCsvName} --high-fidelity`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -217,9 +232,9 @@ describe("ag-convert command", () => {
     });
 
     it("should preserve data integrity", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --high-fidelity`,
+        `ag-convert /${testCsvName} --high-fidelity`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -236,9 +251,9 @@ describe("ag-convert command", () => {
     });
 
     it("should handle long text fields properly", async () => {
-      const env = new Bash();
+      const env = createEnv();
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --high-fidelity`,
+        `ag-convert /${testCsvName} --high-fidelity`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -253,10 +268,10 @@ describe("ag-convert command", () => {
     });
   });
 
-  describe("smart routing (v2.2.0)", () => {
+  describe("smart routing (v2.3.1)", () => {
     it("should show complexity analysis with --analyze flag", async () => {
-      const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --analyze`);
+      const env = createEnv();
+      const result = await env.exec(`ag-convert /${testCsvName} --analyze`);
 
       expect(result.exitCode).toBe(0);
       // Should output JSON
@@ -269,8 +284,8 @@ describe("ag-convert command", () => {
     });
 
     it("should recommend markitdown for small CSV", async () => {
-      const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --analyze`);
+      const env = createEnv();
+      const result = await env.exec(`ag-convert /${testCsvName} --analyze`);
 
       expect(result.exitCode).toBe(0);
       const analysis = JSON.parse(result.stdout);
@@ -281,20 +296,20 @@ describe("ag-convert command", () => {
     });
 
     it("should use smart routing by default (auto engine)", async () => {
-      const env = new Bash();
+      const env = createEnv();
       // Without --engine flag, should use auto (smart routing)
-      const result = await env.exec(`ag-convert ${testCsvPath}`);
+      const result = await env.exec(`ag-convert /${testCsvName}`);
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("John Doe");
     });
 
     it("should respect --engine override with smart routing", async () => {
-      const env = new Bash();
+      const env = createEnv();
       // Even though small CSV would route to markitdown,
       // explicit --engine docling should override
       const result = await env.exec(
-        `ag-convert ${testCsvPath} --engine docling`,
+        `ag-convert /${testCsvName} --engine docling`,
       );
 
       expect(result.exitCode).toBe(0);
@@ -302,8 +317,8 @@ describe("ag-convert command", () => {
     });
 
     it("should work with --analyze and --json together", async () => {
-      const env = new Bash();
-      const result = await env.exec(`ag-convert ${testCsvPath} --analyze`);
+      const env = createEnv();
+      const result = await env.exec(`ag-convert /${testCsvName} --analyze`);
 
       expect(result.exitCode).toBe(0);
       // Analyze always outputs JSON

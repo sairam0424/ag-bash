@@ -112,7 +112,9 @@ export type CommandName =
   | "ag-todo"
   | "ag-convert"
   | "ag-plan"
-  | "ag-notebook";
+  | "ag-notebook"
+  | "ag-grep"
+  | "ag-find-files";
 
 export type NetworkCommandName = "curl";
 export type PythonCommandName = "python3" | "python";

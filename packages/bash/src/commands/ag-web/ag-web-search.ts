@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolboxTool } from "../../agentic/BashToolbox.js";
+import type { ToolboxTool } from "../../agentic/Tool.js";
 import type { Bash } from "../../Bash.js";
 
 /**
@@ -23,7 +23,11 @@ export const WebSearchTool: ToolboxTool = {
       .optional()
       .describe("Exclude results from these domains."),
   }),
-  execute: async (bash: Bash, { query, allowed_domains, blocked_domains }) => {
+  isReadOnly: true,
+  isDestructive: false,
+  checkPermissions: async (bash: Bash, args: any) => ({ behavior: "allow" }),
+  validateInput: async (args: any) => ({ result: true }),
+  execute: async (bash: Bash, { query, allowed_domains, blocked_domains }: { query: string; allowed_domains?: string[]; blocked_domains?: string[] }) => {
     const env = bash.env;
     const serperKey = env.SERPER_API_KEY;
     const tavilyKey = env.TAVILY_API_KEY;

@@ -36,7 +36,7 @@ const agConvertHelp = {
     "",
     "  Phase 4: Visual Intelligence",
     "    --describe-images Use LLM to describe images",
-    "    --llm-provider <openai|anthropic|google|local>",
+    "    --llm-provider <openai|anthropic|google|local|azure>",
     "                      LLM provider (default: openai)",
     "    --llm-model <name>",
     "                      Specific model (e.g., gpt-4o, claude-3-5-sonnet)",
@@ -158,19 +158,7 @@ export const agConvertCommand: Command = {
       };
     }
 
-    // Call host python
-    // Resolve the absolute path of python3 to avoid shim mismatches
-    let pythonExe = "python3";
-    try {
-      const resolve = spawnSync(
-        "python3",
-        ["-c", "import sys; print(sys.executable)"],
-        { encoding: "utf-8" },
-      );
-      if (resolve.status === 0 && resolve.stdout.trim()) {
-        pythonExe = resolve.stdout.trim();
-      }
-    } catch (e) {}
+    const pythonExe = "python3";
 
     const pythonArgs = [bridgePath, realFilePath, "--engine", engine];
     if (highFidelity) pythonArgs.push("--high-fidelity");
@@ -205,6 +193,10 @@ export const agConvertCommand: Command = {
           stderr: `ag-convert: failed to execute python3: ${result.error.message}\n`,
           exitCode: 1,
         };
+      }
+
+      if (result.status !== 0) {
+        console.error(`ag-convert bridge failed with status ${result.status}. Stderr: ${result.stderr}`);
       }
 
       return {

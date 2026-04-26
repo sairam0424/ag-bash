@@ -86,7 +86,7 @@ def analyze_document_complexity(file_path):
         "recommended_engine": recommended_engine
     }
 
-def smart_route(file_path, user_preference="auto", high_fidelity=False):
+def smart_route(file_path, user_preference="auto", high_fidelity=False, require_json=False):
     """
     Determine the best engine based on document analysis.
 
@@ -94,12 +94,17 @@ def smart_route(file_path, user_preference="auto", high_fidelity=False):
         file_path: Path to document
         user_preference: "auto", "docling", or "markitdown"
         high_fidelity: If True, bias toward Docling
+        require_json: If True, force Docling as it supports JSON output
 
     Returns:
         str: "docling" or "markitdown"
     """
     if user_preference in ["docling", "markitdown"]:
         return user_preference
+
+    # JSON output requires docling
+    if require_json:
+        return "docling"
 
     analysis = analyze_document_complexity(file_path)
     if "error" in analysis:
@@ -121,7 +126,7 @@ def main():
 
     # Phase 4: Visual Intelligence flags
     parser.add_argument("--describe-images", action="store_true", help="Use LLM to describe images")
-    parser.add_argument("--llm-provider", choices=["openai", "anthropic", "google", "local"], default="openai",
+    parser.add_argument("--llm-provider", choices=["openai", "anthropic", "google", "local", "azure"], default="openai",
                        help="LLM provider for image description (default: openai)")
     parser.add_argument("--llm-model", type=str, help="Specific LLM model to use (overrides provider default)")
     parser.add_argument("--vision-mode", choices=list(VISION_PROMPTS.keys()), default="default",
@@ -141,7 +146,7 @@ def main():
         sys.exit(1)
 
     # Smart routing with complexity analysis
-    engine = smart_route(args.file, args.engine, args.high_fidelity)
+    engine = smart_route(args.file, args.engine, args.high_fidelity, args.json)
 
     # Phase 4: Prepare vision parameters
     vision_prompt = args.vision_prompt or VISION_PROMPTS.get(args.vision_mode, VISION_PROMPTS["default"])
@@ -231,8 +236,20 @@ def get_llm_client_and_model(provider="openai", model=None):
         except ImportError:
             raise ValueError("ollama package not installed. Install with: pip install ollama")
 
+    elif provider == "azure":
+        try:
+            from openai import AzureOpenAI
+            api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+            endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+            if not api_key or not endpoint:
+                raise ValueError("AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT environment variables not set")
+            model = model or "gpt-4o"
+            return AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version="2024-02-15-preview"), model
+        except ImportError:
+            raise ValueError("openai package not installed. Install with: pip install openai")
+
     else:
-        raise ValueError(f"Unsupported LLM provider: {provider}. Supported: openai, anthropic, google, local")
+        raise ValueError(f"Unsupported LLM provider: {provider}. Supported: openai, anthropic, google, local, azure")
 
 def run_markitdown(file_path, describe_images=False, llm_provider="openai", llm_model=None, vision_prompt=None):
     from markitdown import MarkItDown

@@ -82,6 +82,19 @@ export class LSPManager {
     }
   }
 
+  /**
+   * Notify the language server that a file has changed.
+   */
+  public notifyDidChange(filePath: string, content: string): void {
+    this.sendNotification(filePath, "textDocument/didChange", {
+      textDocument: {
+        uri: `file://${filePath}`,
+        version: Date.now(), // Simplified versioning
+      },
+      contentChanges: [{ text: content }],
+    });
+  }
+
   private async fallbackToSemanticEngine(
     bash: Bash,
     request: LSPRequest,

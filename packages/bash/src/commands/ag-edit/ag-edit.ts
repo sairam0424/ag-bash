@@ -142,6 +142,12 @@ export const agEditCommand: Command = {
 
     try {
       await ctx.fs.writeFile(filePath, newContent);
+
+      // Notify LSP of changes if running within a Bash instance
+      if (ctx.bash?.lsp) {
+        ctx.bash.lsp.notifyDidChange(filePath, newContent);
+      }
+
       return {
         stdout: `Successfully updated ${file}: ${summary}\n`,
         stderr: "",
