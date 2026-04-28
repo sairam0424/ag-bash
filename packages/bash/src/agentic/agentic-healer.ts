@@ -5,8 +5,8 @@ import type {
 } from "../interpreter/types.js";
 import { SymbolType } from "../lsp/semantic-engine.js";
 import type { ExecResult } from "../types.js";
-import type { AgenticHealerConfig } from "./types.js";
 import type { BashToolbox } from "./BashToolbox.js";
+import type { AgenticHealerConfig } from "./types.js";
 
 /**
  * Agentic Healer for Ag-Bash.
@@ -243,7 +243,7 @@ SHELL_STABLE: ${state.options.posix ? "POSIX" : "BASH"}
   private async diagnoseWithTools(
     command: string,
     result: ExecResult,
-    ctx: InterpreterContext,
+    _ctx: InterpreterContext,
   ): Promise<string | null> {
     if (!this.toolbox) return null;
 

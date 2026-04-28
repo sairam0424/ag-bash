@@ -7,7 +7,6 @@
  */
 
 import type { BashSnapshot } from "../Bash.js";
-import type { FsEntry } from "../fs/interface.js";
 import type { InterpreterState } from "../interpreter/types.js";
 
 export interface BashDelta {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolboxTool } from "../agentic/BashToolbox.js";
+import type { ToolboxTool } from "../agentic/Tool.js";
 import type { Bash } from "../Bash.js";
 import { LSPManager } from "./LSPManager.js";
 
@@ -41,8 +41,11 @@ export const LspTool: ToolboxTool = {
       .optional()
       .describe("Name of the symbol (optional if position is provided)."),
   }),
-  isReadOnly: () => true,
-  execute: async (bash, args) => {
+  isReadOnly: true,
+  isDestructive: false,
+  checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
+  validateInput: async (_args: any) => ({ result: true }),
+  execute: async (bash: Bash, args: any) => {
     const manager = LSPManager.getInstance();
 
     // Map operation names to LSP methods

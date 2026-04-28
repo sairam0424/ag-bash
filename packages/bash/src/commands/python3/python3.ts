@@ -361,7 +361,7 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
     }
   }
 
-  const worker = w;
+  const _worker = w;
   // Fresh worker for each execution (unless persistent)
   const attachListeners = (w: Worker) => {
     if (next.workerRef) next.workerRef.current = w;

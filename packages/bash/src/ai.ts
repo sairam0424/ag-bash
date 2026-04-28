@@ -95,13 +95,13 @@ export function createBashTool(options: CreateBashToolOptions): {
           const startTime = Date.now();
           sandbox.emit("tool:start", { name: "bash", args: { command } });
 
-          const onProgress = (progress: any) => {
+          const _onProgress = (progress: any) => {
             sandbox.emit("tool:progress", { name: "bash", progress });
           };
 
           try {
             await options.onBeforeBashCall?.({ command });
-            const result = await sandbox.exec(command, { 
+            const result = await sandbox.exec(command, {
               // Pass onProgress if exec supports it (it doesn't yet, but we emit the start/end)
             });
             const toolResult = {
@@ -110,13 +110,13 @@ export function createBashTool(options: CreateBashToolOptions): {
               exitCode: result.exitCode,
             };
             await options.onAfterBashCall?.({ command, result: toolResult });
-            
-            sandbox.emit("tool:end", { 
-              name: "bash", 
-              result: toolResult, 
-              duration: Date.now() - startTime 
+
+            sandbox.emit("tool:end", {
+              name: "bash",
+              result: toolResult,
+              duration: Date.now() - startTime,
             });
-            
+
             return toolResult;
             // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
           } catch (error: any) {
@@ -125,13 +125,13 @@ export function createBashTool(options: CreateBashToolOptions): {
               exitCode: 1,
             };
             await options.onAfterBashCall?.({ command, result: errorResult });
-            
-            sandbox.emit("tool:end", { 
-              name: "bash", 
-              result: errorResult, 
-              duration: Date.now() - startTime 
+
+            sandbox.emit("tool:end", {
+              name: "bash",
+              result: errorResult,
+              duration: Date.now() - startTime,
             });
-            
+
             return errorResult;
           }
         },

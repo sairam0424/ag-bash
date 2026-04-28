@@ -44,12 +44,17 @@ class StdioTransport implements McpTransport {
   private pendingRequests: Map<number | string, (res: any) => void> = new Map();
   private nextId = 1;
 
-  constructor(private command: string, private args: string[]) {}
+  constructor(
+    private command: string,
+    private args: string[],
+  ) {}
 
   async init(): Promise<void> {
     const { spawn } = await import("node:child_process");
-    this.process = spawn(this.command, this.args, { stdio: ["pipe", "pipe", "inherit"] });
-    
+    this.process = spawn(this.command, this.args, {
+      stdio: ["pipe", "pipe", "inherit"],
+    });
+
     let buffer = "";
     this.process.stdout.on("data", (data: Buffer) => {
       buffer += data.toString();
@@ -74,14 +79,15 @@ class StdioTransport implements McpTransport {
   }
 
   async send(message: any): Promise<any> {
-    if (!this.process) throw new Error("Transport not initialized. Call init() first.");
+    if (!this.process)
+      throw new Error("Transport not initialized. Call init() first.");
     const id = this.nextId++;
     message.id = id;
     message.jsonrpc = "2.0";
 
     return new Promise((resolve) => {
       this.pendingRequests.set(id, resolve);
-      this.process.stdin.write(JSON.stringify(message) + "\n");
+      this.process.stdin.write(`${JSON.stringify(message)}\n`);
     });
   }
 
@@ -113,7 +119,9 @@ export class McpClient {
   ): Promise<McpServerConnection> {
     const bash = cmdCtx.bash;
     if (bash && this.connections.size >= bash.limits.maxMcpServers) {
-      throw new Error(`Maximum MCP servers reached (${bash.limits.maxMcpServers})`);
+      throw new Error(
+        `Maximum MCP servers reached (${bash.limits.maxMcpServers})`,
+      );
     }
 
     const transport = new StdioTransport(command, args);
@@ -133,9 +141,15 @@ export class McpClient {
     return connection;
   }
 
-  async connectHttp(id: string, url: string, bash?: any): Promise<McpServerConnection> {
+  async connectHttp(
+    id: string,
+    url: string,
+    bash?: any,
+  ): Promise<McpServerConnection> {
     if (bash && this.connections.size >= bash.limits.maxMcpServers) {
-      throw new Error(`Maximum MCP servers reached (${bash.limits.maxMcpServers})`);
+      throw new Error(
+        `Maximum MCP servers reached (${bash.limits.maxMcpServers})`,
+      );
     }
 
     const transport = new HttpTransport(url);
@@ -164,19 +178,26 @@ export class McpClient {
       params: {},
     });
 
-    if (response.result && response.result.tools) {
+    if (response.result?.tools) {
       conn.tools = response.result.tools;
     }
   }
 
-  async callTool(connectionId: string, toolName: string, args: any, bash?: any): Promise<any> {
+  async callTool(
+    connectionId: string,
+    toolName: string,
+    args: any,
+    bash?: any,
+  ): Promise<any> {
     const conn = this.connections.get(connectionId);
     if (!conn) throw new Error(`Connection ${connectionId} not found`);
 
     if (bash) {
       const state = (bash as any).state;
       if (state.mcpToolCallCount >= bash.limits.maxMcpToolCalls) {
-        throw new Error(`Maximum MCP tool calls reached (${bash.limits.maxMcpToolCalls})`);
+        throw new Error(
+          `Maximum MCP tool calls reached (${bash.limits.maxMcpToolCalls})`,
+        );
       }
       state.mcpToolCallCount++;
     }

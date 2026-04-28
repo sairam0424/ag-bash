@@ -1,5 +1,4 @@
 import type { Command, CommandContext, ExecResult } from "../../types.js";
-import { parseArgs } from "../../utils/args.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 
 const agSnapshotHelp = {
@@ -11,7 +10,7 @@ const agSnapshotHelp = {
 
 // Global map to store snapshots for the current session
 // In a real implementation, this might persist to some storage.
-const snapshots = new Map<string, any>();
+const _snapshots = new Map<string, any>();
 
 export const agSnapshotCommand: Command = {
   name: "ag-snapshot",
@@ -52,13 +51,16 @@ export const agSnapshotCommand: Command = {
             id: snapshotId,
             timestamp: Date.now(),
             cwd: ctx.cwd,
-            env: Object.assign(Object.create(null), Object.fromEntries(ictx.state.env)),
+            env: Object.assign(
+              Object.create(null),
+              Object.fromEntries(ictx.state.env),
+            ),
             functions: Object.assign(
               Object.create(null),
               Object.fromEntries(
-                Array.from(ictx.state.functions.entries() as [string, any][]).map(
-                  ([name, node]) => [name, node],
-                ),
+                Array.from(
+                  ictx.state.functions.entries() as [string, any][],
+                ).map(([name, node]) => [name, node]),
               ),
             ),
             fs: fsSnapshot,
@@ -143,7 +145,7 @@ export const agSnapshotCommand: Command = {
             .join("\n");
 
           return {
-            stdout: snaps ? snaps + "\n" : "No snapshots found.\n",
+            stdout: snaps ? `${snaps}\n` : "No snapshots found.\n",
             stderr: "",
             exitCode: 0,
           };

@@ -75,7 +75,7 @@ export class WorkspaceIndexer {
         try {
           const tree = TreeSitterParser.parse(content, language);
           this.engine.indexNode(tree.rootNode, path, language);
-        } catch (e) {
+        } catch (_e) {
           console.warn(
             `TreeSitter failed to parse ${path} as ${language}, falling back to literal indexing.`,
           );

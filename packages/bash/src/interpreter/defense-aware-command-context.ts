@@ -1,4 +1,7 @@
-import { assertDefenseContext } from "../security/defense-context.js";
+import {
+  assertDefenseContext,
+  SecurityViolationError,
+} from "../security/defense-context.js";
 import type { CommandContext } from "../types.js";
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -15,8 +18,27 @@ function wrapFunction<TArgs extends unknown[], TResult>(
   requireDefenseContext: boolean | undefined,
   component: string,
   phase: string,
+  ctx?: CommandContext,
 ): (...args: TArgs) => TResult {
   return ((...args: TArgs): TResult => {
+    // If this is a write-related operation and we are in plan mode, block it.
+    // This provides defense-in-depth for all shell commands (touch, rm, mkdir, etc.)
+    const isWriteOp =
+      /^(writeFile|appendFile|mkdir|rm|cp|mv|chmod|symlink|link|utimes|restore)$/.test(
+        phase.replace(/^fs\./, ""),
+      );
+    if (isWriteOp && ctx?.bash?.getMode?.() === "plan") {
+      const message = `security violation: Destructive operation '${phase}' blocked in 'plan' mode.`;
+      const error = new SecurityViolationError(message, {
+        timestamp: Date.now(),
+        type: "plan_mode_violation" as any,
+        message,
+        path: phase,
+      });
+      error.name = "SecurityViolationError";
+      throw error;
+    }
+
     assertDefenseContext(requireDefenseContext, component, `${phase} call`);
     const result = fn(...args);
 
@@ -50,6 +72,7 @@ function wrapFileSystem(
   fs: CommandContext["fs"],
   requireDefenseContext: boolean | undefined,
   component: string,
+  ctx: CommandContext,
 ): CommandContext["fs"] {
   const wrappedFs: CommandContext["fs"] = {
     readFile: wrapFunction(
@@ -57,117 +80,154 @@ function wrapFileSystem(
       requireDefenseContext,
       component,
       "fs.readFile",
+      ctx,
     ),
     readFileBuffer: wrapFunction(
       fs.readFileBuffer.bind(fs),
       requireDefenseContext,
       component,
       "fs.readFileBuffer",
+      ctx,
     ),
     writeFile: wrapFunction(
       fs.writeFile.bind(fs),
       requireDefenseContext,
       component,
       "fs.writeFile",
+      ctx,
     ),
     appendFile: wrapFunction(
       fs.appendFile.bind(fs),
       requireDefenseContext,
       component,
       "fs.appendFile",
+      ctx,
     ),
     exists: wrapFunction(
       fs.exists.bind(fs),
       requireDefenseContext,
       component,
       "fs.exists",
+      ctx,
     ),
     stat: wrapFunction(
       fs.stat.bind(fs),
       requireDefenseContext,
       component,
       "fs.stat",
+      ctx,
     ),
     mkdir: wrapFunction(
       fs.mkdir.bind(fs),
       requireDefenseContext,
       component,
       "fs.mkdir",
+      ctx,
     ),
     readdir: wrapFunction(
       fs.readdir.bind(fs),
       requireDefenseContext,
       component,
       "fs.readdir",
+      ctx,
     ),
-    rm: wrapFunction(fs.rm.bind(fs), requireDefenseContext, component, "fs.rm"),
-    cp: wrapFunction(fs.cp.bind(fs), requireDefenseContext, component, "fs.cp"),
-    mv: wrapFunction(fs.mv.bind(fs), requireDefenseContext, component, "fs.mv"),
+    rm: wrapFunction(
+      fs.rm.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.rm",
+      ctx,
+    ),
+    cp: wrapFunction(
+      fs.cp.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.cp",
+      ctx,
+    ),
+    mv: wrapFunction(
+      fs.mv.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.mv",
+      ctx,
+    ),
     resolvePath: wrapFunction(
       fs.resolvePath.bind(fs),
       requireDefenseContext,
       component,
       "fs.resolvePath",
+      ctx,
     ),
     getAllPaths: wrapFunction(
       fs.getAllPaths.bind(fs),
       requireDefenseContext,
       component,
       "fs.getAllPaths",
+      ctx,
     ),
     chmod: wrapFunction(
       fs.chmod.bind(fs),
       requireDefenseContext,
       component,
       "fs.chmod",
+      ctx,
     ),
     symlink: wrapFunction(
       fs.symlink.bind(fs),
       requireDefenseContext,
       component,
       "fs.symlink",
+      ctx,
     ),
     link: wrapFunction(
       fs.link.bind(fs),
       requireDefenseContext,
       component,
       "fs.link",
+      ctx,
     ),
     readlink: wrapFunction(
       fs.readlink.bind(fs),
       requireDefenseContext,
       component,
       "fs.readlink",
+      ctx,
     ),
     lstat: wrapFunction(
       fs.lstat.bind(fs),
       requireDefenseContext,
       component,
       "fs.lstat",
+      ctx,
     ),
     realpath: wrapFunction(
       fs.realpath.bind(fs),
       requireDefenseContext,
       component,
       "fs.realpath",
+      ctx,
     ),
     utimes: wrapFunction(
       fs.utimes.bind(fs),
       requireDefenseContext,
       component,
       "fs.utimes",
+      ctx,
     ),
     snapshot: wrapFunction(
       fs.snapshot.bind(fs),
       requireDefenseContext,
       component,
       "fs.snapshot",
+      ctx,
     ),
     restore: wrapFunction(
       fs.restore.bind(fs),
       requireDefenseContext,
       component,
       "fs.restore",
+      ctx,
     ),
   };
 
@@ -177,6 +237,17 @@ function wrapFileSystem(
       requireDefenseContext,
       component,
       "fs.readdirWithFileTypes",
+      ctx,
+    );
+  }
+
+  if (fs.toRealPath) {
+    wrappedFs.toRealPath = wrapFunction(
+      fs.toRealPath.bind(fs),
+      requireDefenseContext,
+      component,
+      "fs.toRealPath",
+      ctx,
     );
   }
 
@@ -191,14 +262,14 @@ export function createDefenseAwareCommandContext(
   ctx: CommandContext,
   commandName: string,
 ): CommandContext {
-  if (!ctx.requireDefenseContext) {
+  if (!ctx.requireDefenseContext && !ctx.bash?.agentic) {
     return ctx;
   }
 
   const component = `command:${commandName}`;
   const wrappedCtx: CommandContext = {
     ...ctx,
-    fs: wrapFileSystem(ctx.fs, ctx.requireDefenseContext, component),
+    fs: wrapFileSystem(ctx.fs, ctx.requireDefenseContext, component, ctx),
   };
 
   if (ctx.exec) {
@@ -207,6 +278,7 @@ export function createDefenseAwareCommandContext(
       ctx.requireDefenseContext,
       component,
       "exec",
+      ctx,
     );
   }
 
@@ -216,6 +288,7 @@ export function createDefenseAwareCommandContext(
       ctx.requireDefenseContext,
       component,
       "fetch",
+      ctx,
     );
   }
 
@@ -225,6 +298,7 @@ export function createDefenseAwareCommandContext(
       ctx.requireDefenseContext,
       component,
       "sleep",
+      ctx,
     );
   }
 
@@ -234,6 +308,7 @@ export function createDefenseAwareCommandContext(
       ctx.requireDefenseContext,
       component,
       "getRegisteredCommands",
+      ctx,
     );
   }
 

@@ -1,4 +1,4 @@
-import type { ASTNode, ScriptNode, StatementNode } from "../../ast/types.js";
+import type { StatementNode } from "../../ast/types.js";
 import type { InterpreterState } from "../types.js";
 
 /**
@@ -31,7 +31,7 @@ export class DebuggerBridge {
    */
   public async onBeforeStatement(
     node: StatementNode,
-    state: InterpreterState,
+    _state: InterpreterState,
   ): Promise<void> {
     const currentLine = node.line ?? 0;
 

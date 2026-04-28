@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolboxTool } from "../../agentic/BashToolbox.js";
+import type { ToolboxTool } from "../../agentic/Tool.js";
 import type { Bash } from "../../Bash.js";
 
 /**
@@ -12,7 +12,11 @@ export const WebFetchTool: ToolboxTool = {
   parameters: z.object({
     url: z.string().describe("The URL of the page to fetch."),
   }),
-  execute: async (bash: Bash, { url }) => {
+  isReadOnly: true,
+  isDestructive: false,
+  checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
+  validateInput: async (_args: any) => ({ result: true }),
+  execute: async (bash: Bash, { url }: { url: string }) => {
     try {
       // Use curl to fetch the content
       const fetchResult = await bash.exec(`curl -L "${url}"`);

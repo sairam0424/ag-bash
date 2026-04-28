@@ -74,4 +74,13 @@ export const agenticLoaders: LazyCommandDef<CommandName>[] = [
     load: async () =>
       (await import("../ag-notebook/ag-notebook.js")).agNotebookCommand,
   },
+  {
+    name: "ag-grep" as CommandName,
+    load: async () => (await import("../ag-grep/ag-grep.js")).agGrepCommand,
+  },
+  {
+    name: "ag-find-files" as CommandName,
+    load: async () =>
+      (await import("../ag-find-files/ag-find-files.js")).agFindFilesCommand,
+  },
 ];

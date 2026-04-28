@@ -42,7 +42,9 @@ class EventEmitter {
   off(event, listener) {
     const listeners = this._listeners.get(event);
     if (listeners) {
-      const index = listeners.findIndex((l) => l === listener || l.listener === listener);
+      const index = listeners.findIndex(
+        (l) => l === listener || l.listener === listener,
+      );
       if (index !== -1) {
         listeners.splice(index, 1);
       }

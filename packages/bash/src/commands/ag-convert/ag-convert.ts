@@ -36,7 +36,7 @@ const agConvertHelp = {
     "",
     "  Phase 4: Visual Intelligence",
     "    --describe-images Use LLM to describe images",
-    "    --llm-provider <openai|anthropic|google|local>",
+    "    --llm-provider <openai|anthropic|google|local|azure>",
     "                      LLM provider (default: openai)",
     "    --llm-model <name>",
     "                      Specific model (e.g., gpt-4o, claude-3-5-sonnet)",
@@ -158,19 +158,7 @@ export const agConvertCommand: Command = {
       };
     }
 
-    // Call host python
-    // Resolve the absolute path of python3 to avoid shim mismatches
-    let pythonExe = "python3";
-    try {
-      const resolve = spawnSync(
-        "python3",
-        ["-c", "import sys; print(sys.executable)"],
-        { encoding: "utf-8" },
-      );
-      if (resolve.status === 0 && resolve.stdout.trim()) {
-        pythonExe = resolve.stdout.trim();
-      }
-    } catch (e) {}
+    const pythonExe = "python3";
 
     const pythonArgs = [bridgePath, realFilePath, "--engine", engine];
     if (highFidelity) pythonArgs.push("--high-fidelity");
@@ -207,6 +195,12 @@ export const agConvertCommand: Command = {
         };
       }
 
+      if (result.status !== 0) {
+        console.error(
+          `ag-convert bridge failed with status ${result.status}. Stderr: ${result.stderr}`,
+        );
+      }
+
       return {
         stdout: result.stdout,
         stderr: result.stderr,
@@ -237,7 +231,7 @@ function setupDependencies(): ExecResult {
     if (resolve.status === 0 && resolve.stdout.trim()) {
       pythonExe = resolve.stdout.trim();
     }
-  } catch (e) {}
+  } catch (_e) {}
 
   console.log(`Hyperion Setup: Targeting Python at ${pythonExe}`);
   console.log("Installing docling and markitdown...");
@@ -246,7 +240,7 @@ function setupDependencies(): ExecResult {
     "/opt/homebrew/bin/uv",
     "/usr/local/bin/uv",
     "/opt/homebrew/Caskroom/miniconda/base/bin/uv",
-    process.env.HOME + "/.cargo/bin/uv",
+    `${process.env.HOME}/.cargo/bin/uv`,
   ];
 
   // Try uv first if available, otherwise fallback to pip
@@ -255,7 +249,7 @@ function setupDependencies(): ExecResult {
   try {
     const check = spawnSync("uv", ["--version"]);
     if (check.status === 0) foundUv = true;
-  } catch (e) {}
+  } catch (_e) {}
 
   if (!foundUv) {
     for (const path of commonPaths) {

@@ -17,7 +17,8 @@ export const agPlanCommand: Command = {
   name: "ag-plan",
   execute: async (args: string[], ctx: CommandContext): Promise<ExecResult> => {
     const bash = ctx.bash;
-    if (!bash) return { stdout: "", stderr: "Bash instance not found\n", exitCode: 1 };
+    if (!bash)
+      return { stdout: "", stderr: "Bash instance not found\n", exitCode: 1 };
 
     const subcommand = args[0];
 
@@ -32,18 +33,36 @@ export const agPlanCommand: Command = {
     switch (subcommand) {
       case "enter":
         bash.setMode("plan");
-        return { stdout: "Entered plan mode. You are now in read-only mode.\n", stderr: "", exitCode: 0 };
+        return {
+          stdout: "Entered plan mode. You are now in read-only mode.\n",
+          stderr: "",
+          exitCode: 0,
+        };
 
       case "exit":
         bash.setMode("execute");
-        return { stdout: "Exited plan mode. You can now make changes to the codebase.\n", stderr: "", exitCode: 0 };
+        return {
+          stdout:
+            "Exited plan mode. You can now make changes to the codebase.\n",
+          stderr: "",
+          exitCode: 0,
+        };
 
       case "status":
-        return { stdout: `Current mode: ${bash.getMode()}\n`, stderr: "", exitCode: 0 };
+        return {
+          stdout: `Current mode: ${bash.getMode()}\n`,
+          stderr: "",
+          exitCode: 0,
+        };
 
       case "add": {
         const step = args.slice(1).join(" ");
-        if (!step) return { stdout: "", stderr: "Usage: ag-plan add <step_description>\n", exitCode: 1 };
+        if (!step)
+          return {
+            stdout: "",
+            stderr: "Usage: ag-plan add <step_description>\n",
+            exitCode: 1,
+          };
 
         let plan: string[] = [];
         if (await ctx.fs.exists(PLAN_FILE)) {
@@ -55,14 +74,20 @@ export const agPlanCommand: Command = {
           await ctx.fs.mkdir(planDir, { recursive: true });
         }
         await ctx.fs.writeFile(PLAN_FILE, JSON.stringify(plan, null, 2));
-        return { stdout: `Added step ${plan.length}: ${step}\n`, stderr: "", exitCode: 0 };
+        return {
+          stdout: `Added step ${plan.length}: ${step}\n`,
+          stderr: "",
+          exitCode: 0,
+        };
       }
 
       case "list": {
         if (!(await ctx.fs.exists(PLAN_FILE))) {
           return { stdout: "No active plan found.\n", stderr: "", exitCode: 0 };
         }
-        const plan: string[] = JSON.parse(await ctx.fs.readFile(PLAN_FILE, "utf8"));
+        const plan: string[] = JSON.parse(
+          await ctx.fs.readFile(PLAN_FILE, "utf8"),
+        );
         let output = "Current Plan:\n";
         plan.forEach((step, i) => {
           output += `${i + 1}. ${step}\n`;
@@ -71,7 +96,11 @@ export const agPlanCommand: Command = {
       }
 
       default:
-        return { stdout: "", stderr: `Unknown subcommand: ${subcommand}\n`, exitCode: 1 };
+        return {
+          stdout: "",
+          stderr: `Unknown subcommand: ${subcommand}\n`,
+          exitCode: 1,
+        };
     }
   },
 };

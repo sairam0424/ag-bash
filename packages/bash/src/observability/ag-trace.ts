@@ -1,9 +1,4 @@
-import {
-  ArithmeticError,
-  BadSubstitutionError,
-  ExecutionLimitError,
-  NounsetError,
-} from "../interpreter/errors.js";
+import { ExecutionLimitError, NounsetError } from "../interpreter/errors.js";
 import type { InterpreterContext } from "../interpreter/types.js";
 import { LexerError } from "../parser/lexer.js";
 import { ParseException } from "../parser/types.js";
@@ -95,20 +90,34 @@ export class AgTrace {
     }
 
     // 5. MCP Tool Call Failures
-    if (result.stderr.includes("MCP error") || result.stderr.includes("Connection") && result.stderr.includes("not found")) {
+    if (
+      result.stderr.includes("MCP error") ||
+      (result.stderr.includes("Connection") &&
+        result.stderr.includes("not found"))
+    ) {
       observations.push({
         type: "suggestion",
-        message: "An MCP tool call failed. This might be due to a disconnected server or missing tool.",
-        suggestions: ["Run 'ag-mcp list' to check active connections.", "Run 'ag-mcp connect' to reconnect to the server."],
+        message:
+          "An MCP tool call failed. This might be due to a disconnected server or missing tool.",
+        suggestions: [
+          "Run 'ag-mcp list' to check active connections.",
+          "Run 'ag-mcp connect' to reconnect to the server.",
+        ],
       });
     }
 
     // 6. Notebook Errors
-    if (result.stderr.toLowerCase().includes("notebook") && result.stderr.toLowerCase().includes("invalid")) {
+    if (
+      result.stderr.toLowerCase().includes("notebook") &&
+      result.stderr.toLowerCase().includes("invalid")
+    ) {
       observations.push({
         type: "suggestion",
-        message: "The notebook file might be malformed or the cell index is out of bounds.",
-        suggestions: ["Run 'ag-notebook read <path>' to check the cell structure."],
+        message:
+          "The notebook file might be malformed or the cell index is out of bounds.",
+        suggestions: [
+          "Run 'ag-notebook read <path>' to check the cell structure.",
+        ],
       });
     }
 
@@ -242,7 +251,7 @@ export class AgTrace {
         if (match) {
           return {
             type: "file_not_found",
-            message: `Path '${path}' not found, but a case-insensitive match '${dirPath === "." ? "" : dirPath + "/"}${match}' exists.`,
+            message: `Path '${path}' not found, but a case-insensitive match '${dirPath === "." ? "" : `${dirPath}/`}${match}' exists.`,
             path: path,
             suggestions: [`Correct the casing to '${match}'`],
           };
@@ -257,7 +266,7 @@ export class AgTrace {
       // Check parent directories
       let current = resolved.startsWith("/") ? "" : "";
       for (let i = 0; i < resolvedParts.length - 1; i++) {
-        current += "/" + resolvedParts[i];
+        current += `/${resolvedParts[i]}`;
         try {
           await ctx.fs.stat(current);
         } catch {

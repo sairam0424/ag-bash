@@ -74,7 +74,7 @@ export class SharedStateBus {
     if (!this.listeners.has(type)) {
       this.listeners.set(type, new Set());
     }
-    this.listeners.get(type)!.add(callback);
+    this.listeners.get(type)?.add(callback);
 
     return () => {
       const callbacks = this.listeners.get(type);

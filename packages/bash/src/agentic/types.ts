@@ -65,13 +65,13 @@ export type PermissionResult =
 export interface ToolboxTool {
   name: string;
   description: string;
-  parameters: import("zod").ZodType<any>;
-  
+  parameters: import("zod").ZodObject<any>;
+
   /**
    * Optional aliases for backwards compatibility.
    */
   aliases?: string[];
-  
+
   /**
    * Metadata for tool discovery and search.
    */
@@ -85,37 +85,30 @@ export interface ToolboxTool {
   /**
    * Implementation of the tool logic.
    */
-  execute: (bash: any, args: any, onProgress?: (progress: any) => void) => Promise<any>;
+  execute: (bash: any, args: any) => Promise<any>;
 
   /**
    * Optional hook to validate input before execution.
    */
-  validateInput?: (
-    bash: any,
-    args: any,
-  ) => Promise<ValidationResult>;
+  validateInput: (args: any) => Promise<ValidationResult>;
 
   /**
    * Optional hook to check permissions before execution.
    */
-  checkPermissions?: (
-    bash: any,
-    args: any,
-  ) => Promise<PermissionResult>;
-
+  checkPermissions: (bash: any, args: any) => Promise<PermissionResult>;
 
   /**
    * Indicates if the tool is read-only (doesn't modify state).
    */
-  isReadOnly?: (args: any) => boolean;
+  isReadOnly?: ((args: any) => boolean) | boolean;
 
   /**
    * Indicates if the tool is destructive (e.g., delete, overwrite).
    */
-  isDestructive?: (args: any) => boolean;
+  isDestructive?: ((args: any) => boolean) | boolean;
 
   /**
    * Indicates if the tool is safe to run in parallel.
    */
-  isConcurrencySafe?: (args: any) => boolean;
+  isConcurrencySafe?: ((args: any) => boolean) | boolean;
 }

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-04-26
+
+### Added (Project V-Next Upgrade - Enhanced Tooling)
+
+- **Unified Tooling Architecture**:
+  - Standardized `ToolboxTool` interface across all agentic tools for consistent execution and validation.
+  - Decoupled `buildTool` factory to eliminate circular dependencies and improve build stability.
+- **Enhanced Agentic Tools**:
+  - `ag_edit`: New high-performance file editor with multi-chunk support and SHA-256 staleness protection.
+  - `ag_grep`: Optimized recursive search tool with unified `GrepTool` wrapper.
+  - `ag_todo`: Integrated task management with persistent storage for agent memory.
+  - `ag_convert`: Document-to-markdown conversion with smart engine routing.
+  - `ag_lsp`: Unified LSP-driven tool for code navigation, symbol search, and documentation.
+- **Security & Governance**:
+  - **Plan Mode Enforcement**: Destructive tools are now automatically blocked when the shell is in `plan` mode.
+  - **Staleness Protection**: Added hash verification to `ag_edit` to prevent overwriting concurrent changes.
+  - **Permission Manager**: Fine-grained access control for sensitive tool executions.
+
+### Changed
+
+- Synchronized monorepo versions to **v2.6.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Refactored `EditTool` and `SearchTool` to use the unified tooling architecture.
+
 ## [2.5.0] - 2026-04-25
 
 ### Added (Project V-Next Upgrade - Final)

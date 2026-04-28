@@ -73,7 +73,7 @@ export const agEditCommand: Command = {
     if (
       ["insert-before", "insert-after", "replace", "delete"].includes(action)
     ) {
-      if (startIdx === undefined || isNaN(startIdx))
+      if (startIdx === undefined || Number.isNaN(startIdx))
         return error("missing or invalid --line");
       if (
         startIdx < 0 ||
@@ -97,7 +97,11 @@ export const agEditCommand: Command = {
         summary = `Inserted ${newLines.length} line(s) after line ${flags.line}`;
         break;
       case "replace":
-        if (endIdx === undefined || isNaN(endIdx) || endIdx < startIdx!) {
+        if (
+          endIdx === undefined ||
+          Number.isNaN(endIdx) ||
+          endIdx < startIdx!
+        ) {
           return error("invalid range for replace");
         }
         if (endIdx >= originalLineCount)
@@ -106,7 +110,11 @@ export const agEditCommand: Command = {
         summary = `Replaced lines ${flags.line}-${flags.to || flags.line} with ${newLines.length} line(s)`;
         break;
       case "delete":
-        if (endIdx === undefined || isNaN(endIdx) || endIdx < startIdx!) {
+        if (
+          endIdx === undefined ||
+          Number.isNaN(endIdx) ||
+          endIdx < startIdx!
+        ) {
           return error("invalid range for delete");
         }
         if (endIdx >= originalLineCount)
@@ -142,6 +150,12 @@ export const agEditCommand: Command = {
 
     try {
       await ctx.fs.writeFile(filePath, newContent);
+
+      // Notify LSP of changes if running within a Bash instance
+      if (ctx.bash?.lsp) {
+        ctx.bash.lsp.notifyDidChange(filePath, newContent);
+      }
+
       return {
         stdout: `Successfully updated ${file}: ${summary}\n`,
         stderr: "",

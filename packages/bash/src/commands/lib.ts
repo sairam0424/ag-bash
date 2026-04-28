@@ -35,12 +35,12 @@ export function createLazyCommand(def: LazyCommandDef): Command {
         try {
           const { emitFlagCoverage } = await import("./flag-coverage.js");
           emitFlagCoverage(ctx.coverage, def.name, args);
-        } catch (e) {
+        } catch (_e) {
           // Ignore coverage errors
         }
       }
 
-      return DefenseInDepthBox.runTrustedAsync(() => cmd!.execute(args, ctx));
+      return DefenseInDepthBox.runTrustedAsync(() => cmd?.execute(args, ctx));
     },
   };
 }
