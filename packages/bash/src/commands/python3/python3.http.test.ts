@@ -36,7 +36,7 @@ describe("python3 HTTP requests", () => {
         }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
         },
@@ -61,7 +61,7 @@ EOF`);
         }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
         },
@@ -85,7 +85,7 @@ print('content-type' in response.headers)
         }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
         },
@@ -112,7 +112,7 @@ EOF`);
         );
       });
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
         },
@@ -137,7 +137,7 @@ EOF`);
         }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
         },
@@ -162,7 +162,7 @@ EOF`);
         }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
         },
@@ -185,7 +185,7 @@ EOF`);
 
   describe("network access denied", () => {
     it("should fail when network not configured", async () => {
-      const env = new Bash({ python: true }); // No network config
+      const env = new Bash({ runtimes: { python: true } }); // No network config
       await env.exec(`cat > /tmp/test_no_network.py << 'EOF'
 import jb_http
 try:
@@ -202,7 +202,7 @@ EOF`);
 
     it("should fail for URLs not in allow-list", async () => {
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
         },
@@ -230,7 +230,7 @@ EOF`);
         });
       });
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
           allowedMethods: ["GET", "POST"],
@@ -253,7 +253,7 @@ EOF`);
         return new Response(JSON.stringify({ json: body }), { status: 200 });
       });
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
           allowedMethods: ["GET", "POST"],
@@ -281,7 +281,7 @@ EOF`);
         }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
           allowedMethods: ["GET", "HEAD"],
@@ -304,7 +304,7 @@ EOF`);
         new Response('{"updated": true}', { status: 200 }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
           allowedMethods: ["GET", "PUT"],
@@ -326,7 +326,7 @@ EOF`);
         new Response('{"deleted": true}', { status: 200 }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
           allowedMethods: ["GET", "DELETE"],
@@ -348,7 +348,7 @@ EOF`);
         new Response('{"patched": true}', { status: 200 }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
           allowedMethods: ["GET", "PATCH"],
@@ -375,7 +375,7 @@ EOF`);
         }),
       );
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
         },

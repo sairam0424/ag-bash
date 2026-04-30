@@ -727,7 +727,7 @@ describe("exec options", () => {
 
     it("should log exec command at info level", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("echo hello");
 
@@ -739,7 +739,7 @@ describe("exec options", () => {
 
     it("should log stdout at debug level", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("echo hello");
 
@@ -751,7 +751,7 @@ describe("exec options", () => {
 
     it("should log stderr at info level", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("echo error >&2");
 
@@ -763,7 +763,7 @@ describe("exec options", () => {
 
     it("should log exit code at info level", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("echo hello");
 
@@ -775,7 +775,7 @@ describe("exec options", () => {
 
     it("should log non-zero exit code", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("exit 42");
 
@@ -786,7 +786,7 @@ describe("exec options", () => {
 
     it("should log in correct order: exec, stdout/stderr, exit", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("echo out; echo err >&2");
 
@@ -796,7 +796,7 @@ describe("exec options", () => {
 
     it("should not log stdout when empty", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("true");
 
@@ -806,7 +806,7 @@ describe("exec options", () => {
 
     it("should not log stderr when empty", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("echo hello");
 
@@ -816,7 +816,7 @@ describe("exec options", () => {
 
     it("should not log empty commands", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("");
       await env.exec("   ");
@@ -826,7 +826,7 @@ describe("exec options", () => {
 
     it("should log parse errors", async () => {
       const logger = createMockLogger();
-      const env = new Bash({ logger });
+      const env = new Bash({ debug: { logger } });
 
       await env.exec("echo ${");
 

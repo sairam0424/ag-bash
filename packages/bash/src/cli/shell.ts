@@ -66,18 +66,22 @@ class VirtualShell {
         options.network === true
           ? { dangerouslyAllowFullInternetAccess: true }
           : undefined,
-      python: options.python ?? true,
-      javascript: options.javascript ?? true,
-      parserEngine: "tree-sitter",
-      treeSitterConfig: {
-        webTreeSitterWasm: path.join(
-          __dirname,
-          "../parser/vendor/web-tree-sitter.wasm",
-        ),
-        bashGrammarWasm: path.join(
-          __dirname,
-          "../../vendor/tree-sitter-bash.wasm",
-        ),
+      runtimes: {
+        python: options.python ?? true,
+        javascript: options.javascript ?? true,
+      },
+      parser: {
+        engine: "tree-sitter",
+        treeSitterConfig: {
+          webTreeSitterWasm: path.join(
+            __dirname,
+            "../parser/vendor/web-tree-sitter.wasm",
+          ),
+          bashGrammarWasm: path.join(
+            __dirname,
+            "../../vendor/tree-sitter-bash.wasm",
+          ),
+        },
       },
     });
 

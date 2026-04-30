@@ -28,7 +28,7 @@ beforeEach(() => {
 describe("js-exec http operations", () => {
   describe("network access denied", () => {
     it("should error when network is not configured", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fetch('http://example.com').then(function(r) { console.log('status: ' + r.status); }, function(e) { console.log('error: ' + e.message); })"`,
       );
@@ -48,7 +48,7 @@ describe("js-exec http operations", () => {
         }),
       );
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         network: { allowedUrlPrefixes: ["https://api.example.com/"] },
       });
       const result = await env.exec(
@@ -67,7 +67,7 @@ describe("js-exec http operations", () => {
         }),
       );
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         network: { allowedUrlPrefixes: ["https://api.example.com/"] },
       });
       const result = await env.exec(
@@ -83,7 +83,7 @@ describe("js-exec http operations", () => {
         new Response("Hello World", { status: 200 }),
       );
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         network: { allowedUrlPrefixes: ["https://example.com/"] },
       });
       const result = await env.exec(
@@ -102,7 +102,7 @@ describe("js-exec http operations", () => {
         }),
       );
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         network: { allowedUrlPrefixes: ["https://api.example.com/"] },
       });
       const result = await env.exec(
@@ -118,7 +118,7 @@ describe("js-exec http operations", () => {
         new Response("Not Found", { status: 404, statusText: "Not Found" }),
       );
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         network: { allowedUrlPrefixes: ["https://api.example.com/"] },
       });
       const result = await env.exec(
@@ -136,7 +136,7 @@ describe("js-exec http operations", () => {
         });
       });
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         network: {
           allowedUrlPrefixes: ["https://api.example.com/"],
           allowedMethods: ["GET", "POST"],
@@ -175,7 +175,7 @@ describe("js-exec http operations", () => {
       );
 
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         network: { allowedUrlPrefixes: ["https://api.example.com/"] },
       });
 
@@ -213,7 +213,7 @@ describe("js-exec http operations", () => {
 
   describe("Web API classes", () => {
     it("should support URL class", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var u = new URL('https://example.com:8080/path?q=1&r=2#hash'); console.log(u.hostname, u.port, u.pathname, u.searchParams.get('q'), u.hash)"`,
       );
@@ -223,7 +223,7 @@ describe("js-exec http operations", () => {
     });
 
     it("should support Headers class", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var h = new Headers({'Content-Type': 'application/json'}); h.append('Accept', 'text/html'); console.log(h.get('content-type'), h.has('accept'))"`,
       );
@@ -233,7 +233,7 @@ describe("js-exec http operations", () => {
     });
 
     it("should support Response static methods", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var r = Response.json({ok: true}); r.json().then(function(d) { console.log(d.ok, r.status, r.headers.get('content-type')); })"`,
       );
@@ -243,7 +243,7 @@ describe("js-exec http operations", () => {
     });
 
     it("should support Request class", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var req = new Request('https://example.com', {method: 'POST', headers: {'X-Test': 'yes'}}); console.log(req.method, req.url, req.headers.get('x-test'))"`,
       );

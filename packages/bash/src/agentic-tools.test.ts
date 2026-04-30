@@ -11,9 +11,8 @@ describe("Agentic Tools (BashToolbox)", () => {
 
   beforeEach(() => {
     bash = new Bash({
-      parserEngine: "legacy",
-      python: true,
-      javascript: true,
+      parser: { engine: "legacy" },
+      runtimes: { python: true, javascript: true },
       fs: new InMemoryFs({
         "/test.txt": "hello world",
       }),

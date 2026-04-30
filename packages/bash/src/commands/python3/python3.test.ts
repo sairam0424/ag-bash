@@ -9,21 +9,21 @@ describe("python3", () => {
     it("should execute simple print statement", {
       timeout: 60000,
     }, async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "print(1 + 2)"');
       expect(result.stdout).toBe("3\n");
       expect(result.exitCode).toBe(0);
     });
 
     it("should execute arithmetic", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "print(10 * 5 + 2)"');
       expect(result.stdout).toBe("52\n");
       expect(result.exitCode).toBe(0);
     });
 
     it("should handle string operations", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         `python3 -c "print('hello' + ' ' + 'world')"`,
       );
@@ -34,7 +34,7 @@ describe("python3", () => {
 
   describe("help and version", () => {
     it("should show help with --help", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec("python3 --help");
       expect(result.stdout).toContain("python3");
       expect(result.stdout).toContain("Execute Python code");
@@ -42,14 +42,14 @@ describe("python3", () => {
     });
 
     it("should show version with --version", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec("python3 --version");
       expect(result.stdout).toContain("Python 3.");
       expect(result.exitCode).toBe(0);
     });
 
     it("should show version with -V", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec("python3 -V");
       expect(result.stdout).toContain("Python 3.");
       expect(result.exitCode).toBe(0);
@@ -58,7 +58,7 @@ describe("python3", () => {
 
   describe("python alias", () => {
     it("should work as python (alias)", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python -c "print(42)"');
       expect(result.stdout).toBe("42\n");
       expect(result.exitCode).toBe(0);
@@ -67,7 +67,7 @@ describe("python3", () => {
 
   describe("stdin input", () => {
     it("should read Python code from stdin", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('echo "print(123)" | python3');
       expect(result.stdout).toBe("123\n");
       expect(result.exitCode).toBe(0);
@@ -76,42 +76,42 @@ describe("python3", () => {
 
   describe("error handling", () => {
     it("should report syntax errors", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "print(1 +"');
       expect(result.stderr).toContain("SyntaxError");
       expect(result.exitCode).toBe(1);
     });
 
     it("should report runtime errors", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "1 / 0"');
       expect(result.stderr).toContain("ZeroDivisionError");
       expect(result.exitCode).toBe(1);
     });
 
     it("should report name errors", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "print(undefined_var)"');
       expect(result.stderr).toContain("NameError");
       expect(result.exitCode).toBe(1);
     });
 
     it("should error on missing -c argument", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec("python3 -c");
       expect(result.stderr).toContain("requires an argument");
       expect(result.exitCode).toBe(2);
     });
 
     it("should error on unknown option", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 --unknown "print(1)"');
       expect(result.stderr).toContain("unrecognized option");
       expect(result.exitCode).toBe(2);
     });
 
     it("should error on missing script file", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec("python3 /nonexistent.py");
       expect(result.stderr).toContain("can't open file");
       expect(result.stderr).toContain("No such file");
@@ -121,7 +121,7 @@ describe("python3", () => {
 
   describe("Python features", () => {
     it("should support list comprehensions", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         'python3 -c "print([x*2 for x in range(5)])"',
       );
@@ -130,7 +130,7 @@ describe("python3", () => {
     });
 
     it("should support dictionaries", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         `python3 -c "d = {'a': 1, 'b': 2}; print(d['a'])"`,
       );
@@ -139,7 +139,7 @@ describe("python3", () => {
     });
 
     it("should support lambdas", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         'python3 -c "add = lambda a, b: a + b; print(add(3, 4))"',
       );
@@ -148,7 +148,7 @@ describe("python3", () => {
     });
 
     it("should support imports (standard library)", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         "python3 -c \"import json; print(json.dumps({'a': 1}))\"",
       );
@@ -157,7 +157,7 @@ describe("python3", () => {
     });
 
     it("should support math module", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         'python3 -c "import math; print(int(math.sqrt(16)))"',
       );
@@ -168,7 +168,7 @@ describe("python3", () => {
 
   describe("environment", () => {
     it("should access environment variables", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(`
 export MY_VAR=hello
 python3 -c "import os; print(os.environ.get('MY_VAR', 'not found'))"
@@ -178,7 +178,7 @@ python3 -c "import os; print(os.environ.get('MY_VAR', 'not found'))"
     });
 
     it("should have correct sys.argv[0] for -c", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         'python3 -c "import sys; print(sys.argv[0])"',
       );
@@ -189,7 +189,7 @@ python3 -c "import os; print(os.environ.get('MY_VAR', 'not found'))"
 
   describe("stderr", () => {
     it("should write to stderr", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         "python3 -c \"import sys; print('error', file=sys.stderr)\"",
       );
@@ -201,9 +201,9 @@ python3 -c "import os; print(os.environ.get('MY_VAR', 'not found'))"
   describe("concurrent executions", () => {
     it("should handle multiple concurrent executions correctly", async () => {
       // Run multiple Python commands in parallel and verify each gets correct result
-      const env1 = new Bash({ python: true });
-      const env2 = new Bash({ python: true });
-      const env3 = new Bash({ python: true });
+      const env1 = new Bash({ runtimes: { python: true } });
+      const env2 = new Bash({ runtimes: { python: true } });
+      const env3 = new Bash({ runtimes: { python: true } });
 
       const [result1, result2, result3] = await Promise.all([
         env1.exec('python3 -c "print(111)"'),
@@ -223,7 +223,7 @@ python3 -c "import os; print(os.environ.get('MY_VAR', 'not found'))"
     });
 
     it("should queue concurrent executions and complete all", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
 
       // Launch 5 concurrent executions
       const results = await Promise.all([

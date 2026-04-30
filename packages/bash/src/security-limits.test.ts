@@ -9,7 +9,7 @@ describe("Security Limits", () => {
   let bash: Bash;
 
   beforeEach(() => {
-    bash = new Bash({ parserEngine: "legacy" });
+    bash = new Bash({ parser: { engine: "legacy" } });
   });
 
   describe("maxStringLength limit", () => {
@@ -17,7 +17,7 @@ describe("Security Limits", () => {
       // Create a bash env with a very low string length limit
       const limitedBash = new Bash({
         executionLimits: { maxStringLength: 100 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       // Generate a string that exceeds the limit
@@ -31,7 +31,7 @@ describe("Security Limits", () => {
     it("should allow strings within the limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxStringLength: 1000 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       const result = await limitedBash.exec('echo "hello world"');
@@ -44,7 +44,7 @@ describe("Security Limits", () => {
     it("should enforce array element limit on mapfile", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxArrayElements: 5 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       // Try to read more lines than allowed using a heredoc
@@ -69,7 +69,7 @@ echo "count: \${#arr[@]}"
     it("should allow arrays within the limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxArrayElements: 10 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       const result = await limitedBash.exec(`
@@ -89,7 +89,7 @@ echo "count: \${#arr[@]}"
     it("should enforce command substitution nesting limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxSubstitutionDepth: 3 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       // Create deeply nested command substitution
@@ -105,7 +105,7 @@ echo "count: \${#arr[@]}"
     it("should allow substitution within the limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxSubstitutionDepth: 5 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       const result = await limitedBash.exec("echo $(echo $(echo hello))");
@@ -120,7 +120,7 @@ echo "count: \${#arr[@]}"
       // Use limit of 1 to trigger failure on readdir
       const limitedBash = new Bash({
         executionLimits: { maxGlobOperations: 1 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       // Create some files to glob
@@ -138,7 +138,7 @@ echo "count: \${#arr[@]}"
     it("should allow glob operations within the limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxGlobOperations: 1000 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       // Create some files to glob
@@ -179,7 +179,7 @@ echo "count: \${#arr[@]}"
       // Create bash with a very short limit (100ms)
       const limitedBash = new Bash({
         executionLimits: { maxCpuMs: 100 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       // Mock Date.now
@@ -205,7 +205,7 @@ echo "count: \${#arr[@]}"
     it("should still enforce limit for a single long-running command sequence", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxCpuMs: 100 },
-        parserEngine: "legacy",
+        parser: { engine: "legacy" },
       });
 
       const realDateNow = Date.now;
@@ -229,7 +229,7 @@ echo "count: \${#arr[@]}"
       let currentTime = 10000;
       Date.now = () => currentTime;
 
-      const limitedBash = new Bash({ parserEngine: "legacy" });
+      const limitedBash = new Bash({ parser: { engine: "legacy" } });
 
       // Execute something to set baseline
       await limitedBash.exec("true");

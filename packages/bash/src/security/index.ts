@@ -14,15 +14,17 @@
  *
  * // Enable defense-in-depth (recommended for production)
  * const bash = new Bash({
- *   defenseInDepth: true,
+ *   security: { defenseInDepth: true },
  * });
  *
  * // Or with custom configuration
  * const bash = new Bash({
- *   defenseInDepth: {
- *     enabled: true,
- *     auditMode: false,
- *     onViolation: (v) => console.warn('Violation:', v),
+ *   security: {
+ *     defenseInDepth: {
+ *       enabled: true,
+ *       auditMode: false,
+ *       onViolation: (v) => console.warn('Violation:', v),
+ *     },
  *   },
  * });
  * ```

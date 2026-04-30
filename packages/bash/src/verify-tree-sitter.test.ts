@@ -18,10 +18,12 @@ describe("v2.9 Tree-sitter Parser Integration", () => {
 
   beforeAll(async () => {
     bash = new Bash({
-      parserEngine: "tree-sitter",
-      treeSitterConfig: {
-        webTreeSitterWasm,
-        bashGrammarWasm,
+      parser: {
+        engine: "tree-sitter",
+        treeSitterConfig: {
+          webTreeSitterWasm,
+          bashGrammarWasm,
+        },
       },
     });
   });

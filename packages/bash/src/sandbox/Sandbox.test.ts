@@ -26,7 +26,7 @@ describe("Sandbox API", () => {
     });
 
     it("should accept Bash-specific maxCallDepth option", async () => {
-      const sandbox = await Sandbox.create({ maxCallDepth: 5 });
+      const sandbox = await Sandbox.create({ executionLimits: { maxCallDepth: 5 } });
       // Define and call recursive function in same exec (each exec is a new shell)
       const cmd = await sandbox.runCommand("recurse() { recurse; }; recurse");
       const stderr = await cmd.stderr();

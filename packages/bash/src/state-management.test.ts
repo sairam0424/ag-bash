@@ -7,7 +7,7 @@ describe("State Management (Phase 7)", () => {
 
   beforeEach(() => {
     bash = new Bash({
-      parserEngine: "legacy",
+      parser: { engine: "legacy" },
       fs: new InMemoryFs({
         "/file1.txt": "initial",
       }),

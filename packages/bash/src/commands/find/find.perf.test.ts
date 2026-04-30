@@ -31,7 +31,7 @@ describe("find performance tracing", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     const result = await env.exec('find /repos -path "*/pulls/*.json" -type f');
@@ -67,7 +67,7 @@ describe("find performance tracing", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     const result = await env.exec(
@@ -106,7 +106,7 @@ describe("find performance tracing", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     // Test the -path pattern query
@@ -171,7 +171,7 @@ describe("find performance tracing", () => {
     const events1: TraceEvent[] = [];
     const env1 = new Bash({
       files,
-      trace: (event) => events1.push(event),
+      debug: { trace: (event) => events1.push(event) },
     });
     await env1.exec('find /repos -type f -name "*.json"');
     const summary1 = events1.find(
@@ -182,7 +182,7 @@ describe("find performance tracing", () => {
     const events2: TraceEvent[] = [];
     const env2 = new Bash({
       files,
-      trace: (event) => events2.push(event),
+      debug: { trace: (event) => events2.push(event) },
     });
     const result = await env2.exec(
       'find /repos -path "*/pulls/*.json" -type f',
@@ -227,7 +227,7 @@ describe("find performance tracing", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     const result = await env.exec('find /repos -path "*/pulls/*.json" -type f');
@@ -263,7 +263,7 @@ describe("find performance tracing", () => {
     const env = new Bash({
       fs,
       cwd: mountPoint,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     // Test the -path pattern query against real files
@@ -310,7 +310,7 @@ describe("find performance tracing", () => {
     const events1: TraceEvent[] = [];
     const env1 = new Bash({
       files,
-      trace: (event) => events1.push(event),
+      debug: { trace: (event) => events1.push(event) },
     });
 
     console.log("\n--- Fast-path vs Regular Evaluation Comparison ---");
@@ -327,7 +327,7 @@ describe("find performance tracing", () => {
     const events2: TraceEvent[] = [];
     const env2 = new Bash({
       files,
-      trace: (event) => events2.push(event),
+      debug: { trace: (event) => events2.push(event) },
     });
 
     const result2 = await env2.exec(
@@ -464,7 +464,7 @@ describe("find performance tracing", () => {
     const events1: TraceEvent[] = [];
     const env1 = new Bash({
       files,
-      trace: (event) => events1.push(event),
+      debug: { trace: (event) => events1.push(event) },
     });
 
     const result1 = await env1.exec('find /data -type f -printf "%f %p\\n"');
@@ -479,7 +479,7 @@ describe("find performance tracing", () => {
     const events2: TraceEvent[] = [];
     const env2 = new Bash({
       files,
-      trace: (event) => events2.push(event),
+      debug: { trace: (event) => events2.push(event) },
     });
 
     const result2 = await env2.exec('find /data -type f -printf "%f %s\\n"');
@@ -582,7 +582,7 @@ describe("find node visitation verification", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     const result = await env.exec('find /data -path "*/pulls/*.json" -type f');
@@ -623,7 +623,7 @@ describe("find node visitation verification", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     // maxdepth 3 from /data: /data(0), org*(1), repo*(2), pulls|issues|src(3)
@@ -661,7 +661,7 @@ describe("find node visitation verification", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     const result = await env.exec('find /data -name "*.json" -type f');
@@ -698,7 +698,7 @@ describe("find node visitation verification", () => {
     const events1: TraceEvent[] = [];
     const env1 = new Bash({
       files,
-      trace: (event) => events1.push(event),
+      debug: { trace: (event) => events1.push(event) },
     });
     const result1 = await env1.exec('find /data -type f -name "*.json"');
 
@@ -706,7 +706,7 @@ describe("find node visitation verification", () => {
     const events2: TraceEvent[] = [];
     const env2 = new Bash({
       files,
-      trace: (event) => events2.push(event),
+      debug: { trace: (event) => events2.push(event) },
     });
     const result2 = await env2.exec(
       'find /data -path "*/pulls/*.json" -type f',
@@ -744,7 +744,7 @@ describe("find node visitation verification", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     const result = await env.exec("find /data -maxdepth 2 -type d");
@@ -789,7 +789,7 @@ describe("find node visitation verification", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     const result = await env.exec('find /data -path "*/pulls/*.json" -type f');
@@ -826,7 +826,7 @@ describe("find node visitation verification", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     const result = await env.exec('find /data -path "*/pulls/*.json" -type f');
@@ -843,7 +843,7 @@ describe("find node visitation verification", () => {
     const events: TraceEvent[] = [];
     const env = new Bash({
       files,
-      trace: (event) => events.push(event),
+      debug: { trace: (event) => events.push(event) },
     });
 
     // Find repo directories: depth 2 only
@@ -962,7 +962,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec(
@@ -998,7 +998,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Find all .ts files, excluding node_modules
@@ -1033,7 +1033,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Find all files excluding .git
@@ -1058,7 +1058,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Find .ts files excluding node_modules, .git, and dist
@@ -1093,7 +1093,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Find all image files
@@ -1116,7 +1116,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Find all .ts and .js files in src and dist (excluding node_modules)
@@ -1143,7 +1143,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec(
@@ -1169,7 +1169,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec(
@@ -1194,7 +1194,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec(
@@ -1220,7 +1220,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec(
@@ -1240,7 +1240,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Find all .json config files in project root and immediate subdirs
@@ -1267,7 +1267,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec("find /project/dist -type f");
@@ -1288,7 +1288,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec('find /project -name "*.map" -type f');
@@ -1306,7 +1306,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec('find /project -name "*.d.ts" -type f');
@@ -1331,7 +1331,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // All files in in-memory fs have current mtime, so -mtime -1 finds all
@@ -1363,7 +1363,7 @@ describe("find common patterns", () => {
           "/data/file1.txt": { content: "1", mtime: now },
           "/data/file2.txt": { content: "2", mtime: now },
         },
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // file1.txt and file2.txt are newer than reference.txt
@@ -1391,7 +1391,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       const result = await env.exec("find /data -empty -type f");
@@ -1413,7 +1413,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Find files larger than 50 bytes
@@ -1463,7 +1463,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Typical gitignore-aware search
@@ -1499,7 +1499,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Find .ts files that are not tests
@@ -1524,7 +1524,7 @@ describe("find common patterns", () => {
       const events: TraceEvent[] = [];
       const env = new Bash({
         files,
-        trace: (event) => events.push(event),
+        debug: { trace: (event) => events.push(event) },
       });
 
       // Count .ts files (using wc -l)

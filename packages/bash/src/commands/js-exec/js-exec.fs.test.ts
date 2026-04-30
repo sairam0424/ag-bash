@@ -5,7 +5,7 @@ describe("js-exec fs operations", () => {
   describe("readFile", () => {
     it("should read a file", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/test.txt": "hello world",
         },
@@ -18,7 +18,7 @@ describe("js-exec fs operations", () => {
     });
 
     it("should throw on non-existent file", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { fs.readFileSync('/no/such/file'); } catch(e) { console.log('error: ' + e.message); }"`,
       );
@@ -29,7 +29,7 @@ describe("js-exec fs operations", () => {
 
   describe("writeFile", () => {
     it("should write and read back a file", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.writeFileSync('/tmp/out.txt', 'test data'); console.log(fs.readFileSync('/tmp/out.txt'))"`,
       );
@@ -41,7 +41,7 @@ describe("js-exec fs operations", () => {
   describe("exists", () => {
     it("should return true for existing file", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/file.txt": "data" },
       });
       const result = await env.exec(
@@ -52,7 +52,7 @@ describe("js-exec fs operations", () => {
     });
 
     it("should return false for non-existing file", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(fs.existsSync('/no/such/file'))"`,
       );
@@ -64,7 +64,7 @@ describe("js-exec fs operations", () => {
   describe("stat", () => {
     it("should stat a file", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/file.txt": "12345" },
       });
       const result = await env.exec(
@@ -75,7 +75,7 @@ describe("js-exec fs operations", () => {
     });
 
     it("should stat a directory", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "const s = fs.statSync('/home'); console.log(s.isDirectory)"`,
       );
@@ -87,7 +87,7 @@ describe("js-exec fs operations", () => {
   describe("readdir", () => {
     it("should list directory entries", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/a.txt": "a",
           "/home/user/b.txt": "b",
@@ -105,7 +105,7 @@ describe("js-exec fs operations", () => {
 
   describe("mkdir", () => {
     it("should create a directory", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.mkdirSync('/tmp/newdir'); console.log(fs.existsSync('/tmp/newdir'))"`,
       );
@@ -114,7 +114,7 @@ describe("js-exec fs operations", () => {
     });
 
     it("should create directories recursively", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.mkdirSync('/tmp/a/b/c', {recursive: true}); console.log(fs.existsSync('/tmp/a/b/c'))"`,
       );
@@ -125,7 +125,7 @@ describe("js-exec fs operations", () => {
 
   describe("rm", () => {
     it("should remove a file", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.writeFileSync('/tmp/del.txt', 'x'); fs.rmSync('/tmp/del.txt'); console.log(fs.existsSync('/tmp/del.txt'))"`,
       );
@@ -134,7 +134,7 @@ describe("js-exec fs operations", () => {
     });
 
     it("should remove directory recursively", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.mkdirSync('/tmp/rmdir'); fs.writeFileSync('/tmp/rmdir/f.txt', 'x'); fs.rmSync('/tmp/rmdir', {recursive: true}); console.log(fs.existsSync('/tmp/rmdir'))"`,
       );
@@ -145,7 +145,7 @@ describe("js-exec fs operations", () => {
 
   describe("appendFile", () => {
     it("should append to a file", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.writeFileSync('/tmp/app.txt', 'hello'); fs.appendFileSync('/tmp/app.txt', ' world'); console.log(fs.readFileSync('/tmp/app.txt'))"`,
       );

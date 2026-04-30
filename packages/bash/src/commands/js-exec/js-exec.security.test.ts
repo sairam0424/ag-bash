@@ -3,7 +3,7 @@ import { Bash } from "../../Bash.js";
 
 describe("js-exec security", () => {
   it("should support require for known modules but not arbitrary ones", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
     // require('fs') should work (sandboxed)
     const r1 = await env.exec(
       `js-exec -c "const fs = require('fs'); console.log(typeof fs.readFileSync)"`,
@@ -20,7 +20,7 @@ describe("js-exec security", () => {
   });
 
   it("should have sandboxed process (not real Node.js process)", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
     // process.env is our sandboxed env object, not the real Node.js process.env
     const result = await env.exec(
       `js-exec -c "console.log(typeof process.env, typeof process.pid)"`,
@@ -38,7 +38,7 @@ describe("js-exec security", () => {
   });
 
   it("should redirect node command to js-exec with help", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
     const result = await env.exec(`node -e "console.log('test')"`);
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
@@ -56,7 +56,7 @@ describe("js-exec security", () => {
   });
 
   it("should isolate between executions", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
     // Set a global in first execution
     await env.exec(`js-exec -c "globalThis.secret = 42"`);
     // Check it's not available in second execution
@@ -69,7 +69,7 @@ describe("js-exec security", () => {
 
   describe("eval and Function constructor blocked", () => {
     it("should block eval()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { eval('1+1'); console.log('FAIL'); } catch(e) { console.log(e.constructor.name + ': ' + e.message); }"`,
       );
@@ -79,7 +79,7 @@ describe("js-exec security", () => {
     });
 
     it("should block new Function()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { new Function('return 1')(); console.log('FAIL'); } catch(e) { console.log(e.message); }"`,
       );
@@ -89,7 +89,7 @@ describe("js-exec security", () => {
     });
 
     it("should block constructor.constructor (Function via prototype chain)", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { ({}).constructor.constructor('return 42')(); console.log('FAIL'); } catch(e) { console.log(e.message); }"`,
       );
@@ -99,7 +99,7 @@ describe("js-exec security", () => {
     });
 
     it("should block AsyncFunction constructor", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { const AF = (async function(){}).constructor; new AF('return 1')(); console.log('FAIL'); } catch(e) { console.log(e.message); }"`,
       );
@@ -109,7 +109,7 @@ describe("js-exec security", () => {
     });
 
     it("should block GeneratorFunction constructor", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { const GF = (function*(){}).constructor; new GF('yield 1')().next(); console.log('FAIL'); } catch(e) { console.log(e.message); }"`,
       );
@@ -119,7 +119,7 @@ describe("js-exec security", () => {
     });
 
     it("should block AsyncGeneratorFunction constructor", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { const AGF = (async function*(){}).constructor; new AGF('yield 1')(); console.log('FAIL'); } catch(e) { console.log(e.message); }"`,
       );
@@ -131,7 +131,7 @@ describe("js-exec security", () => {
 
   describe("intrinsic prototypes frozen", () => {
     it("should block prototype pollution on Object.prototype", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "Object.prototype.polluted = true; console.log('polluted' in Object.prototype)"`,
       );
@@ -141,7 +141,7 @@ describe("js-exec security", () => {
     });
 
     it("should block prototype pollution on Array.prototype", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "Array.prototype.polluted = true; console.log('polluted' in Array.prototype)"`,
       );
@@ -150,7 +150,7 @@ describe("js-exec security", () => {
     });
 
     it("should block overwriting built-in methods", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "const origToString = Object.prototype.toString; Object.prototype.toString = () => 'hacked'; console.log(Object.prototype.toString === origToString)"`,
       );
@@ -160,7 +160,7 @@ describe("js-exec security", () => {
     });
 
     it("should still allow creating objects with own properties", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "const obj = { a: 1 }; obj.b = 2; console.log(obj.a, obj.b)"`,
       );
@@ -169,7 +169,7 @@ describe("js-exec security", () => {
     });
 
     it("should still allow array operations", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "const arr = [1,2,3]; arr.push(4); console.log(arr.join(','))"`,
       );
@@ -180,7 +180,7 @@ describe("js-exec security", () => {
 
   describe("timer APIs not available", () => {
     it("should not have setTimeout", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(typeof setTimeout)"`,
       );
@@ -189,7 +189,7 @@ describe("js-exec security", () => {
     });
 
     it("should not have setInterval", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(typeof setInterval)"`,
       );
@@ -198,7 +198,7 @@ describe("js-exec security", () => {
     });
 
     it("should not have setImmediate", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(typeof setImmediate)"`,
       );
@@ -212,7 +212,7 @@ describe("js-exec security", () => {
       timeout: 30000,
     }, async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         executionLimits: { maxJsTimeoutMs: 500 },
       });
       // Infinite loop should time out
@@ -230,11 +230,11 @@ describe("js-exec security", () => {
       timeout: 30000,
     }, async () => {
       const env1 = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         executionLimits: { maxJsTimeoutMs: 500 },
       });
       const env2 = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         executionLimits: { maxJsTimeoutMs: 5000 },
       });
 

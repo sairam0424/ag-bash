@@ -24,7 +24,7 @@ describe("runtime error-forwarding leak probes", () => {
     const bash = new Bash({
       fs: new ReadWriteFs({ root: tempDir, allowSymlinks: true }),
       cwd: "/",
-      python: true,
+      runtimes: { python: true },
     });
 
     const result = await bash.exec("ln /dir /dirlink");
@@ -44,7 +44,7 @@ describe("runtime error-forwarding leak probes", () => {
     const bash = new Bash({
       fs: new ReadWriteFs({ root: tempDir, allowSymlinks: true }),
       cwd: "/",
-      python: true,
+      runtimes: { python: true },
     });
 
     const result = await bash.exec("python3 /pkg");
@@ -64,7 +64,7 @@ describe("runtime error-forwarding leak probes", () => {
     const bash = new Bash({
       fs: new ReadWriteFs({ root: tempDir, allowSymlinks: true }),
       cwd: "/",
-      python: true,
+      runtimes: { python: true },
     });
 
     const result = await bash.exec("sqlite3 /dbdir 'select 1;'");

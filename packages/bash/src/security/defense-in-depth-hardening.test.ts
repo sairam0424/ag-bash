@@ -644,7 +644,7 @@ describe("Defense-in-Depth Hardening", () => {
   // =====================================================================
   describe("Category C: Bash.exec() integration with defenseInDepth", () => {
     it("should execute normal bash commands with defenseInDepth enabled", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec('echo "hello world"');
       expect(result.exitCode).toBe(0);
@@ -652,7 +652,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle arithmetic with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec("echo $((5 + 3 * 2))");
       expect(result.exitCode).toBe(0);
@@ -660,7 +660,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle loops with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec('for i in 1 2 3; do echo "item $i"; done');
       expect(result.exitCode).toBe(0);
@@ -668,7 +668,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle pipes with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec(
         'echo -e "cherry\\napple\\nbanana" | sort',
@@ -678,7 +678,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle command substitution with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec('x=$(echo "inner"); echo "got: $x"');
       expect(result.exitCode).toBe(0);
@@ -686,7 +686,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle arrays with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec(
         'arr=(alpha beta gamma); echo "${arr[1]}" "${#arr[@]}"',
@@ -696,7 +696,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle subshells with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec(
         'x=outer; (x=inner; echo "$x"); echo "$x"',
@@ -706,7 +706,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle heredocs with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec("cat <<EOF\nhello world\nEOF");
       expect(result.exitCode).toBe(0);
@@ -714,7 +714,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle case statements with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec(`
         x="banana"
@@ -729,7 +729,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle comprehensive bash script with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec(`
         # Arithmetic
@@ -766,7 +766,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle concurrent exec calls with defenseInDepth", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const [r1, r2, r3] = await Promise.all([
         bash.exec('echo "first"'),
@@ -783,7 +783,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should still work after new process blocks are added", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       // Run multiple bash commands to verify nothing is broken
       const results = await Promise.all([
@@ -804,7 +804,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle time command with performance.now() replaced", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec("time echo hello");
       expect(result.exitCode).toBe(0);
@@ -814,7 +814,7 @@ describe("Defense-in-Depth Hardening", () => {
     });
 
     it("should handle timed pipelines with performance.now() replaced", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec('time echo "hello" | cat');
       expect(result.exitCode).toBe(0);
@@ -1019,7 +1019,7 @@ describe("Defense-in-Depth Hardening", () => {
   // =====================================================================
   describe("Category I: Stack trace sanitization", () => {
     it("should sanitize host paths from SecurityViolationError", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       // SecurityViolationError messages should not leak host paths
       // The sanitization happens in the Bash.exec() error handler
@@ -1045,7 +1045,7 @@ describe("Defense-in-Depth Hardening", () => {
   // =====================================================================
   describe("Category K: Module._resolveFilename blocking", () => {
     it("should still execute bash commands with _resolveFilename patched", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec('echo "resolve test"');
       expect(result.exitCode).toBe(0);
@@ -1142,7 +1142,7 @@ describe("Defense-in-Depth Hardening", () => {
 
     it("should not interfere with normal bash execution after hooks registered", async () => {
       // This test runs in-process to verify hooks don't break the interpreter
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const results = await Promise.all([
         bash.exec("echo hello"),
