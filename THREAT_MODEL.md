@@ -1,10 +1,10 @@
-# Ag-Bash Security Threat Model (v1.3.0 - LOCKED)
+# Ag-Bash Security Threat Model (v3.0.0-draft)
 
 This document outlines the security architecture and threat mitigations for Ag-Bash.
 
 > [!IMPORTANT]
-> **Status: RELEASE v1.3.0**
-> All core security layers described below (Architecture, FS, Network, Runtime) are implemented and verified for the v1.3.0 release.
+> **Status: DRAFT v3.0.0**
+> All core security layers described below (Architecture, FS, Network, Runtime) are implemented and verified for the v1.3.0 release. Sections for TB6–TB9, added in this draft, cover new attack surface introduced between v1.3.0 and v2.6.0 and require review before lock.
 
 ## Context
 
@@ -45,6 +45,10 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 - **The Node.js runtime and underlying OS**: @ag-bash/bash assumes the Node.js binary, V8, and OS kernel are not compromised. Exploits targeting V8 internals or kernel vulnerabilities are out of scope.
 - **Dependencies**: Supply-chain attacks via npm dependencies are a deployment-level concern (addressed by lockfiles, audits, etc.), not a runtime defense.
 
+**Partially trusted** (v2.6.0+):
+
+- **External MCP servers**: When `@ag-bash/mcp-server` connects to external MCP servers via `ag-mcp`, those servers are treated as *partially trusted*. Their tool schemas are validated via Zod and their responses pass through strict JSON parsing, but the semantic content of tool results is accepted at face value once structurally validated. A compromised MCP server could return well-formed but malicious tool results — the ag-bash sandbox confines the blast radius, but the *meaning* of tool output is trusted by the orchestrating agent.
+
 ---
 
 ## 2. Trust Boundaries
@@ -69,13 +73,14 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 │  │  ┌──────────────────┬──────────────────┬───────┴──────┐  │  │
 │  │  │ Filesystem       │ Network          │ Commands     │  │  │
 │  │  │ (InMemoryFs/     │ (Allow-list)     │ (Registry)   │  │  │
-│  │  │  OverlayFs)      │ Default: OFF     │ ~79 built-in │  │  │
+│  │  │  OverlayFs)      │ Default: OFF     │ 110+ built-in│  │  │
 │  │  │ Symlinks: DENY   │                  │ No spawn()   │  │  │
 │  │  └──────────────────┴──────────────────┴──────────────┘  │  │
 │  │                                                           │  │
 │  │  ┌───────────────────────────────────────────────────┐    │  │
 │  │  │ Defense-in-Depth (SECONDARY)                      │    │  │
 │  │  │ AsyncLocalStorage context-aware monkey-patching   │    │  │
+│  │  │ PermissionMgr: plan-mode destructive-op blocking  │    │  │
 │  │  │ Blocks: Function, eval, setTimeout, process.*,   │    │  │
 │  │  │   performance, Module._resolveFilename,           │    │  │
 │  │  │   __defineGetter__/__defineSetter__, stdout/stderr │    │  │
@@ -95,6 +100,14 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 **TB4 — Interpreter → Host Process**: The interpreter must never spawn child processes, access host environment variables, or reach Node.js internals (process.binding, require, import()).
 
 **TB5 — Data → Variable/Key Space**: User-controlled data becomes JS object keys (env vars, AWK variables, associative array keys). Must use null-prototype objects or Maps to prevent prototype pollution.
+
+**TB6 — MCP Client → External Server** (v2.6.0+): The `@ag-bash/mcp-server` connects to external MCP servers via JSON-RPC 2.0 over stdio and HTTP transports. External servers are untrusted at the transport layer: tool schemas are validated via Zod at registration time, and responses pass through strict JSON parsing before reaching the interpreter. However, a compromised MCP server could return structurally valid but semantically malicious tool results (e.g., a `read_file` tool returning fabricated content). The ag-bash sandbox confines execution, but the orchestrating agent may act on the poisoned data. **Residual risk**: Semantically valid but malicious tool results that pass structural validation.
+
+**TB7 — Plan Mode → Tool Dispatch** (v2.6.0+): The `PermissionManager` (`src/services/PermissionManager.ts`) enforces plan-mode restrictions by blocking destructive operations (file writes, `rm`, `chmod`, network mutations) via regex pattern matching at the tool dispatch level, not at the raw command level. This prevents bypass via shell aliases or indirect execution chains. **Residual risk**: Custom commands registered by the host application via `customCommands` can bypass `PermissionManager` checks because they execute as opaque JS functions, not as dispatchable tool invocations.
+
+**TB8 — ag-convert → Document Processing** (v2.6.0+): The `ag-convert` command processes untrusted documents (PDF, DOCX, HTML) by routing them through Python-based converters (Docling/MarkItDown). Python execution runs inside a CPython Emscripten WASM sandbox with no host filesystem access — the same isolation model described in §4.7. Document content is treated as untrusted data; output is plain text/markdown only. **Residual risk**: A crafted document could trigger WASM memory exhaustion (OOM) within the Emscripten heap. The 30-second `maxPythonTimeoutMs` timeout bounds the blast radius, but repeated invocations could degrade host performance before the timeout fires.
+
+**TB9 — Agentic Healer → Auto-Remediation** (v2.6.0+): The `AgenticHealer` observes script failures and suggests recovery commands. In the default `keyword` mode, suggestions are generated via fixed keyword matching against a scored tool registry — no external model is involved. Suggestions are advisory only (displayed to the user/agent, not auto-executed) unless the host explicitly configures auto-execution. **Residual risk**: If `llm` mode is enabled, the healer delegates suggestion generation to an LLM. An attacker who controls stderr output (e.g., via a crafted script that writes attacker-controlled error messages) could prompt-inject the LLM into suggesting malicious remediation commands. The `keyword` default mode is immune to this vector.
 
 ---
 
