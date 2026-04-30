@@ -195,11 +195,7 @@ export const agConvertCommand: Command = {
         };
       }
 
-      if (result.status !== 0) {
-        console.error(
-          `ag-convert bridge failed with status ${result.status}. Stderr: ${result.stderr}`,
-        );
-      }
+      // Bridge failure details are already captured in result.stderr
 
       return {
         stdout: result.stdout,
@@ -217,7 +213,7 @@ export const agConvertCommand: Command = {
 };
 
 function setupDependencies(): ExecResult {
-  console.log("Hyperion Setup: Installing docling and markitdown using uv...");
+  // Installing docling and markitdown using uv
 
   // Try to find uv in common locations if not in PATH
   // Resolve the absolute path of python3 to avoid shim mismatches
@@ -233,8 +229,7 @@ function setupDependencies(): ExecResult {
     }
   } catch (_e) {}
 
-  console.log(`Hyperion Setup: Targeting Python at ${pythonExe}`);
-  console.log("Installing docling and markitdown...");
+  // Targeting resolved pythonExe; installing docling and markitdown
 
   const commonPaths = [
     "/opt/homebrew/bin/uv",
@@ -263,7 +258,7 @@ function setupDependencies(): ExecResult {
 
   let result;
   if (foundUv) {
-    console.log(`Using uv at: ${uvPath}`);
+    // Using uv at resolved path
     result = spawnSync(
       uvPath,
       [
@@ -285,11 +280,9 @@ function setupDependencies(): ExecResult {
 
   if (!result || result.status !== 0) {
     if (result && result.status !== 0) {
-      console.log(
-        `uv failed with exit code ${result.status}. Error: ${result.stderr}`,
-      );
+      // uv failed — falling through to pip
     }
-    console.log(`Trying ${pythonExe} -m pip install...`);
+    // Trying pip install as fallback
     result = spawnSync(
       pythonExe,
       [
