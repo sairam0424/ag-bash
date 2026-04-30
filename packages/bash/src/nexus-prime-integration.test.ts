@@ -14,9 +14,7 @@ const mockClient = {
 
 vi.mock("./services/McpClient.js", () => {
   return {
-    McpClient: {
-      getInstance: () => mockClient,
-    },
+    McpClient: vi.fn(() => mockClient),
   };
 });
 
@@ -26,7 +24,7 @@ describe("Nexus Prime Integration (MCP & Orchestration)", () => {
 
   beforeEach(() => {
     fs = new InMemoryFs();
-    bash = new Bash({ fs, agentic: true });
+    bash = new Bash({ fs, agentic: { enabled: true } });
     // Reset singletons if necessary
     // @ts-expect-error
     AgentManager.instance = undefined;
@@ -107,7 +105,7 @@ describe("Nexus Prime Integration (MCP & Orchestration)", () => {
 
     it("should handle connection errors gracefully", async () => {
       // Re-mock for this specific test
-      const client = McpClient.getInstance();
+      const client = bash.services.mcpClient;
       vi.mocked(client.connectStdio).mockRejectedValueOnce(
         new Error("Connection failed"),
       );

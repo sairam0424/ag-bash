@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { ToolboxTool } from "../agentic/Tool.js";
 import type { Bash } from "../Bash.js";
-import { LSPManager } from "./LSPManager.js";
 
 /**
  * ag_lsp: Unified tool for code intelligence.
@@ -46,7 +45,7 @@ export const LspTool: ToolboxTool = {
   checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
   validateInput: async (_args: any) => ({ result: true }),
   execute: async (bash: Bash, args: any) => {
-    const manager = LSPManager.getInstance();
+    const manager = bash.services.lspManager;
 
     // Map operation names to LSP methods
     const methodMap: Record<string, string> = {

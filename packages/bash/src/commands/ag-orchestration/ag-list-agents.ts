@@ -4,16 +4,15 @@
  * Usage: ag-list-agents
  */
 
-import { AgentManager } from "../../services/AgentManager.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agListAgents: Command = {
   name: "ag-list-agents",
   execute: async (
     _args: string[],
-    _ctx: CommandContext,
+    ctx: CommandContext,
   ): Promise<ExecResult> => {
-    const manager = AgentManager.getInstance();
+    const manager = ctx.bash.services.agentManager;
     const agents = manager.listAgents();
 
     if (agents.length === 0) {

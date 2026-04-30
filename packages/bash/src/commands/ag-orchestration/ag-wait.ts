@@ -4,14 +4,13 @@
  * Usage: ag-wait <id>
  */
 
-import { AgentManager } from "../../services/AgentManager.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agWait: Command = {
   name: "ag-wait",
   execute: async (
     args: string[],
-    _ctx: CommandContext,
+    ctx: CommandContext,
   ): Promise<ExecResult> => {
     const id = args[0];
 
@@ -24,7 +23,7 @@ export const agWait: Command = {
     }
 
     try {
-      const manager = AgentManager.getInstance();
+      const manager = ctx.bash.services.agentManager;
       const result = await manager.wait(id);
 
       let output = `Sub-agent ${id} completed with exit code ${result.exitCode}.\n`;

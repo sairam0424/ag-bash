@@ -24,7 +24,7 @@ import { mapToRecord } from "../../helpers/env.js";
 
 import { bindDefenseContextCallback } from "../../security/defense-context.js";
 import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
-import { SessionManager } from "../../services/SessionManager.js";
+import type { SessionManager } from "../../services/SessionManager.js";
 import { _clearTimeout, _setTimeout } from "../../timers.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
@@ -180,6 +180,8 @@ type QueuedExecution = {
   canceled?: boolean;
   /** Set to true when the request has been resolved or rejected */
   resolved?: boolean;
+  /** SessionManager instance from the owning Bash context */
+  sessionManager?: SessionManager;
 };
 type QueueState = {
   executionQueue: QueuedExecution[];
@@ -336,11 +338,11 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
   }
   queueState.isExecuting = true;
 
-  const sessionManager = SessionManager.getInstance();
+  const sessionManager = next.sessionManager;
   let w: Worker | null = null;
   const sessionId = next.input.sessionId;
 
-  if (sessionId) {
+  if (sessionId && sessionManager) {
     const session = sessionManager.getSession(sessionId);
     if (session && session.type === "python") {
       w = session.worker;
@@ -356,7 +358,7 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
       });
     });
 
-    if (sessionId) {
+    if (sessionId && sessionManager) {
       sessionManager.createSession("python", w, sessionId);
     }
   }
@@ -543,6 +545,7 @@ async function executePython(
       resolve: () => {},
       workerRef,
       requireDefenseContext: ctx.requireDefenseContext,
+      sessionManager: ctx.bash?.services?.sessionManager,
     };
 
     const onTimeout = bindDefenseContextCallback(

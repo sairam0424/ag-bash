@@ -857,10 +857,8 @@ export class BashToolbox {
         name: "list_mcp_tools",
         description: "List all tools available via connected MCP servers.",
         parameters: z.object({}),
-        execute: async (_bash: Bash) => {
-          const client = (
-            await import("../services/McpClient.js")
-          ).McpClient.getInstance();
+        execute: async (bash: Bash) => {
+          const client = bash.services.mcpClient;
           return client.listConnections().map((c) => ({
             server: c.id,
             tools: c.tools.map((t) => `${c.id}__${t.name}`),
@@ -876,10 +874,8 @@ export class BashToolbox {
           "Synchronize and register all MCP tools into the central toolbox.",
         parameters: z.object({}),
         isReadOnly: true,
-        execute: async (_bash: Bash) => {
-          const client = (
-            await import("../services/McpClient.js")
-          ).McpClient.getInstance();
+        execute: async (bash: Bash) => {
+          const client = bash.services.mcpClient;
           const connections = client.listConnections();
           let count = 0;
 
@@ -892,7 +888,7 @@ export class BashToolbox {
                   description: `[MCP: ${conn.id}] ${tool.description || ""}`,
                   parameters: z.any(), // MCP schemas are dynamic
                   execute: async (b, args) => {
-                    return await client.callTool(conn.id, tool.name, args, b);
+                    return await b.services.mcpClient.callTool(conn.id, tool.name, args, b);
                   },
                 }),
               );
@@ -963,10 +959,7 @@ export class BashToolbox {
           description: tool.description || `MCP tool from ${connectionId}`,
           parameters: this.jsonSchemaToZod(tool.inputSchema),
           execute: async (bash: Bash, args: any) => {
-            const client = (
-              await import("../services/McpClient.js")
-            ).McpClient.getInstance();
-            return await client.callTool(connectionId, tool.name, args, bash);
+            return await bash.services.mcpClient.callTool(connectionId, tool.name, args, bash);
           },
         }),
       );
