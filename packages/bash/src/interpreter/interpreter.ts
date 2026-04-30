@@ -35,11 +35,12 @@ import {
   DefenseInDepthBox,
   SecurityViolationError,
 } from "../security/defense-in-depth-box.js";
-import { SharedStateBus } from "../services/SharedStateBus.js";
+import type { SharedStateBus } from "../services/SharedStateBus.js";
 import type {
   CommandRegistry,
   ExecResult,
   FeatureCoverageWriter,
+  Observation,
   TraceCallback,
 } from "../types.js";
 import { expandAlias as expandAliasHelper } from "./alias-expansion.js";
@@ -186,7 +187,7 @@ export class Interpreter {
       agenticHealer:
         options.agenticHealer ||
         (options.agentic ? new AgenticHealer() : undefined),
-      sharedBus: options.sharedBus || SharedStateBus.getInstance(),
+      sharedBus: options.sharedBus || options.bash?.services?.sharedBus,
       bash: options.bash,
     };
   }
@@ -255,7 +256,7 @@ export class Interpreter {
     let stdout = "";
     let stderr = "";
     let exitCode = 0;
-    const observations: any[] = [];
+    const observations: Observation[] = [];
     const maxOutputSize = this.ctx.limits.maxOutputSize;
 
     const appendOutput = (nextStdout: string, nextStderr: string): void => {
@@ -491,7 +492,7 @@ export class Interpreter {
 
       let stdout = "";
       let stderr = "";
-      const observations: any[] = [];
+      const observations: Observation[] = [];
 
       // verbose mode (set -v)
       if (

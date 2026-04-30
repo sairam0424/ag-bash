@@ -5,7 +5,7 @@
  * constructing ExecResult objects throughout the interpreter.
  */
 
-import type { ExecResult } from "../../types.js";
+import type { ExecResult, Observation } from "../../types.js";
 import { ExecutionLimitError } from "../errors.js";
 import type { InterpreterContext } from "../types.js";
 
@@ -26,7 +26,7 @@ export const OK: ExecResult = Object.freeze({
  * @param observations - Optional failure metadata
  * @returns ExecResult with exitCode 0
  */
-export function success(stdout = "", observations?: any[]): ExecResult {
+export function success(stdout = "", observations?: Observation[]): ExecResult {
   return { stdout, stderr: "", exitCode: 0, observations };
 }
 
@@ -41,7 +41,7 @@ export function success(stdout = "", observations?: any[]): ExecResult {
 export function failure(
   stderr: string,
   exitCode = 1,
-  observations?: any[],
+  observations?: Observation[],
 ): ExecResult {
   return { stdout: "", stderr, exitCode, observations };
 }
@@ -59,7 +59,7 @@ export function result(
   stdout: string,
   stderr: string,
   exitCode: number,
-  observations?: any[],
+  observations?: Observation[],
 ): ExecResult {
   return { stdout, stderr, exitCode, observations };
 }
