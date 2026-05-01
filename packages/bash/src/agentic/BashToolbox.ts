@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Bash } from "../Bash.js";
 import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
 import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
+import { detectDestructiveCommand } from "../security/destructive-command-detector.js";
 import { LspTool } from "../lsp/LspTool.js";
 import { ConvertTool } from "./ConvertTool.js";
 import { EditTool } from "./EditTool.js";
@@ -896,6 +897,411 @@ export class BashToolbox {
             }
           }
           return `Successfully synchronized ${count} tools from ${connections.length} MCP servers.`;
+        },
+      }),
+    );
+
+    // --- Phase 1: Task Management Tools ---
+
+    this.registerTool(
+      buildTool({
+        name: "task_create",
+        description:
+          "Create a new tracked task with subject, description, owner, and progress text.",
+        searchHint: "create a task to track work",
+        parameters: z.object({
+          subject: z.string().describe("Brief title for the task."),
+          description: z.string().describe("What needs to be done."),
+          activeForm: z
+            .string()
+            .optional()
+            .describe('Spinner text when in_progress (e.g., "Running tests").'),
+          owner: z.string().optional().describe("Agent ID that owns this task."),
+        }),
+        execute: async (
+          bash: Bash,
+          input: {
+            subject: string;
+            description: string;
+            activeForm?: string;
+            owner?: string;
+          },
+        ) => {
+          const task = bash.services.taskManager.create(input);
+          return { id: task.id, subject: task.subject, status: task.status };
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "task_update",
+        description:
+          "Update a task's status, subject, description, owner, or dependencies.",
+        searchHint: "update task status or details",
+        parameters: z.object({
+          taskId: z.string().describe("The task ID to update."),
+          status: z
+            .string()
+            .optional()
+            .describe("New status: pending, in_progress, completed, failed, blocked."),
+          subject: z.string().optional().describe("New subject."),
+          description: z.string().optional().describe("New description."),
+          owner: z.string().optional().describe("New owner agent ID."),
+          addBlocks: z
+            .array(z.string())
+            .optional()
+            .describe("Task IDs that this task blocks."),
+          addBlockedBy: z
+            .array(z.string())
+            .optional()
+            .describe("Task IDs that block this task."),
+        }),
+        execute: async (bash: Bash, input: Record<string, unknown>) => {
+          const { taskId, ...changes } = input;
+          const task = bash.services.taskManager.update(
+            taskId as string,
+            changes as any,
+          );
+          return { id: task.id, status: task.status, subject: task.subject };
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "task_list",
+        description: "List all tracked tasks, optionally filtered by status or owner.",
+        searchHint: "list all tasks",
+        parameters: z.object({
+          status: z.string().optional().describe("Filter by status."),
+          owner: z.string().optional().describe("Filter by owner agent ID."),
+        }),
+        isReadOnly: true,
+        execute: async (
+          bash: Bash,
+          filter: { status?: string; owner?: string },
+        ) => {
+          return bash.services.taskManager.list(filter as any);
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "task_get",
+        description: "Get full details of a specific task by ID.",
+        searchHint: "get task details",
+        parameters: z.object({
+          taskId: z.string().describe("The task ID."),
+        }),
+        isReadOnly: true,
+        execute: async (bash: Bash, { taskId }: { taskId: string }) => {
+          const task = bash.services.taskManager.get(taskId);
+          if (!task) return `Task ${taskId} not found.`;
+          return task;
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "task_stop",
+        description: "Stop (fail) a running task.",
+        searchHint: "stop a running task",
+        parameters: z.object({
+          taskId: z.string().describe("The task ID to stop."),
+        }),
+        execute: async (bash: Bash, { taskId }: { taskId: string }) => {
+          const task = bash.services.taskManager.update(taskId, {
+            status: "failed",
+          });
+          return { id: task.id, status: task.status };
+        },
+      }),
+    );
+
+    // --- Phase 1: Multi-Agent Swarm Tools ---
+
+    this.registerTool(
+      buildTool({
+        name: "team_create",
+        description: "Create a new agent team for coordinated multi-agent work.",
+        searchHint: "create multi-agent team",
+        parameters: z.object({
+          name: z.string().describe("Team name."),
+          description: z.string().optional().describe("Team purpose."),
+        }),
+        execute: async (
+          bash: Bash,
+          input: { name: string; description?: string },
+        ) => {
+          const team = bash.services.teamManager.createTeam(input);
+          return { id: team.id, name: team.name };
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "team_delete",
+        description: "Delete an agent team.",
+        searchHint: "delete agent team",
+        parameters: z.object({
+          name: z.string().describe("Team name or ID."),
+        }),
+        execute: async (bash: Bash, { name }: { name: string }) => {
+          const deleted = bash.services.teamManager.deleteTeam(name);
+          return deleted ? `Deleted team ${name}.` : `Team ${name} not found.`;
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "send_message",
+        description: "Send a message from one agent to another.",
+        searchHint: "inter-agent messaging",
+        parameters: z.object({
+          from: z.string().describe("Sender agent ID."),
+          to: z.string().describe("Recipient agent ID."),
+          content: z.string().describe("Message content."),
+        }),
+        execute: async (
+          bash: Bash,
+          input: { from: string; to: string; content: string },
+        ) => {
+          const msg = bash.services.teamManager.sendMessage(
+            input.from,
+            input.to,
+            input.content,
+          );
+          return { id: msg.id, from: msg.from, to: msg.to };
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "agent_memory_read",
+        description: "Read a memory entry for an agent type.",
+        searchHint: "read agent memory",
+        parameters: z.object({
+          agentType: z.string().describe("Agent type identifier."),
+          scope: z
+            .string()
+            .describe("Memory scope: user, project, or local."),
+          key: z.string().describe("Memory key."),
+        }),
+        isReadOnly: true,
+        execute: async (
+          bash: Bash,
+          input: { agentType: string; scope: string; key: string },
+        ) => {
+          const entry = bash.services.agentMemory.read(
+            input.agentType,
+            input.scope as any,
+            input.key,
+          );
+          return entry || `No memory found for ${input.agentType}:${input.scope}:${input.key}`;
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "agent_memory_write",
+        description: "Write a memory entry for an agent type.",
+        searchHint: "write agent memory",
+        parameters: z.object({
+          agentType: z.string().describe("Agent type identifier."),
+          scope: z
+            .string()
+            .describe("Memory scope: user, project, or local."),
+          key: z.string().describe("Memory key."),
+          value: z.string().describe("Memory value."),
+        }),
+        execute: async (
+          bash: Bash,
+          input: { agentType: string; scope: string; key: string; value: string },
+        ) => {
+          const entry = bash.services.agentMemory.write(
+            input.agentType,
+            input.scope as any,
+            input.key,
+            input.value,
+          );
+          return { key: entry.key, scope: entry.scope, agentType: entry.agentType };
+        },
+      }),
+    );
+
+    // --- Phase 2: Intelligence Tools ---
+
+    this.registerTool(
+      buildTool({
+        name: "glob_files",
+        description:
+          "Fast glob pattern matching over the filesystem. Returns matching file paths sorted by name or mtime.",
+        searchHint: "find files by glob pattern",
+        parameters: z.object({
+          pattern: z.string().describe('Glob pattern (e.g., "**/*.ts", "src/**/*.{ts,tsx}").'),
+          path: z.string().optional().describe("Root directory (default: cwd)."),
+          sort: z.string().optional().describe('"alpha" (default) or "mtime".'),
+          limit: z.number().optional().describe("Max results (default: 1000)."),
+        }),
+        isReadOnly: true,
+        execute: async (
+          bash: Bash,
+          input: { pattern: string; path?: string; sort?: string; limit?: number },
+        ) => {
+          const args = [JSON.stringify(input.pattern)];
+          if (input.path) args.push("--path", JSON.stringify(input.path));
+          if (input.sort) args.push("--sort", input.sort);
+          if (input.limit) args.push("--limit", String(input.limit));
+          const result = await bash.exec("ag-glob " + args.join(" "));
+          return result.stdout.trim().split("\n").filter(Boolean);
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "git_track",
+        description:
+          "Record and classify a git operation. Returns classification (safe/mutating/destructive) and audit entry.",
+        searchHint: "track git operation for safety audit",
+        parameters: z.object({
+          command: z.string().describe("The git command to classify and record."),
+        }),
+        execute: async (bash: Bash, { command }: { command: string }) => {
+          const op = bash.services.gitTracker.recordOperation(command);
+          return { id: op.id, classification: op.classification, command: op.command };
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "git_audit_log",
+        description: "Get the git operations audit log, optionally filtered to destructive operations only.",
+        searchHint: "view git audit log",
+        parameters: z.object({
+          destructiveOnly: z.boolean().optional().describe("If true, return only destructive operations."),
+        }),
+        isReadOnly: true,
+        execute: async (bash: Bash, { destructiveOnly }: { destructiveOnly?: boolean }) => {
+          if (destructiveOnly) return bash.services.gitTracker.getDestructiveOps();
+          return bash.services.gitTracker.getLog();
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "check_destructive",
+        description:
+          "Check if a command contains destructive patterns (rm -rf, DROP TABLE, git reset --hard, etc.). Returns warning or null.",
+        searchHint: "check command for destructive patterns",
+        parameters: z.object({
+          command: z.string().describe("The command to analyze for destructive patterns."),
+        }),
+        isReadOnly: true,
+        execute: async (_bash: Bash, { command }: { command: string }) => {
+          const warning = detectDestructiveCommand(command);
+          return warning || { safe: true, message: "No destructive patterns detected." };
+        },
+      }),
+    );
+
+    // --- Phase 3: Automation Tools ---
+
+    this.registerTool(
+      buildTool({
+        name: "cron_create",
+        description:
+          "Schedule a recurring or one-shot prompt using a cron expression.",
+        searchHint: "schedule recurring cron job",
+        parameters: z.object({
+          cron: z.string().describe('5-field cron expression (e.g., "*/5 * * * *").'),
+          prompt: z.string().describe("The prompt/command to run at each fire time."),
+          recurring: z.boolean().optional().describe("True = repeating (default), false = one-shot."),
+          durable: z.boolean().optional().describe("True = persisted, false = session-only (default)."),
+        }),
+        execute: async (
+          bash: Bash,
+          input: { cron: string; prompt: string; recurring?: boolean; durable?: boolean },
+        ) => {
+          const job = bash.services.cronScheduler.createJob(input);
+          return { id: job.id, cron: job.cron, recurring: job.recurring };
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "cron_delete",
+        description: "Delete a scheduled cron job.",
+        searchHint: "delete cron job",
+        parameters: z.object({
+          id: z.string().describe("The cron job ID to delete."),
+        }),
+        execute: async (bash: Bash, { id }: { id: string }) => {
+          const deleted = bash.services.cronScheduler.deleteJob(id);
+          return deleted ? `Deleted cron job ${id}.` : `Job ${id} not found.`;
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "cron_list",
+        description: "List all scheduled cron jobs.",
+        searchHint: "list cron jobs",
+        parameters: z.object({}),
+        isReadOnly: true,
+        execute: async (bash: Bash) => {
+          return bash.services.cronScheduler.listJobs();
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "enter_worktree",
+        description:
+          "Create and enter an isolated virtual worktree for independent development.",
+        searchHint: "create worktree for isolation",
+        parameters: z.object({
+          name: z.string().describe("Worktree name."),
+          branch: z.string().optional().describe("Branch name (default: worktree/<name>)."),
+        }),
+        execute: async (bash: Bash, input: { name: string; branch?: string }) => {
+          const cwd = bash.getCwd();
+          let wt = bash.services.worktreeManager.getWorktree(input.name);
+          if (!wt) {
+            wt = bash.services.worktreeManager.createWorktree({
+              name: input.name,
+              branch: input.branch,
+              originalCwd: cwd,
+            });
+          }
+          bash.services.worktreeManager.enterWorktree(input.name);
+          return { id: wt.id, path: wt.path, branch: wt.branch };
+        },
+      }),
+    );
+
+    this.registerTool(
+      buildTool({
+        name: "exit_worktree",
+        description: "Exit the active worktree and restore the original working directory.",
+        searchHint: "exit worktree isolation",
+        parameters: z.object({}),
+        execute: async (bash: Bash) => {
+          const result = bash.services.worktreeManager.exitWorktree();
+          if (!result) return "No active worktree.";
+          return { restored: result.originalCwd };
         },
       }),
     );
