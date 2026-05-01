@@ -3,6 +3,7 @@ import type { Bash } from "../Bash.js";
 import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
 import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
 import { detectDestructiveCommand } from "../security/destructive-command-detector.js";
+import { ToolSearchEngine } from "./ToolSearchEngine.js";
 import { LspTool } from "../lsp/LspTool.js";
 import { ConvertTool } from "./ConvertTool.js";
 import { EditTool } from "./EditTool.js";
@@ -824,30 +825,45 @@ export class BashToolbox {
     this.registerTool(
       buildTool({
         name: "search_tools",
-        description: "Search for available tools by keyword or description.",
+        description:
+          "Search for available tools by keyword, or select by exact name with 'select:Name1,Name2'.",
         parameters: z.object({
           query: z
             .string()
-            .describe("Keyword to search for in tool names and descriptions."),
+            .describe(
+              'Keyword query or "select:Name1,Name2" for exact lookup.',
+            ),
+          limit: z
+            .number()
+            .optional()
+            .describe("Max results (default: 10)."),
         }),
         isReadOnly: true,
-        execute: async (_bash: Bash, { query }: { query: string }) => {
+        execute: async (
+          _bash: Bash,
+          { query, limit }: { query: string; limit?: number },
+        ) => {
           const tools = this.getTools();
-          const results = tools.filter(
-            (t) =>
-              t.name.includes(query) ||
-              t.description.includes(query) ||
-              t.searchHint?.includes(query),
-          );
+          const engine = new ToolSearchEngine();
 
-          if (results.length === 0) {
-            return "No tools found matching your query.";
+          if (query.startsWith("select:")) {
+            const selected = engine.selectByName(tools, query);
+            if (selected.length === 0) return "No tools found matching those names.";
+            return selected.map((t) => ({
+              name: t.name,
+              description: t.description,
+              aliases: t.aliases,
+            }));
           }
 
-          return results.map((t) => ({
-            name: t.name,
-            description: t.description,
-            aliases: t.aliases,
+          const results = engine.search(tools, query, limit);
+          if (results.length === 0) return "No tools found matching your query.";
+
+          return results.map((r) => ({
+            name: r.tool.name,
+            description: r.tool.description,
+            score: r.score,
+            matchedOn: r.matchedOn,
           }));
         },
       }),
@@ -1318,40 +1334,11 @@ export class BashToolbox {
   }
 
   /**
-   * Performs a semantic search over the registered tools.
+   * Performs a semantic search over the registered tools using ToolSearchEngine.
    */
   public async searchTools(query: string, limit = 3): Promise<ToolboxTool[]> {
-    const tools = this.getTools();
-    const queryLower = query.toLowerCase();
-    const keywords = queryLower.split(/\s+/).filter((k) => k.length > 3);
-
-    return tools
-      .map((tool) => {
-        const toolName = tool.name.toLowerCase();
-        const toolDesc = tool.description.toLowerCase();
-        const toolHint = (tool.searchHint || "").toLowerCase();
-
-        // Count keyword matches
-        const matchCount = keywords.filter(
-          (k) =>
-            toolName.includes(k) ||
-            toolDesc.includes(k) ||
-            toolHint.includes(k),
-        ).length;
-
-        // Check if tool name is mentioned in query
-        const isNamedInQuery = queryLower.includes(toolName.replace(/_/g, " "));
-
-        let score = 100; // Lower is better
-        if (isNamedInQuery) score = 0;
-        else if (matchCount > 0) score = 50 - matchCount; // More matches = lower score
-
-        return { tool, score };
-      })
-      .filter((res) => res.score < 100)
-      .sort((a, b) => a.score - b.score)
-      .slice(0, limit)
-      .map((res) => res.tool);
+    const engine = new ToolSearchEngine();
+    return engine.search(this.getTools(), query, limit).map((r) => r.tool);
   }
 
   public getTool(name: string): ToolboxTool | undefined {
