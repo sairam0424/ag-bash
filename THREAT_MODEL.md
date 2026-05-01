@@ -1,10 +1,10 @@
-# Ag-Bash Security Threat Model (v3.0.0-draft)
+# Ag-Bash Security Threat Model (v3.0.0)
 
 This document outlines the security architecture and threat mitigations for Ag-Bash.
 
 > [!IMPORTANT]
-> **Status: DRAFT v3.0.0**
-> All core security layers described below (Architecture, FS, Network, Runtime) are implemented and verified for the v1.3.0 release. Sections for TB6–TB9, added in this draft, cover new attack surface introduced between v1.3.0 and v2.6.0 and require review before lock.
+> **Status: v3.0.0-LOCKED**
+> All core security layers described below (Architecture, FS, Network, Runtime) are implemented and verified. TB6–TB9 cover attack surface introduced in the v2.x–v3.0 cycle including MCP client isolation, plan mode enforcement, document processing, and agentic healer governance.
 
 ## Context
 

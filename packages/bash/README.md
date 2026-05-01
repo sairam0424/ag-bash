@@ -80,7 +80,7 @@ Custom commands receive a `CommandContext` with `fs`, `cwd`, `env`, `stdin`, and
 
 ### Optional Runtimes
 
-`js-exec` (JavaScript/TypeScript via QuickJS; requires `javascript: true`), `python3`/`python` (Python via CPython; requires `python: true`)
+`js-exec` (JavaScript/TypeScript via QuickJS; requires `runtimes: { javascript: true }`), `python3`/`python` (Python via CPython; requires `runtimes: { python: true }`)
 
 ### Compression & Archives
 
@@ -98,10 +98,14 @@ Custom commands receive a `CommandContext` with `fs`, `cwd`, `env`, `stdin`, and
 
 Specialized commands and lifecycle hooks designed for AI agents to interact with the environment effectively:
 
-- **Observability (v2.4.0+)**: `Bash` instance now emits `tool:start`, `tool:progress`, and `tool:end` events for real-time tracking.
+- **ServiceContainer DI (v3.0.0)**: All services injected via constructor — no singletons, fully testable.
+- **Grouped BashOptions (v3.0.0)**: Runtime, security, parser, debug, and agentic options organized into sub-objects.
+- **Pipeline Optimization (v3.0.0)**: Early termination for `head -N` patterns via AST static analysis.
+- **Type-Safe Core (v3.0.0)**: `any` eliminated from services, interpreter, and error hierarchy.
+- **Observability (v2.4.0+)**: `Bash` instance emits `tool:start`, `tool:progress`, and `tool:end` events.
 - **Agentic Healer 2.0 (v2.4.0+)**: Tool-aware automated remediation loop with semantic tool discovery.
-- **Unified Permissions (v2.5.0+)**: Centralized `PermissionManager` for managing tool access and interactive prompts.
-- **Real MCP Support (v2.5.0+)**: Full JSON-RPC 2.0 client for connecting to external tool servers via Stdio or HTTP.
+- **Unified Permissions (v2.5.0+)**: Centralized `PermissionManager` for managing tool access.
+- **Real MCP Support (v2.5.0+)**: Full JSON-RPC 2.0 client for connecting to external tool servers.
 - `ag-edit`: Robust, line-based file editing (insert/replace/delete).
 - `ag-diff`: High-fidelity, semantic diff for code changes.
 - `ag-snapshot`: Capture and restore core shell state (env, functions, CWD, and FS).
@@ -141,9 +145,17 @@ const env = new Bash({
   env: { MY_VAR: "value" }, // Initial environment
   cwd: "/app", // Starting directory (default: /home/user)
   executionLimits: { maxCallDepth: 50 }, // See "Execution Protection"
-  python: true, // Enable python3/python commands
-  javascript: true, // Enable js-exec command
-  // Or with bootstrap: javascript: { bootstrap: "globalThis.X = 1;" }
+  runtimes: {
+    python: true, // Enable python3/python commands
+    javascript: true, // Enable js-exec command
+    // Or with bootstrap: javascript: { bootstrap: "globalThis.X = 1;" }
+  },
+  security: {
+    defenseInDepth: true, // Enable prototype pollution defenses
+  },
+  agentic: {
+    enabled: true, // Enable agentic tools and orchestration
+  },
 });
 
 // Per-exec overrides

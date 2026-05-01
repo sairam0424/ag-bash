@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-05-01
+
+### Breaking Changes
+
+- **BashOptions API Restructured**: Flat configuration fields reorganized into grouped sub-objects:
+  - `python`/`javascript` → `runtimes: { python?, javascript? }`
+  - `defenseInDepth`/`processInfo` → `security: { defenseInDepth?, processInfo? }`
+  - `parserEngine`/`treeSitterConfig` → `parser: { engine?, treeSitterConfig? }`
+  - `logger`/`trace`/`coverage`/`debugger`/`semanticEngine` → `debug: { ... }`
+  - `agentic` (boolean) → `agentic: { enabled?, healer?, nestingDepth?, permissionHandler? }`
+- **Singletons Eliminated**: `AgentManager`, `McpClient`, `SessionManager`, `Orchestrator`, and `LSPManager` are no longer singletons. All services are now owned per-`Bash` instance via `ServiceContainer`.
+- **Deprecated Fields Removed**: `maxCallDepth`, `maxCommandCount`, and `maxLoopIterations` top-level options removed (use `executionLimits` sub-object).
+
+### Added
+
+- **ServiceContainer DI**:
+  - New `createDefaultServices()` factory for constructing the full service graph with optional overrides for testing.
+  - `bash.services` exposes `astCache`, `sharedBus`, `sessionManager`, `agentManager`, `mcpClient`, `orchestrator`, and `lspManager`.
+- **FNV-1a ASTCache**:
+  - Replaced SHA-256 with non-cryptographic FNV-1a hashing for browser compatibility and ~10x faster key generation.
+  - True LRU eviction using JavaScript `Map` insertion-order semantics (delete + re-set for promotion).
+  - Added `configure()`, `stats()` (hit/miss counters), and short-circuit for inputs < 64 chars.
+- **Pipeline Early Termination**:
+  - Static AST analysis detects `head -N` patterns (all flag variants: `-N`, `-n N`, `--lines=N`).
+  - Upstream pipe output truncated to `N+10` lines, avoiding unnecessary data processing.
+- **Type Safety Overhaul**:
+  - Eliminated `any` from `SharedStateBus`, `McpClient`, `SessionManager`, `LSPManager`, interpreter errors, and result helpers.
+  - Added `BusErrorHandler`, `publishTyped<T>()`, `getStateAs<T>()`, `McpBashLike`, `SessionSummary` interfaces.
+- **MCP Server Hardening**:
+  - `sanitizeErrorMessage()` strips file paths and caps error messages at 200 characters.
+  - Implemented proper `restore` handler for snapshot tool.
+  - Version bumped to 3.0.0 with V3 startup banner.
+- **Threat Model v3.0**: Added TB6 (MCP Client), TB7 (Plan Mode), TB8 (ag-convert), TB9 (Agentic Healer) trust boundaries.
+
+### Fixed
+
+- Removed all `console.error`/`console.warn`/`console.log` calls from library code (LSPConnection, WorkspaceIndexer, tree-sitter-parser, ag-convert, McpClient).
+- Fixed dead code after snapshot handler in MCP server.
+
+### Changed
+
+- Synchronized monorepo versions to **v3.0.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- `DefenseInDepthBox` remains a process-wide singleton (intentional — it patches `AsyncLocalStorage` globally).
+
 ## [2.6.0] - 2026-04-26
 
 ### Added (Project V-Next Upgrade - Enhanced Tooling)
