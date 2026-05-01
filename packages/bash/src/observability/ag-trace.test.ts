@@ -3,7 +3,7 @@ import { Bash } from "../Bash.js";
 
 describe("AgTrace observability", () => {
   it("should provide suggestions for command typos", async () => {
-    const bash = new Bash({ agentic: true });
+    const bash = new Bash({ agentic: { enabled: true } });
     const result = await bash.exec("cho hello");
     expect(result.exitCode).toBe(127);
     expect(result.observations).toBeDefined();
@@ -16,7 +16,7 @@ describe("AgTrace observability", () => {
 
   it("should detect case-insensitive file matches", async () => {
     const bash = new Bash({
-      agentic: true,
+      agentic: { enabled: true },
       files: {
         "README.md": "content",
       },
@@ -31,7 +31,7 @@ describe("AgTrace observability", () => {
   });
 
   it("should identify missing parent directories", async () => {
-    const bash = new Bash({ agentic: true });
+    const bash = new Bash({ agentic: { enabled: true } });
     const result = await bash.exec("cat /tmp/nonexistent/file.txt");
     expect(result.observations).toBeDefined();
     const obs = result.observations?.find(
@@ -43,7 +43,7 @@ describe("AgTrace observability", () => {
   });
 
   it("should analyze syntax errors", async () => {
-    const bash = new Bash({ agentic: true });
+    const bash = new Bash({ agentic: { enabled: true } });
     const result = await bash.exec("if true; then echo"); // missing 'fi'
     expect(result.exitCode).toBe(2);
     expect(result.observations).toBeDefined();
@@ -53,7 +53,7 @@ describe("AgTrace observability", () => {
 
   it("should handle execution limits", async () => {
     const bash = new Bash({
-      agentic: true,
+      agentic: { enabled: true },
       executionLimits: { maxCommandCount: 2 },
     });
     const result = await bash.exec("echo 1; echo 2; echo 3");

@@ -11,17 +11,7 @@ export interface SpawnOptions {
  * Orchestrator - Manages sub-agents for parallel or specialized tasks.
  */
 export class Orchestrator {
-  private static instance: Orchestrator;
   private agents: Map<string, Bash> = new Map();
-
-  private constructor() {}
-
-  public static getInstance(): Orchestrator {
-    if (!Orchestrator.instance) {
-      Orchestrator.instance = new Orchestrator();
-    }
-    return Orchestrator.instance;
-  }
 
   /**
    * Spawns a new sub-agent.
@@ -30,7 +20,9 @@ export class Orchestrator {
     const agent = new Bash({
       cwd: options.cwd || parent.cwd,
       env: { ...parent.env, ...options.env },
-      nestingDepth: parent.nestingDepth + 1,
+      agentic: {
+        nestingDepth: parent.nestingDepth + 1,
+      },
     });
 
     // If toolSubset is provided, filter the toolbox

@@ -134,11 +134,8 @@ export function createDefaultProgressLogger(): FuzzProgressCallback {
     const eta =
       rate > 0 ? ((progress.total - progress.current) / rate).toFixed(1) : "?";
 
-    console.log(
-      `[Fuzz] ${progress.current}/${progress.total} (${progress.percent.toFixed(1)}%) | ` +
-        `${elapsed}s elapsed | ${rate.toFixed(1)} tests/s | ETA: ${eta}s | ` +
-        `failures: ${progress.failures}`,
-    );
+    // Silent: library code must not write to console.
+    // Consumers should provide their own onProgress callback.
   };
 }
 
@@ -232,10 +229,7 @@ export function createProgressReporter(
         const eta =
           rate > 0 ? ((config.numRuns - current) / rate).toFixed(1) : "?";
         const prefix = testName ? `[${testName}] ` : "";
-        console.log(
-          `${prefix}${current}/${config.numRuns} (${progress.percent.toFixed(0)}%) | ` +
-            `${elapsed}s | ${rate.toFixed(0)}/s | ETA: ${eta}s`,
-        );
+        // Silent: no onProgress callback provided; do not log to console.
       }
     }
   };

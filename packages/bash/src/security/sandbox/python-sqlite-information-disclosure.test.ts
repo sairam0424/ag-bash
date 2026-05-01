@@ -3,7 +3,7 @@ import { Bash } from "../../Bash.js";
 
 describe("Python/SQLite Information Disclosure", () => {
   it("python3 sys.path should not expose host or Node internal paths", async () => {
-    const bash = new Bash({ python: true });
+    const bash = new Bash({ runtimes: { python: true } });
     const result = await bash.exec(`cat > /tmp/check_sys_path.py << 'EOF'
 import sys
 blob = "\\n".join(str(p) for p in sys.path)
@@ -18,7 +18,7 @@ python3 /tmp/check_sys_path.py`);
   });
 
   it("python3 traceback output should not contain host/internal markers", async () => {
-    const bash = new Bash({ python: true });
+    const bash = new Bash({ runtimes: { python: true } });
     const result =
       await bash.exec(`python3 -c "raise Exception('boom')" 2> /tmp/pyerr.txt || true
 if grep -Eq '/Users/|node:internal|file://' /tmp/pyerr.txt; then

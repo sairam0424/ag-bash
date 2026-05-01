@@ -197,7 +197,7 @@ describe("DefenseInDepthBox concurrent execution", () => {
 
   describe("integration with Bash.exec()", () => {
     it("should isolate multiple concurrent bash.exec() calls", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       // Run two bash.exec() concurrently
       const [result1, result2] = await Promise.all([
@@ -212,7 +212,7 @@ describe("DefenseInDepthBox concurrent execution", () => {
     });
 
     it("should not interfere with normal bash execution", async () => {
-      const bash = new Bash({ defenseInDepth: true });
+      const bash = new Bash({ security: { defenseInDepth: true } });
 
       const result = await bash.exec(`
         x=5
@@ -225,7 +225,7 @@ describe("DefenseInDepthBox concurrent execution", () => {
     });
 
     it("should allow disabling defense-in-depth", async () => {
-      const bash = new Bash({ defenseInDepth: false });
+      const bash = new Bash({ security: { defenseInDepth: false } });
 
       const result = await bash.exec('echo "no defense"');
 
@@ -236,10 +236,12 @@ describe("DefenseInDepthBox concurrent execution", () => {
     it("should work with audit mode", async () => {
       const violations: { type: string }[] = [];
       const bash = new Bash({
-        defenseInDepth: {
-          enabled: true,
-          auditMode: true,
-          onViolation: (v) => violations.push({ type: v.type }),
+        security: {
+          defenseInDepth: {
+            enabled: true,
+            auditMode: true,
+            onViolation: (v) => violations.push({ type: v.type }),
+          },
         },
       });
 

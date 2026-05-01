@@ -7,7 +7,7 @@ describe("python3 queue runtime desync checks", () => {
     timeout: 60000,
   }, async () => {
     const bash = new Bash({
-      python: true,
+      runtimes: { python: true },
       executionLimits: { maxPythonTimeoutMs: 5 },
     });
 
@@ -29,13 +29,13 @@ describe("python3 queue runtime desync checks", () => {
 
     const slowBash = new Bash({
       fs: sharedFs,
-      python: true,
+      runtimes: { python: true },
       executionLimits: { maxPythonTimeoutMs: 30000 },
     });
 
     const fastTimeoutBash = new Bash({
       fs: sharedFs,
-      python: true,
+      runtimes: { python: true },
       executionLimits: { maxPythonTimeoutMs: 5 },
     });
 
@@ -70,13 +70,13 @@ describe("python3 queue runtime desync checks", () => {
 
     const blocker = new Bash({
       fs: sharedFs,
-      python: true,
+      runtimes: { python: true },
       executionLimits: { maxPythonTimeoutMs: 30000 },
     });
 
     const timed = new Bash({
       fs: sharedFs,
-      python: true,
+      runtimes: { python: true },
       executionLimits: { maxPythonTimeoutMs: 5 },
     });
 

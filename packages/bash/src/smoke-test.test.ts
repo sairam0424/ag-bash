@@ -10,7 +10,7 @@ describe("Ag-Bash v2.0 Smoke Test", () => {
     fs = new InMemoryFs();
     bash = new Bash({
       fs,
-      agentic: true,
+      agentic: { enabled: true },
       fetch: async () =>
         ({
           ok: true,
@@ -94,8 +94,7 @@ describe("Ag-Bash v2.0 Smoke Test", () => {
     // Level 1 -> Spawn Level 2 (FAIL)
     // We simulate this by trying to spawn from within the agent manager with a depth of 1
     const subAgent = new Bash({
-      agentic: true,
-      nestingDepth: 1,
+      agentic: { enabled: true, nestingDepth: 1 },
       executionLimits: { maxAgentNesting: 1 },
     });
 

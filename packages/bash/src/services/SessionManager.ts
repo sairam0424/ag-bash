@@ -1,5 +1,12 @@
 import type { Worker } from "node:worker_threads";
 
+export interface SessionSummary {
+  id: string;
+  type: "javascript" | "python";
+  age: number;
+  lastUsed: number;
+}
+
 export interface SessionInfo {
   id: string;
   type: "javascript" | "python";
@@ -13,17 +20,7 @@ export interface SessionInfo {
  * It keeps workers alive across multiple tool calls.
  */
 export class SessionManager {
-  private static instance: SessionManager;
   private sessions: Map<string, SessionInfo> = new Map();
-
-  private constructor() {}
-
-  static getInstance(): SessionManager {
-    if (!SessionManager.instance) {
-      SessionManager.instance = new SessionManager();
-    }
-    return SessionManager.instance;
-  }
 
   createSession(
     type: "javascript" | "python",
@@ -59,7 +56,7 @@ export class SessionManager {
     return false;
   }
 
-  listSessions(): any[] {
+  listSessions(): SessionSummary[] {
     return Array.from(this.sessions.values()).map((s) => ({
       id: s.id,
       type: s.type,

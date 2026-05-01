@@ -7,7 +7,7 @@ const nodeMajor = Number(process.versions.node.split(".")[0]);
 
 describe.skipIf(nodeMajor < 22)("js-exec recursion guard bypass probes", () => {
   it("blocks nested js-exec via child_process.execSync", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
 
     const result = await env.exec(`js-exec -c "
 const cp = require('child_process');
@@ -34,7 +34,7 @@ try {
   });
 
   it("blocks nested js-exec through timeout wrapper", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
 
     const result = await env.exec(`js-exec -c "
 const cp = require('child_process');
@@ -66,7 +66,7 @@ console.log('TIMEOUT_MARKER=' + String(fs.existsSync(marker)));
   });
 
   it("blocks nested js-exec via spawnSync structured args", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
 
     const result = await env.exec(`js-exec -c "
 const cp = require('child_process');
@@ -99,7 +99,7 @@ console.log('SPAWN_MARKER=' + String(fs.existsSync(marker)));
     timeout: 30000,
   }, async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       executionLimits: { maxJsTimeoutMs: 1500 },
       files: {
         "/tmp/nested-bg.js": `
@@ -141,7 +141,7 @@ console.log('BG_MARKER=' + String(fs.existsSync(marker)));
     timeout: 30000,
   }, async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       executionLimits: { maxJsTimeoutMs: 1500 },
       files: {
         "/tmp/nested-bg-nowait.js": `
@@ -191,7 +191,7 @@ console.log('NOWAIT_NERR=' + String(fs.existsSync(nestedErr) ? fs.readFileSync(n
     timeout: 30000,
   }, async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       executionLimits: { maxJsTimeoutMs: 2000 },
       files: {
         "/tmp/nested-bg-delayed.js": `
@@ -238,7 +238,7 @@ console.log('DELAY_NERR=' + String(fs.existsSync(nestedErr) ? fs.readFileSync(ne
   });
 
   it("blocks nested js-exec from Promise microtask bridge callback", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
 
     const result = await env.exec(`js-exec -c "
 const marker = '/tmp/jb_nested_promise_marker';

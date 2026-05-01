@@ -12,6 +12,8 @@
  * as they propagate through the execution stack.
  */
 
+import type { Observation } from "../types.js";
+
 /**
  * Base class for all control flow errors.
  * Carries stdout/stderr to preserve output during propagation.
@@ -21,7 +23,7 @@ abstract class ControlFlowError extends Error {
     message: string,
     public stdout: string = "",
     public stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(message);
   }
@@ -90,7 +92,7 @@ export class ErrexitError extends ControlFlowError {
     public readonly exitCode: number,
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(
       `errexit: command exited with status ${exitCode}`,
@@ -129,7 +131,7 @@ export class ExitError extends ControlFlowError {
     public readonly exitCode: number,
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(`exit`, stdout, stderr, observations);
   }
@@ -153,7 +155,7 @@ export class ArithmeticError extends ControlFlowError {
     stdout: string = "",
     stderr: string = "",
     fatal = false,
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}\n`;
@@ -172,7 +174,7 @@ export class BadSubstitutionError extends ControlFlowError {
     message: string,
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}: bad substitution\n`;
@@ -190,7 +192,7 @@ export class GlobError extends ControlFlowError {
     pattern: string,
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(`no match: ${pattern}`, stdout, stderr, observations);
     this.stderr = stderr || `bash: no match: ${pattern}\n`;
@@ -208,7 +210,7 @@ export class BraceExpansionError extends ControlFlowError {
     message: string,
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}\n`;
@@ -241,7 +243,7 @@ export class ExecutionLimitError extends ControlFlowError {
       | "sub_agents",
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}\n`;

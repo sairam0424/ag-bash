@@ -11,21 +11,21 @@ import { Bash } from "../../Bash.js";
 describe("python3 security", () => {
   describe("module isolation (no JS bridge)", () => {
     it("should block import js", { timeout: 60000 }, async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "import js"');
       expect(result.stderr).toContain("ModuleNotFoundError");
       expect(result.exitCode).toBe(1);
     });
 
     it("should block import pyodide", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "import pyodide"');
       expect(result.stderr).toContain("ModuleNotFoundError");
       expect(result.exitCode).toBe(1);
     });
 
     it("should block ctypes (no _ctypes C extension)", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "import ctypes"');
       // ctypes pure-Python loads but _ctypes C extension is missing
       expect(result.stderr).toMatch(/ImportError|ModuleNotFoundError/);
@@ -33,7 +33,7 @@ describe("python3 security", () => {
     });
 
     it("should block _ctypes (not compiled)", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -c "import _ctypes"');
       expect(result.stderr).toMatch(/ImportError|ModuleNotFoundError/);
       expect(result.exitCode).toBe(1);
@@ -42,7 +42,7 @@ describe("python3 security", () => {
 
   describe("process spawn blocking", () => {
     it("should return -1 from os.system (no-op at Emscripten level)", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         "python3 -c \"import os; print(os.system('echo pwned'))\"",
       );
@@ -53,7 +53,7 @@ describe("python3 security", () => {
     });
 
     it("should block subprocess.run", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         "python3 -c \"import subprocess; subprocess.run(['echo', 'pwned'])\"",
       );
@@ -63,7 +63,7 @@ describe("python3 security", () => {
     });
 
     it("should block os.popen", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         "python3 -c \"import os; os.popen('echo pwned')\"",
       );
@@ -75,7 +75,7 @@ describe("python3 security", () => {
 
   describe("dlopen blocking", () => {
     it("should block loading crafted WASM side modules", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       // First, write the WASM bytes to a file using python
       await env.exec(
         "python3 -c \"open('/tmp/evil.cpython-313-wasm32-emscripten.so','wb').write(bytes([0,97,115,109,1,0,0,0,0,14,8,100,121,108,105,110,107,46,48,0,0,0,0,0,1,4,1,96,0,1,127,3,2,1,0,7,15,1,11,80,121,73,110,105,116,95,101,118,105,108,0,0,10,6,1,4,0,65,0,11]))\"",
@@ -92,7 +92,7 @@ describe("python3 security", () => {
 
   describe("filesystem isolation", () => {
     it("should not have /etc/passwd (no host FS)", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         "python3 -c \"import os; print(os.path.exists('/etc/passwd'))\"",
       );
@@ -101,7 +101,7 @@ describe("python3 security", () => {
     });
 
     it("should not access host filesystem via _io.open (C-level)", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec(`cat > /tmp/test_io.py << 'EOF'
 import _io
 try:
@@ -117,7 +117,7 @@ EOF`);
     });
 
     it("should not access real /etc/passwd via C-level listdir", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       // Even with _os module (C-level), /etc doesn't exist in Emscripten VFS
       // (path redirection sends os.listdir('/') to /host/ which is the ag-bash VFS)
       await env.exec(`cat > /tmp/test_root.py << 'EOF'
@@ -137,7 +137,7 @@ EOF`);
 
   describe("network isolation", () => {
     it("should block raw TCP sockets", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec(`cat > /tmp/test_socket.py << 'EOF'
 import socket
 try:
@@ -156,7 +156,7 @@ EOF`);
 
   describe("environment isolation", () => {
     it("should not leak host environment variables", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec(`cat > /tmp/test_env.py << 'EOF'
 import os
 env = dict(os.environ)
@@ -183,7 +183,7 @@ EOF`);
 
   describe("file operation redirects", () => {
     it("should redirect open() to /host", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec('echo "test content" > /tmp/redirect_test.txt');
       const result = await env.exec(
         "python3 -c \"print(open('/tmp/redirect_test.txt').read().strip())\"",
@@ -193,7 +193,7 @@ EOF`);
     });
 
     it("should redirect glob.glob to /host", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec('echo "x" > /tmp/glob_test_file.txt');
       const result = await env.exec(`python3 -c "
 import glob
@@ -205,7 +205,7 @@ print(files)
     });
 
     it("should redirect os.walk to /host", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec("mkdir -p /tmp/walk_dir");
       await env.exec('echo "a" > /tmp/walk_dir/file.txt');
       await env.exec(`cat > /tmp/test_walk.py << 'EOF'
@@ -220,7 +220,7 @@ EOF`);
     });
 
     it("should redirect pathlib.Path operations to /host", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec('echo "pathlib content" > /tmp/pathlib_test.txt');
       await env.exec(`cat > /tmp/test_pathlib.py << 'EOF'
 from pathlib import Path
@@ -235,7 +235,7 @@ EOF`);
     });
 
     it("should strip /host prefix from os.getcwd", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec("mkdir -p /tmp/cwd_test");
       const result = await env.exec(`python3 -c "
 import os
@@ -250,7 +250,7 @@ print(os.getcwd())
 
   describe("legitimate operations", () => {
     it("should allow standard library imports", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         "python3 -c \"import json, math, re, datetime, collections; print('OK')\"",
       );
@@ -259,7 +259,7 @@ print(os.getcwd())
     });
 
     it("should allow jb_http module", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       await env.exec(`cat > /tmp/test_jb_http.py << 'EOF'
 import jb_http
 try:
@@ -280,7 +280,7 @@ EOF`);
 
   describe("module name validation", () => {
     it("should reject module names with quotes", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec(
         'python3 -m "os\'; import sys; sys.exit(42); #"',
       );
@@ -290,7 +290,7 @@ EOF`);
     });
 
     it("should reject module names with newlines", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       // Newlines would break out of the string if not validated
       const result = await env.exec('python3 -m "os\nimport os"');
       expect(result.exitCode).toBe(1);
@@ -298,7 +298,7 @@ EOF`);
     });
 
     it("should reject module names with special characters", async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       const result = await env.exec('python3 -m "os; import sys"');
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("No module named");
@@ -307,7 +307,7 @@ EOF`);
     it("should allow valid dotted module names", {
       timeout: 60000,
     }, async () => {
-      const env = new Bash({ python: true });
+      const env = new Bash({ runtimes: { python: true } });
       // platform is a stdlib module that prints platform info
       const result = await env.exec("python3 -m platform");
       expect(result.stdout).toContain("Emscripten");
@@ -318,7 +318,7 @@ EOF`);
   describe("timeout worker termination (Fix 2)", () => {
     it("should terminate worker on timeout", { timeout: 60000 }, async () => {
       const env = new Bash({
-        python: true,
+        runtimes: { python: true },
         executionLimits: { maxPythonTimeoutMs: 2000 },
       });
       const result = await env.exec('python3 -c "import time; time.sleep(30)"');

@@ -6,7 +6,7 @@ describe("worker protocol runtime desync probes", () => {
   it("python3 stdout shaped like worker control payload is treated as plain output", {
     timeout: 60000,
   }, async () => {
-    const bash = new Bash({ python: true });
+    const bash = new Bash({ runtimes: { python: true } });
     const result = await bash.exec(
       `python3 -c "print('{\\"type\\":\\"security-violation\\",\\"violation\\":{\\"type\\":\\"module_load\\"}}')"`,
     );

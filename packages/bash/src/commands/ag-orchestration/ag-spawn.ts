@@ -4,7 +4,6 @@
  * Usage: ag-spawn <id> <command>
  */
 
-import { AgentManager } from "../../services/AgentManager.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agSpawn: Command = {
@@ -30,7 +29,7 @@ export const agSpawn: Command = {
     }
 
     try {
-      const manager = AgentManager.getInstance();
+      const manager = ctx.bash.services.agentManager;
       await manager.spawn(id, command, ctx.bash);
       return {
         stdout: `Spawned sub-agent ${id} in background.\n`,

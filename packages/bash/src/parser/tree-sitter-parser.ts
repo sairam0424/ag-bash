@@ -35,9 +35,7 @@ export class TreeSitterParser {
       const { Parser, Language } = TreeSitter as any;
 
       if (!TreeSitterParser.parser) {
-        console.log(
-          "[TreeSitterParser] Initializing core with vendored library...",
-        );
+        // Initializing core with vendored library
         if (!Parser) {
           throw new Error(
             "Parser class not found in vendored web-tree-sitter module.",
@@ -67,7 +65,7 @@ export class TreeSitterParser {
         for (const [name, grammar] of Object.entries(options.grammars)) {
           if (TreeSitterParser.languages.has(name)) continue;
 
-          console.log(`[TreeSitterParser] Loading grammar: ${name}`);
+          // Loading grammar silently
           const grammarWasm =
             grammar instanceof Uint8Array
               ? grammar
@@ -91,7 +89,6 @@ export class TreeSitterParser {
       }
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error("[TreeSitterParser] Initialization FAILED:", errorMsg);
       throw new Error(`Failed to initialize TreeSitterParser: ${errorMsg}`);
     } finally {
       TreeSitterParser.isInitializing = false;

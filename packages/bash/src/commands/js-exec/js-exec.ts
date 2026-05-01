@@ -20,7 +20,7 @@ import {
 import { mapToRecord } from "../../helpers/env.js";
 import { getErrorMessage } from "../../interpreter/helpers/errors.js";
 import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
-import { SessionManager } from "../../services/SessionManager.js";
+import type { SessionManager } from "../../services/SessionManager.js";
 import { _clearTimeout, _setTimeout } from "../../timers.js";
 import type {
   Command,
@@ -237,6 +237,7 @@ type QueuedExecution = {
   input: JsExecWorkerInput;
   resolve: (result: JsExecWorkerOutput) => void;
   canceled?: boolean;
+  sessionManager?: SessionManager;
 };
 const executionQueue: QueuedExecution[] = [];
 let currentExecution: QueuedExecution | null = null;
@@ -293,7 +294,7 @@ function processNextExecution(): void {
     return;
   }
   currentExecution = next;
-  const worker = getOrCreateWorker(currentExecution.input.sessionId);
+  const worker = getOrCreateWorker(currentExecution.input.sessionId, currentExecution.sessionManager);
   worker.postMessage(currentExecution.input);
 }
 
@@ -346,15 +347,15 @@ function normalizeJsWorkerMessage(
   };
 }
 
-function getOrCreateWorker(sessionId?: string): Worker {
+function getOrCreateWorker(sessionId?: string, sessionManager?: SessionManager): Worker {
   // Clear any pending idle timeout
   if (workerIdleTimeout && !sessionId) {
     _clearTimeout(workerIdleTimeout);
     workerIdleTimeout = null;
   }
 
-  if (sessionId) {
-    const session = SessionManager.getInstance().getSession(sessionId);
+  if (sessionId && sessionManager) {
+    const session = sessionManager.getSession(sessionId);
     if (session) return session.worker;
   }
 
@@ -364,8 +365,8 @@ function getOrCreateWorker(sessionId?: string): Worker {
 
   const worker = DefenseInDepthBox.runTrusted(() => new Worker(workerPath));
 
-  if (sessionId) {
-    SessionManager.getInstance().createSession("javascript", worker, sessionId);
+  if (sessionId && sessionManager) {
+    sessionManager.createSession("javascript", worker, sessionId);
   } else {
     sharedWorker = worker;
   }
@@ -538,6 +539,7 @@ async function executeJSInner(
   const queueEntry: QueuedExecution = {
     input: workerInput,
     resolve: () => {}, // replaced below
+    sessionManager: ctx.bash?.services?.sessionManager,
   };
 
   const timeoutHandle = _setTimeout(() => {

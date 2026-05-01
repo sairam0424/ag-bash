@@ -330,7 +330,7 @@ async function main(): Promise<void> {
 
   // Load Tree-sitter WASM assets from vendor directory
   const vendorDir = join(__dirname, "..", "parser", "vendor");
-  const treeSitterConfig = {
+  const treeSitterWasmConfig = {
     webTreeSitterWasm: readFileSync(join(vendorDir, "web-tree-sitter.wasm")),
     bashGrammarWasm: readFileSync(join(vendorDir, "tree-sitter-bash.wasm")),
   };
@@ -338,10 +338,16 @@ async function main(): Promise<void> {
   const env = new Bash({
     fs,
     cwd,
-    python: options.python,
-    javascript: options.javascript,
-    agentic: options.agentic,
-    treeSitterConfig,
+    runtimes: {
+      python: options.python,
+      javascript: options.javascript,
+    },
+    agentic: {
+      enabled: options.agentic,
+    },
+    parser: {
+      treeSitterConfig: treeSitterWasmConfig,
+    },
   });
 
   if (options.plan) {

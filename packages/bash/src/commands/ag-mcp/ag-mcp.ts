@@ -8,13 +8,12 @@
  * - disconnect <server_id> : Close a connection
  */
 
-import { McpClient } from "../../services/McpClient.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agMcp: Command = {
   name: "ag-mcp",
   execute: async (args: string[], ctx: CommandContext): Promise<ExecResult> => {
-    const client = McpClient.getInstance();
+    const client = ctx.bash.services.mcpClient;
     const subcommand = args[0];
 
     if (!subcommand) {

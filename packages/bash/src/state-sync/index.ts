@@ -86,9 +86,6 @@ export function diffState(
   if (funcChanged) delta.funcDelta = funcDelta;
 
   // 3. Diff CWD
-  console.log(
-    `DIFFING CWD: base=${base.state.cwd}, current=${current.state.cwd}`,
-  );
   if (base.state.cwd !== current.state.cwd) {
     delta.cwd = current.state.cwd;
   }

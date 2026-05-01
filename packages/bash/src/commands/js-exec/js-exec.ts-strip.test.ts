@@ -6,7 +6,7 @@ describe("js-exec TypeScript type stripping", () => {
     timeout: 30000,
   }, async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       files: {
         // Interface + type annotation
         "/home/user/iface.ts": `
@@ -59,7 +59,7 @@ console.log(x);
 
   it("should auto-detect module + strip for .mts files", async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       files: {
         "/home/user/utils.mts": `
 export function add(a: number, b: number): number {
@@ -80,7 +80,7 @@ console.log(result);
 
   it("should support --strip-types and --module flags", async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       files: {
         "/etc/hostname": "myhost\n",
       },
@@ -103,7 +103,7 @@ console.log(result);
 
   it("should handle .ts importing .ts with types", async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       files: {
         "/home/user/types.ts": `
 export interface Config {

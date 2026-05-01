@@ -9,7 +9,7 @@ describe("Todo Manager (Phase 7)", () => {
 
   beforeEach(() => {
     bash = new Bash({
-      parserEngine: "legacy",
+      parser: { engine: "legacy" },
       fs: new InMemoryFs(),
     });
     const toolbox = new BashToolbox();

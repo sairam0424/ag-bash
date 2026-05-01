@@ -1,5 +1,18 @@
 import { Bash } from "@ag-bash/bash";
 
+function sanitizeErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return "Internal server error";
+  const msg = error.message;
+  // Strip file paths (Unix and Windows)
+  const sanitized = msg
+    .replace(/\/[\w./\-]+/g, "[path]")
+    .replace(/[A-Z]:\\[\w\\.\-]+/g, "[path]");
+  // Cap length to prevent information leakage via long stack traces
+  return sanitized.length > 200
+    ? `${sanitized.slice(0, 200)}...`
+    : sanitized;
+}
+
 /**
  * Ag-Bash MCP Server (Dependency-Free Implementation)
  *
@@ -16,9 +29,8 @@ class AgBashServer {
       network: {
         dangerouslyAllowFullInternetAccess: true,
       },
-      python: true,
-      javascript: true,
-      defenseInDepth: true,
+      runtimes: { python: true, javascript: true },
+      security: { defenseInDepth: true },
     });
   }
 
@@ -48,7 +60,7 @@ class AgBashServer {
               },
               serverInfo: {
                 name: "ag-bash",
-                version: "1.4.0",
+                version: "3.0.0",
               },
             },
           });
@@ -193,9 +205,17 @@ class AgBashServer {
                 content: [{ type: "text", text: encoded }],
               },
             });
+          } else if (name === "restore") {
+            const encodedSnapshot = String(args?.snapshot || "");
+            const snapshot = JSON.parse(
+              Buffer.from(encodedSnapshot, "base64").toString("utf-8"),
+            );
+            await this.bash.restore(snapshot);
             return this.sendResponse(id, {
               result: {
-                content: [{ type: "text", text: "State restored successfully." }],
+                content: [
+                  { type: "text", text: "State restored successfully." },
+                ],
               },
             });
           } else if (name === "create_delta") {
@@ -276,7 +296,7 @@ class AgBashServer {
       return this.sendResponse(id, {
         error: {
           code: -32603,
-          message: error instanceof Error ? error.message : String(error),
+          message: sanitizeErrorMessage(error),
         },
       });
     }
@@ -291,7 +311,7 @@ class AgBashServer {
           const request = JSON.parse(line);
           this.handleRequest(request);
         } catch (e) {
-          console.error("Failed to parse JSON-RPC message", e);
+          console.error("Failed to parse JSON-RPC message");
         }
       }
     });
@@ -300,7 +320,7 @@ class AgBashServer {
     process.on("SIGTERM", () => process.exit(0));
 
     console.error(
-      "Ag-Bash MCP server running on stdio (V2 Custom Implementation)",
+      "Ag-Bash MCP server running on stdio (V3)",
     );
   }
 }

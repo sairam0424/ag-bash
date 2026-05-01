@@ -16,17 +16,7 @@ export interface SubAgent {
 }
 
 export class AgentManager {
-  private static instance: AgentManager;
   private agents: Map<string, SubAgent> = new Map();
-
-  private constructor() {}
-
-  static getInstance(): AgentManager {
-    if (!AgentManager.instance) {
-      AgentManager.instance = new AgentManager();
-    }
-    return AgentManager.instance;
-  }
 
   /**
    * Spawn a new sub-agent.
@@ -65,8 +55,10 @@ export class AgentManager {
       fs: parentBash.fs, // Shared filesystem
       env: parentBash.getEnv(),
       cwd: parentBash.getCwd(),
-      agentic: true,
-      nestingDepth: parentBash.nestingDepth + 1,
+      agentic: {
+        enabled: true,
+        nestingDepth: parentBash.nestingDepth + 1,
+      },
       executionLimits: limits,
     });
 

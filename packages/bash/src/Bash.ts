@@ -55,7 +55,6 @@ import {
   type InterpreterState,
 } from "./interpreter/index.js";
 import { type ExecutionLimits, resolveLimits } from "./limits.js";
-import { LSPManager } from "./lsp/LSPManager.js";
 import { SemanticEngine } from "./lsp/semantic-engine.js";
 import { WorkspaceIndexer } from "./lsp/WorkspaceIndexer.js";
 import {
@@ -64,7 +63,6 @@ import {
   type SecureFetch,
 } from "./network/index.js";
 import { AgTrace } from "./observability/ag-trace.js";
-import { ASTCache } from "./parser/ASTCache.js";
 import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
 import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
@@ -75,7 +73,8 @@ import {
 } from "./security/defense-in-depth-box.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
 import { PermissionManager } from "./services/PermissionManager.js";
-import { SessionManager } from "./services/SessionManager.js";
+import type { ServiceContainer } from "./services/ServiceContainer.js";
+import { createDefaultServices } from "./services/ServiceContainer.js";
 import {
   applyStateDelta,
   type BashDelta,
@@ -139,204 +138,96 @@ export interface PermissionHandler {
 }
 
 export interface BashOptions {
+  // Core options (flat for convenience)
   files?: InitialFiles;
   env?: Record<string, string>;
   cwd?: string;
   fs?: IFileSystem;
-  /**
-   * Persistence configuration for the agent workspace.
-   */
-  persistence?: {
-    root: string;
-    mountPoint?: string;
-  };
-  /**
-   * Current nesting depth (for sub-agent orchestration).
-   * Defaults to 0 for root bash.
-   */
-  nestingDepth?: number;
-  /**
-   * Execution limits to prevent runaway compute.
-   * See ExecutionLimits interface for available options.
-   */
-  executionLimits?: ExecutionLimits;
-  /**
-   * @deprecated Use executionLimits.maxCallDepth instead
-   */
-  maxCallDepth?: number;
-  /**
-   * @deprecated Use executionLimits.maxCommandCount instead
-   */
-  maxCommandCount?: number;
-  /**
-   * @deprecated Use executionLimits.maxLoopIterations instead
-   */
-  maxLoopIterations?: number;
-  /**
-   * Custom secure fetch function. When provided, used instead of creating one
-   * from NetworkConfig. Enables wrapping the fetch layer with custom logic
-   * (e.g., policy evaluation) while keeping built-in curl unmodified.
-   * Network commands (curl, wget) are registered when either `fetch` or `network` is provided.
-   */
-  fetch?: SecureFetch;
-  /**
-   * Network configuration for commands like curl.
-   * Network access is disabled by default - you must explicitly configure allowed URLs.
-   */
-  network?: NetworkConfig;
-  /**
-   * Enable python3/python commands.
-   * Python is disabled by default as it introduces additional security surface
-   * (arbitrary code execution via CPython Emscripten).
-   */
-  python?: boolean;
-  /**
-   * Enable js-exec command for sandboxed JavaScript execution via QuickJS.
-   * Disabled by default. Can be a boolean or a config object with bootstrap code.
-   */
-  javascript?: boolean | JavaScriptConfig;
-  /**
-   * Optional list of command names to register.
-   * If not provided, all built-in commands are available.
-   * Use this to restrict which commands can be executed.
-   */
   commands?: CommandName[];
-  /**
-   * Optional sleep function for the sleep command.
-   * If provided, used instead of real setTimeout.
-   * Useful for testing with mock clocks.
-   */
+  customCommands?: CustomCommand[];
+  executionLimits?: ExecutionLimits;
+  persistState?: boolean;
   sleep?: (ms: number) => Promise<void>;
-  /**
-   * Optional handler for when a command is not found.
-   * If provided, called with the command name and arguments.
-   * Return null to fall back to the standard "command not found" error.
-   */
   onCommandNotFound?: (
     command: string,
     args: string[],
   ) => Promise<ExecResult | null>;
-  /**
-   * Custom commands to register alongside built-in commands.
-   * These take precedence over built-ins with the same name.
-   *
-   * @example
-   * ```ts
-   * import { defineCommand } from "ag-bash";
-   *
-   * const hello = defineCommand("hello", async (args) => ({
-   *   stdout: `Hello, ${args[0] || "world"}!\n`,
-   *   stderr: "",
-   *   exitCode: 0,
-   * }));
-   *
-   * const bash = new Bash({ customCommands: [hello] });
-   * ```
-   */
-  customCommands?: CustomCommand[];
-  /**
-   * Optional logger for execution tracing.
-   * When provided, logs exec commands (info), stdout (debug), stderr (info), and exit codes (info).
-   * Disabled by default.
-   */
-  logger?: BashLogger;
-  /**
-   * Optional trace callback for performance profiling.
-   * When provided, commands emit timing events for analysis.
-   * Useful for identifying performance bottlenecks.
-   */
-  trace?: TraceCallback;
-  /**
-   * Defense-in-depth configuration.
-   *
-   * When enabled, monkey-patches dangerous JavaScript globals (Function, eval,
-   * setTimeout, process, etc.) during script execution to block potential
-   * escape vectors.
-   *
-   * IMPORTANT: This is a SECONDARY defense layer. It should never be relied
-   * upon as the primary security mechanism. The primary security comes from
-   * proper sandboxing, input validation, and architectural constraints.
-   *
-   * @example
-   * ```ts
-   * // Simple enable
-   * const bash = new Bash({ defenseInDepth: true });
-   *
-   * // With custom configuration
-   * const bash = new Bash({
-   *   defenseInDepth: {
-   *     enabled: true,
-   *     auditMode: false, // Set to true to log but not block
-   *     onViolation: (v) => console.warn('Violation:', v),
-   *   },
-   * });
-   * ```
-   */
-  defenseInDepth?: DefenseInDepthConfig | boolean;
-  /**
-   * Feature coverage writer for fuzzing instrumentation.
-   * When provided, interpreter emits coverage hits for analysis.
-   */
-  coverage?: FeatureCoverageWriter;
-  /**
-   * Virtual process info for sandboxed environment.
-   * Overrides the default virtual PID/UID values exposed via $$, $PPID, $UID, $EUID, $BASHPID,
-   * and /proc/self/status. Real host process info is never exposed.
-   */
-  processInfo?: {
-    pid?: number;
-    ppid?: number;
-    uid?: number;
-    gid?: number;
+
+  // Persistence
+  persistence?: {
+    root: string;
+    mountPoint?: string;
   };
-  /**
-   * If true, commit execution state back to the Bash instance after success by default.
-   * Persists CWD, environment variables, and functions.
-   * Individual exec calls can override this.
-   */
-  persistState?: boolean;
-  /**
-   * Selection of the parser engine to use.
-   * - 'legacy': The hand-written recursive descent parser (v1.x/v2.x).
-   * - 'tree-sitter': The robust AST-based parser engine (v1.4.0+).
-   * Default: 'tree-sitter'
-   */
-  parserEngine?: "legacy" | "tree-sitter";
-  /**
-   * If true, enables agentic behavior for the shell.
-   * This includes automatic AI intervention on command failure if an agent gateway is configured.
-   */
-  agentic?: boolean;
-  /**
-   * Healer configuration for automatic troubleshooting.
-   */
-  healer?: AgenticHealerConfig;
-  /**
-   * Optional permission handler for interactive approval.
-   */
-  permissionHandler?: PermissionHandler;
-  /**
-   * Configuration for the agentic healer.
-   */
-  agenticConfig?: AgenticHealerConfig;
-  /**
-   * Configuration for the Tree-sitter parser engine.
-   * Required if parserEngine is set to 'tree-sitter'.
-   */
-  treeSitterConfig?: {
-    webTreeSitterWasm: string | Uint8Array;
-    bashGrammarWasm?: string | Uint8Array;
-    grammars?: Record<string, string | Uint8Array>;
+
+  // Runtimes
+  runtimes?: {
+    python?: boolean;
+    javascript?: boolean | JavaScriptConfig;
   };
-  /**
-   * Optional debugger for statement-level control.
-   */
-  debugger?: DebuggerBridge;
-  /**
-   * Optional semantic engine for AST analysis.
-   */
-  semanticEngine?: SemanticEngine;
+
+  // Network
+  network?: NetworkConfig;
+  fetch?: SecureFetch;
+
+  // Security
+  security?: {
+    defenseInDepth?: DefenseInDepthConfig | boolean;
+    processInfo?: {
+      pid?: number;
+      ppid?: number;
+      uid?: number;
+      gid?: number;
+    };
+  };
+
+  // Agentic
+  agentic?: {
+    enabled?: boolean;
+    healer?: AgenticHealerConfig;
+    permissionHandler?: PermissionHandler;
+    nestingDepth?: number;
+  };
+
+  // Parser
+  parser?: {
+    engine?: "legacy" | "tree-sitter";
+    treeSitterConfig?: {
+      webTreeSitterWasm: string | Uint8Array;
+      bashGrammarWasm?: string | Uint8Array;
+      grammars?: Record<string, string | Uint8Array>;
+    };
+  };
+
+  // Debug & Observability
+  debug?: {
+    logger?: BashLogger;
+    trace?: TraceCallback;
+    coverage?: FeatureCoverageWriter;
+    debugger?: DebuggerBridge;
+    semanticEngine?: SemanticEngine;
+  };
+
+  // Dependency injection
+  services?: Partial<ServiceContainer>;
 }
+
+// v3.0 Breaking Changes:
+// - options.python -> options.runtimes?.python
+// - options.javascript -> options.runtimes?.javascript
+// - options.logger -> options.debug?.logger
+// - options.trace -> options.debug?.trace
+// - options.coverage -> options.debug?.coverage
+// - options.debugger -> options.debug?.debugger
+// - options.semanticEngine -> options.debug?.semanticEngine
+// - options.defenseInDepth -> options.security?.defenseInDepth
+// - options.processInfo -> options.security?.processInfo
+// - options.parserEngine -> options.parser?.engine
+// - options.treeSitterConfig -> options.parser?.treeSitterConfig
+// - options.agentic (boolean) -> options.agentic?.enabled
+// - options.healer -> options.agentic?.healer
+// - options.agenticConfig -> options.agentic?.healer
+// - options.permissionHandler -> options.agentic?.permissionHandler
+// - options.nestingDepth -> options.agentic?.nestingDepth
 
 export interface ExecOptions {
   /**
@@ -430,7 +321,7 @@ export class Bash extends EventEmitter {
   private transformPlugins: TransformPlugin<any>[] = [];
   private defaultPersistState: boolean;
   private parserEngine: "legacy" | "tree-sitter";
-  private treeSitterConfig?: BashOptions["treeSitterConfig"];
+  private treeSitterConfig?: NonNullable<BashOptions["parser"]>["treeSitterConfig"];
   private agentic: boolean;
   private debugger?: DebuggerBridge;
   public semanticEngine: SemanticEngine;
@@ -439,6 +330,7 @@ export class Bash extends EventEmitter {
   public toolbox: BashToolbox;
   public permissionManager: PermissionManager;
   public readonly nestingDepth: number;
+  public readonly services: ServiceContainer;
 
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
@@ -448,8 +340,9 @@ export class Bash extends EventEmitter {
   constructor(options: BashOptions = {}) {
     super();
     this.options = options;
-    this.nestingDepth = options.nestingDepth ?? 0;
-    this.permissionManager = new PermissionManager(options.permissionHandler);
+    this.nestingDepth = options.agentic?.nestingDepth ?? 0;
+    this.services = createDefaultServices(options.services);
+    this.permissionManager = new PermissionManager(options.agentic?.permissionHandler);
     this.toolbox = new BashToolbox();
     this.initLsp();
     this.fs =
@@ -487,20 +380,7 @@ export class Bash extends EventEmitter {
       ...Object.entries(options.env ?? {}),
     ]);
 
-    // Resolve limits: new executionLimits takes precedence, then deprecated individual options
-    this.limits = resolveLimits({
-      ...options.executionLimits,
-      // Support deprecated individual options (they override executionLimits if set)
-      ...(options.maxCallDepth !== undefined && {
-        maxCallDepth: options.maxCallDepth,
-      }),
-      ...(options.maxCommandCount !== undefined && {
-        maxCommandCount: options.maxCommandCount,
-      }),
-      ...(options.maxLoopIterations !== undefined && {
-        maxLoopIterations: options.maxLoopIterations,
-      }),
-    });
+    this.limits = resolveLimits(options.executionLimits);
 
     // Create secure fetch: prefer explicit fetch, fall back to network config
     if (options.fetch) {
@@ -518,22 +398,22 @@ export class Bash extends EventEmitter {
     this.sleepFn = options.sleep;
 
     // Store trace callback if provided (for performance profiling)
-    this.traceFn = options.trace;
+    this.traceFn = options.debug?.trace;
 
     // Store logger if provided
-    this.logger = options.logger;
+    this.logger = options.debug?.logger;
 
     // Store onCommandNotFound hook if provided
     this.onCommandNotFound = options.onCommandNotFound;
 
     // Defense-in-depth defaults to enabled
-    this.defenseInDepthConfig = options.defenseInDepth ?? true;
+    this.defenseInDepthConfig = options.security?.defenseInDepth ?? true;
 
     // Agentic behavior defaults to false
-    this.agentic = options.agentic ?? false;
+    this.agentic = options.agentic?.enabled ?? false;
 
     // Store coverage writer if provided (for fuzzing instrumentation)
-    this.coverageWriter = options.coverage;
+    this.coverageWriter = options.debug?.coverage;
 
     // Initialize interpreter state
     this.state = {
@@ -552,12 +432,12 @@ export class Bash extends EventEmitter {
       networkTrafficBytes: 0,
       mcpToolCallCount: 0,
       lastBackgroundPid: 0,
-      virtualPid: options.processInfo?.pid ?? 1,
-      virtualPpid: options.processInfo?.ppid ?? 0,
-      virtualUid: options.processInfo?.uid ?? 1000,
-      virtualGid: options.processInfo?.gid ?? 1000,
-      bashPid: options.processInfo?.pid ?? 1, // BASHPID starts as virtual PID
-      nextVirtualPid: (options.processInfo?.pid ?? 1) + 1, // Counter for unique subshell PIDs
+      virtualPid: options.security?.processInfo?.pid ?? 1,
+      virtualPpid: options.security?.processInfo?.ppid ?? 0,
+      virtualUid: options.security?.processInfo?.uid ?? 1000,
+      virtualGid: options.security?.processInfo?.gid ?? 1000,
+      bashPid: options.security?.processInfo?.pid ?? 1, // BASHPID starts as virtual PID
+      nextVirtualPid: (options.security?.processInfo?.pid ?? 1) + 1, // Counter for unique subshell PIDs
       currentLine: 1, // $LINENO starts at 1
       options: {
         errexit: false,
@@ -640,21 +520,21 @@ export class Bash extends EventEmitter {
 
     // Register python commands only when explicitly enabled
     // Python introduces additional security surface (arbitrary code execution)
-    if (options.python) {
+    if (options.runtimes?.python) {
       for (const cmd of createPythonCommands()) {
         this.registerCommand(cmd);
       }
     }
 
     // Register javascript commands only when explicitly enabled
-    if (options.javascript) {
+    if (options.runtimes?.javascript) {
       for (const cmd of createJavaScriptCommands()) {
         this.registerCommand(cmd);
       }
       // Store bootstrap code in private field (threaded via context chain, not env)
       const jsConfig =
-        typeof options.javascript === "object"
-          ? options.javascript
+        typeof options.runtimes.javascript === "object"
+          ? options.runtimes.javascript
           : Object.create(null);
       if (jsConfig.bootstrap) {
         this.jsBootstrapCode = jsConfig.bootstrap;
@@ -676,16 +556,16 @@ export class Bash extends EventEmitter {
     }
 
     this.defaultPersistState = options.persistState ?? false;
-    this.parserEngine = options.parserEngine ?? "legacy";
-    this.treeSitterConfig = options.treeSitterConfig;
-    this.debugger = options.debugger;
-    this.semanticEngine = options.semanticEngine ?? new SemanticEngine();
+    this.parserEngine = options.parser?.engine ?? "legacy";
+    this.treeSitterConfig = options.parser?.treeSitterConfig;
+    this.debugger = options.debug?.debugger;
+    this.semanticEngine = options.debug?.semanticEngine ?? new SemanticEngine();
     this.indexer = new WorkspaceIndexer(this, this.semanticEngine);
-    this.agentic = options.agentic ?? false;
+    this.agentic = options.agentic?.enabled ?? false;
     if (this.agentic) {
       this.agenticHealer = new AgenticHealer(
         this.toolbox,
-        options.agenticConfig || { enableHeuristics: true },
+        options.agentic?.healer || { enableHeuristics: true },
       );
     }
   }
@@ -694,7 +574,7 @@ export class Bash extends EventEmitter {
    * Close a persistent session and terminate its worker.
    */
   public async closeSession(sessionId: string): Promise<void> {
-    await SessionManager.getInstance().terminateSession(sessionId);
+    await this.services.sessionManager.terminateSession(sessionId);
     if (this.state.sessionId === sessionId) {
       this.state.sessionId = undefined;
     }
@@ -727,12 +607,12 @@ export class Bash extends EventEmitter {
     return res;
   }
 
-  public get lsp(): LSPManager {
-    return LSPManager.getInstance();
+  public get lsp() {
+    return this.services.lspManager;
   }
 
   private async initLsp(): Promise<void> {
-    const lsp = LSPManager.getInstance();
+    const lsp = this.services.lspManager;
     // Initialize TS server if available
     await lsp.initServer("ts", "typescript-language-server", ["--stdio"]);
     await lsp.initServer("js", "typescript-language-server", ["--stdio"]);
@@ -951,7 +831,7 @@ export class Bash extends EventEmitter {
       const executeScript = async (): Promise<BashExecResult> => {
         let ast: ScriptNode;
 
-        const astCache = ASTCache.getInstance();
+        const astCache = this.services.astCache;
         const cachedAst = astCache.get(normalized);
         if (cachedAst) {
           ast = cachedAst;
@@ -1001,6 +881,7 @@ export class Bash extends EventEmitter {
           debugger: options?.debugger ?? this.debugger,
           semanticEngine: options?.semanticEngine ?? this.semanticEngine,
           agenticHealer: options?.agenticHealer ?? this.agenticHealer,
+          sharedBus: this.services.sharedBus,
           bash: this,
         };
 
@@ -1301,7 +1182,7 @@ export class Bash extends EventEmitter {
     this.updateFileState(path, { content });
 
     // Notify LSP of change
-    LSPManager.getInstance().sendNotification(path, "textDocument/didChange", {
+    this.services.lspManager.sendNotification(path, "textDocument/didChange", {
       textDocument: { uri: `file://${path}`, version: 1 },
       contentChanges: [{ text: content }],
     });

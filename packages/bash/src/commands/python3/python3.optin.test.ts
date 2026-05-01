@@ -13,7 +13,7 @@ describe("python3 opt-in behavior", () => {
   it("should have python3 when python option is enabled", {
     timeout: 60000,
   }, async () => {
-    const env = new Bash({ python: true });
+    const env = new Bash({ runtimes: { python: true } });
     const result = await env.exec("python3 --version");
     expect(result.stdout).toContain("Python 3.");
     expect(result.exitCode).toBe(0);

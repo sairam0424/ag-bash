@@ -3,7 +3,7 @@ import { LSPConnection } from "./LSPConnection.js";
 
 export interface LSPRequest {
   method: string;
-  params: any;
+  params: unknown;
   filePath: string;
 }
 
@@ -11,17 +11,7 @@ export interface LSPRequest {
  * LSPManager - Manages external language servers for advanced code intelligence.
  */
 export class LSPManager {
-  private static instance: LSPManager;
   private connections: Map<string, LSPConnection> = new Map(); // extension -> connection
-
-  private constructor() {}
-
-  public static getInstance(): LSPManager {
-    if (!LSPManager.instance) {
-      LSPManager.instance = new LSPManager();
-    }
-    return LSPManager.instance;
-  }
 
   /**
    * Initialize a language server for a specific file extension.
@@ -45,16 +35,14 @@ export class LSPManager {
       });
       connection.sendNotification("initialized", {});
     } catch (error) {
-      console.warn(
-        `Failed to initialize LSP server for ${extension}: ${error}`,
-      );
+      // Silently swallow — LSP init failure is non-fatal
     }
   }
 
   /**
    * Send a request to the appropriate LSP server.
    */
-  public async sendRequest(bash: Bash, request: LSPRequest): Promise<any> {
+  public async sendRequest(bash: Bash, request: LSPRequest): Promise<unknown> {
     const ext = request.filePath.split(".").pop() || "";
     const connection = this.connections.get(ext);
 
@@ -66,7 +54,7 @@ export class LSPManager {
     try {
       return await connection.sendRequest(request.method, request.params);
     } catch (error) {
-      console.error(`LSP Request failed: ${error}`);
+      // Silently swallow — caller receives null as the fallback
       return null;
     }
   }
@@ -74,7 +62,7 @@ export class LSPManager {
   /**
    * Send a notification to the appropriate LSP server.
    */
-  public sendNotification(filePath: string, method: string, params: any): void {
+  public sendNotification(filePath: string, method: string, params: unknown): void {
     const ext = filePath.split(".").pop() || "";
     const connection = this.connections.get(ext);
     if (connection) {
@@ -98,16 +86,18 @@ export class LSPManager {
   private async fallbackToSemanticEngine(
     bash: Bash,
     request: LSPRequest,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const engine = bash.semanticEngine;
     if (!engine) return null;
 
+    const params = request.params as Record<string, unknown> | undefined;
+    const symbolName = (params?.symbolName as string) || "";
+
     switch (request.method) {
       case "textDocument/definition":
-        // Extract symbol name from position (Simplified)
-        return engine.findDefinition(request.params.symbolName || "");
+        return engine.findDefinition(symbolName);
       case "textDocument/references":
-        return engine.getOccurrences(request.params.symbolName || "");
+        return engine.getOccurrences(symbolName);
       default:
         return null;
     }

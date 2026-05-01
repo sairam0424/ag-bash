@@ -33,7 +33,7 @@ export class WorkspaceIndexer {
         }
       }
     } catch (error) {
-      console.error(`Failed to scan directory ${dir}:`, error);
+      // Silently swallow — scan failure for a single directory is non-fatal
     }
   }
 
@@ -76,14 +76,12 @@ export class WorkspaceIndexer {
           const tree = TreeSitterParser.parse(content, language);
           this.engine.indexNode(tree.rootNode, path, language);
         } catch (_e) {
-          console.warn(
-            `TreeSitter failed to parse ${path} as ${language}, falling back to literal indexing.`,
-          );
+          // TreeSitter parse failed — fall back to literal indexing silently
           // Fallback to basic string-based indexing if needed
         }
       }
     } catch (error) {
-      console.error(`Failed to index file ${path}:`, error);
+      // Silently swallow — index failure for a single file is non-fatal
     }
   }
 

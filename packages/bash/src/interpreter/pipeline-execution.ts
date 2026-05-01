@@ -4,9 +4,9 @@
  * Handles execution of command pipelines (cmd1 | cmd2 | cmd3).
  */
 
-import type { CommandNode, PipelineNode } from "../ast/types.js";
+import type { CommandNode, PipelineNode, WordNode } from "../ast/types.js";
 import { _performanceNow } from "../security/trusted-globals.js";
-import type { ExecResult } from "../types.js";
+import type { ExecResult, Observation } from "../types.js";
 import { BadSubstitutionError, ErrexitError, ExitError } from "./errors.js";
 import { OK } from "./helpers/result.js";
 import type { InterpreterContext } from "./types.js";
@@ -18,6 +18,73 @@ export type ExecuteCommandFn = (
   node: CommandNode,
   stdin: string,
 ) => Promise<ExecResult>;
+
+/** Extracts the literal string value from a WordNode, or null if it contains expansions. */
+function getLiteralValue(word: WordNode): string | null {
+  if (word.parts.length === 0) return "";
+  if (word.parts.length === 1) {
+    const part = word.parts[0];
+    if (part.type === "Literal") return part.value;
+    if (part.type === "SingleQuoted") return part.value;
+  }
+  return null;
+}
+
+/**
+ * Detect the line limit of a command that only consumes a fixed number of input lines.
+ * Returns the line count, or null if the command is not a recognized line-limited consumer.
+ * Recognizes: head -N, head -n N, head -n=N, head --lines N, head --lines=N.
+ */
+function getLineLimit(command: CommandNode): number | null {
+  if (command.type !== "SimpleCommand" || !command.name) return null;
+
+  const name = getLiteralValue(command.name);
+  if (name !== "head") return null;
+
+  const args = command.args;
+  if (args.length === 0) return 10;
+
+  for (let i = 0; i < args.length; i++) {
+    const val = getLiteralValue(args[i]);
+    if (val === null) continue;
+
+    const dashNum = /^-(\d+)$/.exec(val);
+    if (dashNum) return Number.parseInt(dashNum[1], 10);
+
+    const dashNNum = /^-n(\d+)$/.exec(val);
+    if (dashNNum) return Number.parseInt(dashNNum[1], 10);
+
+    const dashNEqNum = /^-n=(\d+)$/.exec(val);
+    if (dashNEqNum) return Number.parseInt(dashNEqNum[1], 10);
+
+    const linesEqNum = /^--lines=(\d+)$/.exec(val);
+    if (linesEqNum) return Number.parseInt(linesEqNum[1], 10);
+
+    if ((val === "-n" || val === "--lines") && i + 1 < args.length) {
+      const nextVal = getLiteralValue(args[i + 1]);
+      if (nextVal !== null && /^\d+$/.test(nextVal)) {
+        return Number.parseInt(nextVal, 10);
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Truncate text to at most maxLines newline-delimited lines. */
+function truncateToLines(text: string, maxLines: number): string {
+  if (maxLines <= 0) return "";
+  let count = 0;
+  let idx = 0;
+  while (count < maxLines && idx < text.length) {
+    const nl = text.indexOf("\n", idx);
+    if (nl === -1) break;
+    count++;
+    idx = nl + 1;
+  }
+  if (count < maxLines) return text;
+  return text.slice(0, idx);
+}
 
 /**
  * Execute a pipeline node (command or sequence of piped commands).
@@ -35,7 +102,7 @@ export async function executePipeline(
   let pipefailExitCode = 0; // Track rightmost failing command
   const pipestatusExitCodes: number[] = []; // Track all exit codes for PIPESTATUS
   let accumulatedStderr = ""; // Accumulate stderr from all pipeline commands
-  const allObservations: any[] = [];
+  const allObservations: Observation[] = [];
 
   // For multi-command pipelines, save parent's $_ because pipeline commands
   // run in subshell-like contexts and should not affect parent's $_
@@ -142,6 +209,14 @@ export async function executePipeline(
         stdin = result.stdout;
         accumulatedStderr += result.stderr;
       }
+
+      // Early termination: if the next command only needs N lines, truncate
+      // the piped output to avoid processing unnecessary data downstream.
+      const nextLineLimit = getLineLimit(node.commands[i + 1]);
+      if (nextLineLimit !== null) {
+        stdin = truncateToLines(stdin, nextLineLimit + 10);
+      }
+
       lastResult = {
         stdout: "",
         stderr: "",

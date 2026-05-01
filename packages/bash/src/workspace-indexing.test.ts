@@ -9,7 +9,7 @@ describe("Workspace Indexing (Phase 8)", () => {
 
   beforeEach(async () => {
     bash = new Bash({
-      parserEngine: "legacy",
+      parser: { engine: "legacy" },
       fs: new InMemoryFs(),
     });
     await bash.fs.mkdir("/src", { recursive: true });

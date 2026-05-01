@@ -19,14 +19,13 @@ export class LSPConnection extends EventEmitter {
     this.process.on("error", (err: any) => {
       // If the language server isn't installed (ENOENT), silence the warning
       // as it's expected in many environments. For other errors, log it.
-      if (err.code !== "ENOENT") {
-        console.warn(`LSP process error: ${err.message}`);
-      }
+      // Silently swallow — ENOENT is expected; other errors are non-fatal
+      void err;
     });
 
     this.process.stdout?.on("data", (data) => this.handleData(data));
-    this.process.stderr?.on("data", (data) => {
-      console.error(`LSP Server Error: ${data.toString()}`);
+    this.process.stderr?.on("data", () => {
+      // Silently swallow LSP stderr — library must not write to consumer's console
     });
 
     this.process.on("exit", (code) => {
@@ -90,7 +89,7 @@ export class LSPConnection extends EventEmitter {
         const message = JSON.parse(messageJson);
         this.handleMessage(message);
       } catch (e) {
-        console.error("Failed to parse LSP message", e);
+        // Silently swallow malformed LSP message
       }
     }
   }

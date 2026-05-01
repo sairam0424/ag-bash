@@ -77,6 +77,9 @@ export type {
   VariableAttributeState,
 } from "./interpreter/types.js";
 export { SemanticEngine } from "./lsp/semantic-engine.js";
+// Service container (v3.0 dependency injection)
+export type { ServiceContainer } from "./services/ServiceContainer.js";
+export { createDefaultServices } from "./services/ServiceContainer.js";
 export type {
   AllowedUrl,
   AllowedUrlEntry,

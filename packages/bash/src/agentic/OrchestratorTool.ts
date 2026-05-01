@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { Bash } from "../Bash.js";
-import { Orchestrator } from "./Orchestrator.js";
 import type { ToolboxTool } from "./Tool.js";
 
 /**
@@ -23,7 +22,7 @@ export const SpawnTool: ToolboxTool = {
   checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
   validateInput: async (_args: any) => ({ result: true }),
   execute: async (bash: Bash, args: any) => {
-    const orchestrator = Orchestrator.getInstance();
+    const orchestrator = bash.services.orchestrator;
     try {
       const subAgent = await orchestrator.spawn(bash, {
         name: args.name,

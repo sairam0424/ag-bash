@@ -9,7 +9,7 @@ describe("Incremental Indexing (Phase 8)", () => {
 
   beforeEach(async () => {
     bash = new Bash({
-      parserEngine: "legacy",
+      parser: { engine: "legacy" },
       fs: new InMemoryFs(),
     });
     const toolbox = new BashToolbox();

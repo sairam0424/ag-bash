@@ -14,6 +14,7 @@ import type { IFileSystem, InitialFiles } from "./fs/interface.js";
 import { type ExecutionLimits } from "./limits.js";
 import { type NetworkConfig, type SecureFetch } from "./network/index.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
+import type { ServiceContainer } from "./services/ServiceContainer.js";
 import type {
   BashTransformResult,
   TransformPlugin,
@@ -45,146 +46,56 @@ export interface BashOptions {
   env?: Record<string, string>;
   cwd?: string;
   fs?: IFileSystem;
-  /**
-   * Execution limits to prevent runaway compute.
-   * See ExecutionLimits interface for available options.
-   */
-  executionLimits?: ExecutionLimits;
-  /**
-   * @deprecated Use executionLimits.maxCallDepth instead
-   */
-  maxCallDepth?: number;
-  /**
-   * @deprecated Use executionLimits.maxCommandCount instead
-   */
-  maxCommandCount?: number;
-  /**
-   * @deprecated Use executionLimits.maxLoopIterations instead
-   */
-  maxLoopIterations?: number;
-  /**
-   * Custom secure fetch function. When provided, used instead of creating one
-   * from NetworkConfig. Enables wrapping the fetch layer with custom logic
-   * (e.g., policy evaluation) while keeping built-in curl unmodified.
-   * Network commands (curl, wget) are registered when either `fetch` or `network` is provided.
-   */
-  fetch?: SecureFetch;
-  /**
-   * Network configuration for commands like curl.
-   * Network access is disabled by default - you must explicitly configure allowed URLs.
-   */
-  network?: NetworkConfig;
-  /**
-   * Enable python3/python commands.
-   * Python is disabled by default as it introduces additional security surface
-   * (arbitrary code execution via CPython Emscripten).
-   */
-  python?: boolean;
-  /**
-   * Enable js-exec command for sandboxed JavaScript execution via QuickJS.
-   * Disabled by default. Can be a boolean or a config object with bootstrap code.
-   */
-  javascript?: boolean | JavaScriptConfig;
-  /**
-   * Optional list of command names to register.
-   * If not provided, all built-in commands are available.
-   * Use this to restrict which commands can be executed.
-   */
   commands?: CommandName[];
-  /**
-   * Optional sleep function for the sleep command.
-   * If provided, used instead of real setTimeout.
-   * Useful for testing with mock clocks.
-   */
+  customCommands?: CustomCommand[];
+  executionLimits?: ExecutionLimits;
+  persistState?: boolean;
   sleep?: (ms: number) => Promise<void>;
-  /**
-   * Optional handler for when a command is not found.
-   * If provided, called with the command name and arguments.
-   * Return null to fall back to the standard "command not found" error.
-   */
   onCommandNotFound?: (
     command: string,
     args: string[],
   ) => Promise<ExecResult | null>;
-  /**
-   * Custom commands to register alongside built-in commands.
-   * These take precedence over built-ins with the same name.
-   *
-   * @example
-   * ```ts
-   * import { defineCommand } from "ag-bash";
-   *
-   * const hello = defineCommand("hello", async (args) => ({
-   *   stdout: `Hello, ${args[0] || "world"}!\n`,
-   *   stderr: "",
-   *   exitCode: 0,
-   * }));
-   *
-   * const bash = new Bash({ customCommands: [hello] });
-   * ```
-   */
-  customCommands?: CustomCommand[];
-  /**
-   * Optional logger for execution tracing.
-   * When provided, logs exec commands (info), stdout (debug), stderr (info), and exit codes (info).
-   * Disabled by default.
-   */
-  logger?: BashLogger;
-  /**
-   * Optional trace callback for performance profiling.
-   * When provided, commands emit timing events for analysis.
-   * Useful for identifying performance bottlenecks.
-   */
-  trace?: TraceCallback;
-  /**
-   * Defense-in-depth configuration.
-   *
-   * When enabled, monkey-patches dangerous JavaScript globals (Function, eval,
-   * setTimeout, process, etc.) during script execution to block potential
-   * escape vectors.
-   *
-   * IMPORTANT: This is a SECONDARY defense layer. It should never be relied
-   * upon as the primary security mechanism. The primary security comes from
-   * proper sandboxing, input validation, and architectural constraints.
-   *
-   * @example
-   * ```ts
-   * // Simple enable
-   * const bash = new Bash({ defenseInDepth: true });
-   *
-   * // With custom configuration
-   * const bash = new Bash({
-   *   defenseInDepth: {
-   *     enabled: true,
-   *     auditMode: false, // Set to true to log but not block
-   *     onViolation: (v) => console.warn('Violation:', v),
-   *   },
-   * });
-   * ```
-   */
-  defenseInDepth?: DefenseInDepthConfig | boolean;
-  /**
-   * Feature coverage writer for fuzzing instrumentation.
-   * When provided, interpreter emits coverage hits for analysis.
-   */
-  coverage?: FeatureCoverageWriter;
-  /**
-   * Virtual process info for sandboxed environment.
-   * Overrides the default virtual PID/UID values exposed via $$, $PPID, $UID, $EUID, $BASHPID,
-   * and /proc/self/status. Real host process info is never exposed.
-   */
-  processInfo?: {
-    pid?: number;
-    ppid?: number;
-    uid?: number;
-    gid?: number;
+  persistence?: {
+    root: string;
+    mountPoint?: string;
   };
-  /**
-   * If true, commit execution state back to the Bash instance after success by default.
-   * Persists CWD, environment variables, and functions.
-   * Individual exec calls can override this.
-   */
-  persistState?: boolean;
+  runtimes?: {
+    python?: boolean;
+    javascript?: boolean | JavaScriptConfig;
+  };
+  network?: NetworkConfig;
+  fetch?: SecureFetch;
+  security?: {
+    defenseInDepth?: DefenseInDepthConfig | boolean;
+    processInfo?: {
+      pid?: number;
+      ppid?: number;
+      uid?: number;
+      gid?: number;
+    };
+  };
+  agentic?: {
+    enabled?: boolean;
+    healer?: any;
+    permissionHandler?: any;
+    nestingDepth?: number;
+  };
+  parser?: {
+    engine?: "legacy" | "tree-sitter";
+    treeSitterConfig?: {
+      webTreeSitterWasm: string | Uint8Array;
+      bashGrammarWasm?: string | Uint8Array;
+      grammars?: Record<string, string | Uint8Array>;
+    };
+  };
+  debug?: {
+    logger?: BashLogger;
+    trace?: TraceCallback;
+    coverage?: FeatureCoverageWriter;
+    debugger?: any;
+    semanticEngine?: any;
+  };
+  services?: Partial<ServiceContainer>;
 }
 export interface ExecOptions {
   /**
@@ -233,6 +144,7 @@ export interface ExecOptions {
 }
 export declare class Bash {
   readonly fs: IFileSystem;
+  readonly services: ServiceContainer;
   private commands;
   private useDefaultLayout;
   private limits;

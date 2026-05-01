@@ -18,10 +18,12 @@ describe("Query Engine Defense Violation Probes", () => {
   it("does not trigger high-risk defense violations for jq/yq constructor-chain mutations", async () => {
     const violations: SecurityViolation[] = [];
     const env = new Bash({
-      defenseInDepth: {
-        enabled: true,
-        auditMode: true,
-        onViolation: (v) => violations.push(v),
+      security: {
+        defenseInDepth: {
+          enabled: true,
+          auditMode: true,
+          onViolation: (v) => violations.push(v),
+        },
       },
     });
 

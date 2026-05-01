@@ -4,9 +4,8 @@ import { Bash } from "./Bash.js";
 describe("Agentic Healer", () => {
   it("should provide heuristic suggestions for missing files", async () => {
     const bash = new Bash({
-      agentic: true,
-      agenticConfig: { enableHeuristics: true },
-      parserEngine: "legacy",
+      agentic: { enabled: true, healer: { enableHeuristics: true } },
+      parser: { engine: "legacy" },
     });
 
     const result = await bash.exec("cat non-existent-file.txt");
@@ -17,8 +16,8 @@ describe("Agentic Healer", () => {
 
   it("should provide suggestions for common typos", async () => {
     const bash = new Bash({
-      agentic: true,
-      parserEngine: "legacy",
+      agentic: { enabled: true },
+      parser: { engine: "legacy" },
     });
 
     const result = await bash.exec("git stauts");
@@ -37,12 +36,14 @@ describe("Agentic Healer", () => {
     };
 
     const bash = new Bash({
-      agentic: true,
-      agenticConfig: {
-        enableHeuristics: false,
-        llm: mockLLM,
+      agentic: {
+        enabled: true,
+        healer: {
+          enableHeuristics: false,
+          llm: mockLLM,
+        },
       },
-      parserEngine: "legacy",
+      parser: { engine: "legacy" },
     });
 
     const result = await bash.exec("failed-cmd");
@@ -51,8 +52,8 @@ describe("Agentic Healer", () => {
 
   it("should not provide suggestions when agentic is false", async () => {
     const bash = new Bash({
-      agentic: false,
-      parserEngine: "legacy",
+      agentic: { enabled: false },
+      parser: { engine: "legacy" },
     });
 
     const result = await bash.exec("cat non-existent.txt");
