@@ -83,4 +83,30 @@ export const agenticLoaders: LazyCommandDef<CommandName>[] = [
     load: async () =>
       (await import("../ag-find-files/ag-find-files.js")).agFindFilesCommand,
   },
+  {
+    name: "ag-task" as CommandName,
+    load: async () => (await import("../ag-task/ag-task.js")).agTaskCommand,
+  },
+  {
+    name: "ag-team" as CommandName,
+    load: async () => (await import("../ag-team/ag-team.js")).agTeamCommand,
+  },
+  {
+    name: "ag-message" as CommandName,
+    load: async () =>
+      (await import("../ag-message/ag-message.js")).agMessageCommand,
+  },
+  {
+    name: "ag-glob" as CommandName,
+    load: async () => (await import("../ag-glob/ag-glob.js")).agGlobCommand,
+  },
+  {
+    name: "ag-cron" as CommandName,
+    load: async () => (await import("../ag-cron/ag-cron.js")).agCronCommand,
+  },
+  {
+    name: "ag-worktree" as CommandName,
+    load: async () =>
+      (await import("../ag-worktree/ag-worktree.js")).agWorktreeCommand,
+  },
 ];

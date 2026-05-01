@@ -19,6 +19,10 @@ export interface ToolMetadata {
   effort?: "low" | "medium" | "high";
   /** Advanced composition hooks for the orchestration layer */
   composeHooks?: { before?: string[]; after?: string[]; parallel?: string[] };
+  /** If true, only name + description are loaded initially; full schema is loaded on first use */
+  deferred?: boolean;
+  /** Callback to load the full Zod schema on demand (used with deferred: true) */
+  loadSchema?: () => Promise<z.ZodType<any>>;
 }
 
 /**

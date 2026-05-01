@@ -114,7 +114,13 @@ export type CommandName =
   | "ag-plan"
   | "ag-notebook"
   | "ag-grep"
-  | "ag-find-files";
+  | "ag-find-files"
+  | "ag-task"
+  | "ag-team"
+  | "ag-message"
+  | "ag-glob"
+  | "ag-cron"
+  | "ag-worktree";
 
 export type NetworkCommandName = "curl";
 export type PythonCommandName = "python3" | "python";

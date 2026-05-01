@@ -98,6 +98,13 @@ export class LSPManager {
         return engine.findDefinition(symbolName);
       case "textDocument/references":
         return engine.getOccurrences(symbolName);
+      case "textDocument/documentSymbol":
+        return engine.getAllSymbols?.() ?? null;
+      case "callHierarchy/incomingCalls": {
+        const occurrences = engine.getOccurrences(symbolName);
+        if (!occurrences) return null;
+        return Array.isArray(occurrences) ? occurrences : null;
+      }
       default:
         return null;
     }
