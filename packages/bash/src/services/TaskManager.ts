@@ -36,19 +36,18 @@ const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   failed: ["pending"],
 };
 
-let nextId = 1;
-
-function generateId(): string {
-  return `task_${nextId++}`;
-}
-
 export class TaskManager {
   private tasks: Map<string, Task> = new Map();
   private bus: SharedStateBus | undefined;
   private maxTasks: number;
+  private nextId = 1;
 
   constructor(options?: { maxTasks?: number }) {
     this.maxTasks = options?.maxTasks ?? 100;
+  }
+
+  private generateId(): string {
+    return `task_${this.nextId++}`;
   }
 
   setBus(bus: SharedStateBus): void {
@@ -68,7 +67,7 @@ export class TaskManager {
 
     const now = Date.now();
     const task: Task = {
-      id: generateId(),
+      id: this.generateId(),
       subject: opts.subject,
       description: opts.description,
       status: "pending",
@@ -240,6 +239,6 @@ export class TaskManager {
       const num = Number.parseInt(task.id.replace("task_", ""), 10);
       if (!Number.isNaN(num) && num > maxNum) maxNum = num;
     }
-    nextId = maxNum + 1;
+    this.nextId = maxNum + 1;
   }
 }

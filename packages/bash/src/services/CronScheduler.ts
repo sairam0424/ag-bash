@@ -166,23 +166,25 @@ function validateCron(expression: string): string | undefined {
 /*  ID generator                                                       */
 /* ------------------------------------------------------------------ */
 
-let nextId = 1;
-
-function generateId(): string {
-  return `cron_${nextId++}`;
-}
-
 /* ------------------------------------------------------------------ */
 /*  CronScheduler service                                              */
 /* ------------------------------------------------------------------ */
+
+/** One day in milliseconds — TTL for one-shot jobs. */
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export class CronScheduler {
   private jobs: Map<string, CronJob> = new Map();
   private bus: SharedStateBus | undefined;
   private maxJobs: number;
+  private nextId = 1;
 
   constructor(options?: { maxJobs?: number }) {
     this.maxJobs = options?.maxJobs ?? 20;
+  }
+
+  private generateId(): string {
+    return `cron_${this.nextId++}`;
   }
 
   /** Wire up the SharedStateBus for event publishing. */
@@ -214,13 +216,13 @@ export class CronScheduler {
     const recurring = opts.recurring ?? true;
 
     const job: CronJob = {
-      id: generateId(),
+      id: this.generateId(),
       cron: opts.cron,
       prompt: opts.prompt,
       recurring,
       durable: opts.durable ?? false,
       createdAt: now,
-      expiresAt: recurring ? now + SEVEN_DAYS_MS : now + SEVEN_DAYS_MS,
+      expiresAt: recurring ? now + SEVEN_DAYS_MS : now + ONE_DAY_MS,
       fireCount: 0,
     };
 
@@ -325,7 +327,7 @@ export class CronScheduler {
       const num = Number.parseInt(job.id.replace("cron_", ""), 10);
       if (!Number.isNaN(num) && num > maxNum) maxNum = num;
     }
-    nextId = maxNum + 1;
+    this.nextId = maxNum + 1;
   }
 
   /* ---------------------------------------------------------------- */

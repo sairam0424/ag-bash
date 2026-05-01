@@ -23,15 +23,14 @@ export interface AgentMessage {
   timestamp: number;
 }
 
-let nextTeamId = 1;
-let nextMsgId = 1;
-
 export class TeamManager {
   private teams: Map<string, Team> = new Map();
   private messages: AgentMessage[] = [];
   private bus: SharedStateBus | undefined;
   private maxTeams: number;
   private maxMessages: number;
+  private nextTeamId = 1;
+  private nextMsgId = 1;
 
   constructor(options?: { maxTeams?: number; maxMessages?: number }) {
     this.maxTeams = options?.maxTeams ?? 10;
@@ -58,7 +57,7 @@ export class TeamManager {
     }
 
     const team: Team = {
-      id: `team_${nextTeamId++}`,
+      id: `team_${this.nextTeamId++}`,
       name: opts.name,
       description: opts.description,
       agents: opts.agents || [],
@@ -118,11 +117,11 @@ export class TeamManager {
 
   sendMessage(from: string, to: string, content: string): AgentMessage {
     if (this.messages.length >= this.maxMessages) {
-      this.messages.splice(0, Math.floor(this.maxMessages * 0.1));
+      this.messages.splice(0, Math.max(1, Math.floor(this.maxMessages * 0.1)));
     }
 
     const msg: AgentMessage = {
-      id: `msg_${nextMsgId++}`,
+      id: `msg_${this.nextMsgId++}`,
       from,
       to,
       content,

@@ -72,15 +72,31 @@ const CRITICAL_RULES: DetectionRule[] = [
     severity: "critical",
     pattern: "may recursively force-remove critical files",
     test(command: string): boolean {
-      // Must contain rm with both -r and -f (in any order / combined flags)
       if (!/\brm\b/.test(command)) return false;
       const afterRm = command.slice(command.search(/\brm\b/) + 2);
-      // Extract all flag groups (e.g. "-rf", "-r", "-f", "--force")
       const hasR = /-[^\s]*r/.test(afterRm) || /--recursive/.test(afterRm);
       const hasF = /-[^\s]*f/.test(afterRm) || /--force/.test(afterRm);
       if (!hasR || !hasF) return false;
       // Check for critical targets: /, ~, or bare *
-      return /(\s|^)(\/(\s|$|\*)|\*(\s|$)|~(\/|\s|$))/.test(afterRm);
+      if (/(\s|^)(\/(\s|$|\*)|\*(\s|$)|~(\/|\s|$))/.test(afterRm)) return true;
+      // Canonicalize paths containing .. to catch traversals like /tmp/../
+      const pathArgs = afterRm.match(/(?:^|\s)(\/[^\s]+)/g);
+      if (pathArgs) {
+        for (const arg of pathArgs) {
+          const p = arg.trim();
+          if (/\.\./.test(p)) {
+            const parts = p.split("/").filter(Boolean);
+            const resolved: string[] = [];
+            for (const seg of parts) {
+              if (seg === "..") resolved.pop();
+              else if (seg !== ".") resolved.push(seg);
+            }
+            const canonical = "/" + resolved.join("/");
+            if (canonical === "/" || canonical === "") return true;
+          }
+        }
+      }
+      return false;
     },
   },
 

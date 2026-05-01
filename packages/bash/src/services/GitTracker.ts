@@ -179,18 +179,13 @@ const MUTATING_RULES: ClassificationRule[] = [
 
 // ── ID generation ───────────────────────────────────────────────────
 
-let nextOpId = 1;
-
-function generateOpId(): string {
-  return `gitop_${nextOpId++}`;
-}
-
 // ── Service ─────────────────────────────────────────────────────────
 
 const MAX_LOG_SIZE = 500;
 
 export class GitTracker {
   private log: GitOperation[] = [];
+  private nextOpId = 1;
   private bus: SharedStateBus | undefined;
 
   setBus(bus: SharedStateBus): void {
@@ -241,7 +236,7 @@ export class GitTracker {
   recordOperation(command: string): GitOperation {
     const classification = this.classifyCommand(command);
     const op: GitOperation = {
-      id: generateOpId(),
+      id: `gitop_${this.nextOpId++}`,
       command,
       classification,
       timestamp: Date.now(),

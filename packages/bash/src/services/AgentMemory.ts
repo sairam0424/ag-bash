@@ -18,6 +18,11 @@ export interface MemoryEntry {
 
 export class AgentMemory {
   private memories: Map<string, MemoryEntry> = new Map();
+  private maxEntries: number;
+
+  constructor(options?: { maxEntries?: number }) {
+    this.maxEntries = options?.maxEntries ?? 10000;
+  }
 
   private entryKey(agentType: string, scope: MemoryScope, key: string): string {
     return `${scope}:${agentType}:${key}`;
@@ -41,6 +46,12 @@ export class AgentMemory {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
+
+    // Evict oldest entries if at capacity (skip if this is an update)
+    if (!existing && this.memories.size >= this.maxEntries) {
+      const oldest = this.memories.keys().next().value;
+      if (oldest !== undefined) this.memories.delete(oldest);
+    }
 
     this.memories.set(entryId, entry);
     return entry;

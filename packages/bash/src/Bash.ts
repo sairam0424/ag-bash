@@ -94,6 +94,7 @@ import type {
   FeatureCoverageWriter,
   TraceCallback,
 } from "./types.js";
+import { LSPManager } from "./lsp/LSPManager.js";
 
 /**
  * Metadata for tracking file state to detect staleness and provide suggestions.
@@ -607,7 +608,7 @@ export class Bash extends EventEmitter {
     return res;
   }
 
-  public get lsp() {
+  public get lsp(): LSPManager {
     return this.services.lspManager;
   }
 
