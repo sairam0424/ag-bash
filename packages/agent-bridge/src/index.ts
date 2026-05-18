@@ -56,30 +56,40 @@ export function formatForTerminal(text: string): string {
  * Creates an agent executor that handles streaming AI responses and tool outputs
  * in a terminal environment.
  */
-export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOptions = {}) {
-  const { 
-    apiEndpoint = "/api/agent", 
+export function createAgentBridge(
+  term: TerminalWriter,
+  options: AgentBridgeOptions = {},
+) {
+  const {
+    apiEndpoint = "/api/agent",
     maxToolOutputLines = 20,
     onStateUpdate,
     bash,
-    adapter: customAdapter
+    adapter: customAdapter,
   } = options as any;
 
   const adapter = customAdapter || new FetchAgentAdapter(apiEndpoint);
-  
+
   if (bash) {
     const orchestrator = new AgentOrchestrator({
       bash,
       adapter,
       writer: term,
-      maxToolOutputLines
+      maxToolOutputLines,
     });
-    
+
     return {
-      agentCmd: defineCommand("agent", (args) => orchestrator.run(args.join(" ")).then(() => ({ stdout: "", stderr: "", exitCode: 0 }))),
-      executeAgentPrompt: (prompt: string) => orchestrator.run(prompt).then(() => ({ stdout: "", stderr: "", exitCode: 0 })),
+      agentCmd: defineCommand("agent", (args) =>
+        orchestrator
+          .run(args.join(" "))
+          .then(() => ({ stdout: "", stderr: "", exitCode: 0 })),
+      ),
+      executeAgentPrompt: (prompt: string) =>
+        orchestrator
+          .run(prompt)
+          .then(() => ({ stdout: "", stderr: "", exitCode: 0 })),
       agentMessages: orchestrator.getMessages(),
-      orchestrator // Expose for advanced control
+      orchestrator, // Expose for advanced control
     };
   }
 
@@ -125,10 +135,13 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
 
       let lineBuffer = "";
       let fullText = "";
-      const toolCallsMap = new Map<string, { toolName: string; args: unknown; result?: string }>();
+      const toolCallsMap = new Map<
+        string,
+        { toolName: string; args: unknown; result?: string }
+      >();
       const decoder = new TextDecoder();
       let buffer = "";
-      let isStreaming = false;
+      const isStreaming = false;
 
       let thinkingTimeout: ReturnType<typeof setTimeout> | null = null;
       let showingThinking = false;
@@ -165,7 +178,11 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
 
       resetThinkingTimer();
 
-      const formatToolResult = (tc: { toolName: string; args: unknown; result?: string }) => {
+      const formatToolResult = (tc: {
+        toolName: string;
+        args: unknown;
+        result?: string;
+      }) => {
         if (!tc.result) return;
         let displayResult = tc.result;
         try {
@@ -186,9 +203,13 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
         }
 
         if (displayResult && displayResult.trim()) {
-          const resultLines = displayResult.split("\n").filter((l: string) => l.trim());
+          const resultLines = displayResult
+            .split("\n")
+            .filter((l: string) => l.trim());
           const linesToShow = resultLines.slice(0, maxToolOutputLines);
-          let output = linesToShow.map((line) => `\x1b[2m${line}\x1b[0m`).join("\n");
+          let output = linesToShow
+            .map((line) => `\x1b[2m${line}\x1b[0m`)
+            .join("\n");
           if (resultLines.length > maxToolOutputLines) {
             output += `\n\x1b[2m... (${resultLines.length - maxToolOutputLines} more lines)\x1b[0m`;
           }
@@ -233,7 +254,10 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
                 lineBuffer = "";
               }
               term.write("\r\n");
-            } else if (data.type === "tool-input-available" && data.toolCallId) {
+            } else if (
+              data.type === "tool-input-available" &&
+              data.toolCallId
+            ) {
               clearThinking();
               if (fullText && !fullText.endsWith("\n")) {
                 term.write("\r\n");
@@ -250,11 +274,20 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
               } else {
                 term.write(`\x1b[36m[${data.toolName}]\x1b[0m\r\n`);
               }
-              toolCallsMap.set(data.toolCallId, { toolName: data.toolName, args: data.input });
-            } else if (data.type === "tool-output-available" && data.toolCallId) {
+              toolCallsMap.set(data.toolCallId, {
+                toolName: data.toolName,
+                args: data.input,
+              });
+            } else if (
+              data.type === "tool-output-available" &&
+              data.toolCallId
+            ) {
               const existing = toolCallsMap.get(data.toolCallId);
               const result = data.output;
-              const resultStr = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+              const resultStr =
+                typeof result === "string"
+                  ? result
+                  : JSON.stringify(result, null, 2);
               const tc = {
                 toolName: existing?.toolName || "tool",
                 args: existing?.args || Object.create(null),
@@ -265,10 +298,12 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
               else toolCallsMap.set(data.toolCallId, tc);
             } else if (data.type === "error") {
               const errorMsg = data.error || data.message || "Unknown error";
-              term.write(`\x1b[31mError: ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`);
+              term.write(
+                `\x1b[31mError: ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`,
+              );
             }
           } catch (e) {
-             // Silence parse errors for streaming deltas
+            // Silence parse errors for streaming deltas
           }
         }
       }
@@ -290,7 +325,9 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
 
       return { stdout: "", stderr: "", exitCode: 0 };
     } catch (error) {
-      const message = sanitizeTerminalError(error instanceof Error ? error.message : "Unknown error");
+      const message = sanitizeTerminalError(
+        error instanceof Error ? error.message : "Unknown error",
+      );
       agentMessages.pop();
       onStateUpdate?.([...agentMessages]);
       return { stdout: "", stderr: `Error: ${message}\n`, exitCode: 1 };
@@ -302,7 +339,8 @@ export function createAgentBridge(term: TerminalWriter, options: AgentBridgeOpti
     if (!prompt) {
       return {
         stdout: "",
-        stderr: "Usage: agent <message>\nExample: agent how do I use custom commands?\n",
+        stderr:
+          "Usage: agent <message>\nExample: agent how do I use custom commands?\n",
         exitCode: 1,
       };
     }

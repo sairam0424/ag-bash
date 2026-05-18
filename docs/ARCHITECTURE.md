@@ -1,6 +1,6 @@
-# 🏛️ Ag-Bash Architecture: Project V-Next (v2.4.1)
+# 🏛️ Ag-Bash Architecture (v3.0.0)
 
-This document provides a deep dive into the high-performance architectural components introduced in the **v2.4.1 "Project V-Next"** and **v2.0.0 "Nexus Prime"** releases.
+This document provides a deep dive into the high-performance architectural components of **v3.0.0**, building on the foundations laid in **v2.0.0 "Nexus Prime"** and **v2.4.x "Project V-Next"**.
 
 ---
 
@@ -14,12 +14,13 @@ graph TD
     CLI --> Interpreter["Bash Interpreter"]
     
     subgraph "Nexus Core Engine"
-        Interpreter --> Parser["Tree-sitter Parser"]
-        Parser --> ASTCache["ASTCache (LRU)"]
-        Interpreter --> Semantic["Semantic Intelligence Engine"]
-        Interpreter --> Accounting["Resource Accounting (CPU/Mem/Net)"]
-        Interpreter --> SharedBus["SharedStateBus"]
-        Interpreter --> Events["EventEmitter (Observability)"]
+        Interpreter --> ServiceContainer["ServiceContainer (DI)"]
+        ServiceContainer --> Parser["Tree-sitter Parser"]
+        Parser --> ASTCache["ASTCache (LRU, FNV-1a)"]
+        ServiceContainer --> Semantic["Semantic Intelligence Engine"]
+        ServiceContainer --> Accounting["Resource Accounting (CPU/Mem/Net)"]
+        ServiceContainer --> SharedBus["SharedStateBus"]
+        ServiceContainer --> Events["EventEmitter (Observability)"]
     end
     
     subgraph "Runtimes"
@@ -37,7 +38,7 @@ graph TD
 
 ## 🧠 Nexus AST Engine & ASTCache
 
-To reduce the latency of script execution, Ag-Bash v1.5.0 introduces the **ASTCache**.
+To reduce the latency of script execution, Ag-Bash introduced the **ASTCache** in v1.5.0, with a major upgrade in v3.0.0.
 
 ### The Problem
 
@@ -45,12 +46,13 @@ Traditional shells re-parse scripts every time they are executed. For autonomous
 
 ### The Solution: ASTCache
 
-The `ASTCache` is a global LRU (Least Recently Used) cache that stores parsed Tree-sitter AST nodes.
+The `ASTCache` is an LRU (Least Recently Used) cache that stores parsed Tree-sitter AST nodes. In v3.0.0, it was upgraded to a true LRU implementation owned per-instance via `ServiceContainer`.
 
-- **Keying**: Input script strings are hashed using SHA-256 to create unique cache keys.
+- **Keying**: Input script strings are hashed using **FNV-1a** (non-cryptographic) for browser compatibility and ~10x faster key generation than the previous SHA-256 approach.
+- **Short-circuit**: Inputs shorter than 64 characters bypass hashing entirely for maximum throughput.
+- **LRU Eviction**: Uses JavaScript `Map` insertion-order semantics (delete + re-set) for O(1) promotion. A fixed memory footprint (default 100 entries) ensures the cache doesn't grow unbounded.
 - **TTL**: Entries have a default TTL of 1 hour to prevent stale state in dynamic scripts.
-
-- **Eviction**: A fixed memory footprint (default 100 entries) ensures the cache doesn't grow unbounded.
+- **Observability**: `stats()` exposes hit/miss counters; `configure()` allows runtime tuning of capacity and TTL.
 
 ---
 
@@ -60,13 +62,27 @@ Project Nexus enables **Shared State Persistence** across Bash, Python, and Java
 
 ### Architecture
 
-The `SharedStateBus` is a singleton event bus that allows different runtimes to synchronize variables and state changes.
+The `SharedStateBus` is an event bus that allows different runtimes to synchronize variables and state changes. As of v3.0.0, `SharedStateBus` is **no longer a singleton** — each `Bash` instance owns its own bus via the `ServiceContainer` dependency injection system (see below).
 
-- **Event-Driven**: Components publish events (e.g., `state:variable_set`) to the bus.
-- **State Shadowing**: The bus maintains a "Shadow Map" of the current environment state accessible to any runtime.
+- **Event-Driven**: Components publish events (e.g., `state:variable_set`) to the bus via type-safe `publishTyped<T>()` methods.
+- **State Shadowing**: The bus maintains a "Shadow Map" of the current environment state accessible to any runtime, retrievable with `getStateAs<T>()`.
+- **Error Handling**: A dedicated `BusErrorHandler` interface allows host applications to intercept and handle bus-level failures.
 - **Cross-Language Bindings**:
   - **Bash**: Access via `ag-snapshot` and environment expansion.
   - **Python/JS**: Access via built-in bridge libraries that communicate with the bus via the `Interpreter`.
+
+---
+
+## 🏭 ServiceContainer: Dependency Injection (v3.0.0)
+
+In v3.0.0, all previously-global singletons (`AgentManager`, `McpClient`, `SessionManager`, `Orchestrator`, `LSPManager`) were eliminated. Services are now owned **per-`Bash` instance** through the `ServiceContainer` pattern.
+
+### Design
+
+- **Factory**: `createDefaultServices()` constructs the full service graph. Each service receives its dependencies via constructor injection, enabling straightforward override for testing.
+- **Access**: `bash.services` exposes `astCache`, `sharedBus`, `sessionManager`, `agentManager`, `mcpClient`, `orchestrator`, and `lspManager`.
+- **Isolation**: Multiple `Bash` instances can coexist in the same process without shared mutable state. The only remaining process-wide singleton is `DefenseInDepthBox`, which patches `AsyncLocalStorage` globally by necessity.
+- **Testability**: Integration tests can inject mock services at construction time without monkey-patching globals.
 
 ---
 
@@ -134,6 +150,37 @@ Ag-Bash utilizes an **Overlay Filesystem (CoW)** to ensure host safety.
 - **Lower Layer**: Your actual project files (Read-only).
 - **Upper Layer**: An ephemeral, in-memory layer for all writes.
 - **Resolution**: Filename lookups merge these layers, giving the agent a seamless view while protecting the underlying disk.
+
+---
+
+## ⚙️ BashOptions Configuration (v3.0.0)
+
+In v3.0.0, the flat `BashOptions` configuration was restructured into grouped sub-objects for clarity and discoverability:
+
+| Sub-object | Contains (previously flat) |
+|------------|---------------------------|
+| `runtimes` | `python`, `javascript` |
+| `security` | `defenseInDepth`, `processInfo` |
+| `parser` | `engine`, `treeSitterConfig` |
+| `debug` | `logger`, `trace`, `coverage`, `debugger`, `semanticEngine` |
+| `agentic` | `enabled`, `healer`, `nestingDepth`, `permissionHandler` (previously a boolean) |
+| `executionLimits` | `maxMemoryAccountingBytes`, `maxCpuMs`, `maxNetworkTrafficBytes` (previously top-level `maxCallDepth`, `maxCommandCount`, `maxLoopIterations` — removed) |
+
+This is a **breaking change** from v2.x. Consumers must migrate flat option fields to their respective sub-objects.
+
+---
+
+## 🧰 Nexus Suite: Surgical Editing Tools
+
+The **Nexus Suite** provides a cohesive set of tools purpose-built for agentic file manipulation:
+
+- **`ag-edit`**: High-performance line-based file editor with multi-chunk support and SHA-256 staleness protection (prevents overwriting concurrent changes).
+- **`ag-diff`**: Semantic diffing tool that produces LLM-optimized summaries alongside traditional unified diffs.
+- **`ag-snapshot`**: Persistent state capture (environment variables, functions, CWD, VFS) saved to `.ag-snapshots/` for session replay and recovery.
+
+### Plan Mode
+
+The `ag-plan` command activates **Planning Mode** — a read-only sandbox where destructive tools are automatically blocked. This allows agents to design multi-step strategies with checkpoints before committing any changes to the filesystem.
 
 ---
 

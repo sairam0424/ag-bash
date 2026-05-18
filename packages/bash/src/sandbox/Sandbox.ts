@@ -83,9 +83,10 @@ export class Sandbox {
       fs,
       executionLimits: opts?.executionLimits,
       network: opts?.network,
-      security: opts?.defenseInDepth != null
-        ? { defenseInDepth: opts.defenseInDepth }
-        : undefined,
+      security:
+        opts?.defenseInDepth != null
+          ? { defenseInDepth: opts.defenseInDepth }
+          : undefined,
     });
     return new Sandbox(bashEnv, opts?.timeoutMs);
   }

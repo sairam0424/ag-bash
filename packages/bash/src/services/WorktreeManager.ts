@@ -34,12 +34,6 @@ export interface CreateWorktreeOpts {
 
 // ── ID generation ───────────────────────────────────────────────────
 
-let nextWorktreeId = 1;
-
-function generateWorktreeId(): string {
-  return `wt_${nextWorktreeId++}`;
-}
-
 // ── Constants ───────────────────────────────────────────────────────
 
 const WORKTREE_BASE = "/.ag-bash/worktrees";
@@ -50,6 +44,7 @@ export class WorktreeManager {
   private worktrees: Map<string, Worktree> = new Map();
   private activeWorktree: string | undefined;
   private bus: SharedStateBus | undefined;
+  private nextWorktreeId = 1;
 
   setBus(bus: SharedStateBus): void {
     this.bus = bus;
@@ -69,7 +64,7 @@ export class WorktreeManager {
       }
     }
 
-    const id = generateWorktreeId();
+    const id = `wt_${this.nextWorktreeId++}`;
     const branch = opts.branch ?? `worktree/${opts.name}`;
     const path = `${WORKTREE_BASE}/${opts.name}`;
 

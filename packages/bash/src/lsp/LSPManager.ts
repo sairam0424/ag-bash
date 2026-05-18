@@ -62,7 +62,11 @@ export class LSPManager {
   /**
    * Send a notification to the appropriate LSP server.
    */
-  public sendNotification(filePath: string, method: string, params: unknown): void {
+  public sendNotification(
+    filePath: string,
+    method: string,
+    params: unknown,
+  ): void {
     const ext = filePath.split(".").pop() || "";
     const connection = this.connections.get(ext);
     if (connection) {

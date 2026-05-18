@@ -6,7 +6,7 @@ const agCronHelp = {
   summary: "manage scheduled cron jobs",
   usage: "ag-cron <create|delete|list> [args]",
   options: [
-    '  create  <cron-expr> <prompt> [--one-shot] [--durable]',
+    "  create  <cron-expr> <prompt> [--one-shot] [--durable]",
     "  delete  <job-id>",
     "  list",
     "",
@@ -52,7 +52,8 @@ export const agCronCommand: Command = {
         if (!cronExpr) {
           return {
             stdout: "",
-            stderr: "ag-cron: missing cron expression\nUsage: ag-cron create <cron-expr> <prompt> [--one-shot] [--durable]\n",
+            stderr:
+              "ag-cron: missing cron expression\nUsage: ag-cron create <cron-expr> <prompt> [--one-shot] [--durable]\n",
             exitCode: 1,
           };
         }
@@ -71,7 +72,8 @@ export const agCronCommand: Command = {
         if (!prompt) {
           return {
             stdout: "",
-            stderr: "ag-cron: missing prompt\nUsage: ag-cron create <cron-expr> <prompt> [--one-shot] [--durable]\n",
+            stderr:
+              "ag-cron: missing prompt\nUsage: ag-cron create <cron-expr> <prompt> [--one-shot] [--durable]\n",
             exitCode: 1,
           };
         }

@@ -72,15 +72,31 @@ const CRITICAL_RULES: DetectionRule[] = [
     severity: "critical",
     pattern: "may recursively force-remove critical files",
     test(command: string): boolean {
-      // Must contain rm with both -r and -f (in any order / combined flags)
       if (!/\brm\b/.test(command)) return false;
       const afterRm = command.slice(command.search(/\brm\b/) + 2);
-      // Extract all flag groups (e.g. "-rf", "-r", "-f", "--force")
       const hasR = /-[^\s]*r/.test(afterRm) || /--recursive/.test(afterRm);
       const hasF = /-[^\s]*f/.test(afterRm) || /--force/.test(afterRm);
       if (!hasR || !hasF) return false;
       // Check for critical targets: /, ~, or bare *
-      return /(\s|^)(\/(\s|$|\*)|\*(\s|$)|~(\/|\s|$))/.test(afterRm);
+      if (/(\s|^)(\/(\s|$|\*)|\*(\s|$)|~(\/|\s|$))/.test(afterRm)) return true;
+      // Canonicalize paths containing .. to catch traversals like /tmp/../
+      const pathArgs = afterRm.match(/(?:^|\s)(\/[^\s]+)/g);
+      if (pathArgs) {
+        for (const arg of pathArgs) {
+          const p = arg.trim();
+          if (/\.\./.test(p)) {
+            const parts = p.split("/").filter(Boolean);
+            const resolved: string[] = [];
+            for (const seg of parts) {
+              if (seg === "..") resolved.pop();
+              else if (seg !== ".") resolved.push(seg);
+            }
+            const canonical = "/" + resolved.join("/");
+            if (canonical === "/" || canonical === "") return true;
+          }
+        }
+      }
+      return false;
     },
   },
 
@@ -133,9 +149,7 @@ const HIGH_RULES: DetectionRule[] = [
     category: "git",
     severity: "high",
     pattern: "may overwrite remote history",
-    test: caseSensitive(
-      String.raw`\bgit\s+push\s+.*(-f\b|--force\b)`
-    ),
+    test: caseSensitive(String.raw`\bgit\s+push\s+.*(-f\b|--force\b)`),
   },
 
   // Git — clean -f (without -n / --dry-run)
@@ -192,7 +206,7 @@ const HIGH_RULES: DetectionRule[] = [
     severity: "high",
     pattern: "may recursively force-remove files",
     test: caseSensitive(
-      String.raw`\brm\s+(-[^\s]*r[^\s]*\s+-[^\s]*f[^\s]*|-[^\s]*f[^\s]*\s+-[^\s]*r[^\s]*|-[^\s]*rf[^\s]*|-[^\s]*fr[^\s]*)\b`
+      String.raw`\brm\s+(-[^\s]*r[^\s]*\s+-[^\s]*f[^\s]*|-[^\s]*f[^\s]*\s+-[^\s]*r[^\s]*|-[^\s]*rf[^\s]*|-[^\s]*fr[^\s]*)\b`,
     ),
   },
 
@@ -228,7 +242,9 @@ const HIGH_RULES: DetectionRule[] = [
     test(command: string): boolean {
       const deleteMatch = /\bDELETE\s+FROM\s+\S+/i.exec(command);
       if (!deleteMatch) return false;
-      const afterDelete = command.slice(deleteMatch.index + deleteMatch[0].length);
+      const afterDelete = command.slice(
+        deleteMatch.index + deleteMatch[0].length,
+      );
       // No WHERE clause at all
       if (!/\bWHERE\b/i.test(afterDelete)) return true;
       // WHERE 1=1 (tautology)
@@ -250,9 +266,7 @@ const HIGH_RULES: DetectionRule[] = [
     category: "container",
     severity: "high",
     pattern: "may force-remove all containers",
-    test: caseSensitive(
-      String.raw`\bdocker\s+rm\s+.*-f.*\$\(docker\s+ps\b`
-    ),
+    test: caseSensitive(String.raw`\bdocker\s+rm\s+.*-f.*\$\(docker\s+ps\b`),
   },
 ];
 

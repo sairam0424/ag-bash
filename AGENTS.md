@@ -63,7 +63,7 @@ Enforced by **Biome** (`biome.json`):
 - **Null prototypes required**: All `Record<string, T>` must use `Object.create(null)` or `nullPrototype()` to prevent prototype pollution.
 - **Filesystem security gates**: All filesystem access must go through `resolveAndValidate` in the respective FS implementation.
 - **Sandbox purity**: No Node.js native dependencies allowed in the core package (except optional WASM runtimes).
-- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v2.6.0).
+- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v3.0.0).
 - **E2E verification**: Always verify changes with `bash scripts/e2e-verify.sh` to ensure protocol and persistence stability.
 
 ## CI/CD

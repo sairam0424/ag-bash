@@ -2,9 +2,8 @@ import { z } from "zod";
 import type { Bash } from "../Bash.js";
 import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
 import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
-import { detectDestructiveCommand } from "../security/destructive-command-detector.js";
-import { ToolSearchEngine } from "./ToolSearchEngine.js";
 import { LspTool } from "../lsp/LspTool.js";
+import { detectDestructiveCommand } from "../security/destructive-command-detector.js";
 import { ConvertTool } from "./ConvertTool.js";
 import { EditTool } from "./EditTool.js";
 import { MultiReplaceTool } from "./MultiReplaceTool.js";
@@ -12,6 +11,7 @@ import { FindFilesTool, GrepTool } from "./SearchTool.js";
 import { ExplainTool, FindSymbolTool, HoverTool } from "./SemanticTool.js";
 import { TodoTool } from "./TodoTool.js";
 import { buildTool, type ToolboxTool } from "./Tool.js";
+import { ToolSearchEngine } from "./ToolSearchEngine.js";
 import type { PermissionResult, ValidationResult } from "./types.js";
 
 /**
@@ -833,10 +833,7 @@ export class BashToolbox {
             .describe(
               'Keyword query or "select:Name1,Name2" for exact lookup.',
             ),
-          limit: z
-            .number()
-            .optional()
-            .describe("Max results (default: 10)."),
+          limit: z.number().optional().describe("Max results (default: 10)."),
         }),
         isReadOnly: true,
         execute: async (
@@ -848,7 +845,8 @@ export class BashToolbox {
 
           if (query.startsWith("select:")) {
             const selected = engine.selectByName(tools, query);
-            if (selected.length === 0) return "No tools found matching those names.";
+            if (selected.length === 0)
+              return "No tools found matching those names.";
             return selected.map((t) => ({
               name: t.name,
               description: t.description,
@@ -857,7 +855,8 @@ export class BashToolbox {
           }
 
           const results = engine.search(tools, query, limit);
-          if (results.length === 0) return "No tools found matching your query.";
+          if (results.length === 0)
+            return "No tools found matching your query.";
 
           return results.map((r) => ({
             name: r.tool.name,
@@ -905,7 +904,12 @@ export class BashToolbox {
                   description: `[MCP: ${conn.id}] ${tool.description || ""}`,
                   parameters: z.any(), // MCP schemas are dynamic
                   execute: async (b, args) => {
-                    return await b.services.mcpClient.callTool(conn.id, tool.name, args, b);
+                    return await b.services.mcpClient.callTool(
+                      conn.id,
+                      tool.name,
+                      args,
+                      b,
+                    );
                   },
                 }),
               );
@@ -932,7 +936,10 @@ export class BashToolbox {
             .string()
             .optional()
             .describe('Spinner text when in_progress (e.g., "Running tests").'),
-          owner: z.string().optional().describe("Agent ID that owns this task."),
+          owner: z
+            .string()
+            .optional()
+            .describe("Agent ID that owns this task."),
         }),
         execute: async (
           bash: Bash,
@@ -960,7 +967,9 @@ export class BashToolbox {
           status: z
             .string()
             .optional()
-            .describe("New status: pending, in_progress, completed, failed, blocked."),
+            .describe(
+              "New status: pending, in_progress, completed, failed, blocked.",
+            ),
           subject: z.string().optional().describe("New subject."),
           description: z.string().optional().describe("New description."),
           owner: z.string().optional().describe("New owner agent ID."),
@@ -987,7 +996,8 @@ export class BashToolbox {
     this.registerTool(
       buildTool({
         name: "task_list",
-        description: "List all tracked tasks, optionally filtered by status or owner.",
+        description:
+          "List all tracked tasks, optionally filtered by status or owner.",
         searchHint: "list all tasks",
         parameters: z.object({
           status: z.string().optional().describe("Filter by status."),
@@ -1042,7 +1052,8 @@ export class BashToolbox {
     this.registerTool(
       buildTool({
         name: "team_create",
-        description: "Create a new agent team for coordinated multi-agent work.",
+        description:
+          "Create a new agent team for coordinated multi-agent work.",
         searchHint: "create multi-agent team",
         parameters: z.object({
           name: z.string().describe("Team name."),
@@ -1104,9 +1115,7 @@ export class BashToolbox {
         searchHint: "read agent memory",
         parameters: z.object({
           agentType: z.string().describe("Agent type identifier."),
-          scope: z
-            .string()
-            .describe("Memory scope: user, project, or local."),
+          scope: z.string().describe("Memory scope: user, project, or local."),
           key: z.string().describe("Memory key."),
         }),
         isReadOnly: true,
@@ -1119,7 +1128,10 @@ export class BashToolbox {
             input.scope as any,
             input.key,
           );
-          return entry || `No memory found for ${input.agentType}:${input.scope}:${input.key}`;
+          return (
+            entry ||
+            `No memory found for ${input.agentType}:${input.scope}:${input.key}`
+          );
         },
       }),
     );
@@ -1131,15 +1143,18 @@ export class BashToolbox {
         searchHint: "write agent memory",
         parameters: z.object({
           agentType: z.string().describe("Agent type identifier."),
-          scope: z
-            .string()
-            .describe("Memory scope: user, project, or local."),
+          scope: z.string().describe("Memory scope: user, project, or local."),
           key: z.string().describe("Memory key."),
           value: z.string().describe("Memory value."),
         }),
         execute: async (
           bash: Bash,
-          input: { agentType: string; scope: string; key: string; value: string },
+          input: {
+            agentType: string;
+            scope: string;
+            key: string;
+            value: string;
+          },
         ) => {
           const entry = bash.services.agentMemory.write(
             input.agentType,
@@ -1147,7 +1162,11 @@ export class BashToolbox {
             input.key,
             input.value,
           );
-          return { key: entry.key, scope: entry.scope, agentType: entry.agentType };
+          return {
+            key: entry.key,
+            scope: entry.scope,
+            agentType: entry.agentType,
+          };
         },
       }),
     );
@@ -1161,15 +1180,25 @@ export class BashToolbox {
           "Fast glob pattern matching over the filesystem. Returns matching file paths sorted by name or mtime.",
         searchHint: "find files by glob pattern",
         parameters: z.object({
-          pattern: z.string().describe('Glob pattern (e.g., "**/*.ts", "src/**/*.{ts,tsx}").'),
-          path: z.string().optional().describe("Root directory (default: cwd)."),
+          pattern: z
+            .string()
+            .describe('Glob pattern (e.g., "**/*.ts", "src/**/*.{ts,tsx}").'),
+          path: z
+            .string()
+            .optional()
+            .describe("Root directory (default: cwd)."),
           sort: z.string().optional().describe('"alpha" (default) or "mtime".'),
           limit: z.number().optional().describe("Max results (default: 1000)."),
         }),
         isReadOnly: true,
         execute: async (
           bash: Bash,
-          input: { pattern: string; path?: string; sort?: string; limit?: number },
+          input: {
+            pattern: string;
+            path?: string;
+            sort?: string;
+            limit?: number;
+          },
         ) => {
           const args = [JSON.stringify(input.pattern)];
           if (input.path) args.push("--path", JSON.stringify(input.path));
@@ -1188,11 +1217,17 @@ export class BashToolbox {
           "Record and classify a git operation. Returns classification (safe/mutating/destructive) and audit entry.",
         searchHint: "track git operation for safety audit",
         parameters: z.object({
-          command: z.string().describe("The git command to classify and record."),
+          command: z
+            .string()
+            .describe("The git command to classify and record."),
         }),
         execute: async (bash: Bash, { command }: { command: string }) => {
           const op = bash.services.gitTracker.recordOperation(command);
-          return { id: op.id, classification: op.classification, command: op.command };
+          return {
+            id: op.id,
+            classification: op.classification,
+            command: op.command,
+          };
         },
       }),
     );
@@ -1200,14 +1235,22 @@ export class BashToolbox {
     this.registerTool(
       buildTool({
         name: "git_audit_log",
-        description: "Get the git operations audit log, optionally filtered to destructive operations only.",
+        description:
+          "Get the git operations audit log, optionally filtered to destructive operations only.",
         searchHint: "view git audit log",
         parameters: z.object({
-          destructiveOnly: z.boolean().optional().describe("If true, return only destructive operations."),
+          destructiveOnly: z
+            .boolean()
+            .optional()
+            .describe("If true, return only destructive operations."),
         }),
         isReadOnly: true,
-        execute: async (bash: Bash, { destructiveOnly }: { destructiveOnly?: boolean }) => {
-          if (destructiveOnly) return bash.services.gitTracker.getDestructiveOps();
+        execute: async (
+          bash: Bash,
+          { destructiveOnly }: { destructiveOnly?: boolean },
+        ) => {
+          if (destructiveOnly)
+            return bash.services.gitTracker.getDestructiveOps();
           return bash.services.gitTracker.getLog();
         },
       }),
@@ -1220,12 +1263,19 @@ export class BashToolbox {
           "Check if a command contains destructive patterns (rm -rf, DROP TABLE, git reset --hard, etc.). Returns warning or null.",
         searchHint: "check command for destructive patterns",
         parameters: z.object({
-          command: z.string().describe("The command to analyze for destructive patterns."),
+          command: z
+            .string()
+            .describe("The command to analyze for destructive patterns."),
         }),
         isReadOnly: true,
         execute: async (_bash: Bash, { command }: { command: string }) => {
           const warning = detectDestructiveCommand(command);
-          return warning || { safe: true, message: "No destructive patterns detected." };
+          return (
+            warning || {
+              safe: true,
+              message: "No destructive patterns detected.",
+            }
+          );
         },
       }),
     );
@@ -1239,14 +1289,29 @@ export class BashToolbox {
           "Schedule a recurring or one-shot prompt using a cron expression.",
         searchHint: "schedule recurring cron job",
         parameters: z.object({
-          cron: z.string().describe('5-field cron expression (e.g., "*/5 * * * *").'),
-          prompt: z.string().describe("The prompt/command to run at each fire time."),
-          recurring: z.boolean().optional().describe("True = repeating (default), false = one-shot."),
-          durable: z.boolean().optional().describe("True = persisted, false = session-only (default)."),
+          cron: z
+            .string()
+            .describe('5-field cron expression (e.g., "*/5 * * * *").'),
+          prompt: z
+            .string()
+            .describe("The prompt/command to run at each fire time."),
+          recurring: z
+            .boolean()
+            .optional()
+            .describe("True = repeating (default), false = one-shot."),
+          durable: z
+            .boolean()
+            .optional()
+            .describe("True = persisted, false = session-only (default)."),
         }),
         execute: async (
           bash: Bash,
-          input: { cron: string; prompt: string; recurring?: boolean; durable?: boolean },
+          input: {
+            cron: string;
+            prompt: string;
+            recurring?: boolean;
+            durable?: boolean;
+          },
         ) => {
           const job = bash.services.cronScheduler.createJob(input);
           return { id: job.id, cron: job.cron, recurring: job.recurring };
@@ -1290,9 +1355,15 @@ export class BashToolbox {
         searchHint: "create worktree for isolation",
         parameters: z.object({
           name: z.string().describe("Worktree name."),
-          branch: z.string().optional().describe("Branch name (default: worktree/<name>)."),
+          branch: z
+            .string()
+            .optional()
+            .describe("Branch name (default: worktree/<name>)."),
         }),
-        execute: async (bash: Bash, input: { name: string; branch?: string }) => {
+        execute: async (
+          bash: Bash,
+          input: { name: string; branch?: string },
+        ) => {
           const cwd = bash.getCwd();
           let wt = bash.services.worktreeManager.getWorktree(input.name);
           if (!wt) {
@@ -1311,7 +1382,8 @@ export class BashToolbox {
     this.registerTool(
       buildTool({
         name: "exit_worktree",
-        description: "Exit the active worktree and restore the original working directory.",
+        description:
+          "Exit the active worktree and restore the original working directory.",
         searchHint: "exit worktree isolation",
         parameters: z.object({}),
         execute: async (bash: Bash) => {
@@ -1352,7 +1424,12 @@ export class BashToolbox {
           description: tool.description || `MCP tool from ${connectionId}`,
           parameters: this.jsonSchemaToZod(tool.inputSchema),
           execute: async (bash: Bash, args: any) => {
-            return await bash.services.mcpClient.callTool(connectionId, tool.name, args, bash);
+            return await bash.services.mcpClient.callTool(
+              connectionId,
+              tool.name,
+              args,
+              bash,
+            );
           },
         }),
       );

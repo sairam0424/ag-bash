@@ -19,6 +19,8 @@ import {
  * Handles node mapping, source location tracking, and bash-specific syntax quirks.
  */
 export class TreeSitterToAst {
+  private readonly source: string;
+
   constructor(source: string) {
     this.source = source;
   }
@@ -459,6 +461,7 @@ export class TreeSitterToAst {
 
   private convertForStatement(node: Node): CommandNode | null {
     const variable = node.childForFieldName("variable")?.text;
+    if (!variable) return null;
     const valueNode = node.childForFieldName("value");
     const bodyNode = node.childForFieldName("body")!;
 

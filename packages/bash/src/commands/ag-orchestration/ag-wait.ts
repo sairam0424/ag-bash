@@ -8,10 +8,7 @@ import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agWait: Command = {
   name: "ag-wait",
-  execute: async (
-    args: string[],
-    ctx: CommandContext,
-  ): Promise<ExecResult> => {
+  execute: async (args: string[], ctx: CommandContext): Promise<ExecResult> => {
     const id = args[0];
 
     if (!id) {

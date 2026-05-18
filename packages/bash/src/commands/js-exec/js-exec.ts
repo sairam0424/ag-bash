@@ -294,7 +294,10 @@ function processNextExecution(): void {
     return;
   }
   currentExecution = next;
-  const worker = getOrCreateWorker(currentExecution.input.sessionId, currentExecution.sessionManager);
+  const worker = getOrCreateWorker(
+    currentExecution.input.sessionId,
+    currentExecution.sessionManager,
+  );
   worker.postMessage(currentExecution.input);
 }
 
@@ -347,7 +350,10 @@ function normalizeJsWorkerMessage(
   };
 }
 
-function getOrCreateWorker(sessionId?: string, sessionManager?: SessionManager): Worker {
+function getOrCreateWorker(
+  sessionId?: string,
+  sessionManager?: SessionManager,
+): Worker {
   // Clear any pending idle timeout
   if (workerIdleTimeout && !sessionId) {
     _clearTimeout(workerIdleTimeout);
