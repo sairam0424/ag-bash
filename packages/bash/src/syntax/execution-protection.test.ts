@@ -155,7 +155,9 @@ describe("Execution Protection", () => {
     });
 
     it("should protect against fork bomb pattern", async () => {
-      const env = new Bash({ executionLimits: { maxCallDepth: 20, maxCommandCount: 1000 } });
+      const env = new Bash({
+        executionLimits: { maxCallDepth: 20, maxCommandCount: 1000 },
+      });
       // Classic fork bomb pattern (limited by our protections)
       const result = await env.exec(`
         bomb() { bomb | bomb & }
@@ -241,7 +243,9 @@ describe("Execution Protection", () => {
 
   describe("combined protection", () => {
     it("should protect against recursive function with loops", async () => {
-      const env = new Bash({ executionLimits: { maxCallDepth: 20, maxLoopIterations: 100 } });
+      const env = new Bash({
+        executionLimits: { maxCallDepth: 20, maxLoopIterations: 100 },
+      });
       const result = await env.exec(
         "dangerous() { for i in 1 2 3; do dangerous; done; }; dangerous",
       );
@@ -250,7 +254,9 @@ describe("Execution Protection", () => {
     });
 
     it("should protect against loop calling recursive function", async () => {
-      const env = new Bash({ executionLimits: { maxCallDepth: 20, maxLoopIterations: 100 } });
+      const env = new Bash({
+        executionLimits: { maxCallDepth: 20, maxLoopIterations: 100 },
+      });
       const result = await env.exec(`
         recurse() { recurse; }
         for i in 1 2 3 4 5; do
@@ -406,7 +412,9 @@ describe("Execution Protection", () => {
 
   describe("subshell protection", () => {
     it("should protect against infinite subshell recursion", async () => {
-      const env = new Bash({ executionLimits: { maxCallDepth: 50, maxCommandCount: 1000 } });
+      const env = new Bash({
+        executionLimits: { maxCallDepth: 50, maxCommandCount: 1000 },
+      });
       const result = await env.exec(`
         f() { (f); }
         f

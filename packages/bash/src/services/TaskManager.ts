@@ -148,8 +148,7 @@ export class TaskManager {
 
     if (changes.addBlockedBy) {
       for (const blockerId of changes.addBlockedBy) {
-        if (!task.blockedBy.includes(blockerId))
-          task.blockedBy.push(blockerId);
+        if (!task.blockedBy.includes(blockerId)) task.blockedBy.push(blockerId);
         const blocker = this.tasks.get(blockerId);
         if (blocker && !blocker.blocks.includes(id)) {
           blocker.blocks.push(id);
@@ -161,10 +160,7 @@ export class TaskManager {
     task.updatedAt = Date.now();
     this.publishChange(task, "updated");
 
-    if (
-      task.status === "completed" ||
-      task.status === "failed"
-    ) {
+    if (task.status === "completed" || task.status === "failed") {
       this.resolveBlockedTasks(id);
     }
 
@@ -196,10 +192,7 @@ export class TaskManager {
 
   private resolveBlockedTasks(completedId: string): void {
     for (const task of this.tasks.values()) {
-      if (
-        task.status === "blocked" &&
-        task.blockedBy.includes(completedId)
-      ) {
+      if (task.status === "blocked" && task.blockedBy.includes(completedId)) {
         const allResolved = task.blockedBy.every((bid) => {
           const blocker = this.tasks.get(bid);
           return (

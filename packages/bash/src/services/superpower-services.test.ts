@@ -5,15 +5,14 @@
  * Exercises core methods, edge cases, state transitions, and bounded collections.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
-
+import { beforeEach, describe, expect, it } from "vitest";
+import { AgentMemory, type MemoryScope } from "./AgentMemory.js";
+import { CronScheduler, matchesCron } from "./CronScheduler.js";
+import { GitTracker } from "./GitTracker.js";
+import { type BusEvent, SharedStateBus } from "./SharedStateBus.js";
 import { TaskManager, type TaskStatus } from "./TaskManager.js";
 import { TeamManager } from "./TeamManager.js";
-import { AgentMemory, type MemoryScope } from "./AgentMemory.js";
-import { GitTracker } from "./GitTracker.js";
-import { CronScheduler, matchesCron } from "./CronScheduler.js";
 import { WorktreeManager } from "./WorktreeManager.js";
-import { SharedStateBus, type BusEvent } from "./SharedStateBus.js";
 
 /* ================================================================== */
 /*  Helper: collect bus events for assertion                           */
@@ -533,9 +532,7 @@ describe("AgentMemory", () => {
 
     expect(mem.read("coder", "project", "key")!.value).toBe("coder-project");
     expect(mem.read("coder", "user", "key")!.value).toBe("coder-user");
-    expect(mem.read("tester", "project", "key")!.value).toBe(
-      "tester-project",
-    );
+    expect(mem.read("tester", "project", "key")!.value).toBe("tester-project");
   });
 
   // ── List by type / scope ────────────────────────────────────────
@@ -905,9 +902,9 @@ describe("CronScheduler", () => {
     limited.createJob({ cron: "* * * * *", prompt: "1" });
     limited.createJob({ cron: "* * * * *", prompt: "2" });
 
-    expect(() =>
-      limited.createJob({ cron: "* * * * *", prompt: "3" }),
-    ).toThrow("Maximum job limit");
+    expect(() => limited.createJob({ cron: "* * * * *", prompt: "3" })).toThrow(
+      "Maximum job limit",
+    );
   });
 
   // ── Delete ──────────────────────────────────────────────────────
@@ -1077,9 +1074,9 @@ describe("WorktreeManager", () => {
 
   it("rejects duplicate worktree names", () => {
     wm.createWorktree({ name: "dup", originalCwd: "/" });
-    expect(() =>
-      wm.createWorktree({ name: "dup", originalCwd: "/" }),
-    ).toThrow("already exists");
+    expect(() => wm.createWorktree({ name: "dup", originalCwd: "/" })).toThrow(
+      "already exists",
+    );
   });
 
   // ── Enter / Exit ────────────────────────────────────────────────

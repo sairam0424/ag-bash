@@ -1,4 +1,4 @@
-import { UIMessage } from "./index.js";
+import type { UIMessage } from "./index.js";
 
 /**
  * Base status of an agent execution
@@ -21,7 +21,7 @@ export interface AgentAdapter {
    * Run the agent with a prompt and conversation history
    */
   run(messages: UIMessage[]): AsyncIterable<any>;
-  
+
   /**
    * Name/Type of the adapter
    */
@@ -34,7 +34,9 @@ export interface AgentAdapter {
 export class FetchAgentAdapter implements AgentAdapter {
   constructor(private apiEndpoint: string) {}
 
-  get type() { return "fetch"; }
+  get type() {
+    return "fetch";
+  }
 
   async *run(messages: UIMessage[]): AsyncIterable<any> {
     const response = await fetch(this.apiEndpoint, {

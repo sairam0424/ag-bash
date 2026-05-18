@@ -48,7 +48,8 @@ export const agWorktreeCommand: Command = {
         if (!name) {
           return {
             stdout: "",
-            stderr: "ag-worktree: missing worktree name\nUsage: ag-worktree enter <name> [--branch <branch>]\n",
+            stderr:
+              "ag-worktree: missing worktree name\nUsage: ag-worktree enter <name> [--branch <branch>]\n",
             exitCode: 1,
           };
         }
@@ -136,7 +137,8 @@ export const agWorktreeCommand: Command = {
         if (!name) {
           return {
             stdout: "",
-            stderr: "ag-worktree: missing worktree name\nUsage: ag-worktree delete <name>\n",
+            stderr:
+              "ag-worktree: missing worktree name\nUsage: ag-worktree delete <name>\n",
             exitCode: 1,
           };
         }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ToolSearchEngine } from "./ToolSearchEngine.js";
-import { buildTool } from "./Tool.js";
 import { WebCache } from "../network/WebCache.js";
+import { buildTool } from "./Tool.js";
+import { ToolSearchEngine } from "./ToolSearchEngine.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

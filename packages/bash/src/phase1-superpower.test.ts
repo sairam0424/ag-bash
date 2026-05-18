@@ -34,8 +34,14 @@ describe("Phase 1: Superpower Tools", () => {
 
     it("should resolve blocked tasks on completion", () => {
       const tm = bash.services.taskManager;
-      const blocker = tm.create({ subject: "Build", description: "Build first" });
-      const blocked = tm.create({ subject: "Deploy", description: "Deploy after" });
+      const blocker = tm.create({
+        subject: "Build",
+        description: "Build first",
+      });
+      const blocked = tm.create({
+        subject: "Deploy",
+        description: "Deploy after",
+      });
 
       tm.update(blocked.id, { status: "blocked", addBlockedBy: [blocker.id] });
       expect(tm.get(blocked.id)?.status).toBe("blocked");
@@ -201,9 +207,16 @@ describe("Phase 1: Superpower Tools", () => {
     it("should have all 10 Phase 1 tools registered", () => {
       const tools = bash.toolbox.getTools();
       const phase1Names = [
-        "task_create", "task_update", "task_list", "task_get", "task_stop",
-        "team_create", "team_delete", "send_message",
-        "agent_memory_read", "agent_memory_write",
+        "task_create",
+        "task_update",
+        "task_list",
+        "task_get",
+        "task_stop",
+        "team_create",
+        "team_delete",
+        "send_message",
+        "agent_memory_read",
+        "agent_memory_write",
       ];
       for (const name of phase1Names) {
         expect(tools.find((t) => t.name === name)).toBeDefined();

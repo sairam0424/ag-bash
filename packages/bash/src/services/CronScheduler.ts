@@ -152,7 +152,7 @@ function validateCron(expression: string): string | undefined {
     return `Expected 5 fields (minute hour dom month dow), got ${fields.length}`;
   }
   // Verify each field contains only valid characters
-  const fieldPattern = /^[\d,\-\*\/]+$/;
+  const fieldPattern = /^[\d,\-*/]+$/;
   const names = ["minute", "hour", "day-of-month", "month", "day-of-week"];
   for (let i = 0; i < 5; i++) {
     if (!fieldPattern.test(fields[i])) {
@@ -334,10 +334,7 @@ export class CronScheduler {
   /*  Private helpers                                                   */
   /* ---------------------------------------------------------------- */
 
-  private publishChange(
-    job: CronJob,
-    action: "created" | "deleted",
-  ): void {
+  private publishChange(job: CronJob, action: "created" | "deleted"): void {
     this.bus?.publish("state:cron", "cronScheduler", {
       action,
       job: { ...job },

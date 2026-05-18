@@ -133,7 +133,11 @@ export class TeamManager {
     return msg;
   }
 
-  broadcast(from: string, teamIdOrName: string, content: string): AgentMessage[] {
+  broadcast(
+    from: string,
+    teamIdOrName: string,
+    content: string,
+  ): AgentMessage[] {
     const team = this.getTeam(teamIdOrName);
     if (!team) throw new Error(`Team "${teamIdOrName}" not found`);
 
@@ -147,9 +151,7 @@ export class TeamManager {
   }
 
   getInbox(agentId: string): AgentMessage[] {
-    return this.messages.filter(
-      (m) => m.to === agentId || m.to === "*",
-    );
+    return this.messages.filter((m) => m.to === agentId || m.to === "*");
   }
 
   getConversation(agent1: string, agent2: string): AgentMessage[] {

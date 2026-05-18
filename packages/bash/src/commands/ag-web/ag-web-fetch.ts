@@ -53,7 +53,10 @@ export const WebFetchTool: ToolboxTool = {
         convertResult.stdout ||
         "Fetched content, but conversion to markdown was empty.";
 
-      cache.put(url, markdown, { contentType: "text/markdown", statusCode: 200 });
+      cache.put(url, markdown, {
+        contentType: "text/markdown",
+        statusCode: 200,
+      });
 
       return markdown;
     } catch (error: any) {

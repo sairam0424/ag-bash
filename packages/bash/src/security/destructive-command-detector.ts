@@ -149,9 +149,7 @@ const HIGH_RULES: DetectionRule[] = [
     category: "git",
     severity: "high",
     pattern: "may overwrite remote history",
-    test: caseSensitive(
-      String.raw`\bgit\s+push\s+.*(-f\b|--force\b)`
-    ),
+    test: caseSensitive(String.raw`\bgit\s+push\s+.*(-f\b|--force\b)`),
   },
 
   // Git — clean -f (without -n / --dry-run)
@@ -208,7 +206,7 @@ const HIGH_RULES: DetectionRule[] = [
     severity: "high",
     pattern: "may recursively force-remove files",
     test: caseSensitive(
-      String.raw`\brm\s+(-[^\s]*r[^\s]*\s+-[^\s]*f[^\s]*|-[^\s]*f[^\s]*\s+-[^\s]*r[^\s]*|-[^\s]*rf[^\s]*|-[^\s]*fr[^\s]*)\b`
+      String.raw`\brm\s+(-[^\s]*r[^\s]*\s+-[^\s]*f[^\s]*|-[^\s]*f[^\s]*\s+-[^\s]*r[^\s]*|-[^\s]*rf[^\s]*|-[^\s]*fr[^\s]*)\b`,
     ),
   },
 
@@ -244,7 +242,9 @@ const HIGH_RULES: DetectionRule[] = [
     test(command: string): boolean {
       const deleteMatch = /\bDELETE\s+FROM\s+\S+/i.exec(command);
       if (!deleteMatch) return false;
-      const afterDelete = command.slice(deleteMatch.index + deleteMatch[0].length);
+      const afterDelete = command.slice(
+        deleteMatch.index + deleteMatch[0].length,
+      );
       // No WHERE clause at all
       if (!/\bWHERE\b/i.test(afterDelete)) return true;
       // WHERE 1=1 (tautology)
@@ -266,9 +266,7 @@ const HIGH_RULES: DetectionRule[] = [
     category: "container",
     severity: "high",
     pattern: "may force-remove all containers",
-    test: caseSensitive(
-      String.raw`\bdocker\s+rm\s+.*-f.*\$\(docker\s+ps\b`
-    ),
+    test: caseSensitive(String.raw`\bdocker\s+rm\s+.*-f.*\$\(docker\s+ps\b`),
   },
 ];
 

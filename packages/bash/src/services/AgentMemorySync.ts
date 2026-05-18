@@ -62,10 +62,7 @@ function scopeDir(scope: MemoryScope): string {
  * Safely read and parse a JSON file. Returns an empty array if the file
  * does not exist or contains invalid JSON.
  */
-async function readEntries(
-  fs: SyncFs,
-  path: string,
-): Promise<MemoryEntry[]> {
+async function readEntries(fs: SyncFs, path: string): Promise<MemoryEntry[]> {
   try {
     const fileExists = await fs.exists(path);
     if (!fileExists) {
@@ -99,9 +96,7 @@ async function ensureScopeDir(fs: SyncFs, scope: MemoryScope): Promise<void> {
  * Group an array of MemoryEntry objects by a composite key of
  * `scope + agentType`.
  */
-function groupEntries(
-  entries: MemoryEntry[],
-): Map<string, MemoryEntry[]> {
+function groupEntries(entries: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const groups = new Map<string, MemoryEntry[]>();
   for (const entry of entries) {
     const key = `${entry.scope}:${entry.agentType}`;
@@ -181,18 +176,31 @@ export async function loadMemoryFromFs(
       const diskEntries = await readEntries(fs, path);
 
       for (const diskEntry of diskEntries) {
-        const existing = memory.read(diskEntry.agentType, diskEntry.scope, diskEntry.key);
+        const existing = memory.read(
+          diskEntry.agentType,
+          diskEntry.scope,
+          diskEntry.key,
+        );
 
         // Merge strategy: newer updatedAt wins. If no existing entry, load
         // unconditionally.
         if (!existing || diskEntry.updatedAt > existing.updatedAt) {
-          memory.write(diskEntry.agentType, diskEntry.scope, diskEntry.key, diskEntry.value);
+          memory.write(
+            diskEntry.agentType,
+            diskEntry.scope,
+            diskEntry.key,
+            diskEntry.value,
+          );
 
           // Patch timestamps to match the persisted values so round-tripping
           // is stable. `write()` sets updatedAt to Date.now(), so we
           // overwrite with the persisted value.  We read the entry back and
           // mutate directly (the reference is held in the internal Map).
-          const written = memory.read(diskEntry.agentType, diskEntry.scope, diskEntry.key);
+          const written = memory.read(
+            diskEntry.agentType,
+            diskEntry.scope,
+            diskEntry.key,
+          );
           if (written) {
             written.createdAt = diskEntry.createdAt;
             written.updatedAt = diskEntry.updatedAt;
@@ -307,7 +315,9 @@ export async function syncAgentMemory(
       const raw = await fs.readFile(manifestPath, "utf-8");
       const parsed: unknown = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        existingTypes = parsed.filter((t): t is string => typeof t === "string");
+        existingTypes = parsed.filter(
+          (t): t is string => typeof t === "string",
+        );
       }
     }
   } catch {

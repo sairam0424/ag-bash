@@ -1,5 +1,7 @@
 // AST types (for plugin authors)
 
+export type { SearchResult } from "./agentic/ToolSearchEngine.js";
+export { ToolSearchEngine } from "./agentic/ToolSearchEngine.js";
 // AI Tool integration
 export { type CreateBashToolOptions, createBashTool } from "./ai.js";
 export type {
@@ -77,34 +79,6 @@ export type {
   VariableAttributeState,
 } from "./interpreter/types.js";
 export { SemanticEngine } from "./lsp/semantic-engine.js";
-// Service container (v3.0 dependency injection)
-export type { ServiceContainer } from "./services/ServiceContainer.js";
-export { createDefaultServices } from "./services/ServiceContainer.js";
-// Phase 1 services (v3.0 superpower tools)
-export { TaskManager } from "./services/TaskManager.js";
-export type { Task, TaskStatus } from "./services/TaskManager.js";
-export { TeamManager } from "./services/TeamManager.js";
-export type { Team, AgentMessage } from "./services/TeamManager.js";
-export { AgentMemory } from "./services/AgentMemory.js";
-export type { MemoryEntry, MemoryScope } from "./services/AgentMemory.js";
-export { GitTracker } from "./services/GitTracker.js";
-export type { GitOperation } from "./services/GitTracker.js";
-export { detectDestructiveCommand } from "./security/destructive-command-detector.js";
-export type { DestructiveWarning } from "./security/destructive-command-detector.js";
-export { CronScheduler } from "./services/CronScheduler.js";
-export type { CronJob } from "./services/CronScheduler.js";
-export { WorktreeManager } from "./services/WorktreeManager.js";
-export type { Worktree } from "./services/WorktreeManager.js";
-export { ToolSearchEngine } from "./agentic/ToolSearchEngine.js";
-export type { SearchResult } from "./agentic/ToolSearchEngine.js";
-// Phase 4 modules
-export { WebCache } from "./network/WebCache.js";
-export type { CacheEntry } from "./network/WebCache.js";
-export {
-  loadMemoryFromFs,
-  saveMemoryToFs,
-  syncAgentMemory,
-} from "./services/AgentMemorySync.js";
 export type {
   AllowedUrl,
   AllowedUrlEntry,
@@ -117,6 +91,9 @@ export {
   RedirectNotAllowedError,
   TooManyRedirectsError,
 } from "./network/index.js";
+export type { CacheEntry } from "./network/WebCache.js";
+// Phase 4 modules
+export { WebCache } from "./network/WebCache.js";
 // Parser
 export { parse } from "./parser/parser.js";
 export type {
@@ -127,6 +104,8 @@ export type {
 } from "./sandbox/index.js";
 // AG Sandbox API compatible exports
 export { Command as SandboxCommand, Sandbox } from "./sandbox/index.js";
+export type { DestructiveWarning } from "./security/destructive-command-detector.js";
+export { detectDestructiveCommand } from "./security/destructive-command-detector.js";
 // Security module - defense-in-depth
 export type {
   DefenseInDepthConfig,
@@ -141,6 +120,27 @@ export {
   SecurityViolationError,
   SecurityViolationLogger,
 } from "./security/index.js";
+export type { MemoryEntry, MemoryScope } from "./services/AgentMemory.js";
+export { AgentMemory } from "./services/AgentMemory.js";
+export {
+  loadMemoryFromFs,
+  saveMemoryToFs,
+  syncAgentMemory,
+} from "./services/AgentMemorySync.js";
+export type { CronJob } from "./services/CronScheduler.js";
+export { CronScheduler } from "./services/CronScheduler.js";
+export type { GitOperation } from "./services/GitTracker.js";
+export { GitTracker } from "./services/GitTracker.js";
+// Service container (v3.0 dependency injection)
+export type { ServiceContainer } from "./services/ServiceContainer.js";
+export { createDefaultServices } from "./services/ServiceContainer.js";
+export type { Task, TaskStatus } from "./services/TaskManager.js";
+// Phase 1 services (v3.0 superpower tools)
+export { TaskManager } from "./services/TaskManager.js";
+export type { AgentMessage, Team } from "./services/TeamManager.js";
+export { TeamManager } from "./services/TeamManager.js";
+export type { Worktree } from "./services/WorktreeManager.js";
+export { WorktreeManager } from "./services/WorktreeManager.js";
 // Transform API
 export { BashTransformPipeline } from "./transform/pipeline.js";
 export type { CommandCollectorMetadata } from "./transform/plugins/command-collector.js";

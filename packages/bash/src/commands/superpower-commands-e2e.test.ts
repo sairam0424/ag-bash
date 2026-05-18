@@ -80,7 +80,9 @@ describe("ag-task", () => {
   });
 
   it("get shows task details", async () => {
-    const cr = await bash.exec('ag-task create "Review PR" --desc "Review pull request #42"');
+    const cr = await bash.exec(
+      'ag-task create "Review PR" --desc "Review pull request #42"',
+    );
     const taskId = extractId(cr.stdout, "task");
     const r = await bash.exec(`ag-task get ${taskId}`);
     expect(r.exitCode).toBe(0);
@@ -149,7 +151,9 @@ describe("ag-team", () => {
   });
 
   it("create builds a new team", async () => {
-    const r = await bash.exec('ag-team create frontend --desc "Frontend squad"');
+    const r = await bash.exec(
+      'ag-team create frontend --desc "Frontend squad"',
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("Created team");
     expect(r.stdout).toContain("frontend");

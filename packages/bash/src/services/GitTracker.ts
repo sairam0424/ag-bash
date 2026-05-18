@@ -31,7 +31,10 @@ interface ClassificationRule {
  * whitespace and stripping leading/trailing spaces.
  */
 function tokenize(command: string): string[] {
-  return command.trim().split(/\s+/).map((t) => t.toLowerCase());
+  return command
+    .trim()
+    .split(/\s+/)
+    .map((t) => t.toLowerCase());
 }
 
 function hasToken(tokens: string[], value: string): boolean {
@@ -73,26 +76,29 @@ const DESTRUCTIVE_RULES: ClassificationRule[] = [
   },
   // git checkout -- . (restore working tree)
   {
-    test: (t) => hasToken(t, "checkout") && hasToken(t, "--") && hasToken(t, "."),
+    test: (t) =>
+      hasToken(t, "checkout") && hasToken(t, "--") && hasToken(t, "."),
     classification: "destructive",
   },
   // git restore -- . (restore working tree)
   {
-    test: (t) => hasToken(t, "restore") && hasToken(t, "--") && hasToken(t, "."),
+    test: (t) =>
+      hasToken(t, "restore") && hasToken(t, "--") && hasToken(t, "."),
     classification: "destructive",
   },
   // git branch -D / -d
   {
     test: (t) => {
       if (!hasToken(t, "branch")) return false;
-      return t.some((tok) => /^-[a-z]*[dD]$/.test(tok) || tok === "-d" || tok === "-D");
+      return t.some(
+        (tok) => /^-[a-z]*[dD]$/.test(tok) || tok === "-d" || tok === "-D",
+      );
     },
     classification: "destructive",
   },
   // git stash drop / clear
   {
-    test: (t) =>
-      hasToken(t, "stash") && hasAnyToken(t, ["drop", "clear"]),
+    test: (t) => hasToken(t, "stash") && hasAnyToken(t, ["drop", "clear"]),
     classification: "destructive",
   },
   // git rebase -i (interactive)
@@ -121,7 +127,15 @@ const SAFE_RULES: ClassificationRule[] = [
       const rest = t.slice(idx + 1);
       return (
         rest.length === 0 ||
-        rest.every((r) => r === "--list" || r === "-l" || r === "-a" || r === "--all" || r === "-r" || r === "--remotes")
+        rest.every(
+          (r) =>
+            r === "--list" ||
+            r === "-l" ||
+            r === "-a" ||
+            r === "--all" ||
+            r === "-r" ||
+            r === "--remotes",
+        )
       );
     },
     classification: "safe",
@@ -133,8 +147,7 @@ const SAFE_RULES: ClassificationRule[] = [
   },
   // git tag -l / --list
   {
-    test: (t) =>
-      hasToken(t, "tag") && hasAnyToken(t, ["-l", "--list"]),
+    test: (t) => hasToken(t, "tag") && hasAnyToken(t, ["-l", "--list"]),
     classification: "safe",
   },
   // git stash list

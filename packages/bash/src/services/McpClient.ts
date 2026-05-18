@@ -3,8 +3,8 @@
  */
 
 import type { ChildProcess } from "node:child_process";
-import type { CommandContext } from "../types.js";
 import type { ExecutionLimits } from "../limits.js";
+import type { CommandContext } from "../types.js";
 
 /**
  * Minimal structural interface describing what McpClient needs from a Bash

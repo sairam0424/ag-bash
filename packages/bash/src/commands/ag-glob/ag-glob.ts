@@ -1,7 +1,7 @@
-import type { Command, CommandContext, ExecResult } from "../../types.js";
-import { hasHelpFlag, showHelp } from "../help.js";
-import { parseArgs } from "../../utils/args.js";
 import { minimatch } from "minimatch";
+import type { Command, CommandContext, ExecResult } from "../../types.js";
+import { parseArgs } from "../../utils/args.js";
+import { hasHelpFlag, showHelp } from "../help.js";
 
 /**
  * ag-glob - Fast glob pattern matching over the virtual filesystem.
@@ -58,7 +58,8 @@ export const agGlobCommand: Command = {
     if (!pattern) {
       return {
         stdout: "",
-        stderr: "Usage: ag-glob <pattern> [--path <dir>] [--sort mtime] [--limit <n>]\n",
+        stderr:
+          "Usage: ag-glob <pattern> [--path <dir>] [--sort mtime] [--limit <n>]\n",
         exitCode: 1,
       };
     }

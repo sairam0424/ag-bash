@@ -5,12 +5,10 @@ function sanitizeErrorMessage(error: unknown): string {
   const msg = error.message;
   // Strip file paths (Unix and Windows)
   const sanitized = msg
-    .replace(/\/[\w./\-]+/g, "[path]")
-    .replace(/[A-Z]:\\[\w\\.\-]+/g, "[path]");
+    .replace(/\/[\w./-]+/g, "[path]")
+    .replace(/[A-Z]:\\[\w\\.-]+/g, "[path]");
   // Cap length to prevent information leakage via long stack traces
-  return sanitized.length > 200
-    ? `${sanitized.slice(0, 200)}...`
-    : sanitized;
+  return sanitized.length > 200 ? `${sanitized.slice(0, 200)}...` : sanitized;
 }
 
 /**
@@ -117,7 +115,8 @@ class AgBashServer {
                     properties: {
                       snapshot: {
                         type: "string",
-                        description: "The base64 encoded snapshot state to restore.",
+                        description:
+                          "The base64 encoded snapshot state to restore.",
                       },
                     },
                     required: ["snapshot"],
@@ -199,7 +198,9 @@ class AgBashServer {
             });
           } else if (name === "snapshot") {
             const state = await this.bash.snapshot();
-            const encoded = Buffer.from(JSON.stringify(state)).toString("base64");
+            const encoded = Buffer.from(JSON.stringify(state)).toString(
+              "base64",
+            );
             return this.sendResponse(id, {
               result: {
                 content: [{ type: "text", text: encoded }],
@@ -240,7 +241,9 @@ class AgBashServer {
             await this.bash.applyDelta(delta);
             return this.sendResponse(id, {
               result: {
-                content: [{ type: "text", text: "Delta applied successfully." }],
+                content: [
+                  { type: "text", text: "Delta applied successfully." },
+                ],
               },
             });
           }
@@ -319,9 +322,7 @@ class AgBashServer {
     process.on("SIGINT", () => process.exit(0));
     process.on("SIGTERM", () => process.exit(0));
 
-    console.error(
-      "Ag-Bash MCP server running on stdio (V3)",
-    );
+    console.error("Ag-Bash MCP server running on stdio (V3)");
   }
 }
 

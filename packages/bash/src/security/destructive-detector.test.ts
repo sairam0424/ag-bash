@@ -5,8 +5,8 @@
  * with zero tolerance for false negatives on known dangerous commands.
  */
 import { describe, expect, it } from "vitest";
-import { detectDestructiveCommand } from "./destructive-command-detector.js";
 import { GitTracker } from "../services/GitTracker.js";
+import { detectDestructiveCommand } from "./destructive-command-detector.js";
 
 // ─── Destructive Command Detector ──────────────────────────────────────────
 
@@ -19,7 +19,10 @@ describe("detectDestructiveCommand", () => {
       { cmd: "rm -rf ~", description: "recursive force-remove home" },
       { cmd: "rm -rf /*", description: "recursive force-remove root glob" },
       { cmd: "DROP TABLE users;", description: "SQL DROP TABLE" },
-      { cmd: "drop database production", description: "SQL DROP DATABASE (lowercase)" },
+      {
+        cmd: "drop database production",
+        description: "SQL DROP DATABASE (lowercase)",
+      },
       { cmd: "DROP SCHEMA public", description: "SQL DROP SCHEMA" },
       { cmd: "mkfs.ext4 /dev/sda1", description: "format filesystem" },
       { cmd: "dd if=/dev/zero of=/dev/sda", description: "dd disk overwrite" },
@@ -52,10 +55,16 @@ describe("detectDestructiveCommand", () => {
   describe("HIGH severity — must detect", () => {
     const highCommands: Array<{ cmd: string; description: string }> = [
       { cmd: "git reset --hard", description: "git reset hard" },
-      { cmd: "git reset --hard HEAD~3", description: "git reset hard with ref" },
+      {
+        cmd: "git reset --hard HEAD~3",
+        description: "git reset hard with ref",
+      },
       { cmd: "git push --force origin main", description: "git push force" },
       { cmd: "git push -f", description: "git push -f shorthand" },
-      { cmd: "git clean -fd", description: "git clean force with directory flag" },
+      {
+        cmd: "git clean -fd",
+        description: "git clean force with directory flag",
+      },
       { cmd: "git clean -f", description: "git clean force" },
       { cmd: "git checkout -- .", description: "git checkout discard all" },
       { cmd: "git checkout .", description: "git checkout dot" },
@@ -69,9 +78,15 @@ describe("detectDestructiveCommand", () => {
       { cmd: "chown -R root:root /", description: "chown recursive" },
       { cmd: "TRUNCATE TABLE sessions", description: "SQL TRUNCATE TABLE" },
       { cmd: "DELETE FROM users", description: "DELETE without WHERE" },
-      { cmd: "DELETE FROM logs WHERE 1=1", description: "DELETE with tautology WHERE" },
+      {
+        cmd: "DELETE FROM logs WHERE 1=1",
+        description: "DELETE with tautology WHERE",
+      },
       { cmd: "docker system prune", description: "docker system prune" },
-      { cmd: "docker rm -f $(docker ps -aq)", description: "docker force-remove all containers" },
+      {
+        cmd: "docker rm -f $(docker ps -aq)",
+        description: "docker force-remove all containers",
+      },
     ];
 
     for (const { cmd, description } of highCommands) {
@@ -96,7 +111,10 @@ describe("detectDestructiveCommand", () => {
       { cmd: "echo hello", description: "echo" },
       { cmd: "rm file.txt", description: "rm single file (no -rf)" },
       { cmd: "SELECT * FROM users", description: "SQL SELECT" },
-      { cmd: "DELETE FROM users WHERE id = 5", description: "DELETE with specific WHERE" },
+      {
+        cmd: "DELETE FROM users WHERE id = 5",
+        description: "DELETE with specific WHERE",
+      },
       { cmd: "docker ps", description: "docker ps" },
       { cmd: "chmod 644 file.txt", description: "chmod single file" },
     ];
@@ -291,7 +309,9 @@ describe("GitTracker.classifyCommand", () => {
 
       const destructive = fresh.getDestructiveOps();
       expect(destructive).toHaveLength(2);
-      expect(destructive.every((op) => op.classification === "destructive")).toBe(true);
+      expect(
+        destructive.every((op) => op.classification === "destructive"),
+      ).toBe(true);
     });
   });
 });

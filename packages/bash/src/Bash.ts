@@ -55,6 +55,7 @@ import {
   type InterpreterState,
 } from "./interpreter/index.js";
 import { type ExecutionLimits, resolveLimits } from "./limits.js";
+import type { LSPManager } from "./lsp/LSPManager.js";
 import { SemanticEngine } from "./lsp/semantic-engine.js";
 import { WorkspaceIndexer } from "./lsp/WorkspaceIndexer.js";
 import {
@@ -94,7 +95,6 @@ import type {
   FeatureCoverageWriter,
   TraceCallback,
 } from "./types.js";
-import { LSPManager } from "./lsp/LSPManager.js";
 
 /**
  * Metadata for tracking file state to detect staleness and provide suggestions.
@@ -322,7 +322,9 @@ export class Bash extends EventEmitter {
   private transformPlugins: TransformPlugin<any>[] = [];
   private defaultPersistState: boolean;
   private parserEngine: "legacy" | "tree-sitter";
-  private treeSitterConfig?: NonNullable<BashOptions["parser"]>["treeSitterConfig"];
+  private treeSitterConfig?: NonNullable<
+    BashOptions["parser"]
+  >["treeSitterConfig"];
   private agentic: boolean;
   private debugger?: DebuggerBridge;
   public semanticEngine: SemanticEngine;
@@ -343,7 +345,9 @@ export class Bash extends EventEmitter {
     this.options = options;
     this.nestingDepth = options.agentic?.nestingDepth ?? 0;
     this.services = createDefaultServices(options.services);
-    this.permissionManager = new PermissionManager(options.agentic?.permissionHandler);
+    this.permissionManager = new PermissionManager(
+      options.agentic?.permissionHandler,
+    );
     this.toolbox = new BashToolbox();
     this.initLsp();
     this.fs =
