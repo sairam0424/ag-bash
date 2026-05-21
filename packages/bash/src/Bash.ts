@@ -387,6 +387,10 @@ export class Bash extends EventEmitter {
 
     this.limits = resolveLimits(options.executionLimits);
 
+    this.services.astCache.configure({
+      maxEntries: this.limits.astCacheSize,
+    });
+
     // Create secure fetch: prefer explicit fetch, fall back to network config
     if (options.fetch) {
       this.secureFetch = options.fetch;
@@ -1247,6 +1251,11 @@ export class Bash extends EventEmitter {
       ast,
       metadata,
     };
+  }
+
+  destroy(): void {
+    this.services.sharedBus.destroy();
+    this.services.astCache.clear();
   }
 }
 

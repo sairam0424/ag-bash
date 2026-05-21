@@ -26,7 +26,7 @@ interface ASTCacheStats {
 export class ASTCache {
   private cache: Map<string, { ast: ScriptNode; timestamp: number }> =
     new Map();
-  private maxEntries = 100;
+  private maxEntries = 1000;
   private ttlMs = 3600000;
   private hits = 0;
   private misses = 0;
