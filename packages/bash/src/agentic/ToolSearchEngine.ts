@@ -22,10 +22,13 @@ const MIN_TOKEN_LENGTH = 2;
 /* ------------------------------------------------------------------ */
 
 const SCORE_EXACT_NAME = 0;
+const SCORE_FUZZY_NAME = 8;
 const SCORE_NAME_CONTAINS = 10;
 const SCORE_ALIAS_MATCH = 15;
 const SCORE_SEARCH_HINT = 20;
 const SCORE_DESCRIPTION = 30;
+
+const FUZZY_MAX_DISTANCE = 2;
 
 /** Bonus subtracted per additional keyword match (lower score = better). */
 const MULTI_MATCH_BONUS = 2;
@@ -158,21 +161,28 @@ export class ToolSearchEngine {
     let bestScore = Infinity;
     let bestMatchedOn: SearchResult["matchedOn"] = "name";
 
-    // ---- 2. Name contains any keyword (score 10) -----------------------
+    // ---- 2. Fuzzy name match (score 8) ----------------------------------
+    if (this.levenshtein(queryLower, nameLower) <= FUZZY_MAX_DISTANCE) {
+      bestScore = SCORE_FUZZY_NAME;
+      bestMatchedOn = "name";
+    }
+
+    // ---- 3. Name contains any keyword (score 10) -----------------------
     for (const kw of keywords) {
       if (nameLower.includes(kw)) {
-        bestScore = SCORE_NAME_CONTAINS;
-        bestMatchedOn = "name";
-        break; // name-contains is a single tier; one match is enough
+        if (SCORE_NAME_CONTAINS < bestScore) {
+          bestScore = SCORE_NAME_CONTAINS;
+          bestMatchedOn = "name";
+        }
+        break;
       }
     }
 
-    // ---- 3. Alias match (score 15) -------------------------------------
+    // ---- 4. Alias match (score 15) -------------------------------------
     if (tool.aliases && tool.aliases.length > 0) {
       const aliasesLower = tool.aliases.map((a) => a.toLowerCase());
 
       for (const alias of aliasesLower) {
-        // Exact alias match is strongest alias signal.
         if (alias === queryLower) {
           if (SCORE_ALIAS_MATCH < bestScore) {
             bestScore = SCORE_ALIAS_MATCH;
@@ -180,7 +190,13 @@ export class ToolSearchEngine {
           }
           break;
         }
-        // Partial alias keyword match.
+        if (this.levenshtein(queryLower, alias) <= FUZZY_MAX_DISTANCE) {
+          if (SCORE_FUZZY_NAME < bestScore) {
+            bestScore = SCORE_FUZZY_NAME;
+            bestMatchedOn = "alias";
+          }
+          break;
+        }
         for (const kw of keywords) {
           if (alias.includes(kw)) {
             if (SCORE_ALIAS_MATCH < bestScore) {
@@ -193,7 +209,7 @@ export class ToolSearchEngine {
       }
     }
 
-    // ---- 4. searchHint keyword match (score 20 - bonus) ----------------
+    // ---- 5. searchHint keyword match (score 20 - bonus) ----------------
     if (tool.searchHint) {
       const hintLower = tool.searchHint.toLowerCase();
       let matchCount = 0;
@@ -214,7 +230,7 @@ export class ToolSearchEngine {
       }
     }
 
-    // ---- 5. Description keyword match (score 30 - bonus) ---------------
+    // ---- 6. Description keyword match (score 30 - bonus) ---------------
     const descLower = tool.description.toLowerCase();
     let descMatchCount = 0;
 
@@ -239,5 +255,24 @@ export class ToolSearchEngine {
     }
 
     return { tool, score: bestScore, matchedOn: bestMatchedOn };
+  }
+
+  private levenshtein(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () =>
+      Array(n + 1).fill(0),
+    );
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] =
+          a[i - 1] === b[j - 1]
+            ? dp[i - 1][j - 1]
+            : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+    return dp[m][n];
   }
 }

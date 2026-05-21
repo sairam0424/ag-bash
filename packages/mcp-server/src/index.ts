@@ -42,6 +42,60 @@ class AgBashServer {
     process.stdout.write(`${JSON.stringify(response)}\n`);
   }
 
+  private getPromptMessages(
+    name: string,
+    args: Record<string, string>,
+  ): Array<{ role: string; content: { type: string; text: string } }> | null {
+    switch (name) {
+      case "explain-script":
+        return [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Explain what this bash script does, step by step:\n\n${args.script}`,
+            },
+          },
+        ];
+
+      case "fix-error":
+        return [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `The following bash script produced an error. Suggest how to fix it.\n\nScript:\n${args.script}\n\nError:\n${args.error}`,
+            },
+          },
+        ];
+
+      case "optimize-script":
+        return [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Suggest performance improvements for this bash script. Focus on reducing subshell spawns, unnecessary forks, and inefficient patterns:\n\n${args.script}`,
+            },
+          },
+        ];
+
+      case "security-audit":
+        return [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Audit this bash script for security issues. Check for command injection, unquoted variables, unsafe temp files, and privilege escalation risks:\n\n${args.script}`,
+            },
+          },
+        ];
+
+      default:
+        return null;
+    }
+  }
+
   // biome-ignore lint/suspicious/noExplicitAny: incoming JSON-RPC request object
   private async handleRequest(request: any) {
     const { method, params, id } = request;
@@ -55,6 +109,7 @@ class AgBashServer {
               capabilities: {
                 tools: Object.create(null),
                 resources: { subscribe: true },
+                prompts: Object.create(null),
               },
               serverInfo: {
                 name: "ag-bash",
@@ -281,6 +336,90 @@ class AgBashServer {
               },
             });
           }
+        }
+
+        case "prompts/list": {
+          return this.sendResponse(id, {
+            result: {
+              prompts: [
+                {
+                  name: "explain-script",
+                  description: "Explain what a bash script does",
+                  arguments: [
+                    {
+                      name: "script",
+                      description: "The bash script to explain",
+                      required: true,
+                    },
+                  ],
+                },
+                {
+                  name: "fix-error",
+                  description: "Suggest fixes for a shell error",
+                  arguments: [
+                    {
+                      name: "error",
+                      description: "The error message from the shell",
+                      required: true,
+                    },
+                    {
+                      name: "script",
+                      description:
+                        "The bash script that produced the error",
+                      required: true,
+                    },
+                  ],
+                },
+                {
+                  name: "optimize-script",
+                  description:
+                    "Suggest performance improvements for a bash script",
+                  arguments: [
+                    {
+                      name: "script",
+                      description: "The bash script to optimize",
+                      required: true,
+                    },
+                  ],
+                },
+                {
+                  name: "security-audit",
+                  description:
+                    "Check a bash script for security issues",
+                  arguments: [
+                    {
+                      name: "script",
+                      description: "The bash script to audit",
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          });
+        }
+
+        case "prompts/get": {
+          const promptName = String(params?.name || "");
+          const promptArgs = params?.arguments || {};
+
+          const promptMessages = this.getPromptMessages(
+            promptName,
+            promptArgs,
+          );
+
+          if (!promptMessages) {
+            return this.sendResponse(id, {
+              error: {
+                code: -32602,
+                message: `Prompt not found: ${promptName}`,
+              },
+            });
+          }
+
+          return this.sendResponse(id, {
+            result: { messages: promptMessages },
+          });
         }
 
         case "ping": {

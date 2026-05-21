@@ -12,7 +12,9 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc --noEmit && pnpm build:bundle && chmod +x dist/index.js",
-    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --minify --outfile=dist/index.js --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip"
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --minify --outfile=dist/index.js --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "mcp",
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.27.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
   }
 }
