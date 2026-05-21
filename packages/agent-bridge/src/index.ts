@@ -141,7 +141,7 @@ export function createAgentBridge(
       >();
       const decoder = new TextDecoder();
       let buffer = "";
-      const isStreaming = false;
+      const _isStreaming = false;
 
       let thinkingTimeout: ReturnType<typeof setTimeout> | null = null;
       let showingThinking = false;
@@ -188,7 +188,7 @@ export function createAgentBridge(
         try {
           const parsed = JSON.parse(tc.result);
           if (tc.toolName === "bash") {
-            if (parsed.stderr && parsed.stderr.trim()) {
+            if (parsed.stderr?.trim()) {
               displayResult = `stderr: ${parsed.stderr}`;
             } else if (parsed.stdout !== undefined) {
               displayResult = parsed.stdout;
@@ -202,7 +202,7 @@ export function createAgentBridge(
           // Keep original
         }
 
-        if (displayResult && displayResult.trim()) {
+        if (displayResult?.trim()) {
           const resultLines = displayResult
             .split("\n")
             .filter((l: string) => l.trim());
@@ -213,7 +213,7 @@ export function createAgentBridge(
           if (resultLines.length > maxToolOutputLines) {
             output += `\n\x1b[2m... (${resultLines.length - maxToolOutputLines} more lines)\x1b[0m`;
           }
-          term.write(formatForTerminal(output) + "\r\n");
+          term.write(`${formatForTerminal(output)}\r\n`);
         }
       };
 
@@ -227,7 +227,7 @@ export function createAgentBridge(
 
         for (const line of lines) {
           const trimmedLine = line.trim();
-          if (!trimmedLine || !trimmedLine.startsWith("data:")) continue;
+          if (!trimmedLine?.startsWith("data:")) continue;
 
           const jsonStr = trimmedLine.slice(5).trim();
           if (jsonStr === "[DONE]") continue;
@@ -302,7 +302,7 @@ export function createAgentBridge(
                 `\x1b[31mError: ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`,
               );
             }
-          } catch (e) {
+          } catch (_e) {
             // Silence parse errors for streaming deltas
           }
         }

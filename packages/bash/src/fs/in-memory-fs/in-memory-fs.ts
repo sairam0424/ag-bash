@@ -68,14 +68,50 @@ function isFileInit(
 
 export class InMemoryFs implements IFileSystem {
   private data: Map<string, FsEntry> = new Map();
+  private childIndex: Map<string, Set<string>> = new Map();
+
+  private addToChildIndex(parentPath: string, childName: string): void {
+    let children = this.childIndex.get(parentPath);
+    if (!children) {
+      children = new Set();
+      this.childIndex.set(parentPath, children);
+    }
+    children.add(childName);
+  }
+
+  private removeFromChildIndex(parentPath: string, childName: string): void {
+    const children = this.childIndex.get(parentPath);
+    if (children) {
+      children.delete(childName);
+    }
+  }
+
+  private rebuildChildIndex(): void {
+    this.childIndex.clear();
+    for (const [path] of this.data.entries()) {
+      if (path === "/") {
+        if (!this.childIndex.has("/")) {
+          this.childIndex.set("/", new Set());
+        }
+        continue;
+      }
+      const parent = dirname(path);
+      const name = path.slice(parent === "/" ? 1 : parent.length + 1);
+      this.addToChildIndex(parent, name);
+      const entry = this.data.get(path);
+      if (entry?.type === "directory" && !this.childIndex.has(path)) {
+        this.childIndex.set(path, new Set());
+      }
+    }
+  }
 
   constructor(initialFiles?: InitialFiles) {
-    // Create root directory
     this.data.set("/", {
       type: "directory",
       mode: DEFAULT_DIR_MODE,
       mtime: new Date(),
     });
+    this.childIndex.set("/", new Set());
 
     if (initialFiles) {
       for (const [path, value] of Object.entries(initialFiles)) {
@@ -123,16 +159,22 @@ export class InMemoryFs implements IFileSystem {
     const normalized = normalizePath(path);
     this.checkParentExists(normalized);
 
-    // Store content - convert to Uint8Array for internal storage
     const encoding = getEncoding(options);
     const buffer = toBuffer(content, encoding);
 
+    const isNew = !this.data.has(normalized);
     this.data.set(normalized, {
       type: "file",
       content: buffer,
       mode: metadata?.mode ?? DEFAULT_FILE_MODE,
       mtime: metadata?.mtime ?? new Date(),
     });
+
+    if (isNew) {
+      const parent = dirname(normalized);
+      const name = normalized.slice(parent === "/" ? 1 : parent.length + 1);
+      this.addToChildIndex(parent, name);
+    }
   }
 
   /**
@@ -148,12 +190,19 @@ export class InMemoryFs implements IFileSystem {
     const normalized = normalizePath(path);
     this.checkParentExists(normalized);
 
+    const isNew = !this.data.has(normalized);
     this.data.set(normalized, {
       type: "file",
       lazy,
       mode: metadata?.mode ?? DEFAULT_FILE_MODE,
       mtime: metadata?.mtime ?? new Date(),
     });
+
+    if (isNew) {
+      const parent = dirname(normalized);
+      const name = normalized.slice(parent === "/" ? 1 : parent.length + 1);
+      this.addToChildIndex(parent, name);
+    }
   }
 
   /**
@@ -479,11 +528,10 @@ export class InMemoryFs implements IFileSystem {
       if (entry?.type === "file") {
         throw new Error(`EEXIST: file already exists, mkdir '${path}'`);
       }
-      // Directory already exists
       if (!options?.recursive) {
         throw new Error(`EEXIST: directory already exists, mkdir '${path}'`);
       }
-      return; // With -p, silently succeed if directory exists
+      return;
     }
 
     const parent = dirname(normalized);
@@ -500,6 +548,10 @@ export class InMemoryFs implements IFileSystem {
       mode: DEFAULT_DIR_MODE,
       mtime: new Date(),
     });
+    this.childIndex.set(normalized, new Set());
+
+    const name = normalized.slice(parent === "/" ? 1 : parent.length + 1);
+    this.addToChildIndex(parent, name);
   }
 
   async readdir(path: string): Promise<string[]> {
@@ -516,7 +568,6 @@ export class InMemoryFs implements IFileSystem {
       throw new Error(`ENOENT: no such file or directory, scandir '${path}'`);
     }
 
-    // Follow symlinks to get to the actual directory
     const seen = new Set<string>();
     while (entry && entry.type === "symlink") {
       if (seen.has(normalized)) {
@@ -536,30 +587,30 @@ export class InMemoryFs implements IFileSystem {
       throw new Error(`ENOTDIR: not a directory, scandir '${path}'`);
     }
 
-    const prefix = normalized === "/" ? "/" : `${normalized}/`;
-    const entriesMap = new Map<string, DirentEntry>();
+    const children = this.childIndex.get(normalized);
+    if (!children) {
+      return [];
+    }
 
-    for (const [p, fsEntry] of this.data.entries()) {
-      if (p === normalized) continue;
-      if (p.startsWith(prefix)) {
-        const rest = p.slice(prefix.length);
-        const name = rest.split("/")[0];
-        // Only add direct children (no nested paths)
-        if (name && !rest.includes("/", name.length) && !entriesMap.has(name)) {
-          entriesMap.set(name, {
-            name,
-            isFile: fsEntry.type === "file",
-            isDirectory: fsEntry.type === "directory",
-            isSymbolicLink: fsEntry.type === "symlink",
-          });
-        }
+    const results: DirentEntry[] = [];
+    const prefix = normalized === "/" ? "/" : `${normalized}/`;
+    for (const name of children) {
+      const childPath = `${prefix}${name}`;
+      const childEntry = this.data.get(childPath);
+      if (childEntry) {
+        results.push({
+          name,
+          isFile: childEntry.type === "file",
+          isDirectory: childEntry.type === "directory",
+          isSymbolicLink: childEntry.type === "symlink",
+        });
       }
     }
 
-    // Sort using default string comparison (case-sensitive) to match readdir behavior
-    return Array.from(entriesMap.values()).sort((a, b) =>
+    results.sort((a, b) =>
       a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
     );
+    return results;
   }
 
   async rm(path: string, options?: RmOptions): Promise<void> {
@@ -586,6 +637,12 @@ export class InMemoryFs implements IFileSystem {
     }
 
     this.data.delete(normalized);
+    if (entry.type === "directory") {
+      this.childIndex.delete(normalized);
+    }
+    const parent = dirname(normalized);
+    const name = normalized.slice(parent === "/" ? 1 : parent.length + 1);
+    this.removeFromChildIndex(parent, name);
   }
 
   async cp(src: string, dest: string, options?: CpOptions): Promise<void> {
@@ -601,7 +658,7 @@ export class InMemoryFs implements IFileSystem {
 
     if (srcEntry.type === "file") {
       this.checkParentExists(destNorm);
-      // Deep copy: create a new Uint8Array to avoid sharing the buffer reference
+      const isNew = !this.data.has(destNorm);
       if ("content" in srcEntry) {
         const contentCopy =
           srcEntry.content instanceof Uint8Array
@@ -609,13 +666,22 @@ export class InMemoryFs implements IFileSystem {
             : srcEntry.content;
         this.data.set(destNorm, { ...srcEntry, content: contentCopy });
       } else {
-        // Lazy file - copy the lazy reference (will be materialized on read)
         this.data.set(destNorm, { ...srcEntry });
       }
+      if (isNew) {
+        const parent = dirname(destNorm);
+        const name = destNorm.slice(parent === "/" ? 1 : parent.length + 1);
+        this.addToChildIndex(parent, name);
+      }
     } else if (srcEntry.type === "symlink") {
-      // Copy the symlink itself (not its target)
       this.checkParentExists(destNorm);
+      const isNew = !this.data.has(destNorm);
       this.data.set(destNorm, { ...srcEntry });
+      if (isNew) {
+        const parent = dirname(destNorm);
+        const name = destNorm.slice(parent === "/" ? 1 : parent.length + 1);
+        this.addToChildIndex(parent, name);
+      }
     } else if (srcEntry.type === "directory") {
       if (!options?.recursive) {
         throw new Error(`EISDIR: is a directory, cp '${src}'`);
@@ -673,6 +739,10 @@ export class InMemoryFs implements IFileSystem {
       mode: SYMLINK_MODE,
       mtime: new Date(),
     });
+
+    const parent = dirname(normalized);
+    const name = normalized.slice(parent === "/" ? 1 : parent.length + 1);
+    this.addToChildIndex(parent, name);
   }
 
   // Create a hard link
@@ -704,14 +774,16 @@ export class InMemoryFs implements IFileSystem {
     }
 
     this.checkParentExists(newNorm);
-    // For hard links, we create a copy (simulating inode sharing)
-    // In a real fs, they'd share the same inode
     this.data.set(newNorm, {
       type: "file",
       content: (resolved as FileEntry).content,
       mode: resolved.mode,
       mtime: resolved.mtime,
     });
+
+    const parent = dirname(newNorm);
+    const name = newNorm.slice(parent === "/" ? 1 : parent.length + 1);
+    this.addToChildIndex(parent, name);
   }
 
   // Read the target of a symbolic link
@@ -792,10 +864,8 @@ export class InMemoryFs implements IFileSystem {
       throw new Error("Invalid snapshot: expected Map");
     }
 
-    // Clear and restore
     this.data.clear();
     for (const [path, entry] of snapshot.entries()) {
-      // Deep copy back to internal state
       const entryCopy = { ...(entry as FsEntry) };
       if (entryCopy.type === "file" && "content" in entryCopy) {
         if (entryCopy.content instanceof Uint8Array) {
@@ -804,5 +874,6 @@ export class InMemoryFs implements IFileSystem {
       }
       this.data.set(path, entryCopy);
     }
+    this.rebuildChildIndex();
   }
 }

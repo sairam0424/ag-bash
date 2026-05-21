@@ -36,9 +36,22 @@ export interface Observation {
   context?: Record<string, unknown>;
 }
 
+/**
+ * The result of executing a bash command or script.
+ * Check `exitCode` for success (0) or failure (non-zero).
+ *
+ * @example
+ * ```ts
+ * const { stdout, stderr, exitCode, observations } = await bash.exec("ls /tmp");
+ * if (exitCode !== 0) console.error(stderr);
+ * ```
+ */
 export interface ExecResult {
+  /** Standard output produced by the command. */
   stdout: string;
+  /** Standard error produced by the command. */
   stderr: string;
+  /** Process exit code: 0 = success, non-zero = failure. */
   exitCode: number;
   /** The final environment variables after execution (only set by Bash.exec) */
   env?: Record<string, string>;
@@ -49,7 +62,7 @@ export interface ExecResult {
    * When not set, the redirect system uses UTF-8 for non-ASCII text.
    */
   stdoutEncoding?: "binary";
-  /** Structured observations about the execution (Ag-Trace) */
+  /** Structured observations about failures — agents use these for self-correction. */
   observations?: Observation[];
   /** Reasoning effort level applied as a context modifier for subsequent turns */
   effort?: "low" | "medium" | "high";

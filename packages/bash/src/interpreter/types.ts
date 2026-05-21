@@ -418,6 +418,9 @@ export interface InterpreterState
   sessionId?: string;
   /** Current mode of the shell (execute or plan) */
   mode: BashMode;
+
+  /** Trap handlers: signal/event name -> command string */
+  trapHandlers?: Map<string, string>;
 }
 
 export interface InterpreterContext {

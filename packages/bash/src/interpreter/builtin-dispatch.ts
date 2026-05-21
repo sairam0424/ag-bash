@@ -14,6 +14,7 @@ import {
 } from "../security/defense-in-depth-box.js";
 import type { CommandContext, ExecResult } from "../types.js";
 import {
+  handleAlias,
   handleBreak,
   handleCd,
   handleCompgen,
@@ -39,6 +40,8 @@ import {
   handleSet,
   handleShift,
   handleSource,
+  handleTrap,
+  handleUnalias,
   handleUnset,
 } from "./builtins/index.js";
 import { handleShopt } from "./builtins/shopt.js";
@@ -187,6 +190,9 @@ export async function dispatchBuiltin(
   if (commandName === "readonly") {
     return handleReadonly(ctx, args);
   }
+  if (commandName === "trap") {
+    return handleTrap(ctx, args);
+  }
   // User-defined functions override most builtins (except special ones above)
   // This needs to happen before true/false/let which are regular builtins
   if (!skipFunctions) {
@@ -217,6 +223,12 @@ export async function dispatchBuiltin(
   }
   if (commandName === "builtin") {
     return handleBuiltinBuiltin(dispatchCtx, args, stdin);
+  }
+  if (commandName === "alias") {
+    return handleAlias(ctx, args);
+  }
+  if (commandName === "unalias") {
+    return handleUnalias(ctx, args);
   }
   if (commandName === "shopt") {
     return handleShopt(ctx, args);

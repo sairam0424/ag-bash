@@ -98,4 +98,18 @@ export class SharedStateBus {
     this.listeners.clear();
     this.state.clear();
   }
+
+  destroy(): void {
+    this.listeners.clear();
+    this.state.clear();
+    this.onError = undefined;
+  }
+
+  subscriberCount(): number {
+    let count = 0;
+    for (const callbacks of this.listeners.values()) {
+      count += callbacks.size;
+    }
+    return count;
+  }
 }

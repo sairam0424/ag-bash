@@ -66,7 +66,7 @@ export class FetchAgentAdapter implements AgentAdapter {
 
         for (const line of lines) {
           const trimmedLine = line.trim();
-          if (!trimmedLine || !trimmedLine.startsWith("data:")) continue;
+          if (!trimmedLine?.startsWith("data:")) continue;
 
           const jsonStr = trimmedLine.slice(5).trim();
           if (jsonStr === "[DONE]") continue;

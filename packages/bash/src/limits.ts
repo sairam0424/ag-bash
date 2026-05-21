@@ -105,6 +105,9 @@ export interface ExecutionLimits {
 
   /** Maximum web fetch cache size in bytes (default: 50MB) */
   maxWebFetchCacheSizeBytes?: number;
+
+  /** Maximum AST cache entries (default: 1000) */
+  astCacheSize?: number;
 }
 
 /**
@@ -145,6 +148,7 @@ const DEFAULT_LIMITS: Required<ExecutionLimits> = {
   maxCronFiresPerHour: 60,
   maxWebSearchesPerMinute: 10,
   maxWebFetchCacheSizeBytes: 52428800, // 50MB
+  astCacheSize: 1000,
 };
 
 /**
@@ -215,5 +219,6 @@ export function resolveLimits(
     maxWebFetchCacheSizeBytes:
       userLimits.maxWebFetchCacheSizeBytes ??
       DEFAULT_LIMITS.maxWebFetchCacheSizeBytes,
+    astCacheSize: userLimits.astCacheSize ?? DEFAULT_LIMITS.astCacheSize,
   };
 }

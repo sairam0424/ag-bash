@@ -1204,7 +1204,7 @@ export class BashToolbox {
           if (input.path) args.push("--path", JSON.stringify(input.path));
           if (input.sort) args.push("--sort", input.sort);
           if (input.limit) args.push("--limit", String(input.limit));
-          const result = await bash.exec("ag-glob " + args.join(" "));
+          const result = await bash.exec(`ag-glob ${args.join(" ")}`);
           return result.stdout.trim().split("\n").filter(Boolean);
         },
       }),

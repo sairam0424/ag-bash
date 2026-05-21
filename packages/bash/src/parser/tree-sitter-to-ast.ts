@@ -5,6 +5,9 @@ import {
   type CaseItemNode,
   type CommandNode,
   type CompoundCommandNode,
+  type CondBinaryOperator,
+  type ConditionalExpressionNode,
+  type CondUnaryOperator,
   type IfClause,
   type PipelineNode,
   type RedirectionNode,
@@ -19,11 +22,7 @@ import {
  * Handles node mapping, source location tracking, and bash-specific syntax quirks.
  */
 export class TreeSitterToAst {
-  private readonly source: string;
-
-  constructor(source: string) {
-    this.source = source;
-  }
+  constructor(_source: string) {}
 
   /**
    * Convert a complete Tree-sitter tree to a ScriptNode.
@@ -521,11 +520,19 @@ export class TreeSitterToAst {
           }
         }
 
+        let terminator: ";;" | ";&" | ";;&" = ";;";
+        for (let i = 0; i < child.childCount; i++) {
+          const tok = child.child(i)!;
+          if (!tok.isNamed && (tok.type === ";;&" || tok.type === ";&" || tok.type === ";;")) {
+            terminator = tok.type as ";;" | ";&" | ";;&";
+          }
+        }
+
         items.push({
           type: "CaseItem",
           patterns,
           body: this.convertList(bodyNode),
-          terminator: ";;", // TODO: extract from CST
+          terminator,
           line: child.startPosition.row + 1,
         });
       }
@@ -573,11 +580,125 @@ export class TreeSitterToAst {
     };
   }
 
-  private convertConditionalCommand(_node: Node): CommandNode | null {
-    // [[ ... ]]
-    // Simplified for now, just capturing the text for the expander/interpreter
-    // In a real implementation we might want a full CondNode tree
-    return null;
+  private convertConditionalCommand(node: Node): CommandNode | null {
+    const exprNode = node.namedChildren.find(
+      (c) =>
+        c.type === "binary_expression" ||
+        c.type === "unary_expression" ||
+        c.type === "parenthesized_expression" ||
+        c.type === "word" ||
+        c.type === "string" ||
+        c.type === "raw_string" ||
+        c.type === "concatenation" ||
+        c.type === "simple_expansion" ||
+        c.type === "expansion" ||
+        c.type === "command_substitution" ||
+        c.type === "negation",
+    );
+
+    if (!exprNode) {
+      return null;
+    }
+
+    const expression = this.convertCondExpression(exprNode);
+    return AST.conditionalCommand(expression, [], node.startPosition.row + 1);
+  }
+
+  private convertCondExpression(node: Node): ConditionalExpressionNode {
+    switch (node.type) {
+      case "binary_expression":
+        return this.convertCondBinary(node);
+      case "unary_expression":
+        return this.convertCondUnary(node);
+      case "parenthesized_expression": {
+        const inner = node.namedChildren[0];
+        if (inner) {
+          return {
+            type: "CondGroup",
+            expression: this.convertCondExpression(inner),
+          };
+        }
+        return { type: "CondWord", word: AST.word([AST.literal("")]) };
+      }
+      default:
+        return { type: "CondWord", word: this.convertWord(node) };
+    }
+  }
+
+  private convertCondBinary(node: Node): ConditionalExpressionNode {
+    const operatorNode = node.childForFieldName("operator");
+    const leftNode = node.childForFieldName("left");
+    const rightNode = node.childForFieldName("right");
+
+    if (!operatorNode || !leftNode) {
+      return { type: "CondWord", word: this.convertWord(node) };
+    }
+
+    const op =
+      operatorNode.type === "test_operator"
+        ? operatorNode.text
+        : operatorNode.type;
+
+    if (op === "&&") {
+      const left = this.convertCondExpression(leftNode);
+      const right = rightNode
+        ? this.convertCondExpression(rightNode)
+        : { type: "CondWord" as const, word: AST.word([AST.literal("")]) };
+      return { type: "CondAnd", left, right };
+    }
+
+    if (op === "||") {
+      const left = this.convertCondExpression(leftNode);
+      const right = rightNode
+        ? this.convertCondExpression(rightNode)
+        : { type: "CondWord" as const, word: AST.word([AST.literal("")]) };
+      return { type: "CondOr", left, right };
+    }
+
+    const left = this.convertWord(leftNode);
+    const right = rightNode
+      ? this.convertWord(rightNode)
+      : AST.word([AST.literal("")]);
+
+    const normalizedOp = op === "=" ? "==" : op;
+
+    return {
+      type: "CondBinary",
+      operator: normalizedOp as CondBinaryOperator,
+      left,
+      right,
+    };
+  }
+
+  private convertCondUnary(node: Node): ConditionalExpressionNode {
+    const operatorNode = node.childForFieldName("operator");
+    const operand = node.namedChildren.find((c) => c !== operatorNode);
+
+    if (!operatorNode) {
+      return { type: "CondWord", word: this.convertWord(node) };
+    }
+
+    const op =
+      operatorNode.type === "test_operator"
+        ? operatorNode.text
+        : operatorNode.type;
+
+    if (op === "!") {
+      const inner = operand
+        ? this.convertCondExpression(operand)
+        : { type: "CondWord" as const, word: AST.word([AST.literal("")]) };
+      return { type: "CondNot", operand: inner };
+    }
+
+    const word = operand
+      ? this.convertWord(operand)
+      : AST.word([AST.literal("")]);
+
+    return {
+      type: "CondUnary",
+      operator: op as CondUnaryOperator,
+      operand: word,
+    };
   }
 
   private convertList(node: Node | null): StatementNode[] {

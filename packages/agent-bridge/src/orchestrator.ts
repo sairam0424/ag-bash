@@ -1,4 +1,4 @@
-import { type Bash, InterpreterState } from "@ag-bash/bash";
+import type { Bash } from "@ag-bash/bash";
 import type { AgentAdapter } from "./adapters.js";
 import {
   formatForTerminal,
@@ -87,8 +87,7 @@ export class AgentOrchestrator {
       try {
         const parsed = JSON.parse(tc.result);
         if (tc.toolName === "bash") {
-          if (parsed.stderr && parsed.stderr.trim())
-            displayResult = `stderr: ${parsed.stderr}`;
+          if (parsed.stderr?.trim()) displayResult = `stderr: ${parsed.stderr}`;
           else if (parsed.stdout !== undefined) displayResult = parsed.stdout;
 
           if (parsed.observations && parsed.observations.length > 0) {
@@ -251,7 +250,7 @@ export class AgentOrchestrator {
         }
       } catch {}
 
-      if (displayResult && displayResult.trim()) {
+      if (displayResult?.trim()) {
         const resultLines = displayResult.split("\n").filter((l) => l.trim());
         const linesToShow = resultLines.slice(0, maxToolOutputLines);
         let output = linesToShow
@@ -260,7 +259,7 @@ export class AgentOrchestrator {
         if (resultLines.length > maxToolOutputLines) {
           output += `\n\x1b[2m... (${resultLines.length - maxToolOutputLines} more lines)\x1b[0m`;
         }
-        writer.write(formatForTerminal(output) + "\r\n");
+        writer.write(`${formatForTerminal(output)}\r\n`);
       }
     };
 
@@ -360,7 +359,7 @@ export class AgentOrchestrator {
       }
 
       clearThinking(false);
-      if (lineBuffer) writer.write(formatForTerminal(lineBuffer + "\r\n"));
+      if (lineBuffer) writer.write(formatForTerminal(`${lineBuffer}\r\n`));
 
       this.messages.push({
         id: `msg-${++this.messageIdCounter}`,

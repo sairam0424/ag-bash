@@ -90,6 +90,7 @@ import {
   testResult,
   throwExecutionLimit,
 } from "./helpers/result.js";
+import { OutputBuffer } from "./helpers/output-buffer.js";
 import { isPosixSpecialBuiltin } from "./helpers/shell-constants.js";
 import {
   isWordLiteralMatch,
@@ -159,6 +160,8 @@ export interface InterpreterOptions {
  */
 export class Interpreter {
   private ctx: InterpreterContext;
+  private estimatedMemoryBytes = 0;
+  private statementsSinceMemoryCheck = 0;
 
   constructor(options: InterpreterOptions, state: InterpreterState) {
     this.ctx = {
@@ -253,15 +256,15 @@ export class Interpreter {
   async executeScript(node: ScriptNode): Promise<ExecResult> {
     this.assertDefenseContext("execution");
 
-    let stdout = "";
-    let stderr = "";
+    const stdoutBuf = new OutputBuffer();
+    const stderrBuf = new OutputBuffer();
     let exitCode = 0;
     const observations: Observation[] = [];
     const maxOutputSize = this.ctx.limits.maxOutputSize;
 
     const appendOutput = (nextStdout: string, nextStderr: string): void => {
       if (
-        stdout.length + stderr.length + nextStdout.length + nextStderr.length >
+        stdoutBuf.length + stderrBuf.length + nextStdout.length + nextStderr.length >
         maxOutputSize
       ) {
         throwExecutionLimit(
@@ -269,8 +272,8 @@ export class Interpreter {
           "output_size",
         );
       }
-      stdout += nextStdout;
-      stderr += nextStderr;
+      stdoutBuf.push(nextStdout);
+      stderrBuf.push(nextStderr);
     };
 
     for (const statement of node.statements) {
@@ -284,28 +287,23 @@ export class Interpreter {
         this.ctx.state.lastExitCode = exitCode;
         this.ctx.state.env.set("?", String(exitCode));
       } catch (error) {
-        // ExitError always propagates up to terminate the script
-        // This allows 'eval exit 42' and 'source exit.sh' to exit properly
         if (error instanceof ExitError) {
-          error.prependOutput(stdout, stderr);
+          error.prependOutput(stdoutBuf.toString(), stderrBuf.toString());
           throw error;
         }
-        // PosixFatalError terminates the script in POSIX mode
-        // POSIX 2.8.1: special builtins cause shell to exit on error
         if (error instanceof PosixFatalError) {
           appendOutput(error.stdout, error.stderr);
           exitCode = error.exitCode;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
           return {
-            stdout,
-            stderr,
+            stdout: stdoutBuf.toString(),
+            stderr: stderrBuf.toString(),
             exitCode,
             env: mapToRecord(this.ctx.state.env),
             observations,
           };
         }
-        // ExecutionLimitError must always propagate - these are safety limits
         const errorName = error instanceof Error ? error.name : "";
         if (
           error instanceof ExecutionLimitError ||
@@ -319,8 +317,8 @@ export class Interpreter {
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
           return {
-            stdout,
-            stderr,
+            stdout: stdoutBuf.toString(),
+            stderr: stderrBuf.toString(),
             exitCode,
             env: mapToRecord(this.ctx.state.env),
             observations,
@@ -332,8 +330,8 @@ export class Interpreter {
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
           return {
-            stdout,
-            stderr,
+            stdout: stdoutBuf.toString(),
+            stderr: stderrBuf.toString(),
             exitCode,
             env: mapToRecord(this.ctx.state.env),
             observations: [AgTrace.analyzeError(error)],
@@ -345,50 +343,39 @@ export class Interpreter {
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
           return {
-            stdout,
-            stderr,
+            stdout: stdoutBuf.toString(),
+            stderr: stderrBuf.toString(),
             exitCode,
             env: mapToRecord(this.ctx.state.env),
             observations: [AgTrace.analyzeError(error)],
           };
         }
-        // ArithmeticError in expansion (e.g., echo $((42x))) - the command fails
-        // but the script continues execution. This matches bash behavior.
         if (error instanceof ArithmeticError) {
           appendOutput(error.stdout, error.stderr);
           exitCode = 1;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          // Continue to next statement instead of terminating script
           continue;
         }
-        // BraceExpansionError for invalid ranges (e.g., {z..A} mixed case) - the command fails
-        // but the script continues execution. This matches bash behavior.
         if (error instanceof BraceExpansionError) {
           appendOutput(error.stdout, error.stderr);
           exitCode = 1;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          // Continue to next statement instead of terminating script
           continue;
         }
-        // Handle break/continue errors
         if (error instanceof BreakError || error instanceof ContinueError) {
-          // If we're inside a loop, propagate the error up (for eval/source inside loops)
           if (this.ctx.state.loopDepth > 0) {
-            error.prependOutput(stdout, stderr);
+            error.prependOutput(stdoutBuf.toString(), stderrBuf.toString());
             throw error;
           }
-          // Outside loops (level exceeded loop depth), silently continue with next statement
           appendOutput(error.stdout, error.stderr);
           continue;
         }
-        // Handle return - prepend accumulated output before propagating
         if (error instanceof ReturnError) {
-          error.prependOutput(stdout, stderr);
+          error.prependOutput(stdoutBuf.toString(), stderrBuf.toString());
           throw error;
         }
-        // Handle SecurityViolationError - must re-throw to reach Bash.exec
         if (
           error instanceof SecurityViolationError ||
           errorName === "SecurityViolationError"
@@ -400,8 +387,8 @@ export class Interpreter {
     }
 
     return {
-      stdout,
-      stderr,
+      stdout: stdoutBuf.toString(),
+      stderr: stderrBuf.toString(),
       exitCode,
       env: mapToRecord(this.ctx.state.env),
       observations,
@@ -449,10 +436,14 @@ export class Interpreter {
       }
 
       // Performance: Memory accounting
-      const memUsage = this.estimateMemoryUsage();
-      if (memUsage > this.ctx.limits.maxMemoryAccountingBytes) {
+      this.statementsSinceMemoryCheck++;
+      if (this.statementsSinceMemoryCheck >= 100) {
+        this.estimatedMemoryBytes = this.estimateMemoryUsage();
+        this.statementsSinceMemoryCheck = 0;
+      }
+      if (this.estimatedMemoryBytes > this.ctx.limits.maxMemoryAccountingBytes) {
         throwExecutionLimit(
-          `memory limit exceeded: ${Math.round(memUsage / 1024 / 1024)}MB exceeds ${Math.round(this.ctx.limits.maxMemoryAccountingBytes / 1024 / 1024)}MB limit`,
+          `memory limit exceeded: ${Math.round(this.estimatedMemoryBytes / 1024 / 1024)}MB exceeds ${Math.round(this.ctx.limits.maxMemoryAccountingBytes / 1024 / 1024)}MB limit`,
           "memory",
         );
       }

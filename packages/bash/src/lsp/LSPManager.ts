@@ -34,7 +34,7 @@ export class LSPManager {
         rootUri: null,
       });
       connection.sendNotification("initialized", {});
-    } catch (error) {
+    } catch (_error) {
       // Silently swallow — LSP init failure is non-fatal
     }
   }
@@ -53,7 +53,7 @@ export class LSPManager {
 
     try {
       return await connection.sendRequest(request.method, request.params);
-    } catch (error) {
+    } catch (_error) {
       // Silently swallow — caller receives null as the fallback
       return null;
     }

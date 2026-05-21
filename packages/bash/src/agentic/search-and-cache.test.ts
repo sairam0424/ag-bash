@@ -90,7 +90,7 @@ describe("ToolSearchEngine", () => {
     // It should match on name-contains (10) or alias (15) — WebFetch has alias "fetch"
     // Alias exact match beats name-contains, but "fetch" also substring-matches the name
     // Name-contains (10) < Alias (15), so best score should be 10
-    expect(webFetchResult!.score).toBe(10);
+    expect(webFetchResult?.score).toBe(10);
   });
 
   // -----------------------------------------------------------------------
@@ -101,8 +101,8 @@ describe("ToolSearchEngine", () => {
     const results = engine.search(tools, "regex");
     const grepResult = results.find((r) => r.tool.name === "Grep");
     expect(grepResult).toBeDefined();
-    expect(grepResult!.score).toBe(20);
-    expect(grepResult!.matchedOn).toBe("searchHint");
+    expect(grepResult?.score).toBe(20);
+    expect(grepResult?.matchedOn).toBe("searchHint");
   });
 
   // -----------------------------------------------------------------------
@@ -113,8 +113,8 @@ describe("ToolSearchEngine", () => {
     const results = engine.search(tools, "internet");
     const webFetchResult = results.find((r) => r.tool.name === "WebFetch");
     expect(webFetchResult).toBeDefined();
-    expect(webFetchResult!.score).toBe(30);
-    expect(webFetchResult!.matchedOn).toBe("description");
+    expect(webFetchResult?.score).toBe(30);
+    expect(webFetchResult?.matchedOn).toBe("description");
   });
 
   // -----------------------------------------------------------------------
@@ -228,9 +228,9 @@ describe("WebCache", () => {
 
     const entry = cache.get("https://example.com/data");
     expect(entry).not.toBeNull();
-    expect(entry!.content).toBe("hello world");
-    expect(entry!.contentType).toBe("text/plain");
-    expect(entry!.statusCode).toBe(200);
+    expect(entry?.content).toBe("hello world");
+    expect(entry?.contentType).toBe("text/plain");
+    expect(entry?.statusCode).toBe(200);
   });
 
   // -----------------------------------------------------------------------
@@ -341,13 +341,13 @@ describe("WebCache", () => {
     // URL normalization. Both forms normalize to the same href.
     const entry = cache.get("https://example.com/path/");
     expect(entry).not.toBeNull();
-    expect(entry!.content).toBe("normalized content");
+    expect(entry?.content).toBe("normalized content");
 
     // Root URL normalization: trailing slash removed
     cache.put("https://Example.COM/", "root content");
     const rootEntry = cache.get("https://example.com");
     expect(rootEntry).not.toBeNull();
-    expect(rootEntry!.content).toBe("root content");
+    expect(rootEntry?.content).toBe("root content");
   });
 
   // -----------------------------------------------------------------------
@@ -381,7 +381,7 @@ describe("WebCache", () => {
 
     const entry = cache.get("https://example.com/update");
     expect(entry).not.toBeNull();
-    expect(entry!.content).toBe("version 2");
+    expect(entry?.content).toBe("version 2");
 
     // Only one entry should exist
     expect(cache.stats().entries).toBe(1);

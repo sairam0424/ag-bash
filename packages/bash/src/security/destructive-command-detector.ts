@@ -91,7 +91,7 @@ const CRITICAL_RULES: DetectionRule[] = [
               if (seg === "..") resolved.pop();
               else if (seg !== ".") resolved.push(seg);
             }
-            const canonical = "/" + resolved.join("/");
+            const canonical = `/${resolved.join("/")}`;
             if (canonical === "/" || canonical === "") return true;
           }
         }

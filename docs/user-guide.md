@@ -121,17 +121,22 @@ const testShell = new Bash({ services: mockServices });
 Ag-Bash operates on three foundational pillars:
 
 ### OverlayFS (The Mirror Filesystem)
-Ag-Bash uses a **Copy-on-Write (CoW)** filesystem. 
+
+Ag-Bash uses a **Copy-on-Write (CoW)** filesystem.
+
 - **Read**: It mirrors your local project files exactly.
-- **Write**: All modifications stay in a virtual memory layer. 
+- **Write**: All modifications stay in a virtual memory layer.
 - **Benefit**: Your real codebase is never accidentally deleted by an agent, but the agent *thinks* it is working on real files.
 
 ### Agentic Healer
+
 When a command fails, Ag-Bash doesn't just error out. It performs a semantic analysis of the failure and provides **LLM-ready observations**.
+
 - **Fuzzy Matching**: Detects typos in variables and provides "Did you mean?" suggestions for commands and file paths using Levenshtein distance.
 - **Nexus Intelligence**: Uses structural analysis to suggest fixes for missing functions or misconfigured scripts.
 
 ### Defense-in-Depth
+
 Ag-Bash implements absolute isolation using WASM runtimes. Even if an agent tries to run malicious code, it is trapped within the virtual machine.
 
 ---
