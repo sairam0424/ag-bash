@@ -19,11 +19,7 @@ import {
  * Handles node mapping, source location tracking, and bash-specific syntax quirks.
  */
 export class TreeSitterToAst {
-  private readonly source: string;
-
-  constructor(source: string) {
-    this.source = source;
-  }
+  constructor(_source: string) {}
 
   /**
    * Convert a complete Tree-sitter tree to a ScriptNode.
