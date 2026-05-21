@@ -42,7 +42,7 @@ export const agTaskCommand: Command = {
 
     switch (subcommand) {
       case "create": {
-        const subject = args
+        const _subject = args
           .slice(1)
           .filter(
             (a) =>

@@ -6,11 +6,11 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { AgentMemory, type MemoryScope } from "./AgentMemory.js";
+import { AgentMemory } from "./AgentMemory.js";
 import { CronScheduler, matchesCron } from "./CronScheduler.js";
 import { GitTracker } from "./GitTracker.js";
 import { type BusEvent, SharedStateBus } from "./SharedStateBus.js";
-import { TaskManager, type TaskStatus } from "./TaskManager.js";
+import { TaskManager } from "./TaskManager.js";
 import { TeamManager } from "./TeamManager.js";
 import { WorktreeManager } from "./WorktreeManager.js";
 
@@ -113,11 +113,11 @@ describe("TaskManager", () => {
 
     // pending -> in_progress
     tm.update(task.id, { status: "in_progress" });
-    expect(tm.get(task.id)!.status).toBe("in_progress");
+    expect(tm.get(task.id)?.status).toBe("in_progress");
 
     // in_progress -> completed
     tm.update(task.id, { status: "completed" });
-    expect(tm.get(task.id)!.status).toBe("completed");
+    expect(tm.get(task.id)?.status).toBe("completed");
   });
 
   it("rejects invalid status transitions", () => {
@@ -143,7 +143,7 @@ describe("TaskManager", () => {
     const task = tm.create({ subject: "X", description: "" });
     tm.update(task.id, { status: "failed" });
     tm.update(task.id, { status: "pending" });
-    expect(tm.get(task.id)!.status).toBe("pending");
+    expect(tm.get(task.id)?.status).toBe("pending");
   });
 
   it("merges metadata on update", () => {
@@ -153,7 +153,7 @@ describe("TaskManager", () => {
       metadata: { a: 1 },
     });
     tm.update(task.id, { metadata: { b: 2 } });
-    expect(tm.get(task.id)!.metadata).toEqual({ a: 1, b: 2 });
+    expect(tm.get(task.id)?.metadata).toEqual({ a: 1, b: 2 });
   });
 
   it("throws when updating a nonexistent task", () => {
@@ -168,8 +168,8 @@ describe("TaskManager", () => {
 
     tm.update(a.id, { addBlocks: [b.id] });
 
-    expect(tm.get(a.id)!.blocks).toContain(b.id);
-    expect(tm.get(b.id)!.blockedBy).toContain(a.id);
+    expect(tm.get(a.id)?.blocks).toContain(b.id);
+    expect(tm.get(b.id)?.blockedBy).toContain(a.id);
   });
 
   it("sets up blocking relationships via addBlockedBy", () => {
@@ -178,8 +178,8 @@ describe("TaskManager", () => {
 
     tm.update(b.id, { addBlockedBy: [a.id] });
 
-    expect(tm.get(b.id)!.blockedBy).toContain(a.id);
-    expect(tm.get(a.id)!.blocks).toContain(b.id);
+    expect(tm.get(b.id)?.blockedBy).toContain(a.id);
+    expect(tm.get(a.id)?.blocks).toContain(b.id);
   });
 
   it("does not duplicate block entries", () => {
@@ -189,8 +189,8 @@ describe("TaskManager", () => {
     tm.update(a.id, { addBlocks: [b.id] });
     tm.update(a.id, { addBlocks: [b.id] }); // duplicate
 
-    expect(tm.get(a.id)!.blocks.filter((x) => x === b.id)).toHaveLength(1);
-    expect(tm.get(b.id)!.blockedBy.filter((x) => x === a.id)).toHaveLength(1);
+    expect(tm.get(a.id)?.blocks.filter((x) => x === b.id)).toHaveLength(1);
+    expect(tm.get(b.id)?.blockedBy.filter((x) => x === a.id)).toHaveLength(1);
   });
 
   it("auto-unblocks tasks when all blockers complete", () => {
@@ -205,12 +205,12 @@ describe("TaskManager", () => {
     // Complete first blocker — blocked task should remain blocked
     tm.update(blocker1.id, { status: "in_progress" });
     tm.update(blocker1.id, { status: "completed" });
-    expect(tm.get(blocked.id)!.status).toBe("blocked");
+    expect(tm.get(blocked.id)?.status).toBe("blocked");
 
     // Complete second blocker — blocked task should auto-unblock to pending
     tm.update(blocker2.id, { status: "in_progress" });
     tm.update(blocker2.id, { status: "completed" });
-    expect(tm.get(blocked.id)!.status).toBe("pending");
+    expect(tm.get(blocked.id)?.status).toBe("pending");
   });
 
   it("auto-unblocks when a blocker fails (not just completes)", () => {
@@ -221,7 +221,7 @@ describe("TaskManager", () => {
     tm.update(blocked.id, { status: "blocked" });
 
     tm.update(blocker.id, { status: "failed" });
-    expect(tm.get(blocked.id)!.status).toBe("pending");
+    expect(tm.get(blocked.id)?.status).toBe("pending");
   });
 
   // ── Delete & cleanup ────────────────────────────────────────────
@@ -234,7 +234,7 @@ describe("TaskManager", () => {
     tm.delete(a.id);
 
     expect(tm.get(a.id)).toBeUndefined();
-    expect(tm.get(b.id)!.blockedBy).not.toContain(a.id);
+    expect(tm.get(b.id)?.blockedBy).not.toContain(a.id);
   });
 
   it("returns false when deleting a nonexistent task", () => {
@@ -276,7 +276,7 @@ describe("TaskManager", () => {
     tm2.loadFromJSON(json);
 
     expect(tm2.get(a.id)).toBeDefined();
-    expect(tm2.get(a.id)!.subject).toBe("A");
+    expect(tm2.get(a.id)?.subject).toBe("A");
   });
 });
 
@@ -377,17 +377,17 @@ describe("TeamManager", () => {
 
     tm.addAgentToTeam("squad", "agent-1");
     tm.addAgentToTeam("squad", "agent-2");
-    expect(tm.getTeam(team.id)!.agents).toContain("agent-1");
-    expect(tm.getTeam(team.id)!.agents).toContain("agent-2");
+    expect(tm.getTeam(team.id)?.agents).toContain("agent-1");
+    expect(tm.getTeam(team.id)?.agents).toContain("agent-2");
 
     // Adding duplicate should be idempotent
     tm.addAgentToTeam("squad", "agent-1");
     expect(
-      tm.getTeam(team.id)!.agents.filter((a) => a === "agent-1"),
+      tm.getTeam(team.id)?.agents.filter((a) => a === "agent-1"),
     ).toHaveLength(1);
 
     tm.removeAgentFromTeam("squad", "agent-1");
-    expect(tm.getTeam(team.id)!.agents).not.toContain("agent-1");
+    expect(tm.getTeam(team.id)?.agents).not.toContain("agent-1");
   });
 
   it("throws when adding agent to nonexistent team", () => {
@@ -502,7 +502,7 @@ describe("AgentMemory", () => {
 
     const read = mem.read("coder", "project", "greeting");
     expect(read).toBeDefined();
-    expect(read!.value).toBe("hello");
+    expect(read?.value).toBe("hello");
   });
 
   it("returns undefined for nonexistent entries", () => {
@@ -530,9 +530,9 @@ describe("AgentMemory", () => {
     mem.write("coder", "user", "key", "coder-user");
     mem.write("tester", "project", "key", "tester-project");
 
-    expect(mem.read("coder", "project", "key")!.value).toBe("coder-project");
-    expect(mem.read("coder", "user", "key")!.value).toBe("coder-user");
-    expect(mem.read("tester", "project", "key")!.value).toBe("tester-project");
+    expect(mem.read("coder", "project", "key")?.value).toBe("coder-project");
+    expect(mem.read("coder", "user", "key")?.value).toBe("coder-user");
+    expect(mem.read("tester", "project", "key")?.value).toBe("tester-project");
   });
 
   // ── List by type / scope ────────────────────────────────────────
@@ -591,7 +591,7 @@ describe("AgentMemory", () => {
     const mem2 = new AgentMemory();
     mem2.loadFromJSON(json);
 
-    expect(mem2.read("coder", "project", "greeting")!.value).toBe("hello");
+    expect(mem2.read("coder", "project", "greeting")?.value).toBe("hello");
   });
 });
 
@@ -1020,7 +1020,7 @@ describe("CronScheduler", () => {
     cs2.loadFromJSON(json);
 
     expect(cs2.getJob(job.id)).toBeDefined();
-    expect(cs2.getJob(job.id)!.prompt).toBe("saved");
+    expect(cs2.getJob(job.id)?.prompt).toBe("saved");
   });
 });
 
@@ -1087,13 +1087,13 @@ describe("WorktreeManager", () => {
 
     expect(entered.name).toBe("feat");
     expect(wm.getActive()).toBeDefined();
-    expect(wm.getActive()!.name).toBe("feat");
+    expect(wm.getActive()?.name).toBe("feat");
   });
 
   it("enters a worktree by ID", () => {
     const wt = wm.createWorktree({ name: "feat2", originalCwd: "/home" });
     wm.enterWorktree(wt.id);
-    expect(wm.getActive()!.id).toBe(wt.id);
+    expect(wm.getActive()?.id).toBe(wt.id);
   });
 
   it("throws when entering a nonexistent worktree", () => {
@@ -1113,7 +1113,7 @@ describe("WorktreeManager", () => {
 
     const result = wm.exitWorktree();
     expect(result).not.toBeNull();
-    expect(result!.originalCwd).toBe("/my/project");
+    expect(result?.originalCwd).toBe("/my/project");
     expect(wm.getActive()).toBeUndefined();
   });
 

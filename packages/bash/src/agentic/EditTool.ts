@@ -51,7 +51,7 @@ export const EditTool: ToolboxTool = buildTool({
       throw new Error(`File not found: ${args.filePath}`);
     }
 
-    const currentContent = await bash.fs.readFile(path, "utf8");
+    const _currentContent = await bash.fs.readFile(path, "utf8");
 
     // Hash verification
     if (args.expectedHash) {

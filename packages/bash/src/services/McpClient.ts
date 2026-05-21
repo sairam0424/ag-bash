@@ -102,7 +102,7 @@ class StdioTransport implements McpTransport {
               this.pendingRequests.delete(response.id);
             }
           }
-        } catch (e) {
+        } catch (_e) {
           // Silently swallow malformed JSON-RPC response
         }
       }

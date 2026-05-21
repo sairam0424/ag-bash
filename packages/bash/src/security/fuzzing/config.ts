@@ -129,9 +129,9 @@ export function createFuzzConfig(
  */
 export function createDefaultProgressLogger(): FuzzProgressCallback {
   return (progress: FuzzProgress) => {
-    const elapsed = (progress.elapsedMs / 1000).toFixed(1);
+    const _elapsed = (progress.elapsedMs / 1000).toFixed(1);
     const rate = progress.current / (progress.elapsedMs / 1000);
-    const eta =
+    const _eta =
       rate > 0 ? ((progress.total - progress.current) / rate).toFixed(1) : "?";
 
     // Silent: library code must not write to console.
@@ -224,11 +224,11 @@ export function createProgressReporter(
       if (config.onProgress) {
         config.onProgress(progress);
       } else {
-        const elapsed = (elapsedMs / 1000).toFixed(1);
+        const _elapsed = (elapsedMs / 1000).toFixed(1);
         const rate = current / (elapsedMs / 1000);
-        const eta =
+        const _eta =
           rate > 0 ? ((config.numRuns - current) / rate).toFixed(1) : "?";
-        const prefix = testName ? `[${testName}] ` : "";
+        const _prefix = testName ? `[${testName}] ` : "";
         // Silent: no onProgress callback provided; do not log to console.
       }
     }

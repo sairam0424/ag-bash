@@ -53,8 +53,8 @@ describe("Tool Registration", () => {
     for (const name of EXPECTED_TOOLS) {
       const tool = bash.toolbox.getTool(name);
       expect(tool, `Tool "${name}" not found via getTool()`).toBeDefined();
-      expect(tool!.description.length).toBeGreaterThan(0);
-      expect(tool!.parameters).toBeDefined();
+      expect(tool?.description.length).toBeGreaterThan(0);
+      expect(tool?.parameters).toBeDefined();
     }
   });
 });
@@ -62,7 +62,7 @@ describe("Tool Registration", () => {
 // ─── Task Management Tools ──────────────────────────────────────────────────
 
 describe("Task Management Tools", () => {
-  let taskId: string;
+  let _taskId: string;
 
   it("task_create - should create a task with subject and description", async () => {
     const result = await bash.toolbox.callTool(bash, "task_create", {
@@ -72,7 +72,7 @@ describe("Task Management Tools", () => {
     expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("subject", "Write unit tests");
     expect(result).toHaveProperty("status", "pending");
-    taskId = result.id;
+    _taskId = result.id;
   });
 
   it("task_list - should return an array containing the created task", async () => {
@@ -281,7 +281,7 @@ describe("Intelligence Tools", () => {
     // results since InMemoryFs starts empty, or an exec error which is still valid)
     const tool = bash.toolbox.getTool("glob_files");
     expect(tool).toBeDefined();
-    expect(tool!.name).toBe("glob_files");
+    expect(tool?.name).toBe("glob_files");
 
     // Call it — the result may be empty or an error string depending on
     // whether ag-glob is registered, but callTool should not throw
@@ -295,7 +295,7 @@ describe("Intelligence Tools", () => {
 // ─── Automation Tools ───────────────────────────────────────────────────────
 
 describe("Automation Tools", () => {
-  let cronJobId: string;
+  let _cronJobId: string;
 
   it("cron_create - should create a cron job and return id, cron, recurring", async () => {
     const result = await bash.toolbox.callTool(bash, "cron_create", {
@@ -305,7 +305,7 @@ describe("Automation Tools", () => {
     expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("cron", "*/5 * * * *");
     expect(result).toHaveProperty("recurring", true);
-    cronJobId = result.id;
+    _cronJobId = result.id;
   });
 
   it("cron_list - should return array with the created job", async () => {

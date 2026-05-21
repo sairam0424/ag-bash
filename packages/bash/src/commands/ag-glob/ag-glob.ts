@@ -80,7 +80,7 @@ export const agGlobCommand: Command = {
 
       if (!stat.isDirectory) {
         // Compute relative path from the search root for matching
-        const relativePath = currentPath.startsWith(absPath + "/")
+        const relativePath = currentPath.startsWith(`${absPath}/`)
           ? currentPath.slice(absPath.length + 1)
           : currentPath === absPath
             ? currentPath.split("/").pop() || ""

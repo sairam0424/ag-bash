@@ -273,7 +273,7 @@ class AgBashServer {
                 contents: [{ uri, text: content }],
               },
             });
-          } catch (e) {
+          } catch (_e) {
             return this.sendResponse(id, {
               error: {
                 code: -32602,
@@ -313,7 +313,7 @@ class AgBashServer {
         try {
           const request = JSON.parse(line);
           this.handleRequest(request);
-        } catch (e) {
+        } catch (_e) {
           console.error("Failed to parse JSON-RPC message");
         }
       }

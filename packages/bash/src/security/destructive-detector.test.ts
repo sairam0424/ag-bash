@@ -33,7 +33,7 @@ describe("detectDestructiveCommand", () => {
       it(`detects "${cmd}" — ${description}`, () => {
         const result = detectDestructiveCommand(cmd);
         expect(result).not.toBeNull();
-        expect(result!.severity).toBe("critical");
+        expect(result?.severity).toBe("critical");
       });
     }
 
@@ -46,7 +46,7 @@ describe("detectDestructiveCommand", () => {
       // This matches the general rm -rf HIGH rule, not the CRITICAL root-path rule.
       // If CRITICAL detection of path-traversal targets is required, the
       // detector needs path-canonicalisation logic.
-      expect(["critical", "high"]).toContain(result!.severity);
+      expect(["critical", "high"]).toContain(result?.severity);
     });
   });
 
@@ -93,7 +93,7 @@ describe("detectDestructiveCommand", () => {
       it(`detects "${cmd}" — ${description}`, () => {
         const result = detectDestructiveCommand(cmd);
         expect(result).not.toBeNull();
-        expect(result!.severity).toBe("high");
+        expect(result?.severity).toBe("high");
       });
     }
   });
@@ -132,57 +132,57 @@ describe("detectDestructiveCommand", () => {
   describe("Category classification", () => {
     it("classifies rm commands as 'file'", () => {
       const result = detectDestructiveCommand("rm -rf /");
-      expect(result!.category).toBe("file");
+      expect(result?.category).toBe("file");
     });
 
     it("classifies DROP commands as 'database'", () => {
       const result = detectDestructiveCommand("DROP TABLE users;");
-      expect(result!.category).toBe("database");
+      expect(result?.category).toBe("database");
     });
 
     it("classifies TRUNCATE as 'database'", () => {
       const result = detectDestructiveCommand("TRUNCATE TABLE sessions");
-      expect(result!.category).toBe("database");
+      expect(result?.category).toBe("database");
     });
 
     it("classifies DELETE FROM as 'database'", () => {
       const result = detectDestructiveCommand("DELETE FROM users");
-      expect(result!.category).toBe("database");
+      expect(result?.category).toBe("database");
     });
 
     it("classifies mkfs as 'system'", () => {
       const result = detectDestructiveCommand("mkfs.ext4 /dev/sda1");
-      expect(result!.category).toBe("system");
+      expect(result?.category).toBe("system");
     });
 
     it("classifies dd as 'system'", () => {
       const result = detectDestructiveCommand("dd if=/dev/zero of=/dev/sda");
-      expect(result!.category).toBe("system");
+      expect(result?.category).toBe("system");
     });
 
     it("classifies fork bomb as 'system'", () => {
       const result = detectDestructiveCommand(":(){ :|:& };:");
-      expect(result!.category).toBe("system");
+      expect(result?.category).toBe("system");
     });
 
     it("classifies git commands as 'git'", () => {
       const result = detectDestructiveCommand("git reset --hard");
-      expect(result!.category).toBe("git");
+      expect(result?.category).toBe("git");
     });
 
     it("classifies docker commands as 'container'", () => {
       const result = detectDestructiveCommand("docker system prune");
-      expect(result!.category).toBe("container");
+      expect(result?.category).toBe("container");
     });
 
     it("classifies chmod -R 777 as 'file'", () => {
       const result = detectDestructiveCommand("chmod -R 777 /var");
-      expect(result!.category).toBe("file");
+      expect(result?.category).toBe("file");
     });
 
     it("classifies chown -R as 'file'", () => {
       const result = detectDestructiveCommand("chown -R root:root /");
-      expect(result!.category).toBe("file");
+      expect(result?.category).toBe("file");
     });
   });
 
@@ -200,19 +200,19 @@ describe("detectDestructiveCommand", () => {
     it("detects DROP TABLE case-insensitively", () => {
       const result = detectDestructiveCommand("Drop Table users;");
       expect(result).not.toBeNull();
-      expect(result!.severity).toBe("critical");
+      expect(result?.severity).toBe("critical");
     });
 
     it("detects TRUNCATE TABLE case-insensitively", () => {
       const result = detectDestructiveCommand("truncate table sessions");
       expect(result).not.toBeNull();
-      expect(result!.severity).toBe("high");
+      expect(result?.severity).toBe("high");
     });
 
     it("returns the FIRST matching rule (critical before high)", () => {
       // rm -rf / matches both critical and high rm rules; critical must win
       const result = detectDestructiveCommand("rm -rf /");
-      expect(result!.severity).toBe("critical");
+      expect(result?.severity).toBe("critical");
     });
 
     it("detects combined flags rm -rf (not separated)", () => {

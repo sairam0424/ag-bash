@@ -88,7 +88,7 @@ export class LSPConnection extends EventEmitter {
       try {
         const message = JSON.parse(messageJson);
         this.handleMessage(message);
-      } catch (e) {
+      } catch (_e) {
         // Silently swallow malformed LSP message
       }
     }

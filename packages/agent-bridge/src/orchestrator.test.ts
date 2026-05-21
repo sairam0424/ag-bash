@@ -1,6 +1,6 @@
 import type { Bash } from "@ag-bash/bash";
 import { describe, expect, it, vi } from "vitest";
-import { type AgentAdapter, type TerminalWriter, UIMessage } from "./index.js";
+import type { AgentAdapter, TerminalWriter } from "./index.js";
 import { AgentOrchestrator } from "./orchestrator.js";
 
 describe("AgentOrchestrator", () => {
@@ -11,7 +11,7 @@ describe("AgentOrchestrator", () => {
   it("should initialize and handle messages via adapter", async () => {
     const mockAdapter: AgentAdapter = {
       type: "test",
-      async *run(messages) {
+      async *run(_messages) {
         yield { type: "text-delta", delta: "Hello" };
         yield { type: "text-end" };
       },
@@ -40,7 +40,7 @@ describe("AgentOrchestrator", () => {
   it("should process bash commands from adapter", async () => {
     const mockAdapter: AgentAdapter = {
       type: "test",
-      async *run(messages) {
+      async *run(_messages) {
         yield { type: "text-delta", delta: "I will run ls" };
         yield {
           type: "tool-input-available",

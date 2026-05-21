@@ -32,7 +32,7 @@ export class WorkspaceIndexer {
           }
         }
       }
-    } catch (error) {
+    } catch (_error) {
       // Silently swallow — scan failure for a single directory is non-fatal
     }
   }
@@ -80,7 +80,7 @@ export class WorkspaceIndexer {
           // Fallback to basic string-based indexing if needed
         }
       }
-    } catch (error) {
+    } catch (_error) {
       // Silently swallow — index failure for a single file is non-fatal
     }
   }
