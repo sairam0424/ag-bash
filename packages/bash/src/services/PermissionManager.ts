@@ -26,6 +26,17 @@ export interface PermissionRule {
 export class PermissionManager {
   private handler?: PermissionHandler;
   private rules: PermissionRule[] = [];
+  private strictMode = false;
+  private planAllowlist: Set<string> = new Set([
+    "read_file",
+    "glob_files",
+    "search_tools",
+    "list_files",
+    "get_state",
+    "task_list",
+    "task_get",
+    "cron_list",
+  ]);
 
   constructor(handler?: PermissionHandler) {
     this.handler = handler;
@@ -49,6 +60,44 @@ export class PermissionManager {
   }
 
   /**
+   * Enables strict allowlist mode. When enabled and in plan mode,
+   * only tools explicitly in the allowlist can execute. All others are denied.
+   * This prevents bypass of the deny-list via non-standard tool names.
+   */
+  enableStrictMode(): void {
+    this.strictMode = true;
+  }
+
+  /**
+   * Disables strict allowlist mode. Falls back to the default deny-list behavior.
+   */
+  disableStrictMode(): void {
+    this.strictMode = false;
+  }
+
+  /**
+   * Returns whether strict mode is currently enabled.
+   */
+  isStrictMode(): boolean {
+    return this.strictMode;
+  }
+
+  /**
+   * Replaces the plan-mode allowlist with a custom set of tool names.
+   * Only effective when strict mode is enabled.
+   */
+  setAllowedPlanTools(tools: string[]): void {
+    this.planAllowlist = new Set(tools);
+  }
+
+  /**
+   * Returns the current plan-mode allowlist as an array (for inspection/debugging).
+   */
+  getAllowedPlanTools(): string[] {
+    return Array.from(this.planAllowlist);
+  }
+
+  /**
    * Adds a permission rule. Rules added later take precedence (LIFO).
    */
   addRule(rule: PermissionRule): void {
@@ -65,6 +114,19 @@ export class PermissionManager {
     checkFn?: (bash: Bash, args: any) => Promise<PermissionResult>,
   ): Promise<PermissionResult> {
     const path = args?.path || args?.filePath || "";
+
+    // 0. Strict allowlist enforcement in plan mode
+    if (this.strictMode && bash.getMode() === "plan") {
+      if (!this.planAllowlist.has(toolName)) {
+        return {
+          behavior: "deny",
+          message:
+            `[Strict Mode] Tool "${toolName}" is not in the plan-mode allowlist. ` +
+            `Only read-only tools are permitted during plan mode. ` +
+            `Allowed tools: ${Array.from(this.planAllowlist).join(", ")}`,
+        };
+      }
+    }
 
     // 1. Check configured rules first (Hierarchical)
     for (const rule of this.rules) {

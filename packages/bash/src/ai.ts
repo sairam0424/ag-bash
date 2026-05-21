@@ -36,11 +36,20 @@ export interface CreateBashToolOptions {
 }
 
 /**
- * Creates a tool compatible with the Vercel AI SDK (ToolLoopAgent, etc.)
- * that allows an AI agent to execute bash commands in a secure sandbox.
+ * Creates a tool compatible with the Vercel AI SDK that lets an AI agent
+ * run bash commands inside a sandboxed environment.
  *
- * @param options Configuration for the bash tool
- * @returns An object containing the 'bash' tool definition and other granular tools.
+ * @param options - Sandbox instance and optional lifecycle hooks.
+ * @returns An object with a `tools` map (keys are tool names, including "bash").
+ *
+ * @example
+ * ```ts
+ * import { Bash, createBashTool } from "@ag-bash/bash";
+ *
+ * const bash = new Bash({ files: { "/data.json": '{"ok":true}' } });
+ * const { tools } = createBashTool({ sandbox: bash });
+ * // Pass `tools` to your Vercel AI SDK agent
+ * ```
  */
 export function createBashTool(options: CreateBashToolOptions): {
   tools: {

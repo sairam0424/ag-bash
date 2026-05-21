@@ -138,14 +138,32 @@ export interface PermissionHandler {
   ask(message: string): Promise<boolean>;
 }
 
+/**
+ * Configuration for creating a Bash shell instance.
+ *
+ * @example
+ * ```ts
+ * const bash = new Bash({
+ *   cwd: "/project",
+ *   files: { "/project/hello.sh": "echo hello" },
+ *   executionLimits: { maxOutputSize: 1024 * 1024 },
+ * });
+ * ```
+ */
 export interface BashOptions {
-  // Core options (flat for convenience)
+  /** Initial files to populate the virtual filesystem with. */
   files?: InitialFiles;
+  /** Environment variables available to scripts (merged with defaults). */
   env?: Record<string, string>;
+  /** Initial working directory. Defaults to "/". */
   cwd?: string;
+  /** Custom filesystem implementation. Defaults to an in-memory FS. */
   fs?: IFileSystem;
+  /** Which built-in command sets to register (e.g., "grep", "jq"). */
   commands?: CommandName[];
+  /** User-defined commands added to the shell. */
   customCommands?: CustomCommand[];
+  /** Resource limits (output size, execution time, recursion depth). */
   executionLimits?: ExecutionLimits;
   persistState?: boolean;
   sleep?: (ms: number) => Promise<void>;
@@ -160,17 +178,17 @@ export interface BashOptions {
     mountPoint?: string;
   };
 
-  // Runtimes
+  /** WASM-based language runtimes (Python via CPython, JS via QuickJS). */
   runtimes?: {
     python?: boolean;
     javascript?: boolean | JavaScriptConfig;
   };
 
-  // Network
+  /** Network access control: allowlists, transforms, and fetch overrides. */
   network?: NetworkConfig;
   fetch?: SecureFetch;
 
-  // Security
+  /** Sandbox security hardening (defense-in-depth, process identity spoofing). */
   security?: {
     defenseInDepth?: DefenseInDepthConfig | boolean;
     processInfo?: {
@@ -181,7 +199,7 @@ export interface BashOptions {
     };
   };
 
-  // Agentic
+  /** AI agent integration: auto-healing, permission prompts, nesting control. */
   agentic?: {
     enabled?: boolean;
     healer?: AgenticHealerConfig;
@@ -208,7 +226,7 @@ export interface BashOptions {
     semanticEngine?: SemanticEngine;
   };
 
-  // Dependency injection
+  /** Override default service implementations (dependency injection). */
   services?: Partial<ServiceContainer>;
 }
 
@@ -292,6 +310,19 @@ export interface ExecOptions {
   sessionId?: string;
 }
 
+/**
+ * A sandboxed bash shell with a virtual filesystem, built-in commands, and
+ * optional WASM runtimes. Safe to run untrusted scripts — all I/O stays in-memory.
+ *
+ * @example
+ * ```ts
+ * import { Bash } from "@ag-bash/bash";
+ *
+ * const bash = new Bash({ cwd: "/app", files: { "/app/data.txt": "hello" } });
+ * const result = await bash.exec("cat /app/data.txt | wc -c");
+ * console.log(result.stdout); // "6\n"
+ * ```
+ */
 export class Bash extends EventEmitter {
   readonly fs: MountableFs;
   private commands: CommandRegistry = new Map();
