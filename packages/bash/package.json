@@ -34,6 +34,37 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/bundle/browser.js"
       }
+    },
+    "./browser-core": {
+      "browser": "./dist/bundle/browser-core.js",
+      "import": {
+        "types": "./dist/browser-core.d.ts",
+        "default": "./dist/bundle/browser-core.js"
+      }
+    },
+    "./slim": {
+      "import": {
+        "types": "./dist/slim.d.ts",
+        "default": "./dist/bundle/slim.js"
+      }
+    },
+    "./advanced": {
+      "import": {
+        "types": "./dist/advanced.d.ts",
+        "default": "./dist/bundle/advanced.js"
+      }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/bundle/testing.js"
+      }
+    },
+    "./ai": {
+      "import": {
+        "types": "./dist/ai/index.d.ts",
+        "default": "./dist/bundle/ai.js"
+      }
     }
   },
   "bin": {
