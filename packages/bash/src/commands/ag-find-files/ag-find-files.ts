@@ -1,3 +1,4 @@
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 
@@ -58,7 +59,7 @@ export const agFindFilesCommand: Command = {
     } catch (error: any) {
       return {
         stdout: "",
-        stderr: `ag-find-files: ${error.message}\n`,
+        stderr: `ag-find-files: ${sanitizeErrorMessage(error.message)}\n`,
         exitCode: 1,
       };
     }

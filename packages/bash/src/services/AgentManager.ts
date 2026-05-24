@@ -5,6 +5,7 @@
  */
 
 import { Bash } from "../Bash.js";
+import { CowFs } from "../fs/cow-fs.js";
 import type { ExecResult } from "../types.js";
 
 export interface SubAgent {
@@ -49,10 +50,10 @@ export class AgentManager {
       );
     }
 
-    // Inherit configuration from parent (fs, env, etc.)
-    // Note: In a real implementation, we would clone the state or use a shared FS.
+    // Each sub-agent gets an isolated CoW overlay filesystem
+    const agentFs = new CowFs(parentBash.fs);
     const subBash = new Bash({
-      fs: parentBash.fs, // Shared filesystem
+      fs: agentFs,
       env: parentBash.getEnv(),
       cwd: parentBash.getCwd(),
       agentic: {

@@ -1,4 +1,5 @@
 import { minimatch } from "minimatch";
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 import { hasHelpFlag, showHelp } from "../help.js";
@@ -122,7 +123,7 @@ export const agGlobCommand: Command = {
     } catch (error: any) {
       return {
         stdout: "",
-        stderr: `ag-glob: ${error.message}\n`,
+        stderr: `ag-glob: ${sanitizeErrorMessage(error.message)}\n`,
         exitCode: 1,
       };
     }

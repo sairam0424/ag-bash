@@ -1,3 +1,4 @@
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 
@@ -51,18 +52,12 @@ export const agSnapshotCommand: Command = {
             id: snapshotId,
             timestamp: Date.now(),
             cwd: ctx.cwd,
-            env: Object.assign(
-              Object.create(null),
-              Object.fromEntries(ictx.state.env),
-            ),
-            functions: Object.assign(
-              Object.create(null),
-              Object.fromEntries(
-                Array.from(
-                  ictx.state.functions.entries() as [string, any][],
-                ).map(([name, node]) => [name, node]),
-              ),
-            ),
+            env: Object.assign(Object.create(null), Object.fromEntries(ictx.state.env)),
+            functions: Object.assign(Object.create(null), Object.fromEntries(
+              Array.from(
+                ictx.state.functions.entries() as [string, any][],
+              ).map(([name, node]) => [name, node]),
+            )),
             fs: fsSnapshot,
           };
 
@@ -79,7 +74,7 @@ export const agSnapshotCommand: Command = {
         } catch (e: any) {
           return {
             stdout: "",
-            stderr: `ag-snapshot: failed to create: ${e.message}\n`,
+            stderr: `ag-snapshot: failed to create: ${sanitizeErrorMessage(e.message)}\n`,
             exitCode: 1,
           };
         }
@@ -127,7 +122,7 @@ export const agSnapshotCommand: Command = {
         } catch (e: any) {
           return {
             stdout: "",
-            stderr: `ag-snapshot: failed to restore: ${e.message}\n`,
+            stderr: `ag-snapshot: failed to restore: ${sanitizeErrorMessage(e.message)}\n`,
             exitCode: 1,
           };
         }
@@ -152,7 +147,7 @@ export const agSnapshotCommand: Command = {
         } catch (e: any) {
           return {
             stdout: "",
-            stderr: `ag-snapshot: failed to list: ${e.message}\n`,
+            stderr: `ag-snapshot: failed to list: ${sanitizeErrorMessage(e.message)}\n`,
             exitCode: 1,
           };
         }
@@ -184,7 +179,7 @@ export const agSnapshotCommand: Command = {
         } catch (e: any) {
           return {
             stdout: "",
-            stderr: `ag-snapshot: failed to delete: ${e.message}\n`,
+            stderr: `ag-snapshot: failed to delete: ${sanitizeErrorMessage(e.message)}\n`,
             exitCode: 1,
           };
         }

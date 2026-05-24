@@ -4,6 +4,7 @@
  * Usage: ag-spawn <id> <command>
  */
 
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agSpawn: Command = {
@@ -39,7 +40,7 @@ export const agSpawn: Command = {
     } catch (e: any) {
       return {
         stdout: "",
-        stderr: `Spawn failed: ${e.message}\n`,
+        stderr: `Spawn failed: ${sanitizeErrorMessage(e.message)}\n`,
         exitCode: 1,
       };
     }

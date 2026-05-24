@@ -278,4 +278,10 @@ export class GitTracker {
       .filter((op) => op.classification === "destructive")
       .map((op) => ({ ...op }));
   }
+
+  /** Release all resources and clear internal state. */
+  async dispose(): Promise<void> {
+    this.log = [];
+    this.bus = undefined;
+  }
 }

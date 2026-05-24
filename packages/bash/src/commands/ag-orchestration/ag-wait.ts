@@ -4,6 +4,7 @@
  * Usage: ag-wait <id>
  */
 
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agWait: Command = {
@@ -29,7 +30,7 @@ export const agWait: Command = {
 
       return { stdout: output, stderr: "", exitCode: 0 };
     } catch (e: any) {
-      return { stdout: "", stderr: `Wait failed: ${e.message}\n`, exitCode: 1 };
+      return { stdout: "", stderr: `Wait failed: ${sanitizeErrorMessage(e.message)}\n`, exitCode: 1 };
     }
   },
 };

@@ -3,6 +3,7 @@
  */
 
 import type { ChildProcess } from "node:child_process";
+import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import type { ExecutionLimits } from "../limits.js";
 import type { CommandContext } from "../types.js";
 
@@ -113,7 +114,7 @@ class StdioTransport implements McpTransport {
     if (!this.process)
       throw new Error("Transport not initialized. Call init() first.");
     const id = this.nextId++;
-    const envelope = Object.assign({}, message as object, {
+    const envelope = Object.assign(Object.create(null), message as object, {
       id,
       jsonrpc: "2.0",
     });
@@ -198,7 +199,7 @@ export class McpClient {
 
     const response = (await conn.transport.send({
       method: "list_tools",
-      params: {},
+      params: Object.create(null),
     })) as JsonRpcResponse;
 
     if (response.result?.tools) {
@@ -238,7 +239,7 @@ export class McpClient {
     })) as JsonRpcResponse;
 
     if (response.error) {
-      throw new Error(response.error.message || "Unknown MCP error");
+      throw new Error(sanitizeErrorMessage(response.error.message || "Unknown MCP error"));
     }
 
     return response.result;
@@ -254,5 +255,13 @@ export class McpClient {
       conn.transport.close();
       this.connections.delete(id);
     }
+  }
+
+  /** Release all resources and disconnect all servers. */
+  async dispose(): Promise<void> {
+    for (const conn of this.connections.values()) {
+      conn.transport.close();
+    }
+    this.connections.clear();
   }
 }

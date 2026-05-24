@@ -7,6 +7,7 @@
  * - add <path> <type> <content> : Add a new cell (type: code|markdown)
  */
 
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 interface NotebookCell {
@@ -102,7 +103,7 @@ export const agNotebookCommand: Command = {
           const newCell: NotebookCell = {
             cell_type: type,
             source: [source],
-            metadata: {},
+            metadata: Object.create(null),
           };
           if (type === "code") {
             newCell.outputs = [];
@@ -125,7 +126,7 @@ export const agNotebookCommand: Command = {
           };
       }
     } catch (e: any) {
-      return { stdout: "", stderr: `Error: ${e.message}\n`, exitCode: 1 };
+      return { stdout: "", stderr: `Error: ${sanitizeErrorMessage(e.message)}\n`, exitCode: 1 };
     }
   },
 };

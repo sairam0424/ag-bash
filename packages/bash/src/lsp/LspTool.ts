@@ -48,7 +48,7 @@ export const LspTool: ToolboxTool = {
     const manager = bash.services.lspManager;
 
     // Map operation names to LSP methods
-    const methodMap: Record<string, string> = {
+    const methodMap: Record<string, string> = Object.assign(Object.create(null), {
       goToDefinition: "textDocument/definition",
       typeDefinition: "textDocument/typeDefinition",
       implementation: "textDocument/implementation",
@@ -57,7 +57,7 @@ export const LspTool: ToolboxTool = {
       documentSymbol: "textDocument/documentSymbol",
       workspaceSymbol: "workspace/symbol",
       diagnostics: "textDocument/publishDiagnostics", // Note: This is usually a notification, but we might simulate a poll
-    };
+    });
 
     const request = {
       method: methodMap[args.operation],

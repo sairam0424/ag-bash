@@ -9,6 +9,7 @@
 import { Orchestrator } from "../agentic/Orchestrator.js";
 import { LSPManager } from "../lsp/LSPManager.js";
 import { ASTCache } from "../parser/ASTCache.js";
+import { TreeSitterParser } from "../parser/tree-sitter-parser.js";
 import { AgentManager } from "./AgentManager.js";
 import { AgentMemory } from "./AgentMemory.js";
 import { CronScheduler } from "./CronScheduler.js";
@@ -34,6 +35,8 @@ export interface ServiceContainer {
   gitTracker: GitTracker;
   cronScheduler: CronScheduler;
   worktreeManager: WorktreeManager;
+  parser: typeof TreeSitterParser;
+  dispose(): Promise<void>;
 }
 
 export function createDefaultServices(
@@ -52,12 +55,17 @@ export function createDefaultServices(
   cronScheduler.setBus(bus);
   worktreeManager.setBus(bus);
 
+  const sessionManager = overrides?.sessionManager ?? new SessionManager();
+  const mcpClient = overrides?.mcpClient ?? new McpClient();
+
+  let disposed = false;
+
   return {
     astCache: overrides?.astCache ?? new ASTCache(),
     sharedBus: bus,
-    sessionManager: overrides?.sessionManager ?? new SessionManager(),
+    sessionManager,
     agentManager: overrides?.agentManager ?? new AgentManager(),
-    mcpClient: overrides?.mcpClient ?? new McpClient(),
+    mcpClient,
     orchestrator: overrides?.orchestrator ?? new Orchestrator(),
     lspManager: overrides?.lspManager ?? new LSPManager(),
     taskManager,
@@ -66,5 +74,15 @@ export function createDefaultServices(
     gitTracker,
     cronScheduler,
     worktreeManager,
+    parser: overrides?.parser ?? TreeSitterParser,
+    async dispose(): Promise<void> {
+      if (disposed) return;
+      disposed = true;
+      await cronScheduler.dispose();
+      await gitTracker.dispose();
+      await mcpClient.dispose();
+      await sessionManager.dispose();
+      bus.destroy();
+    },
   };
 }
