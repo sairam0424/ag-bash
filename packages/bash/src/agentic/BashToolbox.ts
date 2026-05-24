@@ -1597,6 +1597,7 @@ export class BashToolbox {
       return `Permission Required: ${permission.message || "This operation requires user approval."}`;
     }
 
+    // @banned-pattern-ignore: args comes from Zod-validated tool input, never user-controlled keys
     let effectiveArgs: Record<string, unknown> = args;
     if (permission.behavior === "allow" && permission.updatedInput) {
       effectiveArgs = permission.updatedInput as Record<string, unknown>;
@@ -1644,15 +1645,23 @@ export class BashToolbox {
 
   /**
    * Lightweight Zod to JSON Schema converter.
+   *
+   * Accesses Zod internal `shape` and `_def` properties which lack public type
+   * declarations. We use `unknown` with narrowing where possible and explicit
+   * interface casts for Zod internals that have no public API surface.
    */
-  private zodToJsonSchema(schema: z.ZodType<any>): any {
-    const shape = (schema as any).shape;
-    const properties: any = Object.create(null);
+  private zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaOutput {
+    // ZodObject exposes `.shape` but it is not part of ZodTypeAny's public type.
+    // We access it through a typed interface that reflects the runtime structure.
+    interface ZodObjectLike { shape: Record<string, z.ZodTypeAny> }
+    const objectSchema = schema as unknown as ZodObjectLike;
+    const shape: Record<string, z.ZodTypeAny> = objectSchema.shape ?? (Object.create(null) as Record<string, z.ZodTypeAny>);
+    const properties: Record<string, JsonSchemaPropertyOutput> = Object.create(null);
     const required: string[] = [];
 
     for (const key of Object.keys(shape)) {
       const field = shape[key];
-      const desc = field.description;
+      const desc: string | undefined = field.description;
 
       let type = "string";
       let enumValues: string[] | undefined;
@@ -1665,24 +1674,27 @@ export class BashToolbox {
         type = "boolean";
       } else if (field instanceof z.ZodEnum) {
         type = "string";
-        enumValues = (field as any)._def.values;
+        // ZodEnum stores values in _def.values (string[] at runtime)
+        interface ZodEnumDef { _def: { values: string[] } }
+        enumValues = (field as unknown as ZodEnumDef)._def.values;
       } else if (field instanceof z.ZodOptional) {
-        // Handle optional fields
-        const inner = (field as any)._def.innerType;
+        // Handle optional fields - unwrap to get inner type
+        interface ZodOptionalDef { _def: { innerType: z.ZodTypeAny } }
+        const inner = (field as unknown as ZodOptionalDef)._def.innerType;
         if (inner instanceof z.ZodString) type = "string";
         else if (inner instanceof z.ZodNumber) type = "number";
         else if (inner instanceof z.ZodBoolean) type = "boolean";
         else if (inner instanceof z.ZodEnum) {
           type = "string";
-          enumValues = (inner as any)._def.values;
+          interface ZodEnumDef { _def: { values: string[] } }
+          enumValues = (inner as unknown as ZodEnumDef)._def.values;
         }
       }
 
-      properties[key] = {
-        type,
-        ...(desc && { description: desc }),
-        ...(enumValues && { enum: enumValues }),
-      };
+      const prop: JsonSchemaPropertyOutput = { type };
+      if (desc) prop.description = desc;
+      if (enumValues) prop.enum = enumValues;
+      properties[key] = prop;
 
       if (!(field instanceof z.ZodOptional)) {
         required.push(key);
