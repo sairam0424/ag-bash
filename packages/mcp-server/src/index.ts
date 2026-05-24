@@ -401,7 +401,7 @@ class AgBashServer {
 
         case "prompts/get": {
           const promptName = String(params?.name || "");
-          const promptArgs = params?.arguments || {};
+          const promptArgs = params?.arguments || Object.create(null);
 
           const promptMessages = this.getPromptMessages(
             promptName,
