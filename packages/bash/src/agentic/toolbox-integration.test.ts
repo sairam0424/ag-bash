@@ -10,6 +10,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
 import { InMemoryFs } from "../fs/in-memory-fs/index.js";
 
+/** Helper type for test assertions on callTool results */
+type ToolResult = Record<string, unknown>;
+
 let bash: Bash;
 beforeEach(() => {
   bash = new Bash({ fs: new InMemoryFs(), agentic: { enabled: true } });
@@ -68,11 +71,11 @@ describe("Task Management Tools", () => {
     const result = await bash.toolbox.callTool(bash, "task_create", {
       subject: "Write unit tests",
       description: "Cover all 19 new tools with integration tests",
-    });
+    }) as ToolResult;
     expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("subject", "Write unit tests");
     expect(result).toHaveProperty("status", "pending");
-    _taskId = result.id;
+    _taskId = result.id as string;
   });
 
   it("task_list - should return an array containing the created task", async () => {
@@ -80,24 +83,24 @@ describe("Task Management Tools", () => {
     const created = await bash.toolbox.callTool(bash, "task_create", {
       subject: "List test task",
       description: "A task for the list test",
-    });
+    }) as ToolResult;
 
-    const result = await bash.toolbox.callTool(bash, "task_list", {});
+    const result = await bash.toolbox.callTool(bash, "task_list", {}) as ToolResult[];
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThanOrEqual(1);
-    const found = result.find((t: any) => t.id === created.id);
+    const found = result.find((t: ToolResult) => t.id === created.id);
     expect(found).toBeDefined();
-    expect(found.subject).toBe("List test task");
+    expect(found!.subject).toBe("List test task");
   });
 
   it("task_update - should update task status to in_progress", async () => {
     const created = await bash.toolbox.callTool(bash, "task_create", {
       subject: "Update test task",
       description: "A task to update",
-    });
+    }) as ToolResult;
 
     const result = await bash.toolbox.callTool(bash, "task_update", {
-      taskId: created.id,
+      taskId: created.id as string,
       status: "in_progress",
     });
     expect(result).toHaveProperty("id", created.id);
@@ -108,10 +111,10 @@ describe("Task Management Tools", () => {
     const created = await bash.toolbox.callTool(bash, "task_create", {
       subject: "Get test task",
       description: "A task to retrieve",
-    });
+    }) as ToolResult;
 
     const result = await bash.toolbox.callTool(bash, "task_get", {
-      taskId: created.id,
+      taskId: created.id as string,
     });
     expect(result).toHaveProperty("id", created.id);
     expect(result).toHaveProperty("subject", "Get test task");
@@ -127,16 +130,16 @@ describe("Task Management Tools", () => {
     const created = await bash.toolbox.callTool(bash, "task_create", {
       subject: "Stop test task",
       description: "A task to stop",
-    });
+    }) as ToolResult;
 
     // First move to in_progress (valid transition from pending)
     await bash.toolbox.callTool(bash, "task_update", {
-      taskId: created.id,
+      taskId: created.id as string,
       status: "in_progress",
     });
 
     const result = await bash.toolbox.callTool(bash, "task_stop", {
-      taskId: created.id,
+      taskId: created.id as string,
     });
     expect(result).toHaveProperty("id", created.id);
     expect(result).toHaveProperty("status", "failed");
@@ -246,11 +249,11 @@ describe("Intelligence Tools", () => {
       command: "git reset --hard",
     });
 
-    const log = await bash.toolbox.callTool(bash, "git_audit_log", {});
+    const log = await bash.toolbox.callTool(bash, "git_audit_log", {}) as ToolResult[];
     expect(Array.isArray(log)).toBe(true);
     expect(log.length).toBeGreaterThanOrEqual(2);
 
-    const commands = log.map((op: any) => op.command);
+    const commands = log.map((op: ToolResult) => op.command);
     expect(commands).toContain("git status");
     expect(commands).toContain("git reset --hard");
   });

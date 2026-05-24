@@ -87,6 +87,209 @@ function truncateToLines(text: string, maxLines: number): string {
 }
 
 /**
+ * Detect `grep -m N` match limit for early exit optimization.
+ * Recognizes: grep -m N, grep --max-count=N, grep -N (numeric shorthand).
+ * Returns the match count limit, or null if not detected.
+ */
+function getMatchLimit(command: CommandNode): number | null {
+  if (command.type !== "SimpleCommand" || !command.name) return null;
+
+  const name = getLiteralValue(command.name);
+  if (name !== "grep" && name !== "egrep" && name !== "fgrep") return null;
+
+  const args: string[] = [];
+  for (const arg of command.args) {
+    const val = getLiteralValue(arg);
+    if (val !== null) args.push(val);
+  }
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (arg === "-m" && i + 1 < args.length) {
+      const n = parseInt(args[i + 1], 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+
+    if (arg.startsWith("--max-count=")) {
+      const n = parseInt(arg.slice(12), 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+
+    const match = /^-(\d+)$/.exec(arg);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detect if a command is `wc -l` (line count only).
+ * When detected, the pipeline can count newlines directly instead of
+ * buffering and processing all input through wc.
+ */
+function isLineCountOnly(command: CommandNode): boolean {
+  if (command.type !== "SimpleCommand" || !command.name) return false;
+
+  const name = getLiteralValue(command.name);
+  if (name !== "wc") return false;
+
+  if (command.args.length !== 1) return false;
+
+  const arg = getLiteralValue(command.args[0]);
+  return arg === "-l";
+}
+
+/**
+ * Detect `tail -N` line limit for ring buffer optimization.
+ * Recognizes: tail -N, tail -n N, tail --lines=N.
+ * Returns null if: +N (from start), -f (follow), or file arguments detected.
+ */
+function getTailLimit(command: CommandNode): number | null {
+  if (command.type !== "SimpleCommand" || !command.name) return null;
+
+  const name = getLiteralValue(command.name);
+  if (name !== "tail") return null;
+
+  const args: string[] = [];
+  for (const arg of command.args) {
+    const val = getLiteralValue(arg);
+    if (val !== null) args.push(val);
+  }
+
+  // If -f or --follow is present, bail out (streaming mode)
+  for (const arg of args) {
+    if (arg === "-f" || arg === "--follow" || arg === "-F") return null;
+  }
+
+  let limit: number | null = null;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    // tail -N (shorthand for last N lines)
+    const dashNum = /^-(\d+)$/.exec(arg);
+    if (dashNum) {
+      limit = parseInt(dashNum[1], 10);
+      continue;
+    }
+
+    // tail -nN (combined form)
+    const dashNNum = /^-n(\d+)$/.exec(arg);
+    if (dashNNum) {
+      limit = parseInt(dashNNum[1], 10);
+      continue;
+    }
+
+    // tail --lines=N
+    const linesEq = /^--lines=(.+)$/.exec(arg);
+    if (linesEq) {
+      const val = linesEq[1];
+      // +N means from start, not a tail limit optimization
+      if (val.startsWith("+")) return null;
+      const n = parseInt(val, 10);
+      if (Number.isFinite(n) && n > 0) {
+        limit = n;
+      }
+      continue;
+    }
+
+    // tail -n N (separate argument)
+    if (arg === "-n" && i + 1 < args.length) {
+      const nextVal = args[i + 1];
+      // +N means from start
+      if (nextVal.startsWith("+")) return null;
+      const n = parseInt(nextVal, 10);
+      if (Number.isFinite(n) && n > 0) {
+        limit = n;
+      }
+      i++; // skip next arg
+      continue;
+    }
+
+    // Detect file arguments (non-flag arguments indicate file input, not stdin)
+    if (!arg.startsWith("-") && arg !== "") {
+      return null;
+    }
+  }
+
+  return limit !== null && limit > 0 ? limit : null;
+}
+
+/** Keep only the last N lines from text (ring buffer semantics for tail). */
+function keepLastLines(text: string, n: number): string {
+  if (n <= 0) return "";
+  const lines = text.split("\n");
+  // If text ends with \n, split produces an extra empty element
+  const hasTrailingNewline = text.endsWith("\n");
+  const contentLines = hasTrailingNewline ? lines.slice(0, -1) : lines;
+
+  if (contentLines.length <= n) return text;
+
+  const kept = contentLines.slice(-n);
+  return hasTrailingNewline ? `${kept.join("\n")}\n` : kept.join("\n");
+}
+
+/**
+ * Commands that do NOT read from stdin. When the previous pipeline stage
+ * produced empty output and the next command is NOT in this set (and has no
+ * file arguments), we can short-circuit with empty output.
+ */
+const STDIN_INDEPENDENT: ReadonlySet<string> = new Set([
+  "echo",
+  "printf",
+  "date",
+  "pwd",
+  "true",
+  "false",
+  "hostname",
+  "uname",
+  "whoami",
+  "env",
+  "export",
+]);
+
+/**
+ * Detect if a command is stdin-independent (doesn't read from stdin).
+ * Returns true if the command is in STDIN_INDEPENDENT or has file arguments.
+ */
+function isStdinIndependent(command: CommandNode): boolean {
+  if (command.type !== "SimpleCommand" || !command.name) return false;
+
+  const name = getLiteralValue(command.name);
+  if (name === null) return false;
+
+  if (STDIN_INDEPENDENT.has(name)) return true;
+
+  // Commands with file arguments are also stdin-independent
+  for (const arg of command.args) {
+    const val = getLiteralValue(arg);
+    if (val !== null && !val.startsWith("-") && val !== "") {
+      // Has a positional argument that could be a file — considered stdin-independent
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/** Count newlines in a string without creating intermediate arrays. */
+function countNewlines(text: string): number {
+  let count = 0;
+  let idx = 0;
+  while (idx < text.length) {
+    const nl = text.indexOf("\n", idx);
+    if (nl === -1) break;
+    count++;
+    idx = nl + 1;
+  }
+  return count;
+}
+
+/**
  * Execute a pipeline node (command or sequence of piped commands).
  */
 export async function executePipeline(
@@ -141,43 +344,70 @@ export async function executePipeline(
     const savedEnv = runsInSubshell ? new Map(ctx.state.env) : null;
 
     let result: ExecResult;
-    try {
-      result = await executeCommand(command, stdin);
-    } catch (error) {
-      // BadSubstitutionError should fail the command but not abort the script
-      if (error instanceof BadSubstitutionError) {
+
+    // Optimization B: wc -l streaming counter — count newlines directly
+    // instead of executing the full wc command when only line count is needed.
+    // Only applies to non-first commands in a pipeline (where stdin comes from pipe).
+    const wcLineCountOptimized = !isFirst && isLineCountOnly(command);
+    if (wcLineCountOptimized) {
+      const lineCount = countNewlines(stdin);
+      result = {
+        stdout: `${lineCount}\n`,
+        stderr: "",
+        exitCode: 0,
+      };
+    } else {
+      // Optimization D: Empty stdin short-circuit — when upstream produced
+      // nothing and the command reads from stdin, skip execution.
+      const emptyStdinShortCircuit =
+        !isFirst && stdin === "" && !isStdinIndependent(command);
+
+      if (emptyStdinShortCircuit) {
         result = {
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: 1,
-          observations: error.observations,
-        };
-      }
-      // In a MULTI-command pipeline, each command runs in a subshell context
-      // So exit/return/errexit only affect that segment, not the whole script
-      // For single commands, let these errors propagate to terminate the script
-      else if (error instanceof ExitError && node.commands.length > 1) {
-        result = {
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: error.exitCode,
-          observations: error.observations,
-        };
-      } else if (error instanceof ErrexitError && node.commands.length > 1) {
-        // Errexit inside a pipeline segment should only fail that segment
-        // The pipeline's exit code comes from the last command (or pipefail)
-        result = {
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: error.exitCode,
-          observations: error.observations,
+          stdout: "",
+          stderr: "",
+          exitCode: 0,
         };
       } else {
-        // Restore environment before re-throwing
-        if (savedEnv) {
-          ctx.state.env = savedEnv;
+        try {
+          result = await executeCommand(command, stdin);
+        } catch (error) {
+          // BadSubstitutionError should fail the command but not abort the script
+          if (error instanceof BadSubstitutionError) {
+            result = {
+              stdout: error.stdout,
+              stderr: error.stderr,
+              exitCode: 1,
+              observations: error.observations,
+            };
+          }
+          // In a MULTI-command pipeline, each command runs in a subshell context
+          // So exit/return/errexit only affect that segment, not the whole script
+          // For single commands, let these errors propagate to terminate the script
+          else if (error instanceof ExitError && node.commands.length > 1) {
+            result = {
+              stdout: error.stdout,
+              stderr: error.stderr,
+              exitCode: error.exitCode,
+              observations: error.observations,
+            };
+          } else if (error instanceof ErrexitError && node.commands.length > 1) {
+            // Errexit inside a pipeline segment should only fail that segment
+            // The pipeline's exit code comes from the last command (or pipefail)
+            result = {
+              stdout: error.stdout,
+              stderr: error.stderr,
+              exitCode: error.exitCode,
+              observations: error.observations,
+            };
+          } else {
+            // Restore environment before re-throwing
+            if (savedEnv) {
+              ctx.state.env = savedEnv;
+            }
+            throw error;
+          }
         }
-        throw error;
       }
     }
 
@@ -210,11 +440,25 @@ export async function executePipeline(
         accumulatedStderr += result.stderr;
       }
 
+      const nextCommand = node.commands[i + 1];
+
       // Early termination: if the next command only needs N lines, truncate
       // the piped output to avoid processing unnecessary data downstream.
-      const nextLineLimit = getLineLimit(node.commands[i + 1]);
+      const nextLineLimit = getLineLimit(nextCommand);
       if (nextLineLimit !== null) {
         stdin = truncateToLines(stdin, nextLineLimit + 10);
+      }
+
+      // Optimization A: grep -m N early exit — provide headroom for filtering
+      const nextMatchLimit = getMatchLimit(nextCommand);
+      if (nextMatchLimit !== null) {
+        stdin = truncateToLines(stdin, nextMatchLimit * 10);
+      }
+
+      // Optimization C: tail -N ring buffer — only keep last N lines
+      const nextTailLimit = getTailLimit(nextCommand);
+      if (nextTailLimit !== null) {
+        stdin = keepLastLines(stdin, nextTailLimit);
       }
 
       lastResult = {

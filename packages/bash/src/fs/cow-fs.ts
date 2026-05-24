@@ -13,6 +13,7 @@
  */
 
 import type {
+  BufferEncoding,
   CpOptions,
   DirentEntry,
   FileContent,
@@ -85,7 +86,7 @@ export class CowFs implements IFileSystem {
 
   async readFile(
     path: string,
-    options?: ReadFileOptions | string,
+    options?: ReadFileOptions | BufferEncoding,
   ): Promise<string> {
     const normalized = normalizePath(path);
 
@@ -100,11 +101,11 @@ export class CowFs implements IFileSystem {
           `EISDIR: illegal operation on a directory, read '${path}'`,
         );
       }
-      const encoding = getEncoding(options as any);
+      const encoding = getEncoding(options);
       return fromBuffer(localEntry.content, encoding);
     }
 
-    return this.parent.readFile(path, options as any);
+    return this.parent.readFile(path, options);
   }
 
   async readFileBuffer(path: string): Promise<Uint8Array> {
@@ -130,12 +131,12 @@ export class CowFs implements IFileSystem {
   async writeFile(
     path: string,
     content: FileContent,
-    options?: WriteFileOptions | string,
+    options?: WriteFileOptions | BufferEncoding,
   ): Promise<void> {
     const normalized = normalizePath(path);
     this.ensureParentDirs(normalized);
 
-    const encoding = getEncoding(options as any);
+    const encoding = getEncoding(options);
     const buffer = toBuffer(content, encoding);
 
     this.local.set(normalized, {
@@ -151,10 +152,10 @@ export class CowFs implements IFileSystem {
   async appendFile(
     path: string,
     content: FileContent,
-    options?: WriteFileOptions | string,
+    options?: WriteFileOptions | BufferEncoding,
   ): Promise<void> {
     const normalized = normalizePath(path);
-    const encoding = getEncoding(options as any);
+    const encoding = getEncoding(options);
     const newBuffer = toBuffer(content, encoding);
 
     let existingBuffer: Uint8Array;
@@ -301,7 +302,7 @@ export class CowFs implements IFileSystem {
       if (localPath.startsWith(prefix)) {
         const rest = localPath.slice(prefix.length);
         const name = rest.split("/")[0];
-        if (name && !rest.includes("/", 1)) {
+        if (name && !rest.includes("/")) {
           entries.add(name);
         }
       }

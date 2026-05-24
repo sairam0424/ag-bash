@@ -6,11 +6,14 @@
 
 import { Bash } from "../Bash.js";
 import { CowFs } from "../fs/cow-fs.js";
+import type { IFileSystem } from "../fs/interface.js";
+import { AgentConflictError } from "./AgentConflictError.js";
 import type { ExecResult } from "../types.js";
 
 export interface SubAgent {
   id: string;
   bash: Bash;
+  cowFs: CowFs;
   status: "running" | "completed" | "error";
   promise?: Promise<ExecResult>;
   result?: ExecResult;
@@ -66,6 +69,7 @@ export class AgentManager {
     const agent: SubAgent = {
       id,
       bash: subBash,
+      cowFs: agentFs,
       status: "running",
     };
 
@@ -107,6 +111,48 @@ export class AgentManager {
    */
   listAgents(): SubAgent[] {
     return Array.from(this.agents.values());
+  }
+
+  /**
+   * Merge an agent's filesystem changes back into the parent filesystem.
+   *
+   * Reads each modified path from the agent's CowFs overlay and writes it
+   * to the parent filesystem. Paths that fail to merge are reported as conflicts.
+   */
+  async mergeAgentChanges(
+    agentId: string,
+  ): Promise<{ merged: string[]; conflicts: string[] }> {
+    const agent = this.agents.get(agentId);
+    if (!agent) {
+      throw new Error(`Agent ${agentId} not found`);
+    }
+
+    const cowFs = agent.cowFs;
+    const modifiedPaths = cowFs.getModifiedPaths();
+
+    if (modifiedPaths.size === 0) {
+      return { merged: [], conflicts: [] };
+    }
+
+    const parentFs: IFileSystem = cowFs.getParent();
+    const merged: string[] = [];
+    const conflicts: string[] = [];
+
+    for (const path of modifiedPaths) {
+      try {
+        const content = await cowFs.readFile(path);
+        await parentFs.writeFile(path, content);
+        merged.push(path);
+      } catch {
+        conflicts.push(path);
+      }
+    }
+
+    if (conflicts.length > 0) {
+      throw new AgentConflictError(agentId, conflicts);
+    }
+
+    return { merged, conflicts };
   }
 
   /**

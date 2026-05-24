@@ -1,4 +1,5 @@
 import { Bash } from "@ag-bash/bash";
+import { validateSnapshot, validateDelta } from "./schemas.js";
 
 function sanitizeErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) return "Internal server error";
@@ -222,6 +223,11 @@ class AgBashServer {
             if (result.stdout) output += result.stdout;
             if (result.stderr) output += `\nError:\n${result.stderr}`;
 
+            const MAX_OUTPUT_LENGTH = 1_048_576; // 1MB
+            if (output.length > MAX_OUTPUT_LENGTH) {
+              output = `${output.slice(0, MAX_OUTPUT_LENGTH)}\n[output truncated at 1MB]`;
+            }
+
             return this.sendResponse(id, {
               result: {
                 content: [
@@ -263,10 +269,25 @@ class AgBashServer {
             });
           } else if (name === "restore") {
             const encodedSnapshot = String(args?.snapshot || "");
-            const snapshot = JSON.parse(
+            const parsed = JSON.parse(
               Buffer.from(encodedSnapshot, "base64").toString("utf-8"),
             );
-            await this.bash.restore(snapshot);
+            try {
+              validateSnapshot(parsed);
+            } catch (validationError) {
+              return this.sendResponse(id, {
+                result: {
+                  content: [
+                    {
+                      type: "text",
+                      text: `Validation failed: ${validationError instanceof Error ? validationError.message : String(validationError)}`,
+                    },
+                  ],
+                  isError: true,
+                },
+              });
+            }
+            await this.bash.restore(parsed);
             return this.sendResponse(id, {
               result: {
                 content: [
@@ -276,10 +297,25 @@ class AgBashServer {
             });
           } else if (name === "create_delta") {
             const encodedBase = String(args?.baseSnapshot || "");
-            const base = JSON.parse(
+            const parsedBase = JSON.parse(
               Buffer.from(encodedBase, "base64").toString("utf-8"),
             );
-            const delta = await this.bash.createDelta(base);
+            try {
+              validateSnapshot(parsedBase);
+            } catch (validationError) {
+              return this.sendResponse(id, {
+                result: {
+                  content: [
+                    {
+                      type: "text",
+                      text: `Validation failed: ${validationError instanceof Error ? validationError.message : String(validationError)}`,
+                    },
+                  ],
+                  isError: true,
+                },
+              });
+            }
+            const delta = await this.bash.createDelta(parsedBase);
             const encodedDelta = Buffer.from(JSON.stringify(delta)).toString(
               "base64",
             );
@@ -290,10 +326,25 @@ class AgBashServer {
             });
           } else if (name === "apply_delta") {
             const encodedDelta = String(args?.delta || "");
-            const delta = JSON.parse(
+            const parsedDelta = JSON.parse(
               Buffer.from(encodedDelta, "base64").toString("utf-8"),
             );
-            await this.bash.applyDelta(delta);
+            try {
+              validateDelta(parsedDelta);
+            } catch (validationError) {
+              return this.sendResponse(id, {
+                result: {
+                  content: [
+                    {
+                      type: "text",
+                      text: `Validation failed: ${validationError instanceof Error ? validationError.message : String(validationError)}`,
+                    },
+                  ],
+                  isError: true,
+                },
+              });
+            }
+            await this.bash.applyDelta(parsedDelta);
             return this.sendResponse(id, {
               result: {
                 content: [

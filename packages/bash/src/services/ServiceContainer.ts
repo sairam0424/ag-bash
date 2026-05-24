@@ -78,11 +78,26 @@ export function createDefaultServices(
     async dispose(): Promise<void> {
       if (disposed) return;
       disposed = true;
-      await cronScheduler.dispose();
-      await gitTracker.dispose();
-      await mcpClient.dispose();
-      await sessionManager.dispose();
+
+      const errors: Error[] = [];
+      const services = [cronScheduler, gitTracker, mcpClient, sessionManager];
+
+      for (const svc of services) {
+        try {
+          await svc.dispose();
+        } catch (e: unknown) {
+          errors.push(e instanceof Error ? e : new Error(String(e)));
+        }
+      }
+
       bus.destroy();
+
+      if (errors.length > 0) {
+        throw new AggregateError(
+          errors,
+          `Dispose failed for ${errors.length} service(s)`,
+        );
+      }
     },
   };
 }

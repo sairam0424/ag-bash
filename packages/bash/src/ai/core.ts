@@ -71,20 +71,15 @@ export function buildToolDefinitions(
   // Convert agentic tools into ToolDefinition format
   for (const [name, tool] of Object.entries(agenticTools)) {
     if (name === "bash") continue; // We handle bash separately below
-    const typedTool = tool as {
-      description?: string;
-      inputSchema?: Record<string, unknown>;
-      execute: (args: Record<string, unknown>) => Promise<ToolResult>;
-    };
-    const schema: ToolDefinition["inputSchema"] = (typedTool.inputSchema as unknown as ToolDefinition["inputSchema"]) ?? {
+    const schema: ToolDefinition["inputSchema"] = (tool.inputSchema as unknown as ToolDefinition["inputSchema"]) ?? {
       type: "object",
       properties: Object.create(null),
     };
     definitions.push({
       name,
-      description: typedTool.description ?? "",
+      description: tool.description ?? "",
       inputSchema: schema,
-      execute: typedTool.execute,
+      execute: tool.execute as (args: Record<string, unknown>) => Promise<ToolResult>,
     });
   }
 

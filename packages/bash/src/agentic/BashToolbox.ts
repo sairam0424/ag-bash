@@ -1,10 +1,14 @@
 import { z } from "zod";
 import type { Bash } from "../Bash.js";
+import type { ScriptNode } from "../ast/types.js";
 import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
 import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
 import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
+import { SemanticEngine } from "../lsp/semantic-engine.js";
 import { LspTool } from "../lsp/LspTool.js";
 import { detectDestructiveCommand } from "../security/destructive-command-detector.js";
+import type { MemoryScope } from "../services/AgentMemory.js";
+import type { TaskStatus } from "../services/TaskManager.js";
 import { ConvertTool } from "./ConvertTool.js";
 import { EditTool } from "./EditTool.js";
 import { MultiReplaceTool } from "./MultiReplaceTool.js";
@@ -14,6 +18,64 @@ import { TodoTool } from "./TodoTool.js";
 import { buildTool, type ToolboxTool } from "./Tool.js";
 import { ToolSearchEngine } from "./ToolSearchEngine.js";
 import type { PermissionResult, ValidationResult } from "./types.js";
+
+/**
+ * Minimal JSON Schema interface for MCP tool input schemas.
+ */
+interface JsonSchema {
+  type?: string;
+  properties?: Record<string, JsonSchemaProperty>;
+  required?: string[];
+}
+
+interface JsonSchemaProperty {
+  type?: string;
+  description?: string;
+}
+
+/**
+ * Shape of a todo item stored in the todos JSON file.
+ */
+interface TodoItem {
+  id: string;
+  task: string;
+  status: string;
+}
+
+/**
+ * Shape of an MCP tool descriptor from an MCP connection.
+ */
+interface McpToolDescriptor {
+  name: string;
+  description?: string;
+  inputSchema?: JsonSchema;
+}
+
+/**
+ * Represents a single agentic tool entry returned by getAgenticTools.
+ */
+interface AgenticToolEntry {
+  description: string;
+  inputSchema: JsonSchemaOutput;
+  effort?: "low" | "medium" | "high";
+  composeHooks?: { before?: string[]; after?: string[]; parallel?: string[] };
+  execute: (args: Record<string, unknown>) => Promise<unknown>;
+}
+
+/**
+ * JSON Schema output shape from zodToJsonSchema.
+ */
+interface JsonSchemaOutput {
+  type: "object";
+  properties: Record<string, JsonSchemaPropertyOutput>;
+  required: string[];
+}
+
+interface JsonSchemaPropertyOutput {
+  type: string;
+  description?: string;
+  enum?: string[];
+}
 
 /**
  * Defaults for all tools (fail-closed where it matters).
@@ -71,8 +133,9 @@ export class BashToolbox {
             const content = await bash.fs.readFile(path, "utf-8");
             bash.updateFileState(path, { content });
             return content;
-          } catch (error: any) {
-            return `Error reading file: ${error.message}`;
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return `Error reading file: ${sanitizeErrorMessage(message)}`;
           }
         },
       }),
@@ -98,8 +161,9 @@ export class BashToolbox {
             await bash.saveIndex();
             await bash.lsp.notifyDidChange(path, content);
             return `Successfully wrote to ${path}.`;
-          } catch (error: any) {
-            return `Error writing file ${path}: ${error.message}`;
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return `Error writing file ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
       }),
@@ -117,8 +181,9 @@ export class BashToolbox {
           try {
             const files = await bash.listDirDirect(path);
             return files.join("\n");
-          } catch (error: any) {
-            return `Error listing directory ${path}: ${error.message}`;
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return `Error listing directory ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
       }),
@@ -203,8 +268,9 @@ export class BashToolbox {
             await bash.indexer.indexFile(path);
             await bash.saveIndex();
             return `Successfully edited ${path}.`;
-          } catch (error: any) {
-            return `Error editing file ${path}: ${error.message}`;
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return `Error editing file ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
       }),
@@ -222,14 +288,15 @@ export class BashToolbox {
             const content = await bash.readFileDirect(path);
             const { parse } = await import("../parser/parser.js");
             const ast = parse(content);
-            const { SemanticEngine } = await import("../lsp/semantic-engine.js");
-            const engine = new SemanticEngine(ast as any);
+            // parse() returns a ScriptNode-compatible structure
+            const engine = new SemanticEngine(ast as unknown as ScriptNode);
             return {
               type: "shell",
               symbols: engine.getAllSymbols(),
             };
-          } catch (error: any) {
-            return `Error analyzing file ${path}: ${error.message}`;
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return `Error analyzing file ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
       }),
@@ -329,8 +396,9 @@ export class BashToolbox {
           try {
             const result = await bash.exec(`grep -r "${query}" ${path}`);
             return result.stdout || result.stderr || "No matches found.";
-          } catch (error: any) {
-            return `Error searching in ${path}: ${error.message}`;
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return `Error searching in ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
       }),
@@ -352,8 +420,9 @@ export class BashToolbox {
             await bash.indexer.fullScan(path || "/");
             await bash.saveIndex();
             return "Successfully indexed the workspace.";
-          } catch (error: any) {
-            return `Error indexing workspace: ${error.message}`;
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return `Error indexing workspace: ${sanitizeErrorMessage(message)}`;
           }
         },
       }),
@@ -594,8 +663,8 @@ export class BashToolbox {
         parameters: z.object(EMPTY_SHAPE),
         execute: async (bash: Bash) => {
           return {
-            cwd: (bash as any).state.cwd,
-            env: Array.from((bash as any).state.env.keys()),
+            cwd: bash.getCwd(),
+            env: Object.keys(bash.env),
             limits: bash.limits,
             version: "Ag-Bash vNext",
           };
@@ -729,9 +798,9 @@ export class BashToolbox {
         ) => {
           const todosPath = "/.ag-bash/todos.json";
           await bash.fs.mkdir("/.ag-bash", { recursive: true });
-          let todos: any[] = [];
+          let todos: TodoItem[] = [];
           if (await bash.fs.exists(todosPath)) {
-            todos = JSON.parse(await bash.readFileDirect(todosPath));
+            todos = JSON.parse(await bash.readFileDirect(todosPath)) as TodoItem[];
           }
           const newTodo = {
             id: (todos.length + 1).toString(),
@@ -776,8 +845,8 @@ export class BashToolbox {
           if (!(await bash.fs.exists(todosPath))) {
             return { error: "Todo not found." };
           }
-          const todos = JSON.parse(await bash.readFileDirect(todosPath));
-          const todo = todos.find((t: any) => t.id === id);
+          const todos = JSON.parse(await bash.readFileDirect(todosPath)) as TodoItem[];
+          const todo = todos.find((t: TodoItem) => t.id === id);
           if (!todo) return { error: "Todo not found." };
           todo.status = status;
           await bash.writeFileDirect(todosPath, JSON.stringify(todos, null, 2));
@@ -818,8 +887,8 @@ export class BashToolbox {
     this.registerTool(FindSymbolTool);
     this.registerTool(ExplainTool);
     this.registerTool(TodoTool);
-    this.registerTool(buildTool(WebSearchTool as any));
-    this.registerTool(buildTool(WebFetchTool as any));
+    this.registerTool(WebSearchTool);
+    this.registerTool(WebFetchTool);
     this.registerTool(LspTool);
     this.registerTool(MultiReplaceTool);
     this.registerTool(ConvertTool);
@@ -904,8 +973,9 @@ export class BashToolbox {
                 buildTool({
                   name: namespacedName,
                   description: `[MCP: ${conn.id}] ${tool.description || ""}`,
-                  parameters: z.any(), // MCP schemas are dynamic
-                  execute: async (b, args) => {
+                  // MCP schemas are dynamic; use a passthrough object schema
+                  parameters: z.object(Object.create(null)).passthrough(),
+                  execute: async (b: Bash, args: Record<string, unknown>) => {
                     return await b.services.mcpClient.callTool(
                       conn.id,
                       tool.name,
@@ -985,10 +1055,25 @@ export class BashToolbox {
             .describe("Task IDs that block this task."),
         }),
         execute: async (bash: Bash, input: Record<string, unknown>) => {
-          const { taskId, ...changes } = input;
+          const { taskId, ...rest } = input;
+          const changes: {
+            subject?: string;
+            description?: string;
+            status?: TaskStatus;
+            owner?: string;
+            addBlocks?: string[];
+            addBlockedBy?: string[];
+          } = {
+            subject: rest.subject as string | undefined,
+            description: rest.description as string | undefined,
+            status: rest.status as TaskStatus | undefined,
+            owner: rest.owner as string | undefined,
+            addBlocks: rest.addBlocks as string[] | undefined,
+            addBlockedBy: rest.addBlockedBy as string[] | undefined,
+          };
           const task = bash.services.taskManager.update(
             taskId as string,
-            changes as any,
+            changes,
           );
           return { id: task.id, status: task.status, subject: task.subject };
         },
@@ -1010,7 +1095,10 @@ export class BashToolbox {
           bash: Bash,
           filter: { status?: string; owner?: string },
         ) => {
-          return bash.services.taskManager.list(filter as any);
+          return bash.services.taskManager.list({
+            status: filter.status as TaskStatus | undefined,
+            owner: filter.owner,
+          });
         },
       }),
     );
@@ -1127,7 +1215,7 @@ export class BashToolbox {
         ) => {
           const entry = bash.services.agentMemory.read(
             input.agentType,
-            input.scope as any,
+            input.scope as MemoryScope,
             input.key,
           );
           return (
@@ -1160,7 +1248,7 @@ export class BashToolbox {
         ) => {
           const entry = bash.services.agentMemory.write(
             input.agentType,
-            input.scope as any,
+            input.scope as MemoryScope,
             input.key,
             input.value,
           );
@@ -1418,14 +1506,14 @@ export class BashToolbox {
   public getTool(name: string): ToolboxTool | undefined {
     return this.tools.get(name);
   }
-  registerMcpTools(connectionId: string, tools: any[]): void {
+  registerMcpTools(connectionId: string, tools: McpToolDescriptor[]): void {
     for (const tool of tools) {
       this.registerTool(
         buildTool({
           name: `mcp:${connectionId}:${tool.name}`,
           description: tool.description || `MCP tool from ${connectionId}`,
           parameters: this.jsonSchemaToZod(tool.inputSchema),
-          execute: async (bash: Bash, args: any) => {
+          execute: async (bash: Bash, args: Record<string, unknown>) => {
             return await bash.services.mcpClient.callTool(
               connectionId,
               tool.name,
@@ -1441,17 +1529,18 @@ export class BashToolbox {
   /**
    * Simple JSON Schema to Zod converter for MCP tools.
    */
-  private jsonSchemaToZod(schema: any): z.ZodType<any> {
-    const shape: any = Object.create(null);
-    const props = schema.properties || Object.create(null);
+  private jsonSchemaToZod(schema: JsonSchema | undefined): z.ZodObject<Record<string, z.ZodTypeAny>> {
+    const shape: Record<string, z.ZodTypeAny> = Object.create(null);
+    const props = schema?.properties ?? (Object.create(null) as Record<string, JsonSchemaProperty>);
+    const requiredFields = schema?.required ?? [];
     for (const key of Object.keys(props)) {
       const prop = props[key];
-      let zType: any = z.string();
+      let zType: z.ZodTypeAny = z.string();
       if (prop.type === "number") zType = z.number();
       else if (prop.type === "boolean") zType = z.boolean();
 
       if (prop.description) zType = zType.describe(prop.description);
-      if (!(schema.required || []).includes(key)) {
+      if (!requiredFields.includes(key)) {
         zType = zType.optional();
       }
       shape[key] = zType;
@@ -1461,15 +1550,15 @@ export class BashToolbox {
 
   // Removed duplicate getTools method
 
-  getAgenticTools(bash: Bash): Record<string, any> {
-    const result: Record<string, any> = Object.create(null);
+  getAgenticTools(bash: Bash): Record<string, AgenticToolEntry> {
+    const result: Record<string, AgenticToolEntry> = Object.create(null);
     for (const tool of this.getTools()) {
       result[tool.name] = {
         description: tool.description,
         inputSchema: this.zodToJsonSchema(tool.parameters),
         effort: tool.effort,
         composeHooks: tool.composeHooks,
-        execute: (args: any) => this.callTool(bash, tool.name, args),
+        execute: (args: Record<string, unknown>) => this.callTool(bash, tool.name, args),
       };
     }
     return result;
@@ -1483,11 +1572,7 @@ export class BashToolbox {
    * Orchestrates the tool execution lifecycle:
    * validation -> permissions -> execution.
    */
-  /**
-   * Orchestrates the tool execution lifecycle:
-   * validation -> permissions -> execution.
-   */
-  public async callTool(bash: Bash, toolName: string, args: any): Promise<any> {
+  public async callTool(bash: Bash, toolName: string, args: Record<string, unknown>): Promise<unknown> {
     const tool = this.tools.get(toolName);
     if (!tool) {
       throw new Error(`Tool not found: ${toolName}`);
@@ -1512,20 +1597,23 @@ export class BashToolbox {
       return `Permission Required: ${permission.message || "This operation requires user approval."}`;
     }
 
+    // @banned-pattern-ignore: args comes from Zod-validated tool input, never user-controlled keys
+    let effectiveArgs: Record<string, unknown> = args;
     if (permission.behavior === "allow" && permission.updatedInput) {
-      args = permission.updatedInput;
+      effectiveArgs = permission.updatedInput as Record<string, unknown>;
     }
 
     // 3. Lifecycle Events (Start)
     const startTime = Date.now();
-    bash.emit("tool:start", { name: toolName, args });
+    bash.emit("tool:start", { name: toolName, args: effectiveArgs });
 
     // 4. Execute
-    let result: any;
+    let result: unknown;
     try {
-      result = await tool.execute(bash, args);
-    } catch (error: any) {
-      result = `Execution Error in ${toolName}: ${sanitizeErrorMessage(error.message)}`;
+      result = await tool.execute(bash, effectiveArgs);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      result = `Execution Error in ${toolName}: ${sanitizeErrorMessage(message)}`;
     }
 
     // 5. Lifecycle Events (End)
@@ -1557,15 +1645,23 @@ export class BashToolbox {
 
   /**
    * Lightweight Zod to JSON Schema converter.
+   *
+   * Accesses Zod internal `shape` and `_def` properties which lack public type
+   * declarations. We use `unknown` with narrowing where possible and explicit
+   * interface casts for Zod internals that have no public API surface.
    */
-  private zodToJsonSchema(schema: z.ZodType<any>): any {
-    const shape = (schema as any).shape;
-    const properties: any = Object.create(null);
+  private zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaOutput {
+    // ZodObject exposes `.shape` but it is not part of ZodTypeAny's public type.
+    // We access it through a typed interface that reflects the runtime structure.
+    interface ZodObjectLike { shape: Record<string, z.ZodTypeAny> }
+    const objectSchema = schema as unknown as ZodObjectLike;
+    const shape: Record<string, z.ZodTypeAny> = objectSchema.shape ?? (Object.create(null) as Record<string, z.ZodTypeAny>);
+    const properties: Record<string, JsonSchemaPropertyOutput> = Object.create(null);
     const required: string[] = [];
 
     for (const key of Object.keys(shape)) {
       const field = shape[key];
-      const desc = field.description;
+      const desc: string | undefined = field.description;
 
       let type = "string";
       let enumValues: string[] | undefined;
@@ -1578,24 +1674,27 @@ export class BashToolbox {
         type = "boolean";
       } else if (field instanceof z.ZodEnum) {
         type = "string";
-        enumValues = (field as any)._def.values;
+        // ZodEnum stores values in _def.values (string[] at runtime)
+        interface ZodEnumDef { _def: { values: string[] } }
+        enumValues = (field as unknown as ZodEnumDef)._def.values;
       } else if (field instanceof z.ZodOptional) {
-        // Handle optional fields
-        const inner = (field as any)._def.innerType;
+        // Handle optional fields - unwrap to get inner type
+        interface ZodOptionalDef { _def: { innerType: z.ZodTypeAny } }
+        const inner = (field as unknown as ZodOptionalDef)._def.innerType;
         if (inner instanceof z.ZodString) type = "string";
         else if (inner instanceof z.ZodNumber) type = "number";
         else if (inner instanceof z.ZodBoolean) type = "boolean";
         else if (inner instanceof z.ZodEnum) {
           type = "string";
-          enumValues = (inner as any)._def.values;
+          interface ZodEnumDef { _def: { values: string[] } }
+          enumValues = (inner as unknown as ZodEnumDef)._def.values;
         }
       }
 
-      properties[key] = {
-        type,
-        ...(desc && { description: desc }),
-        ...(enumValues && { enum: enumValues }),
-      };
+      const prop: JsonSchemaPropertyOutput = { type };
+      if (desc) prop.description = desc;
+      if (enumValues) prop.enum = enumValues;
+      properties[key] = prop;
 
       if (!(field instanceof z.ZodOptional)) {
         required.push(key);
