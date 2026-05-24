@@ -36,13 +36,14 @@ export class StreamingExecutor {
     }, timeoutMs);
 
     // Wire up user-provided signal
+    const onAbort = (): void => {
+      controller.abort();
+    };
+
     if (options?.signal) {
       if (options.signal.aborted) {
         controller.abort();
       } else {
-        const onAbort = (): void => {
-          controller.abort();
-        };
         options.signal.addEventListener("abort", onAbort, { once: true });
       }
     }
@@ -152,6 +153,8 @@ export class StreamingExecutor {
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
       }
+      // Remove user signal listener to prevent memory leaks
+      options?.signal?.removeEventListener("abort", onAbort);
       // Ensure the run promise settles (no unhandled rejections)
       await runPromise.catch(() => {
         // Swallow - already handled above
