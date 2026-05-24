@@ -56,10 +56,110 @@ interface JsonRpcResponse {
   error?: { code?: number; message: string };
 }
 
+/** Security configuration for HttpTransport. */
+export interface HttpTransportSecurityConfig {
+  /** Allow requests to private/internal network addresses. Default: false. */
+  allowPrivateNetworks?: boolean;
+}
+
+/** Error thrown when an SSRF-blocked URL is detected. */
+export class McpTransportSecurityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "McpTransportSecurityError";
+  }
+}
+
+/**
+ * Checks whether a URL targets a private or internal IP address.
+ * Used to prevent SSRF attacks via the HttpTransport.
+ */
+function isPrivateUrl(url: string): boolean {
+  const parsed = new URL(url);
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Block localhost variants
+  if (hostname === "localhost" || hostname === "[::1]") {
+    return true;
+  }
+
+  // Block IPv6 loopback and private ranges
+  if (hostname === "::1") {
+    return true;
+  }
+
+  // Strip brackets for IPv6
+  const bare = hostname.startsWith("[") && hostname.endsWith("]")
+    ? hostname.slice(1, -1)
+    : hostname;
+
+  // IPv6 private: fc00::/7 covers fc and fd prefixes
+  if (bare.startsWith("fc") || bare.startsWith("fd")) {
+    return true;
+  }
+
+  // IPv6 loopback
+  if (bare === "::1") {
+    return true;
+  }
+
+  // Parse IPv4 octets
+  const ipv4Parts = bare.split(".");
+  if (ipv4Parts.length === 4) {
+    const octets = ipv4Parts.map(Number);
+    if (octets.some((o) => Number.isNaN(o) || o < 0 || o > 255)) {
+      return false;
+    }
+    const [a, b] = octets;
+
+    // 0.0.0.0
+    if (a === 0 && b === 0 && octets[2] === 0 && octets[3] === 0) {
+      return true;
+    }
+    // 127.0.0.0/8
+    if (a === 127) {
+      return true;
+    }
+    // 10.0.0.0/8
+    if (a === 10) {
+      return true;
+    }
+    // 172.16.0.0/12
+    if (a === 172 && b >= 16 && b <= 31) {
+      return true;
+    }
+    // 192.168.0.0/16
+    if (a === 192 && b === 168) {
+      return true;
+    }
+    // 169.254.0.0/16 (link-local)
+    if (a === 169 && b === 254) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 class HttpTransport implements McpTransport {
-  constructor(private url: string) {}
+  private readonly securityConfig: HttpTransportSecurityConfig;
+
+  constructor(
+    private url: string,
+    securityConfig?: HttpTransportSecurityConfig,
+  ) {
+    this.securityConfig = securityConfig ?? Object.create(null) as HttpTransportSecurityConfig;
+  }
+
   async init(): Promise<void> {}
+
   async send(message: unknown): Promise<unknown> {
+    if (!this.securityConfig.allowPrivateNetworks && isPrivateUrl(this.url)) {
+      throw new McpTransportSecurityError(
+        `SSRF blocked: requests to private/internal network addresses are not allowed (${new URL(this.url).hostname})`,
+      );
+    }
+
     const response = await fetch(this.url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -67,19 +167,34 @@ class HttpTransport implements McpTransport {
     });
     return await response.json();
   }
+
   close(): void {}
+}
+
+/** Configuration options for StdioTransport. */
+export interface StdioTransportOptions {
+  /** Timeout in milliseconds for pending requests. Default: 30000 (30s). */
+  requestTimeoutMs?: number;
 }
 
 class StdioTransport implements McpTransport {
   private process: ChildProcess | null = null;
-  private pendingRequests: Map<number | string, (res: unknown) => void> =
+  private pendingRequests: Map<
+    number | string,
+    { resolve: (res: unknown) => void; reject: (err: Error) => void }
+  > = new Map();
+  private pendingTimeouts: Map<number | string, ReturnType<typeof setTimeout>> =
     new Map();
   private nextId = 1;
+  private readonly requestTimeoutMs: number;
 
   constructor(
     private command: string,
     private args: string[],
-  ) {}
+    options?: StdioTransportOptions,
+  ) {
+    this.requestTimeoutMs = options?.requestTimeoutMs ?? 30_000;
+  }
 
   async init(): Promise<void> {
     const { spawn } = await import("node:child_process");
@@ -97,9 +212,14 @@ class StdioTransport implements McpTransport {
         try {
           const response = JSON.parse(line);
           if (response.id !== undefined) {
-            const resolve = this.pendingRequests.get(response.id);
-            if (resolve) {
-              resolve(response);
+            const pending = this.pendingRequests.get(response.id);
+            if (pending) {
+              const timeout = this.pendingTimeouts.get(response.id);
+              if (timeout !== undefined) {
+                clearTimeout(timeout);
+                this.pendingTimeouts.delete(response.id);
+              }
+              pending.resolve(response);
               this.pendingRequests.delete(response.id);
             }
           }
@@ -119,13 +239,38 @@ class StdioTransport implements McpTransport {
       jsonrpc: "2.0",
     });
 
-    return new Promise((resolve) => {
-      this.pendingRequests.set(id, resolve);
+    return new Promise<unknown>((resolve, reject) => {
+      this.pendingRequests.set(id, { resolve, reject });
+
+      const timeout = setTimeout(() => {
+        this.pendingTimeouts.delete(id);
+        const pending = this.pendingRequests.get(id);
+        if (pending) {
+          this.pendingRequests.delete(id);
+          pending.reject(
+            new Error(
+              `MCP request timed out after ${this.requestTimeoutMs}ms (id: ${id})`,
+            ),
+          );
+        }
+      }, this.requestTimeoutMs);
+
+      this.pendingTimeouts.set(id, timeout);
       this.process?.stdin?.write(`${JSON.stringify(envelope)}\n`);
     });
   }
 
   close(): void {
+    for (const timeout of this.pendingTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+    this.pendingTimeouts.clear();
+
+    for (const pending of this.pendingRequests.values()) {
+      pending.reject(new Error("Transport closed while request was pending"));
+    }
+    this.pendingRequests.clear();
+
     if (this.process) {
       this.process.kill();
     }
@@ -140,6 +285,7 @@ export class McpClient {
     command: string,
     args: string[],
     cmdCtx: CommandContext,
+    options?: StdioTransportOptions,
   ): Promise<McpServerConnection> {
     const bash = cmdCtx.bash;
     if (bash && this.connections.size >= bash.limits.maxMcpServers) {
@@ -148,7 +294,7 @@ export class McpClient {
       );
     }
 
-    const transport = new StdioTransport(command, args);
+    const transport = new StdioTransport(command, args, options);
     await transport.init();
 
     const connection: McpServerConnection = {
@@ -169,6 +315,7 @@ export class McpClient {
     id: string,
     url: string,
     bash?: McpBashLike,
+    securityConfig?: HttpTransportSecurityConfig,
   ): Promise<McpServerConnection> {
     if (bash && this.connections.size >= bash.limits.maxMcpServers) {
       throw new Error(
@@ -176,7 +323,7 @@ export class McpClient {
       );
     }
 
-    const transport = new HttpTransport(url);
+    const transport = new HttpTransport(url, securityConfig);
     await transport.init();
 
     const connection: McpServerConnection = {
