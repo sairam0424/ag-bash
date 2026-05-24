@@ -1,3 +1,4 @@
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 import { hasHelpFlag, showHelp } from "../help.js";
@@ -15,7 +16,7 @@ export const agHoverCommand: Command = {
   async execute(args: string[], ctx: CommandContext): Promise<ExecResult> {
     if (hasHelpFlag(args)) return showHelp(agHoverHelp);
 
-    const parsed = parseArgs("ag-hover", args, {});
+    const parsed = parseArgs("ag-hover", args, Object.create(null));
     if (!parsed.ok) return parsed.error;
 
     const { positional } = parsed.result;
@@ -85,7 +86,7 @@ export const agHoverCommand: Command = {
     } catch (e: any) {
       return {
         stdout: "",
-        stderr: `ag-hover: error: ${e.message}\n`,
+        stderr: `ag-hover: error: ${sanitizeErrorMessage(e.message)}\n`,
         exitCode: 1,
       };
     }

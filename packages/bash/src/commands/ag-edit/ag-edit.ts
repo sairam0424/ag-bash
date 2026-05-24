@@ -1,3 +1,4 @@
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 
@@ -164,7 +165,7 @@ export const agEditCommand: Command = {
     } catch (e: any) {
       return {
         stdout: "",
-        stderr: `ag-edit: failed to write ${file}: ${e.message}\n`,
+        stderr: `ag-edit: failed to write ${file}: ${sanitizeErrorMessage(e.message)}\n`,
         exitCode: 1,
       };
     }

@@ -1,3 +1,4 @@
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 
@@ -69,7 +70,7 @@ export const agGrepCommand: Command = {
     } catch (error: any) {
       return {
         stdout: "",
-        stderr: `ag-grep: ${error.message}\n`,
+        stderr: `ag-grep: ${sanitizeErrorMessage(error.message)}\n`,
         exitCode: 1,
       };
     }

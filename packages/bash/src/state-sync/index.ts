@@ -34,10 +34,10 @@ export function diffState(
   base: BashSnapshot,
   current: BashSnapshot,
 ): BashDelta {
-  const delta: BashDelta = {};
+  const delta: BashDelta = Object.create(null);
 
   // 1. Diff Environment Variables (Map<string, string>)
-  const envDelta: Record<string, string | null> = {};
+  const envDelta: Record<string, string | null> = Object.create(null);
   let envChanged = false;
 
   const baseEnv = base.state.env;
@@ -62,7 +62,7 @@ export function diffState(
   if (envChanged) delta.envDelta = envDelta;
 
   // 2. Diff Functions (Map<string, FunctionDefNode>)
-  const funcDelta: Record<string, string | null> = {};
+  const funcDelta: Record<string, string | null> = Object.create(null);
   let funcChanged = false;
 
   const baseFuncs = base.state.functions;
@@ -97,7 +97,7 @@ export function diffState(
  * Diffs two VFS snapshots. Handles both raw Maps and MountableFs snapshot objects.
  */
 export function diffFs(baseFs: any, currentFs: any): FsDelta {
-  const modified: Record<string, string | Uint8Array> = {};
+  const modified: Record<string, string | Uint8Array> = Object.create(null);
   const deleted: string[] = [];
 
   // Unwrap MountableFs snapshots if necessary

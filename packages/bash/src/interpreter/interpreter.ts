@@ -25,6 +25,7 @@ import type {
   WordNode,
 } from "../ast/types.js";
 import type { IFileSystem } from "../fs/interface.js";
+import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import { mapToRecord } from "../helpers/env.js";
 import type { ExecutionLimits } from "../limits.js";
 import { SemanticEngine } from "../lsp/semantic-engine.js";
@@ -976,7 +977,7 @@ export class Interpreter {
       }
       // Catch unexpected command internal errors and treat as failure
       execResult = failure(
-        `bash: ${commandName}: unexpected error: ${error instanceof Error ? error.message : String(error)}\n`,
+        `bash: ${commandName}: unexpected error: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
       );
     }
 

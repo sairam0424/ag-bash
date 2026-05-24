@@ -15,7 +15,7 @@ export const agReferencesCommand: Command = {
   async execute(args: string[], ctx: CommandContext): Promise<ExecResult> {
     if (hasHelpFlag(args)) return showHelp(agReferencesHelp);
 
-    const parsed = parseArgs("ag-references", args, {});
+    const parsed = parseArgs("ag-references", args, Object.create(null));
     if (!parsed.ok) return parsed.error;
 
     const { positional } = parsed.result;

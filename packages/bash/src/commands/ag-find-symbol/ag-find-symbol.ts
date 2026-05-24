@@ -15,7 +15,7 @@ export const agFindSymbolCommand: Command = {
   async execute(args: string[], ctx: CommandContext): Promise<ExecResult> {
     if (hasHelpFlag(args)) return showHelp(agFindSymbolHelp);
 
-    const parsed = parseArgs("ag-find-symbol", args, {});
+    const parsed = parseArgs("ag-find-symbol", args, Object.create(null));
     if (!parsed.ok) return parsed.error;
 
     const { positional } = parsed.result;

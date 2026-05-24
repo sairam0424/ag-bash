@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 
@@ -190,7 +191,7 @@ export const agConvertCommand: Command = {
       if (result.error) {
         return {
           stdout: "",
-          stderr: `ag-convert: failed to execute python3: ${result.error.message}\n`,
+          stderr: `ag-convert: failed to execute python3: ${sanitizeErrorMessage(result.error.message)}\n`,
           exitCode: 1,
         };
       }
@@ -205,7 +206,7 @@ export const agConvertCommand: Command = {
     } catch (err: any) {
       return {
         stdout: "",
-        stderr: `ag-convert: error: ${err.message}\n`,
+        stderr: `ag-convert: error: ${sanitizeErrorMessage(err.message)}\n`,
         exitCode: 1,
       };
     }

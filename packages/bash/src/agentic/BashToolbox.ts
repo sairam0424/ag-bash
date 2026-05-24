@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Bash } from "../Bash.js";
 import { WebFetchTool } from "../commands/ag-web/ag-web-fetch.js";
 import { WebSearchTool } from "../commands/ag-web/ag-web-search.js";
+import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import { LspTool } from "../lsp/LspTool.js";
 import { detectDestructiveCommand } from "../security/destructive-command-detector.js";
 import { ConvertTool } from "./ConvertTool.js";
@@ -28,6 +29,9 @@ const _TOOL_DEFAULTS = {
 };
 
 const MAX_TOOL_RESULT_SIZE = 100_000;
+
+/** Null-prototype empty shape for Zod schemas with no parameters. */
+const EMPTY_SHAPE: Record<string, never> = Object.create(null);
 const ARTIFACT_DIR = "/.ag-bash/artifacts";
 
 /**
@@ -218,9 +222,7 @@ export class BashToolbox {
             const content = await bash.readFileDirect(path);
             const { parse } = await import("../parser/parser.js");
             const ast = parse(content);
-            const { SemanticEngine } = await import(
-              "../lsp/semantic-engine.js"
-            );
+            const { SemanticEngine } = await import("../lsp/semantic-engine.js");
             const engine = new SemanticEngine(ast as any);
             return {
               type: "shell",
@@ -589,7 +591,7 @@ export class BashToolbox {
       buildTool({
         name: "check_environment",
         description: "Get diagnostics about the sandboxed environment.",
-        parameters: z.object({}),
+        parameters: z.object(EMPTY_SHAPE),
         execute: async (bash: Bash) => {
           return {
             cwd: (bash as any).state.cwd,
@@ -747,7 +749,7 @@ export class BashToolbox {
       buildTool({
         name: "list_todos",
         description: "List all todo items.",
-        parameters: z.object({}),
+        parameters: z.object(EMPTY_SHAPE),
         execute: async (bash: Bash) => {
           const todosPath = "/.ag-bash/todos.json";
           if (await bash.fs.exists(todosPath)) {
@@ -789,7 +791,7 @@ export class BashToolbox {
         name: "plan_enter",
         description:
           "Enter plan mode to design an approach before making changes.",
-        parameters: z.object({}),
+        parameters: z.object(EMPTY_SHAPE),
         execute: async (bash: Bash) => {
           bash.setMode("plan");
           return "Entered plan mode. You are now in read-only mode. Use plan_exit to return to execute mode when ready.";
@@ -801,7 +803,7 @@ export class BashToolbox {
       buildTool({
         name: "plan_exit",
         description: "Exit plan mode and return to execution mode.",
-        parameters: z.object({}),
+        parameters: z.object(EMPTY_SHAPE),
         execute: async (bash: Bash) => {
           bash.setMode("execute");
           return "Exited plan mode. You can now make changes to the codebase.";
@@ -872,7 +874,7 @@ export class BashToolbox {
       buildTool({
         name: "list_mcp_tools",
         description: "List all tools available via connected MCP servers.",
-        parameters: z.object({}),
+        parameters: z.object(EMPTY_SHAPE),
         execute: async (bash: Bash) => {
           const client = bash.services.mcpClient;
           return client.listConnections().map((c) => ({
@@ -888,7 +890,7 @@ export class BashToolbox {
         name: "sync_mcp_tools",
         description:
           "Synchronize and register all MCP tools into the central toolbox.",
-        parameters: z.object({}),
+        parameters: z.object(EMPTY_SHAPE),
         isReadOnly: true,
         execute: async (bash: Bash) => {
           const client = bash.services.mcpClient;
@@ -1339,7 +1341,7 @@ export class BashToolbox {
         name: "cron_list",
         description: "List all scheduled cron jobs.",
         searchHint: "list cron jobs",
-        parameters: z.object({}),
+        parameters: z.object(EMPTY_SHAPE),
         isReadOnly: true,
         execute: async (bash: Bash) => {
           return bash.services.cronScheduler.listJobs();
@@ -1385,7 +1387,7 @@ export class BashToolbox {
         description:
           "Exit the active worktree and restore the original working directory.",
         searchHint: "exit worktree isolation",
-        parameters: z.object({}),
+        parameters: z.object(EMPTY_SHAPE),
         execute: async (bash: Bash) => {
           const result = bash.services.worktreeManager.exitWorktree();
           if (!result) return "No active worktree.";
@@ -1440,9 +1442,9 @@ export class BashToolbox {
    * Simple JSON Schema to Zod converter for MCP tools.
    */
   private jsonSchemaToZod(schema: any): z.ZodType<any> {
-    const shape: any = {};
-    const props = schema.properties || {};
-    for (const key in props) {
+    const shape: any = Object.create(null);
+    const props = schema.properties || Object.create(null);
+    for (const key of Object.keys(props)) {
       const prop = props[key];
       let zType: any = z.string();
       if (prop.type === "number") zType = z.number();
@@ -1460,7 +1462,7 @@ export class BashToolbox {
   // Removed duplicate getTools method
 
   getAgenticTools(bash: Bash): Record<string, any> {
-    const result: Record<string, any> = {};
+    const result: Record<string, any> = Object.create(null);
     for (const tool of this.getTools()) {
       result[tool.name] = {
         description: tool.description,
@@ -1523,7 +1525,7 @@ export class BashToolbox {
     try {
       result = await tool.execute(bash, args);
     } catch (error: any) {
-      result = `Execution Error in ${toolName}: ${error.message}`;
+      result = `Execution Error in ${toolName}: ${sanitizeErrorMessage(error.message)}`;
     }
 
     // 5. Lifecycle Events (End)
@@ -1558,10 +1560,10 @@ export class BashToolbox {
    */
   private zodToJsonSchema(schema: z.ZodType<any>): any {
     const shape = (schema as any).shape;
-    const properties: any = {};
+    const properties: any = Object.create(null);
     const required: string[] = [];
 
-    for (const key in shape) {
+    for (const key of Object.keys(shape)) {
       const field = shape[key];
       const desc = field.description;
 

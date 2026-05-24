@@ -8,6 +8,7 @@
  * - disconnect <server_id> : Close a connection
  */
 
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 
 export const agMcp: Command = {
@@ -81,7 +82,7 @@ export const agMcp: Command = {
         } catch (e: any) {
           return {
             stdout: "",
-            stderr: `Connection failed: ${e.message}\n`,
+            stderr: `Connection failed: ${sanitizeErrorMessage(e.message)}\n`,
             exitCode: 1,
           };
         }
@@ -116,7 +117,7 @@ export const agMcp: Command = {
         } catch (e: any) {
           return {
             stdout: "",
-            stderr: `Tool call failed: ${e.message}\n`,
+            stderr: `Tool call failed: ${sanitizeErrorMessage(e.message)}\n`,
             exitCode: 1,
           };
         }

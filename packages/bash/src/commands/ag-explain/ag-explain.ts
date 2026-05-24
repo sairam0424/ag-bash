@@ -1,3 +1,4 @@
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { showHelp } from "../help.js";
 
@@ -114,7 +115,7 @@ export const agExplainCommand: Command = {
     } catch (e: any) {
       return {
         stdout: "",
-        stderr: `ag-explain: parse error: ${e.message}\n`,
+        stderr: `ag-explain: parse error: ${sanitizeErrorMessage(e.message)}\n`,
         exitCode: 1,
       };
     }

@@ -5,6 +5,7 @@
  * that works directly with the Ag-Bash IFileSystem.
  */
 
+import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../types.js";
 
 export const gitCommand: Command = {
@@ -107,7 +108,7 @@ export const gitCommand: Command = {
       return {
         exitCode: 1,
         stdout: "",
-        stderr: `fatal: ${err.message}\n`,
+        stderr: `fatal: ${sanitizeErrorMessage(err.message)}\n`,
       };
     }
   },

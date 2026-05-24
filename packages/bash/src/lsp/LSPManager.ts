@@ -30,10 +30,10 @@ export class LSPManager {
       // Standard LSP initialization
       await connection.sendRequest("initialize", {
         processId: process.pid,
-        capabilities: {},
+        capabilities: Object.create(null),
         rootUri: null,
       });
-      connection.sendNotification("initialized", {});
+      connection.sendNotification("initialized", Object.create(null));
     } catch (_error) {
       // Silently swallow — LSP init failure is non-fatal
     }

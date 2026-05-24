@@ -640,7 +640,7 @@ export class Bash extends EventEmitter {
   }
 
   public get env(): Record<string, string> {
-    const res: Record<string, string> = {};
+    const res: Record<string, string> = Object.create(null);
     for (const [k, v] of this.state.env) {
       res[k] = v;
     }
