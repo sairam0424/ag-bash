@@ -341,6 +341,12 @@ export class CronScheduler {
     });
   }
 
+  /** Release all resources and clear internal state. */
+  async dispose(): Promise<void> {
+    this.jobs.clear();
+    this.bus = undefined;
+  }
+
   private publishFired(job: CronJob): void {
     this.bus?.publish("cron:fired", "cronScheduler", {
       job: { ...job },

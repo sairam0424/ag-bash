@@ -42,7 +42,7 @@ export class TreeSitterParser {
           );
         }
 
-        const initOptions: any = {};
+        const initOptions: any = Object.create(null);
         if (
           options.webTreeSitterWasm instanceof Uint8Array ||
           Buffer.isBuffer(options.webTreeSitterWasm)

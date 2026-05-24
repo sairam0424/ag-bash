@@ -64,4 +64,12 @@ export class SessionManager {
       lastUsed: Date.now() - s.lastUsedAt,
     }));
   }
+
+  /** Terminate all sessions and release resources. */
+  async dispose(): Promise<void> {
+    for (const session of this.sessions.values()) {
+      session.worker.terminate();
+    }
+    this.sessions.clear();
+  }
 }
