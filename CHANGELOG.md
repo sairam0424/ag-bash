@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-05-25 — "Runtime"
+
+### Added
+
+- **Trap Handler Invocation**: EXIT, ERR, DEBUG, and RETURN trap handlers now fire during execution (previously stored but never invoked).
+- **Test Utilities** (`@ag-bash/bash/testing`): `createTestBash()` factory, `assertSuccess`/`assertFails`/`assertOutput`/`assertStderr`/`assertFileExists`/`assertFileNotExists` assertion helpers, and `EMPTY_PROJECT`/`NODE_PROJECT`/`GIT_REPO` filesystem fixtures.
+- **Tagged Template API**: `createShell()` and `shellEscape()` for zx-style ergonomic scripting with injection-safe interpolation.
+- **Observation Summarizer**: `ObservationSummarizer` class for recording agent turns and producing structured `TurnSummary` objects with context compaction.
+- **Active Self-Healing**: `AgenticHealer.heal()` method with Levenshtein-based typo correction, exponential backoff retry, and configurable `autoRetry` settings.
+- **Agent RunLoop** (`@ag-bash/bash/agent-runtime`): Autonomous multi-turn LLM execution engine with `BudgetManager` (tokens, turns, wall-clock limits), `LLMProvider` interface, and `AbortSignal` support.
+- **Full MCP Toolbox**: All 40+ agentic tools now exposed via MCP protocol (previously only 6 low-level tools). Includes sliding-window rate limiter (60 req/min).
+- **OpenTelemetry Integration**: Optional `AgBashTracer` with zero-overhead no-op fallback when `@opentelemetry/api` is not installed.
+
+### Fixed
+
+- EXIT trap fires exactly once (idempotency guard prevents double-fire).
+- RETURN trap has recursion guard (prevents stack overflow from self-triggering).
+- Trap handler errors now surface in stderr (no longer silently swallowed).
+- `normalize-stage.ts` TS2352 cast error resolved.
+
+### Security
+
+- RunLoop rejects unknown tool names (prevents command injection via LLM-controlled args).
+- MCP tool bridge sanitizes error messages (strips file paths).
+- ObservationSummarizer caps history at 200 turns (prevents memory exhaustion).
+- BudgetManager enforces soft resource limits on autonomous agent execution.
+
 ## [3.0.0] - 2026-05-01
 
 ### Breaking Changes
