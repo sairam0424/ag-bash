@@ -86,7 +86,7 @@ export class NormalizeStage implements PipelineStage {
         );
 
     // Log command execution if logger is available
-    const bashWithLogger = bash as { logger?: { info(msg: string, data?: Record<string, unknown>): void } };
+    const bashWithLogger = bash as unknown as { logger?: { info(msg: string, data?: Record<string, unknown>): void } };
     bashWithLogger.logger?.info("exec", { command: commandLine });
 
     // Normalize indented multi-line scripts (unless rawScript is true)
