@@ -165,3 +165,12 @@ export type {
   ExecResult,
   IFileSystem,
 } from "./types.js";
+// Tagged template API (zx-style ergonomic shell)
+export { createShell, type TaggedShell } from "./template/index.js";
+export { shellEscape } from "./template/index.js";
+
+// Observability
+export { ObservationSummarizer } from "./observability/ObservationSummarizer.js";
+export { AgBashTracer } from "./observability/otel.js";
+export type { TurnSummary, ToolCallSummary } from "./observability/types.js";
+export type { OtelConfig } from "./observability/otel-types.js";
