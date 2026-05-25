@@ -110,6 +110,7 @@ import {
   executeSubshell as executeSubshellHelper,
   executeUserScript as executeUserScriptHelper,
 } from "./subshell-group.js";
+import { executeErrTrap, executeExitTrap } from "./trap-execution.js";
 import type { InterpreterContext, InterpreterState } from "./types.js";
 
 export type { InterpreterContext, InterpreterState } from "./types.js";
@@ -289,6 +290,11 @@ export class Interpreter {
         this.ctx.state.env.set("?", String(exitCode));
       } catch (error) {
         if (error instanceof ExitError) {
+          // Fire EXIT trap before propagating exit
+          const exitTrapResult = await executeExitTrap(this.ctx);
+          if (exitTrapResult) {
+            error.prependOutput(exitTrapResult.stdout, exitTrapResult.stderr);
+          }
           error.prependOutput(stdoutBuf.toString(), stderrBuf.toString());
           throw error;
         }
@@ -385,6 +391,13 @@ export class Interpreter {
         }
         throw error;
       }
+    }
+
+    // Fire EXIT trap at the end of script execution
+    const exitTrapResult = await executeExitTrap(this.ctx);
+    if (exitTrapResult) {
+      stdoutBuf.push(exitTrapResult.stdout);
+      stderrBuf.push(exitTrapResult.stderr);
     }
 
     return {
@@ -526,6 +539,25 @@ export class Interpreter {
       this.ctx.state.errexitSafe =
         wasShortCircuited || lastPipelineNegated || innerWasSafe;
 
+      // Fire ERR trap when a command fails outside condition context
+      if (
+        exitCode !== 0 &&
+        lastExecutedIndex === node.pipelines.length - 1 &&
+        !lastPipelineNegated &&
+        !this.ctx.state.inCondition &&
+        !innerWasSafe
+      ) {
+        const errTrapResult = await executeErrTrap(
+          this.ctx,
+          this.ctx.state.inCondition,
+          lastPipelineNegated,
+        );
+        if (errTrapResult) {
+          stdout += errTrapResult.stdout;
+          stderr += errTrapResult.stderr;
+        }
+      }
+
       // Check errexit (set -e)
       if (
         this.ctx.state.options.errexit &&
@@ -576,11 +608,43 @@ export class Interpreter {
 
     // Ag-Intelligence: Agentic Healer diagnostic hook for command-not-found failures (exit code 127)
     if (this.ctx.agentic && this.ctx.agenticHealer && result.exitCode === 127) {
-      const suggestion = await this.ctx.agenticHealer.diagnose(
-        "",
-        result,
-        this.ctx,
-      );
+      const healer = this.ctx.agenticHealer as AgenticHealer;
+
+      // Reconstruct the full command text from the AST for healing
+      let fullCommand = "";
+      const firstCmd = node.commands[0];
+      if (firstCmd?.type === "SimpleCommand") {
+        const parts: string[] = [];
+        if (firstCmd.name?.parts) {
+          for (const p of firstCmd.name.parts) {
+            if ("value" in p) parts.push(p.value);
+          }
+        }
+        for (const arg of firstCmd.args) {
+          const argParts: string[] = [];
+          for (const p of arg.parts) {
+            if ("value" in p) argParts.push(p.value);
+          }
+          if (argParts.length > 0) parts.push(argParts.join(""));
+        }
+        fullCommand = parts.join(" ");
+      }
+      if (!fullCommand) {
+        const stderrMatch = result.stderr.match(/:\s*(.+?):\s*command not found/);
+        if (stderrMatch) fullCommand = stderrMatch[1].trim();
+      }
+
+      // Active self-healing: attempt to correct and re-execute
+      const execFn = async (cmd: string): Promise<ExecResult> => {
+        return this.ctx.execFn(cmd, { cwd: this.ctx.state.cwd });
+      };
+      const healedResult = await healer.heal(fullCommand, result, execFn);
+      if (healedResult) {
+        return healedResult;
+      }
+
+      // Fall back to diagnostic suggestion
+      const suggestion = await healer.diagnose(fullCommand, result, this.ctx);
       if (suggestion) {
         return {
           ...result,
@@ -1277,13 +1341,26 @@ export class Interpreter {
       cmdResult.exitCode !== 0
     ) {
       const healer = this.ctx.agenticHealer as AgenticHealer;
-      const suggestion = await healer.diagnose(
-        commandName + (args.length > 0 ? ` ${args.join(" ")}` : ""),
-        cmdResult,
-        this.ctx,
-      );
-      if (suggestion) {
-        cmdResult.stderr += `\n[Agentic Healer] ${suggestion}\n`;
+      const fullCommand =
+        commandName + (args.length > 0 ? ` ${args.join(" ")}` : "");
+
+      // Active self-healing: attempt to correct and re-execute
+      const execFn = async (cmd: string): Promise<ExecResult> => {
+        return this.ctx.execFn(cmd, { cwd: this.ctx.state.cwd });
+      };
+      const healedResult = await healer.heal(fullCommand, cmdResult, execFn);
+      if (healedResult) {
+        cmdResult = healedResult as ExecResult;
+      } else {
+        // Fall back to diagnostic suggestion (passive mode)
+        const suggestion = await healer.diagnose(
+          fullCommand,
+          cmdResult,
+          this.ctx,
+        );
+        if (suggestion) {
+          cmdResult.stderr += `\n[Agentic Healer] ${suggestion}\n`;
+        }
       }
     }
 
