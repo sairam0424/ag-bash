@@ -120,7 +120,10 @@ export type CommandName =
   | "ag-message"
   | "ag-glob"
   | "ag-cron"
-  | "ag-worktree";
+  | "ag-worktree"
+  | "commands"
+  | "about"
+  | "doctor";
 
 export type NetworkCommandName = "curl";
 export type PythonCommandName = "python3" | "python";
