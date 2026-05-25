@@ -1,0 +1,11 @@
+# NPM Authentication for publishing @ag-bash packages
+# Copy this file to .npmrc and replace the placeholder with your token:
+#   cp .npmrc.template .npmrc
+#   # Then edit .npmrc and add your token
+#
+# Or set the NPM_TOKEN environment variable:
+#   export NPM_TOKEN=npm_xxxxxxxxxxxxxxxx
+#
+//registry.npmjs.org/:_authToken=${NPM_TOKEN}
+registry=https://registry.npmjs.org/
+access=public

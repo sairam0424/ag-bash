@@ -7,7 +7,9 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "clean": "pnpm -r exec rm -rf dist node_modules"
+    "clean": "pnpm -r exec rm -rf dist node_modules",
+    "publish:all": "bash scripts/publish.sh",
+    "publish:dry-run": "bash scripts/publish.sh --dry-run"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
