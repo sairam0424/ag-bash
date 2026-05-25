@@ -1,26 +1,29 @@
 # @ag-bash/mcp-server
 
-A standalone Model Context Protocol (MCP) server that provides a persistent, sandboxed Bash environment to AI agents.
+> MCP server exposing 40+ ag-bash tools to Claude Desktop and other MCP hosts
 
-This server leverages the `@ag-bash/bash` engine to allow agents to execute shell commands, process data with `jq`, and run Python/JS scripts within a secure virtual filesystem.
+[![npm version](https://img.shields.io/npm/v/@ag-bash/mcp-server?label=npm&color=cb3837)](https://www.npmjs.com/package/@ag-bash/mcp-server)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
----
+A standalone Model Context Protocol (MCP) server that gives AI agents a persistent, sandboxed Bash environment. Previously 6 tools in v3.x, now **40+ tools** in v4.1.
 
-## 🚀 Installation
-
-Install the MCP server globally using npm:
+## Installation
 
 ```bash
 npm install -g @ag-bash/mcp-server
 ```
 
-## ⚙️ Configuration
+## Usage
 
-To use Ag-Bash with your favorite AI client, add it to your `mcpConfig.json` or equivalent configuration file.
+Run the server directly:
+
+```bash
+npx ag-bash-mcp
+```
 
 ### Claude Desktop
 
-On macOS, edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -35,51 +38,40 @@ On macOS, edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ### Cursor / VS Code
 
-Add a new MCP server in your IDE settings with the following details:
+Add a new MCP server in your IDE settings:
 - **Name**: `ag-bash`
 - **Type**: `command`
 - **Command**: `ag-bash-mcp`
 
----
+## What's Exposed
 
-## 🛠️ Available Tools
+- **`run_bash`** — Execute scripts with full unix toolkit (`jq`, `grep`, `sed`, `awk`, etc.)
+- **`get_state`** — Inspect CWD, environment variables, and defined functions
+- **Agentic suite** — `ag-edit`, `ag-diff`, `ag-hover`, `ag-explain`, `ag-find-symbol`, `ag-todo`, `ag-analyze`, `ag-snapshot`, `ag-plan`, `ag-notebook`, `ag-mcp`
+- **40+ tools total** via JSON-RPC 2.0 with Zod schema validation on every input
 
-The server exports the following tools to the agent:
+## Features
 
-### 1. `run_bash`
-Executes a bash script in the sandboxed environment.
-- **Parameters**: 
-    - `script` (string, required): The bash code to execute.
-- **Features**: 
-    - Automatically persists environment variables, functions, and CWD across calls.
-    - Full access to `jq`, `grep`, `sed`, and other unix utilities.
+- **Rate limiting** — 60 requests/minute per session (configurable)
+- **Read-only root** — Project files mounted as overlay; writes stay in memory
+- **Sanitized errors** — JSON-RPC responses strip file paths, capped at 200 chars
+- **Zero console leakage** — All diagnostics flow through structured handlers
+- **Resource limits** — Protection against infinite loops and excessive memory
+- **Orchestration governance** — Agent nesting limits prevent recursive loops
 
-### 2. `get_state`
-Retrieves the current state of the shell session.
-- **Returns**: 
-    - Current working directory (`cwd`).
-    - Active environment variables.
-    - Defined functions.
+## v4.1 Upgrade Notes
 
-### 3. `agentic_suite` (Nexus Prime)
-Full access to the Nexus Prime toolset for high-fidelity code manipulation and analysis.
-- **Tools**: `ag-hover`, `ag-explain`, `ag-find-symbol`, `ag-todo`, `ag-analyze`, `ag-edit`, `ag-diff`.
-- **Features**: 
-    - Semantic code intelligence.
-    - Persistent task tracking.
-    - Surgical file modifications.
+| Before (v3.x) | After (v4.1) |
+|---|---|
+| 6 tools | 40+ tools |
+| Basic bash execution | Full agentic suite with semantic code intelligence |
+| Manual state management | Persistent environment across calls |
 
----
+## Links
 
-## 🛡️ Security Features
+- [GitHub Repository](https://github.com/AstroBaseCode/ag-bash)
+- [Core Engine](https://www.npmjs.com/package/@ag-bash/bash)
 
-- **Read-Only Root**: By default, the server mounts your current project root as a **Read-Only** overlay. Any changes made by the agent stay in the virtual memory and never touch your real files.
-- **In-Process Sandbox**: No external VM required; execution is isolated using Ag-Bash's internal security logic.
-- **Sanitized Errors (v3.0.0)**: JSON-RPC error messages strip file paths and cap at 200 characters to prevent information leakage.
-- **Zero Console Leakage (v3.0.0)**: Library code never writes to `console.*` — all diagnostics flow through structured error handlers.
-- **Resource Limits**: Protects against infinite loops, excessive memory, and session-wide network traffic accounting.
-- **Orchestration Governance**: Enforces agent nesting limits to prevent recursive loops in multi-agent workflows.
-
-## 📜 License
+## License
 
 Apache-2.0

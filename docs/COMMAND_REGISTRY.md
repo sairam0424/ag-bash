@@ -1,4 +1,4 @@
-# Ag-Bash Command Registry (v3.0.0)
+# Ag-Bash Command Registry (v4.1.0)
 
 This registry provides a categorized index of the **150+ commands** supported by Ag-Bash. All commands are virtualized, sandboxed, and optimized for Project V-Next.
 
@@ -165,6 +165,18 @@ This registry provides a categorized index of the **150+ commands** supported by
 
 ---
 
+## Discoverability & Diagnostics
+
+*Commands for exploring the shell's capabilities and verifying setup health (v4.1.0).*
+
+| Command | Description | Registry Link |
+| :--- | :--- | :--- |
+| `commands` | List all available commands with categories and search. | [Discoverability](./registry/discoverability.md) |
+| `about` | Show ag-bash features, architecture, and version. | [Discoverability](./registry/discoverability.md) |
+| `doctor` | Run environment health checks and verify setup. | [Discoverability](./registry/discoverability.md) |
+
+---
+
 ## Pro Tip: Command Discovery
 
-Run `help` or `ag-bash --help` inside the shell to see the dynamic list of commands available in your current permission scope.
+Run `commands` to browse the full registry, or `commands --search <keyword>` to filter by name or description. Use `doctor` to verify your environment is correctly configured.

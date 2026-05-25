@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/agent-bridge",
-  "version": "3.0.0",
+  "version": "4.1.0",
   "description": "Terminal bridge for Ag-Bash AI Agent communication",
   "type": "module",
   "main": "dist/index.js",
@@ -35,5 +35,8 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

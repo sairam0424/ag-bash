@@ -40,7 +40,11 @@ export async function executeTrap(
     return await ctx.executeScript(ast);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    return { stdout: "", stderr: `trap handler error: ${message}\n`, exitCode: 1 };
+    return {
+      stdout: "",
+      stderr: `trap handler error: ${message}\n`,
+      exitCode: 1,
+    };
   }
 }
 

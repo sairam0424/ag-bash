@@ -22,5 +22,5 @@ export function shellEscape(value: unknown): string {
 
   // Single-quote the string, escaping any single quotes within it
   // In bash: replace ' with '\'' (end quote, escaped quote, start quote)
-  return "'" + str.replace(/'/g, "'\\''") + "'";
+  return `'${str.replace(/'/g, "'\\''")}'`;
 }

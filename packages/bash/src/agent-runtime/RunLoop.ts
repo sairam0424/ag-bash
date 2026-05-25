@@ -89,7 +89,10 @@ export class RunLoop {
         ) {
           finalOutput = response.content;
           if (response.content) {
-            this.messages.push({ role: "assistant", content: response.content });
+            this.messages.push({
+              role: "assistant",
+              content: response.content,
+            });
           }
           break;
         }
@@ -189,18 +192,27 @@ export class RunLoop {
 
     // Reject unknown tools — do not construct shell commands from untrusted LLM output
     return JSON.stringify({
-      error: `Unknown tool: ${name}. Available tools: ${this.tools.map(t => t.name).join(", ")}`,
+      error: `Unknown tool: ${name}. Available tools: ${this.tools.map((t) => t.name).join(", ")}`,
       exitCode: 1,
     });
   }
 
   private getDefaultTools(): ToolSchema[] {
     const props = Object.create(null) as Record<string, unknown>;
-    props["command"] = { type: "string", description: "The bash command to run" };
+    props.command = {
+      type: "string",
+      description: "The bash command to run",
+    };
     const schema = Object.create(null) as Record<string, unknown>;
-    schema["type"] = "object";
-    schema["properties"] = props;
-    schema["required"] = ["command"];
-    return [{ name: "bash", description: "Run a bash command in the sandboxed shell environment", inputSchema: schema }];
+    schema.type = "object";
+    schema.properties = props;
+    schema.required = ["command"];
+    return [
+      {
+        name: "bash",
+        description: "Run a bash command in the sandboxed shell environment",
+        inputSchema: schema,
+      },
+    ];
   }
 }

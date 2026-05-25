@@ -1,8 +1,8 @@
-# Ag-Bash User Guide: The Agentic Shell (v3.0.0)
+# Ag-Bash User Guide: The Agentic Shell (v4.1.0)
 
 Welcome to **Ag-Bash**, the industry-standard secure runtime designed specifically for AI agents and high-fidelity virtual environments. This guide walks you through the core concepts, installation, and advanced workflows of the Ag-Bash ecosystem.
 
-> **Version note**: This guide covers Ag-Bash v3.0.0. If you are upgrading from v2.x, see the [Migration](#migrating-from-v2x) section below for breaking changes.
+> **Version note**: This guide covers Ag-Bash v4.1.0. If you are upgrading from v2.x or v3.x, see the [Migration](#migrating-from-v2x) section below for breaking changes.
 
 ---
 
@@ -259,6 +259,98 @@ const session = SessionManager.shared;
 const shell = new Bash({ /* ... */ });
 const session = shell.services.sessionManager;
 ```
+
+---
+
+## New in v4.1.0
+
+### Discoverability Commands
+
+Ag-Bash v4.1.0 introduces three commands to help you explore what the shell can do without leaving the terminal.
+
+```bash
+commands              # Browse all 113+ commands, grouped by category
+commands --search json    # Search commands by keyword
+about                # See features, architecture overview, and version info
+doctor               # Verify environment health (runtimes, WASM, filesystem)
+```
+
+Use `commands --search <keyword>` to filter the registry by name or description. Use `doctor` after installation to confirm everything is working.
+
+### Tagged Template API
+
+The new `createShell` factory returns a tagged template function for concise, injection-safe command execution.
+
+```typescript
+import { createShell } from "@ag-bash/bash";
+
+const $ = createShell();
+
+const pattern = "TODO";
+const file = "src/index.ts";
+const result = await $`grep ${pattern} ${file}`;
+console.log(result.stdout);
+```
+
+Template interpolations are automatically shell-escaped, preventing injection attacks without manual quoting.
+
+### Agent RunLoop
+
+The `@ag-bash/bash/agent-runtime` export provides `RunLoop`, an autonomous execution engine that pairs an LLM with the Ag-Bash shell.
+
+```typescript
+import { RunLoop } from "@ag-bash/bash/agent-runtime";
+import { Bash } from "@ag-bash/bash";
+
+const bash = new Bash({ agentic: { enabled: true } });
+const loop = new RunLoop(bash, {
+  llm: provider,
+  systemPrompt: "You are a code repair agent.",
+  budget: { maxTurns: 20, maxTokens: 100_000 },
+});
+
+const result = await loop.run("Fix the failing test in src/parser.ts");
+console.log(result.summary); // What the agent did and whether it succeeded
+```
+
+The RunLoop handles tool-call routing, turn budgeting, and graceful shutdown. See the [Agent Runtime docs](./registry/agent_runtime.md) for advanced configuration.
+
+### Self-Healing Commands
+
+When agentic mode is enabled (`agentic.enabled: true`), the shell automatically corrects common typos before failing.
+
+```bash
+$ gti status
+# ag-bash: auto-corrected "gti" → "git"
+On branch main
+nothing to commit, working tree clean
+```
+
+This uses Levenshtein distance against the command registry. Disable it by setting `agentic.healer.autoCorrect: false`.
+
+### Testing Utilities
+
+The `@ag-bash/bash/testing` export provides helpers for consumers writing tests against Ag-Bash.
+
+```typescript
+import { createTestBash, assertSuccess, assertFails } from "@ag-bash/bash/testing";
+
+const bash = createTestBash({
+  files: {
+    "/app/index.ts": 'export const hello = "world";',
+    "/app/package.json": '{ "name": "app" }',
+  },
+});
+
+const result = await bash.exec("cat /app/index.ts");
+assertSuccess(result);
+// result.stdout === 'export const hello = "world";'
+
+const bad = await bash.exec("cat /app/missing.ts");
+assertFails(bad, /No such file/);
+```
+
+`createTestBash` uses an in-memory filesystem pre-populated with your fixture files. No disk I/O, no cleanup needed.
 
 ---
 

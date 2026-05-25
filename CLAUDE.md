@@ -9,7 +9,7 @@ Ag-Bash is an AI-native bash interpreter written in TypeScript. It is organized 
 - **`@ag-bash/bash`**: The core shell engine, filesystem, and sandboxed runtimes.
 - **`@ag-bash/agent-bridge`**: Terminal UI bridge for AI agent communication.
 - **`@ag-bash/mcp-server`**: Standalone Model Context Protocol server.
-- **Version Baseline**: `v3.0.0` (Major Release)
+- **Version Baseline**: `v4.1.0` (Major Release)
 
 ## Commands
 
@@ -64,6 +64,6 @@ Input Script → Parser (src/parser/) → AST (src/ast/) → Interpreter (src/in
 - **Null Prototypes**: All `Record<string, T>` must use null prototypes via `Object.create(null)` or `nullPrototype()` to prevent prototype pollution.
 - **Security Gates**: All filesystem access MUST go through `resolveAndValidate` security gates in the respective FS implementation.
 - **Sandbox Pure**: No Node.js native dependencies allowed in the core package (except optional WASM runtimes).
-- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v3.0.0).
+- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v4.1.0).
 - **Nexus Suite**: Integrated surgical editing (`ag-edit`), semantic diffing (`ag-diff`), and snapshots (`ag-snapshot`).
 - **E2E First**: Always verify changes with `bash scripts/e2e-verify.sh` to ensure protocol and persistence stability.

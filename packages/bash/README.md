@@ -1,271 +1,81 @@
 # @ag-bash/bash
 
-A virtual bash environment with an in-memory filesystem, written in TypeScript and designed for AI agents.
+> AI-Native Sandboxed Bash Runtime for TypeScript
 
-Broad support for standard unix commands and bash syntax with optional curl, Python, JS/TS, and sqlite support.
+[![npm version](https://img.shields.io/npm/v/@ag-bash/bash?label=npm&color=cb3837)](https://www.npmjs.com/package/@ag-bash/bash)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-**Note**: This is beta software. Use at your own risk and please provide feedback. See [security model](#security-model).
+A complete bash interpreter with an in-memory filesystem, built for AI agents and TypeScript applications. No VM, no Docker, no native dependencies.
 
-## Installation
-
-### Globally (CLI & Shell)
-
-#### Via Homebrew (macOS)
-```bash
-brew tap ag-bash/homebrew-tap
-brew install ag-bash
-```
-
-#### Via NPM
-```bash
-npm install -g @ag-bash/bash
-```
-
-### As a Library
+## Quick Start
 
 ```bash
 npm install @ag-bash/bash
 ```
 
 ```typescript
+// Direct execution
 import { Bash } from "@ag-bash/bash";
-
 const bash = new Bash();
-await bash.exec('echo "Hello" > greeting.txt');
-const result = await bash.exec("cat greeting.txt");
-console.log(result.stdout); // "Hello\n"
-console.log(result.exitCode); // 0
+const result = await bash.exec("echo hello");
+console.log(result.stdout); // "hello\n"
+
+// Tagged template (zx-style)
+import { createShell } from "@ag-bash/bash";
+const $ = createShell();
+const name = "world";
+await $`echo ${name}`;
+
+// Agent RunLoop
+import { RunLoop } from "@ag-bash/bash/agent-runtime";
 ```
 
-Each `exec()` call gets its own isolated shell state — environment variables, functions, and working directory reset between calls. The **filesystem is shared** across calls, so files written in one `exec()` are visible in the next.
+## Export Paths
 
-## Custom Commands
+| Import Path | Contents |
+|---|---|
+| `@ag-bash/bash` | Core API: `Bash`, `createShell`, `shellEscape`, `defineCommand` |
+| `@ag-bash/bash/agent-runtime` | `RunLoop`, `BudgetManager`, `LLMProvider` |
+| `@ag-bash/bash/testing` | `createTestBash`, assertions, fixtures |
+| `@ag-bash/bash/ai` | Multi-framework adapters (OpenAI, Anthropic, LangChain, Vercel) |
+| `@ag-bash/bash/slim` | Minimal API surface for bundle-sensitive environments |
+| `@ag-bash/bash/advanced` | Full internal surface for power users |
 
-Extend @ag-bash/bash with your own TypeScript commands using `defineCommand`:
+## Key Features
 
-```typescript
-import { Bash, defineCommand } from "@ag-bash/bash";
-
-const hello = defineCommand("hello", async (args, ctx) => {
-  const name = args[0] || "world";
-  return { stdout: `Hello, ${name}!\n`, stderr: "", exitCode: 0 };
-});
-
-const upper = defineCommand("upper", async (args, ctx) => {
-  return { stdout: ctx.stdin.toUpperCase(), stderr: "", exitCode: 0 };
-});
-
-const bash = new Bash({ customCommands: [hello, upper] });
-
-await bash.exec("hello Alice"); // "Hello, Alice!\n"
-await bash.exec("echo 'test' | upper"); // "TEST\n"
-```
-
-Custom commands receive a `CommandContext` with `fs`, `cwd`, `env`, `stdin`, and `exec` (for subcommands), and work with pipes, redirections, and all shell features.
-
-<details>
-<summary><h2>Supported Commands</h2></summary>
-
-### File Operations
-
-`cat`, `cp`, `file`, `ln`, `ls`, `mkdir`, `mv`, `readlink`, `rm`, `rmdir`, `split`, `stat`, `touch`, `tree`
-
-### Text Processing
-
-`awk`, `base64`, `column`, `comm`, `cut`, `diff`, `expand`, `fold`, `grep` (+ `egrep`, `fgrep`), `head`, `join`, `md5sum`, `nl`, `od`, `paste`, `printf`, `rev`, `rg`, `sed`, `sha1sum`, `sha256sum`, `sort`, `strings`, `tac`, `tail`, `tr`, `unexpand`, `uniq`, `wc`, `xargs`
-
-### Data Processing
-
-`jq` (JSON), `sqlite3` (SQLite), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
-
-### Optional Runtimes
-
-`js-exec` (JavaScript/TypeScript via QuickJS; requires `runtimes: { javascript: true }`), `python3`/`python` (Python via CPython; requires `runtimes: { python: true }`)
-
-### Compression & Archives
-
-`gzip` (+ `gunzip`, `zcat`), `tar`
-
-### Navigation & Environment
-
-`basename`, `cd`, `dirname`, `du`, `echo`, `env`, `export`, `find`, `hostname`, `printenv`, `pwd`, `tee`
-
-### Shell Utilities
-
-`alias`, `bash`, `chmod`, `clear`, `date`, `expr`, `false`, `hello`, `help`, `history`, `seq`, `sh`, `sleep`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`
-
-### Agentic Operations (v2.0.0+)
-
-Specialized commands and lifecycle hooks designed for AI agents to interact with the environment effectively:
-
-- **ServiceContainer DI (v3.0.0)**: All services injected via constructor — no singletons, fully testable.
-- **Grouped BashOptions (v3.0.0)**: Runtime, security, parser, debug, and agentic options organized into sub-objects.
-- **Pipeline Optimization (v3.0.0)**: Early termination for `head -N` patterns via AST static analysis.
-- **Type-Safe Core (v3.0.0)**: `any` eliminated from services, interpreter, and error hierarchy.
-- **Observability (v2.4.0+)**: `Bash` instance emits `tool:start`, `tool:progress`, and `tool:end` events.
-- **Agentic Healer 2.0 (v2.4.0+)**: Tool-aware automated remediation loop with semantic tool discovery.
-- **Unified Permissions (v2.5.0+)**: Centralized `PermissionManager` for managing tool access.
-- **Real MCP Support (v2.5.0+)**: Full JSON-RPC 2.0 client for connecting to external tool servers.
-- `ag-edit`: Robust, line-based file editing (insert/replace/delete).
-- `ag-diff`: High-fidelity, semantic diff for code changes.
-- `ag-snapshot`: Capture and restore core shell state (env, functions, CWD, and FS).
-- `ag-analyze`: Structural analysis of Bash scripts with symbol table extraction.
-- `ag-hover`: Retrieve metadata and documentation for a symbol at a specific location.
-- `ag-explain`: Parse and explain the structure of complex shell commands.
-- `ag-find-symbol`: Workspace-wide search for symbol definitions and references.
-- `ag-todo`: Persistent local task management for agentic project tracking.
-- `ag-plan`: Manage multi-step designs with checkpoints and read-only "plan mode".
-- `ag-notebook`: Direct manipulation of Jupyter Notebooks (.ipynb) with cell editing.
-- `ag-mcp`: Connect, list, and call tools from Model Context Protocol servers.
-
-All commands support `--help` for usage information.
-
-### Shell Features
-
-- **Pipes**: `cmd1 | cmd2`
-- **Redirections**: `>`, `>>`, `2>`, `2>&1`, `<`
-- **Command chaining**: `&&`, `||`, `;`
-- **Variables**: `$VAR`, `${VAR}`, `${VAR:-default}`
-- **Positional parameters**: `$1`, `$2`, `$@`, `$#`
-- **Glob patterns**: `*`, `?`, `[...]`
-- **If statements**: `if COND; then CMD; elif COND; then CMD; else CMD; fi`
-- **Functions**: `function name { ... }` or `name() { ... }`
-- **Local variables**: `local VAR=value`
-- **Loops**: `for`, `while`, `until`
-- **Symbolic links**: `ln -s target link`
-- **Hard links**: `ln target link`
-
-</details>
+- **100+ built-in commands** — `grep`, `sed`, `awk`, `jq`, `find`, `xargs`, and more
+- **Pluggable filesystems** — InMemory (default), Overlay (copy-on-write), ReadWrite (real disk), Mountable (multi-mount)
+- **Full shell syntax** — Pipes, redirections, loops, functions, globs, variable expansion
+- **Optional runtimes** — Python (CPython/WASM) and JavaScript (QuickJS/WASM)
+- **Agentic tools** — `ag-edit`, `ag-diff`, `ag-snapshot`, `ag-analyze`, `ag-todo`, `ag-plan`
+- **Custom commands** — Extend with `defineCommand()` and full pipe/redirect support
+- **Security-first** — No host filesystem access by default, no network, prototype-pollution hardened
+- **Zero native deps** — Pure TypeScript, runs in Node.js and browsers
 
 ## Configuration
 
 ```typescript
-const env = new Bash({
-  files: { "/data/file.txt": "content" }, // Initial files
-  env: { MY_VAR: "value" }, // Initial environment
-  cwd: "/app", // Starting directory (default: /home/user)
-  executionLimits: { maxCallDepth: 50 }, // See "Execution Protection"
-  runtimes: {
-    python: true, // Enable python3/python commands
-    javascript: true, // Enable js-exec command
-    // Or with bootstrap: javascript: { bootstrap: "globalThis.X = 1;" }
-  },
-  security: {
-    defenseInDepth: true, // Enable prototype pollution defenses
-  },
-  agentic: {
-    enabled: true, // Enable agentic tools and orchestration
-  },
+const bash = new Bash({
+  files: { "/data/config.json": '{"key": "value"}' },
+  env: { NODE_ENV: "production" },
+  cwd: "/app",
+  runtimes: { python: true, javascript: true },
+  agentic: { enabled: true },
 });
-
-// Per-exec overrides
-await env.exec("echo $TEMP", { env: { TEMP: "value" }, cwd: "/tmp" });
-
-// Pass stdin to the script
-await env.exec("cat", { stdin: "hello from stdin\n" });
-
-// Start with a clean environment
-await env.exec("env", { replaceEnv: true, env: { ONLY: "this" } });
-
-// Pass arguments without shell escaping (like spawnSync)
-await env.exec("grep", { args: ["-r", "TODO", "src/"] });
-
-// Cancel long-running scripts
-const controller = new AbortController();
-setTimeout(() => controller.abort(), 5000);
-await env.exec("while true; do sleep 1; done", { signal: controller.signal });
-
-// Preserve leading whitespace (e.g., for heredocs)
-await env.exec("cat <<EOF\n  indented\nEOF", { rawScript: true });
-```
-
-`exec()` options:
-
-| Option | Type | Description |
-|---|---|---|
-| `env` | `Record<string, string>` | Environment variables for this execution only |
-| `cwd` | `string` | Working directory for this execution only |
-| `stdin` | `string` | Standard input passed to the script |
-| `args` | `string[]` | Additional argv passed directly to the first command (bypasses shell parsing; does not change `$1`, `$2`, ...) |
-| `replaceEnv` | `boolean` | Start with empty env instead of merging (default: `false`) |
-| `signal` | `AbortSignal` | Cooperative cancellation; stops at next statement boundary |
-| `rawScript` | `boolean` | Skip leading-whitespace normalization (default: `false`) |
-| `persistState` | `boolean` | If true, commit env/cwd/function changes back to master instance |
-
-## Filesystem Options
-
-Four filesystem implementations:
-
-**InMemoryFs** (default) - Pure in-memory filesystem, no disk access:
-
-```typescript
-import { Bash } from "@ag-bash/bash";
-
-const env = new Bash({
-  files: {
-    "/data/config.json": '{"key": "value"}',
-    // Lazy: called on first read, cached. Never called if written before read.
-    "/data/large.csv": () => "col1,col2\na,b\n",
-    "/data/remote.txt": async () => (await fetch("https://example.com")).text(),
-  },
-});
-```
-
-**OverlayFs** - Copy-on-write over a real directory. Reads come from disk, writes stay in memory:
-
-```typescript
-import { Bash } from "@ag-bash/bash";
-import { OverlayFs } from "@ag-bash/bash/fs/overlay-fs";
-
-const overlay = new OverlayFs({ root: "/path/to/project" });
-const env = new Bash({ fs: overlay, cwd: overlay.getMountPoint() });
-
-await env.exec("cat package.json"); // reads from disk
-await env.exec('echo "modified" > package.json'); // stays in memory
-```
-
-**ReadWriteFs** - Direct read-write access to a real directory. Use this if you want the agent to be able to write to your disk:
-
-```typescript
-import { Bash } from "@ag-bash/bash";
-import { ReadWriteFs } from "@ag-bash/bash/fs/read-write-fs";
-
-const rwfs = new ReadWriteFs({ root: "/path/to/sandbox" });
-const env = new Bash({ fs: rwfs });
-
-await env.exec('echo "hello" > file.txt'); // writes to real filesystem
-```
-
-Keep `ReadWriteFs` pointed at a workspace directory, not at the installed `@ag-bash/bash` package or any other trusted runtime code. Guest-writable roots should stay separate from trusted code.
-
-**MountableFs** - Mount multiple filesystems at different paths. Combines read-only and read-write filesystems into a unified namespace:
-
-```typescript
-import { Bash, MountableFs, InMemoryFs } from "@ag-bash/bash";
-import { OverlayFs } from "@ag-bash/bash/fs/overlay-fs";
-import { ReadWriteFs } from "@ag-bash/bash/fs/read-write-fs";
-
-const fs = new MountableFs({ base: new InMemoryFs() });
-
-// Mount read-only knowledge base
-fs.mount("/mnt/knowledge", new OverlayFs({ root: "/path/to/knowledge", readOnly: true }));
-
-// Mount read-write workspace
-fs.mount("/home/agent", new ReadWriteFs({ root: "/path/to/workspace" }));
-
-const bash = new Bash({ fs, cwd: "/home/agent" });
-
-await bash.exec("ls /mnt/knowledge"); // reads from knowledge base
-await bash.exec("cp /mnt/knowledge/doc.txt ./"); // cross-mount copy
-await bash.exec('echo "notes" > notes.txt'); // writes to workspace
 ```
 
 ## Security Model
 
-- The shell only has access to the provided filesystem.
-- All execution happens without VM isolation. This does introduce additional risk. The code base was designed to be robust against prototype-pollution attacks and other break outs to the host JS engine and filesystem.
-- There is no network access by default. When enabled, requests are checked against URL prefix allow-lists and HTTP-method allow-lists.
-- Python and JavaScript execution are off by default as they represent additional security surface.
+- In-memory filesystem by default (no host access)
+- No network access unless explicitly allowed via URL allowlists
+- Python/JS runtimes disabled by default
+- Prototype-pollution defenses via null-prototype objects throughout
+
+## Links
+
+- [GitHub Repository](https://github.com/AstroBaseCode/ag-bash)
+- [MCP Server](https://www.npmjs.com/package/@ag-bash/mcp-server)
+- [Agent Bridge](https://www.npmjs.com/package/@ag-bash/agent-bridge)
 
 ## License
 

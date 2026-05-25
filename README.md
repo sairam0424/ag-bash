@@ -11,9 +11,39 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 | :--- | :--- | :--- |
-| [`@ag-bash/bash`](./packages/bash) | `v3.0.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v3.0.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
-| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v3.0.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
+| [`@ag-bash/bash`](./packages/bash) | [![npm](https://img.shields.io/npm/v/@ag-bash/bash.svg)](https://www.npmjs.com/package/@ag-bash/bash) | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [`@ag-bash/mcp-server`](./packages/mcp-server) | [![npm](https://img.shields.io/npm/v/@ag-bash/mcp-server.svg)](https://www.npmjs.com/package/@ag-bash/mcp-server) | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | [![npm](https://img.shields.io/npm/v/@ag-bash/agent-bridge.svg)](https://www.npmjs.com/package/@ag-bash/agent-bridge) | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
+
+---
+
+## What's New in v4.1
+
+| Feature | Description |
+| :--- | :--- |
+| **Agent RunLoop** | Autonomous LLM execution loop — feed a goal, get back a completed task. Supports tool calling, streaming, and configurable termination policies. |
+| **Self-Healing** | Typo correction and auto-retry. When a command fails due to a mistyped name or missing dependency, the engine repairs the environment and retries transparently. |
+| **Discoverability** | Built-in `commands`, `about`, and `doctor` tools let agents introspect the shell's capabilities, health, and configuration without guessing. |
+
+---
+
+## Installation
+
+```bash
+# Latest (recommended)
+npm install @ag-bash/bash
+
+# With MCP server
+npm install @ag-bash/mcp-server
+```
+
+**Subpath imports** for tree-shaking and targeted use:
+
+```typescript
+import { Bash, createShell } from "@ag-bash/bash";
+import { RunLoop } from "@ag-bash/bash/agent-runtime";
+import { createTestBash } from "@ag-bash/bash/testing";
+```
 
 ---
 
@@ -28,11 +58,16 @@ npm install @ag-bash/bash
 ```
 
 ```typescript
-import { Bash } from "@ag-bash/bash";
+import { Bash, createShell } from "@ag-bash/bash";
 
+// Quick instantiation
 const bash = new Bash();
 const result = await bash.exec('echo "Hello Ag-Bash"');
 console.log(result.stdout); // "Hello Ag-Bash\n"
+
+// Or use createShell for full configuration
+const shell = createShell({ filesystem: "overlay", cwd: "/workspace" });
+await shell.exec("ls -la");
 ```
 
 ### 2. Standalone CLI & Shell (Global)
@@ -79,6 +114,7 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
+- **v4.1 Architecture**: RunLoop execution model, Tagged Template literals for ergonomic shell scripting, and Self-Healing error recovery with automatic retry and environment repair.
 - **v3.0 Architecture** *(Breaking)*: Dependency Injection via `ServiceContainer`, restructured `BashOptions` API with grouped sub-objects, and zero singletons.
 - **FNV-1a ASTCache**: Non-cryptographic hashing with true LRU eviction for high-frequency script execution.
 - **Pipeline Early Termination**: Static AST analysis detects `head -N` patterns and truncates upstream output.
@@ -103,6 +139,19 @@ Then, add the server to your MCP configuration:
 - **[Shell Engine Deep-Dive](./packages/bash/README.md)**: Technical guide for filesystem options and custom commands.
 - **[MCP Server Configuration](./packages/mcp-server/README.md)**: Agentic integration patterns and configuration.
 - **[Security & Threat Model](./THREAT_MODEL.md)**: Detailed breakdown of the sandbox architecture.
+
+## Version History
+
+| Version | Codename | Highlights |
+| :--- | :--- | :--- |
+| **v4.1** | *Runtime* | Agent RunLoop, Trap signals, Self-Healing error recovery, OpenTelemetry spans |
+| **v3.0** | *Breaking Redesign* | ServiceContainer DI, new `BashOptions` grouped API, zero singletons |
+| **v2.x** | *Nexus Prime* | Agentic tools (`ag-hover`, `ag-explain`), MCP integration, Planning Mode |
+| **v1.x** | *Genesis* | Initial release, core interpreter, in-memory filesystem, basic builtins |
+
+See the [CHANGELOG](./CHANGELOG.md) for detailed release notes.
+
+---
 
 ## 📜 License
 

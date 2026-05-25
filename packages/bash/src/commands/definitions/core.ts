@@ -179,6 +179,18 @@ export const coreLoaders: LazyCommandDef<CommandName>[] = [
     name: "hello" as CommandName,
     load: async () => (await import("../hello/hello.js")).helloCommand,
   },
+  {
+    name: "commands" as CommandName,
+    load: async () => (await import("../commands/commands.js")).commandsCommand,
+  },
+  {
+    name: "about" as CommandName,
+    load: async () => (await import("../about/about.js")).aboutCommand,
+  },
+  {
+    name: "doctor" as CommandName,
+    load: async () => (await import("../doctor/doctor.js")).doctorCommand,
+  },
 ];
 
 // OS-native commands (suspended in browser)

@@ -1,5 +1,5 @@
-import { Bash } from "../Bash.js";
 import type { BashOptions } from "../Bash.js";
+import { Bash } from "../Bash.js";
 import type { InitialFiles } from "../fs/interface.js";
 
 export interface TestBashOptions {
