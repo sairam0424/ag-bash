@@ -1,5 +1,7 @@
 import { Bash } from "@ag-bash/bash";
 import { validateSnapshot, validateDelta } from "./schemas.js";
+import { McpToolBridge } from "./tool-bridge.js";
+import { RateLimiter } from "./rate-limiter.js";
 
 function sanitizeErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) return "Internal server error";
@@ -20,6 +22,8 @@ function sanitizeErrorMessage(error: unknown): string {
  */
 class AgBashServer {
   private bash: Bash;
+  private toolBridge: McpToolBridge;
+  private rateLimiter: RateLimiter;
   private readonly protocolVersion = "2024-11-05";
 
   constructor() {
@@ -31,6 +35,12 @@ class AgBashServer {
       runtimes: { python: true, javascript: true },
       security: { defenseInDepth: true },
     });
+
+    // Initialize the tool bridge for BashToolbox tools
+    this.toolBridge = new McpToolBridge(this.bash);
+
+    // Initialize rate limiter (60 requests per minute)
+    this.rateLimiter = new RateLimiter(60, 60_000);
   }
 
   // biome-ignore lint/suspicious/noExplicitAny: JSON-RPC result or error object
@@ -126,95 +136,118 @@ class AgBashServer {
         }
 
         case "tools/list": {
+          // Native low-level tools
+          const nativeTools = [
+            {
+              name: "run_bash",
+              description:
+                "Run a bash script in a persistent sandboxed environment. State (cwd, variables, functions) persists between calls.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  script: {
+                    type: "string",
+                    description: "The bash script to execute.",
+                  },
+                },
+                required: ["script"],
+              },
+            },
+            {
+              name: "get_state",
+              description:
+                "Retrieve the current state of the shell (CWD and Environment Variables).",
+              inputSchema: {
+                type: "object",
+                properties: Object.create(null),
+              },
+            },
+            {
+              name: "snapshot",
+              description:
+                "Capture a complete binary snapshot of the current shell state (filesystem + environment).",
+              inputSchema: {
+                type: "object",
+                properties: Object.create(null),
+              },
+            },
+            {
+              name: "restore",
+              description:
+                "Restore the shell to a previously captured state via a snapshot.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  snapshot: {
+                    type: "string",
+                    description:
+                      "The base64 encoded snapshot state to restore.",
+                  },
+                },
+                required: ["snapshot"],
+              },
+            },
+            {
+              name: "create_delta",
+              description:
+                "Create a differential delta between a base snapshot and current state for efficient sync.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  baseSnapshot: {
+                    type: "string",
+                    description: "The base64 encoded base snapshot.",
+                  },
+                },
+                required: ["baseSnapshot"],
+              },
+            },
+            {
+              name: "apply_delta",
+              description:
+                "Apply a differential delta to the current shell state.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  delta: {
+                    type: "string",
+                    description: "The base64 encoded delta to apply.",
+                  },
+                },
+                required: ["delta"],
+              },
+            },
+          ];
+
+          // Bridge tools from BashToolbox (40+ agentic tools)
+          const bridgeTools = this.toolBridge.listTools();
+
           return this.sendResponse(id, {
             result: {
-              tools: [
-                {
-                  name: "run_bash",
-                  description:
-                    "Run a bash script in a persistent sandboxed environment. State (cwd, variables, functions) persists between calls.",
-                  inputSchema: {
-                    type: "object",
-                    properties: {
-                      script: {
-                        type: "string",
-                        description: "The bash script to execute.",
-                      },
-                    },
-                    required: ["script"],
-                  },
-                },
-                {
-                  name: "get_state",
-                  description:
-                    "Retrieve the current state of the shell (CWD and Environment Variables).",
-                  inputSchema: {
-                    type: "object",
-                    properties: Object.create(null),
-                  },
-                },
-                {
-                  name: "snapshot",
-                  description:
-                    "Capture a complete binary snapshot of the current shell state (filesystem + environment).",
-                  inputSchema: {
-                    type: "object",
-                    properties: Object.create(null),
-                  },
-                },
-                {
-                  name: "restore",
-                  description:
-                    "Restore the shell to a previously captured state via a snapshot.",
-                  inputSchema: {
-                    type: "object",
-                    properties: {
-                      snapshot: {
-                        type: "string",
-                        description:
-                          "The base64 encoded snapshot state to restore.",
-                      },
-                    },
-                    required: ["snapshot"],
-                  },
-                },
-                {
-                  name: "create_delta",
-                  description:
-                    "Create a differential delta between a base snapshot and current state for efficient sync.",
-                  inputSchema: {
-                    type: "object",
-                    properties: {
-                      baseSnapshot: {
-                        type: "string",
-                        description: "The base64 encoded base snapshot.",
-                      },
-                    },
-                    required: ["baseSnapshot"],
-                  },
-                },
-                {
-                  name: "apply_delta",
-                  description:
-                    "Apply a differential delta to the current shell state.",
-                  inputSchema: {
-                    type: "object",
-                    properties: {
-                      delta: {
-                        type: "string",
-                        description: "The base64 encoded delta to apply.",
-                      },
-                    },
-                    required: ["delta"],
-                  },
-                },
-              ],
+              tools: [...nativeTools, ...bridgeTools],
             },
           });
         }
 
         case "tools/call": {
+          // Rate limiting check
+          if (!this.rateLimiter.allow()) {
+            return this.sendResponse(id, {
+              result: {
+                content: [
+                  {
+                    type: "text",
+                    text: "Rate limit exceeded. Please wait before making more requests.",
+                  },
+                ],
+                isError: true,
+              },
+            });
+          }
+
           const { name, arguments: args } = params;
+
+          // --- Native low-level tools ---
           if (name === "run_bash") {
             const script = String(args?.script || "");
             const result = await this.bash.exec(script, { persistState: true });
@@ -351,6 +384,15 @@ class AgBashServer {
                   { type: "text", text: "Delta applied successfully." },
                 ],
               },
+            });
+          } else if (this.toolBridge.hasTool(name)) {
+            // --- Bridge tools from BashToolbox ---
+            const bridgeResult = await this.toolBridge.callTool(
+              name,
+              args || Object.create(null),
+            );
+            return this.sendResponse(id, {
+              result: bridgeResult,
             });
           }
           break;
