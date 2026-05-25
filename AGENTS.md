@@ -4,6 +4,10 @@
 
 Ag-Bash is a pnpm monorepo (v4.1.0) with three packages: `@ag-bash/bash` (core shell engine), `@ag-bash/mcp-server` (MCP protocol server), and `@ag-bash/agent-bridge` (terminal UI bridge).
 
+**v4.1.0 export paths** (in addition to the main `@ag-bash/bash` entry):
+- `@ag-bash/bash/agent-runtime` — RunLoop for autonomous agent execution
+- `@ag-bash/bash/testing` — Test utilities (`createTestBash`, `assertSuccess`, `assertFails`)
+
 **Core pipeline**: Input Script → Tree-sitter Parser (`src/parser/`) → AST (`src/ast/`) → Interpreter (`src/interpreter/`) → ExecResult
 
 **Key architectural patterns**:
