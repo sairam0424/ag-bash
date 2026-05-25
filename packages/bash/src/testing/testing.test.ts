@@ -79,7 +79,9 @@ describe("Testing Utilities", () => {
     it("throws on non-zero exit code", async () => {
       const bash = createTestBash();
       const result = await bash.exec("false");
-      expect(() => assertSuccess(result)).toThrow("Expected exit code 0, got 1");
+      expect(() => assertSuccess(result)).toThrow(
+        "Expected exit code 0, got 1",
+      );
     });
   });
 
@@ -145,7 +147,9 @@ describe("Testing Utilities", () => {
       const bash = createTestBash({
         files: { "/test.txt": "content" },
       });
-      await expect(assertFileExists(bash, "/test.txt")).resolves.toBeUndefined();
+      await expect(
+        assertFileExists(bash, "/test.txt"),
+      ).resolves.toBeUndefined();
     });
 
     it("throws when file does not exist", async () => {

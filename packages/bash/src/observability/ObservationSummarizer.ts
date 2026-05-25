@@ -1,5 +1,5 @@
-import type { TurnSummary, ToolCallSummary } from "./types.js";
 import type { Observation } from "../types.js";
+import type { ToolCallSummary, TurnSummary } from "./types.js";
 
 /**
  * Internal state for an in-progress turn being recorded.
@@ -85,7 +85,7 @@ export class ObservationSummarizer {
       typeof result === "string" ? result : JSON.stringify(result);
     const resultPreview =
       resultStr.length > ObservationSummarizer.MAX_PREVIEW_LENGTH
-        ? resultStr.slice(0, ObservationSummarizer.MAX_PREVIEW_LENGTH) + "..."
+        ? `${resultStr.slice(0, ObservationSummarizer.MAX_PREVIEW_LENGTH)}...`
         : resultStr;
 
     this.activeTurn.toolCalls.push({
@@ -185,9 +185,7 @@ export class ObservationSummarizer {
       const succeeded = turn.toolCalls.filter(
         (t) => t.status === "success",
       ).length;
-      const failed = turn.toolCalls.filter(
-        (t) => t.status === "error",
-      ).length;
+      const failed = turn.toolCalls.filter((t) => t.status === "error").length;
       const toolNames = Array.from(
         new Set(turn.toolCalls.map((t) => t.name)),
       ).join(", ");

@@ -50,7 +50,10 @@ const ARCHITECTURE = `  Input Script
 
 export const aboutCommand: Command = {
   name: "about",
-  execute: async (args: string[], _ctx: CommandContext): Promise<ExecResult> => {
+  execute: async (
+    args: string[],
+    _ctx: CommandContext,
+  ): Promise<ExecResult> => {
     if (args.includes("--help") || args.includes("-h")) {
       return showHelp(aboutHelp);
     }
@@ -69,7 +72,7 @@ export const aboutCommand: Command = {
 
     if (args.includes("--architecture")) {
       let output = `ag-bash v${VERSION} — Architecture:\n\n`;
-      output += ARCHITECTURE + "\n";
+      output += `${ARCHITECTURE}\n`;
       return { stdout: output, stderr: "", exitCode: 0 };
     }
 

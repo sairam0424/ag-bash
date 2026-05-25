@@ -9,7 +9,11 @@ import { describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
 import { BudgetManager } from "./BudgetManager.js";
 import { RunLoop } from "./RunLoop.js";
-import type { GenerateRequest, GenerateResponse, LLMProvider } from "./types.js";
+import type {
+  GenerateRequest,
+  GenerateResponse,
+  LLMProvider,
+} from "./types.js";
 
 /**
  * Creates a mock LLM that returns scripted responses in sequence.
@@ -138,16 +142,12 @@ describe("RunLoop", () => {
     const bash = new Bash({ persistState: true });
     const llm = createMockLLM([
       {
-        toolCalls: [
-          { id: "tc1", name: "bash", args: { command: "echo 1" } },
-        ],
+        toolCalls: [{ id: "tc1", name: "bash", args: { command: "echo 1" } }],
         stopReason: "tool_use",
         usage: { inputTokens: 600, outputTokens: 400 },
       },
       {
-        toolCalls: [
-          { id: "tc2", name: "bash", args: { command: "echo 2" } },
-        ],
+        toolCalls: [{ id: "tc2", name: "bash", args: { command: "echo 2" } }],
         stopReason: "tool_use",
         usage: { inputTokens: 600, outputTokens: 400 },
       },
@@ -166,23 +166,17 @@ describe("RunLoop", () => {
     const bash = new Bash({ persistState: true });
     const llm = createMockLLM([
       {
-        toolCalls: [
-          { id: "tc1", name: "bash", args: { command: "echo 1" } },
-        ],
+        toolCalls: [{ id: "tc1", name: "bash", args: { command: "echo 1" } }],
         stopReason: "tool_use",
         usage: { inputTokens: 10, outputTokens: 5 },
       },
       {
-        toolCalls: [
-          { id: "tc2", name: "bash", args: { command: "echo 2" } },
-        ],
+        toolCalls: [{ id: "tc2", name: "bash", args: { command: "echo 2" } }],
         stopReason: "tool_use",
         usage: { inputTokens: 10, outputTokens: 5 },
       },
       {
-        toolCalls: [
-          { id: "tc3", name: "bash", args: { command: "echo 3" } },
-        ],
+        toolCalls: [{ id: "tc3", name: "bash", args: { command: "echo 3" } }],
         stopReason: "tool_use",
         usage: { inputTokens: 10, outputTokens: 5 },
       },
@@ -218,9 +212,7 @@ describe("RunLoop", () => {
     const turns: TurnEvent[] = [];
     const llm = createMockLLM([
       {
-        toolCalls: [
-          { id: "tc1", name: "bash", args: { command: "echo hi" } },
-        ],
+        toolCalls: [{ id: "tc1", name: "bash", args: { command: "echo hi" } }],
         stopReason: "tool_use",
         usage: { inputTokens: 50, outputTokens: 20 },
       },

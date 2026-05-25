@@ -27,17 +27,17 @@ export function createShell(options?: BashOptions): TaggedShell {
     ...options,
   });
 
-  const shell = async function (
+  const shell = (async (
     strings: TemplateStringsArray,
     ...values: unknown[]
-  ): Promise<ExecResult> {
+  ): Promise<ExecResult> => {
     let command = strings[0];
     for (let i = 0; i < values.length; i++) {
       command += shellEscape(values[i]);
       command += strings[i + 1];
     }
     return bash.exec(command);
-  } as TaggedShell;
+  }) as TaggedShell;
 
   Object.defineProperty(shell, "bash", {
     get: () => bash,

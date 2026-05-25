@@ -1,5 +1,5 @@
-export { RunLoop } from "./RunLoop.js";
 export { BudgetManager } from "./BudgetManager.js";
+export { RunLoop } from "./RunLoop.js";
 export type {
   BudgetConfig,
   GenerateRequest,

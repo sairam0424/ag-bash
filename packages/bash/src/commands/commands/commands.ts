@@ -20,29 +20,121 @@ const commandsHelp = {
 };
 
 // Static category definitions
-const CATEGORIES: Record<string, { label: string; commands: string[] }> = Object.create(null);
+const CATEGORIES: Record<string, { label: string; commands: string[] }> =
+  Object.create(null);
 
 // Populate categories - use Object.assign pattern to avoid prototype
 Object.assign(CATEGORIES, {
   core: {
     label: "Core I/O",
-    commands: ["echo", "cat", "ls", "cp", "mv", "rm", "mkdir", "rmdir", "touch", "ln", "stat", "du", "tree", "pwd", "cd", "tee", "printf", "readlink", "basename", "dirname", "env", "whoami", "hostname", "date", "sleep", "seq", "timeout", "clear"],
+    commands: [
+      "echo",
+      "cat",
+      "ls",
+      "cp",
+      "mv",
+      "rm",
+      "mkdir",
+      "rmdir",
+      "touch",
+      "ln",
+      "stat",
+      "du",
+      "tree",
+      "pwd",
+      "cd",
+      "tee",
+      "printf",
+      "readlink",
+      "basename",
+      "dirname",
+      "env",
+      "whoami",
+      "hostname",
+      "date",
+      "sleep",
+      "seq",
+      "timeout",
+      "clear",
+    ],
   },
   text: {
     label: "Text Processing",
-    commands: ["grep", "sed", "awk", "cut", "tr", "sort", "uniq", "wc", "head", "tail", "tac", "rev", "paste", "join", "comm", "column", "fold", "expand", "nl", "od", "strings", "split", "xargs"],
+    commands: [
+      "grep",
+      "sed",
+      "awk",
+      "cut",
+      "tr",
+      "sort",
+      "uniq",
+      "wc",
+      "head",
+      "tail",
+      "tac",
+      "rev",
+      "paste",
+      "join",
+      "comm",
+      "column",
+      "fold",
+      "expand",
+      "nl",
+      "od",
+      "strings",
+      "split",
+      "xargs",
+    ],
   },
   search: {
     label: "Search & Find",
-    commands: ["find", "rg", "ag-grep", "ag-find-files", "ag-find-symbol", "ag-references", "ag-hover"],
+    commands: [
+      "find",
+      "rg",
+      "ag-grep",
+      "ag-find-files",
+      "ag-find-symbol",
+      "ag-references",
+      "ag-hover",
+    ],
   },
   data: {
     label: "Data & Structured",
-    commands: ["jq", "yq", "xan", "sqlite3", "python3", "js-exec", "base64", "md5sum", "file", "diff"],
+    commands: [
+      "jq",
+      "yq",
+      "xan",
+      "sqlite3",
+      "python3",
+      "js-exec",
+      "base64",
+      "md5sum",
+      "file",
+      "diff",
+    ],
   },
   agentic: {
     label: "Agentic Tools",
-    commands: ["ag-edit", "ag-diff", "ag-analyze", "ag-explain", "ag-convert", "ag-snapshot", "ag-plan", "ag-task", "ag-todo", "ag-team", "ag-orchestration", "ag-mcp", "ag-cron", "ag-worktree", "ag-web", "ag-message", "ag-notebook", "ag-glob"],
+    commands: [
+      "ag-edit",
+      "ag-diff",
+      "ag-analyze",
+      "ag-explain",
+      "ag-convert",
+      "ag-snapshot",
+      "ag-plan",
+      "ag-task",
+      "ag-todo",
+      "ag-team",
+      "ag-orchestration",
+      "ag-mcp",
+      "ag-cron",
+      "ag-worktree",
+      "ag-web",
+      "ag-message",
+      "ag-notebook",
+      "ag-glob",
+    ],
   },
   archive: {
     label: "Archive & Encoding",
@@ -127,33 +219,56 @@ export const commandsCommand: Command = {
       : [];
 
     // commands <name> — show help for a specific command
-    const positional = args.filter(a => !a.startsWith("-") && a !== args[args.indexOf("--category") + 1] && a !== args[args.indexOf("--search") + 1]);
-    if (positional.length > 0 && !args.includes("--list") && !args.includes("--category") && !args.includes("--search")) {
+    const positional = args.filter(
+      (a) =>
+        !a.startsWith("-") &&
+        a !== args[args.indexOf("--category") + 1] &&
+        a !== args[args.indexOf("--search") + 1],
+    );
+    if (
+      positional.length > 0 &&
+      !args.includes("--list") &&
+      !args.includes("--category") &&
+      !args.includes("--search")
+    ) {
       const name = positional[0];
       if (ctx.exec) {
         const result = await ctx.exec(`${name} --help`, { cwd: ctx.cwd });
         return result;
       }
-      return { stdout: "", stderr: `commands: cannot show help for '${name}'\n`, exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: `commands: cannot show help for '${name}'\n`,
+        exitCode: 1,
+      };
     }
 
     // --list: flat output
     if (args.includes("--list")) {
       const sorted = [...registered].sort();
-      return { stdout: sorted.join("\n") + "\n", stderr: "", exitCode: 0 };
+      return { stdout: `${sorted.join("\n")}\n`, stderr: "", exitCode: 0 };
     }
 
     // --search TERM
     const searchTerm = getFlagValue(args, "--search");
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      const matches = registered.filter(cmd => {
-        const desc = DESCRIPTIONS[cmd] ?? "";
-        return cmd.toLowerCase().includes(term) || desc.toLowerCase().includes(term);
-      }).sort();
+      const matches = registered
+        .filter((cmd) => {
+          const desc = DESCRIPTIONS[cmd] ?? "";
+          return (
+            cmd.toLowerCase().includes(term) ||
+            desc.toLowerCase().includes(term)
+          );
+        })
+        .sort();
 
       if (matches.length === 0) {
-        return { stdout: `No commands matching '${searchTerm}'\n`, stderr: "", exitCode: 0 };
+        return {
+          stdout: `No commands matching '${searchTerm}'\n`,
+          stderr: "",
+          exitCode: 0,
+        };
       }
 
       let output = `Commands matching '${searchTerm}':\n\n`;
@@ -170,9 +285,13 @@ export const commandsCommand: Command = {
       const cat = CATEGORIES[categoryFilter.toLowerCase()];
       if (!cat) {
         const available = Object.keys(CATEGORIES).join(", ");
-        return { stdout: "", stderr: `commands: unknown category '${categoryFilter}'. Available: ${available}\n`, exitCode: 1 };
+        return {
+          stdout: "",
+          stderr: `commands: unknown category '${categoryFilter}'. Available: ${available}\n`,
+          exitCode: 1,
+        };
       }
-      const available = cat.commands.filter(c => registered.includes(c));
+      const available = cat.commands.filter((c) => registered.includes(c));
       let output = `${cat.label} (${available.length} commands):\n\n`;
       for (const cmd of available) {
         const desc = DESCRIPTIONS[cmd] ?? "";
@@ -185,7 +304,7 @@ export const commandsCommand: Command = {
     let output = `ag-bash commands (${registered.length} total):\n\n`;
 
     for (const [, cat] of Object.entries(CATEGORIES)) {
-      const available = cat.commands.filter(c => registered.includes(c));
+      const available = cat.commands.filter((c) => registered.includes(c));
       if (available.length === 0) continue;
       output += `${cat.label}:\n`;
       for (const cmd of available) {
@@ -196,8 +315,10 @@ export const commandsCommand: Command = {
     }
 
     // Show uncategorized commands
-    const categorized = new Set(Object.values(CATEGORIES).flatMap(c => c.commands));
-    const uncategorized = registered.filter(c => !categorized.has(c)).sort();
+    const categorized = new Set(
+      Object.values(CATEGORIES).flatMap((c) => c.commands),
+    );
+    const uncategorized = registered.filter((c) => !categorized.has(c)).sort();
     if (uncategorized.length > 0) {
       output += `Other (${uncategorized.length}):\n`;
       for (const cmd of uncategorized) {

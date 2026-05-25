@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { ObservationSummarizer } from "./ObservationSummarizer.js";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { Observation } from "../types.js";
+import { ObservationSummarizer } from "./ObservationSummarizer.js";
 
 describe("ObservationSummarizer", () => {
   let summarizer: ObservationSummarizer;
