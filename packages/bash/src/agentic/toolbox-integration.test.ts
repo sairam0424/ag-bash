@@ -269,9 +269,9 @@ describe("Intelligence Tools", () => {
     });
 
     it("should return safe message for 'ls -la'", async () => {
-      const result = await bash.toolbox.callTool(bash, "check_destructive", {
+      const result = (await bash.toolbox.callTool(bash, "check_destructive", {
         command: "ls -la",
-      });
+      })) as ToolResult;
       expect(result).toHaveProperty("safe", true);
       expect(result).toHaveProperty("message");
       expect(result.message).toContain("No destructive patterns");
@@ -301,41 +301,41 @@ describe("Automation Tools", () => {
   let _cronJobId: string;
 
   it("cron_create - should create a cron job and return id, cron, recurring", async () => {
-    const result = await bash.toolbox.callTool(bash, "cron_create", {
+    const result = (await bash.toolbox.callTool(bash, "cron_create", {
       cron: "*/5 * * * *",
       prompt: "Run tests",
-    });
+    })) as ToolResult;
     expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("cron", "*/5 * * * *");
     expect(result).toHaveProperty("recurring", true);
-    _cronJobId = result.id;
+    _cronJobId = result.id as string;
   });
 
   it("cron_list - should return array with the created job", async () => {
-    const created = await bash.toolbox.callTool(bash, "cron_create", {
+    const created = (await bash.toolbox.callTool(bash, "cron_create", {
       cron: "0 * * * *",
       prompt: "Hourly check",
-    });
+    })) as ToolResult;
 
-    const result = await bash.toolbox.callTool(bash, "cron_list", {});
+    const result = (await bash.toolbox.callTool(bash, "cron_list", {})) as ToolResult[];
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThanOrEqual(1);
-    const found = result.find((j: any) => j.id === created.id);
+    const found = result.find((j: ToolResult) => j.id === created.id);
     expect(found).toBeDefined();
-    expect(found.prompt).toBe("Hourly check");
+    expect(found!.prompt).toBe("Hourly check");
   });
 
   it("cron_delete - should delete the job and return success", async () => {
-    const created = await bash.toolbox.callTool(bash, "cron_create", {
+    const created = (await bash.toolbox.callTool(bash, "cron_create", {
       cron: "30 2 * * *",
       prompt: "Nightly build",
-    });
+    })) as ToolResult;
 
     const result = await bash.toolbox.callTool(bash, "cron_delete", {
-      id: created.id,
+      id: created.id as string,
     });
     expect(typeof result).toBe("string");
-    expect(result).toContain("Deleted cron job");
+    expect(result as string).toContain("Deleted cron job");
   });
 });
 
@@ -343,12 +343,12 @@ describe("Automation Tools", () => {
 
 describe("Worktree Tools", () => {
   it("enter_worktree - should create/enter a worktree and return id, path, branch", async () => {
-    const result = await bash.toolbox.callTool(bash, "enter_worktree", {
+    const result = (await bash.toolbox.callTool(bash, "enter_worktree", {
       name: "feature-x",
-    });
+    })) as ToolResult;
     expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("path");
-    expect(result.path).toContain("feature-x");
+    expect(result.path as string).toContain("feature-x");
     expect(result).toHaveProperty("branch");
     expect(result.branch).toBe("worktree/feature-x");
   });
@@ -359,7 +359,7 @@ describe("Worktree Tools", () => {
       name: "feature-y",
     });
 
-    const result = await bash.toolbox.callTool(bash, "exit_worktree", {});
+    const result = (await bash.toolbox.callTool(bash, "exit_worktree", {})) as ToolResult;
     expect(result).toHaveProperty("restored");
     expect(typeof result.restored).toBe("string");
   });
@@ -371,11 +371,11 @@ describe("Search Tools (search_tools)", () => {
   it("should find task-related tools when searching for 'task'", async () => {
     const result = await bash.toolbox.callTool(bash, "search_tools", {
       query: "task",
-    });
+    }) as ToolResult[];
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThan(0);
 
-    const names = result.map((r: any) => r.name);
+    const names = result.map((r: ToolResult) => r.name as string);
     // At least some of the task_* tools should appear
     const taskTools = names.filter((n: string) => n.startsWith("task_"));
     expect(taskTools.length).toBeGreaterThan(0);
@@ -391,11 +391,11 @@ describe("Search Tools (search_tools)", () => {
   it("should support select:name1,name2 pattern for exact lookup", async () => {
     const result = await bash.toolbox.callTool(bash, "search_tools", {
       query: "select:task_create,team_create",
-    });
+    }) as ToolResult[];
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(2);
 
-    const names = result.map((r: any) => r.name);
+    const names = result.map((r: ToolResult) => r.name as string);
     expect(names).toContain("task_create");
     expect(names).toContain("team_create");
   });

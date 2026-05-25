@@ -10,6 +10,29 @@ export interface LLMProvider {
 }
 
 /**
+ * Failure types that the auto-retry system can recognize and attempt to heal.
+ */
+export type RetryableFailureType =
+  | "command_not_found"
+  | "file_not_found"
+  | "permission_denied"
+  | "timeout";
+
+/**
+ * Configuration for the automatic retry/heal subsystem.
+ */
+export interface AutoRetryConfig {
+  /** Whether active self-healing is enabled. */
+  enabled: boolean;
+  /** Maximum number of retry attempts before giving up. Default: 3 */
+  maxRetries?: number;
+  /** Base delay in milliseconds for exponential backoff. Default: 100 */
+  baseDelayMs?: number;
+  /** Which failure types are eligible for automatic retry. Default: ['command_not_found', 'file_not_found'] */
+  retryable?: RetryableFailureType[];
+}
+
+/**
  * Configuration for the Agentic Healer.
  */
 export interface AgenticHealerConfig {
@@ -27,6 +50,12 @@ export interface AgenticHealerConfig {
    * Default: false
    */
   allowAutoFix?: boolean;
+  /**
+   * Configuration for active self-healing: auto-retry with corrected commands.
+   * When enabled, the healer will attempt to fix and re-execute failed commands
+   * using heuristic-based correction (typo detection, path resolution, etc.).
+   */
+  autoRetry?: AutoRetryConfig;
 }
 
 /**

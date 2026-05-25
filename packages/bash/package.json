@@ -65,6 +65,12 @@
         "types": "./dist/ai/index.d.ts",
         "default": "./dist/bundle/ai.js"
       }
+    },
+    "./agent-runtime": {
+      "import": {
+        "types": "./dist/agent-runtime/index.d.ts",
+        "default": "./dist/agent-runtime/index.js"
+      }
     }
   },
   "bin": {

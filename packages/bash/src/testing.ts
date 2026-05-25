@@ -1,9 +1,24 @@
 /**
  * Test utilities — import from "@ag-bash/bash/testing"
  *
- * Provides filesystem mocks, test parsers, and helpers for writing
- * tests against ag-bash without needing the full engine.
+ * Provides filesystem mocks, test parsers, factory helpers, and assertions
+ * for writing tests against ag-bash without needing the full engine.
  */
+
+// New testing utilities (factory, assertions, fixtures)
+export {
+  createTestBash,
+  type TestBashOptions,
+  assertSuccess,
+  assertFails,
+  assertOutput,
+  assertStderr,
+  assertFileExists,
+  assertFileNotExists,
+  EMPTY_PROJECT,
+  NODE_PROJECT,
+  GIT_REPO,
+} from "./testing/index.js";
 
 // In-memory filesystem for test fixtures
 export { InMemoryFs } from "./fs/in-memory-fs/index.js";

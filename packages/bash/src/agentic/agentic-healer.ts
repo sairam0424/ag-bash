@@ -3,10 +3,10 @@ import type {
   InterpreterContext,
   InterpreterState,
 } from "../interpreter/types.js";
-import { SymbolType } from "../lsp/semantic-engine.js";
+import { levenshtein, SymbolType } from "../lsp/semantic-engine.js";
 import type { ExecResult } from "../types.js";
 import type { BashToolbox } from "./BashToolbox.js";
-import type { AgenticHealerConfig } from "./types.js";
+import type { AgenticHealerConfig, RetryableFailureType } from "./types.js";
 
 /**
  * Agentic Healer for Ag-Bash.
@@ -252,6 +252,166 @@ SHELL_STABLE: ${state.options.posix ? "POSIX" : "BASH"}
     if (tools.length > 0) {
       const bestTool = tools[0];
       return `Command failed. Based on the context, you might want to use the agentic tool '${bestTool.name}': ${bestTool.description}`;
+    }
+
+    return null;
+  }
+
+  // ─── Active Self-Healing ───────────────────────────────────────────────────
+
+  /**
+   * Attempt active healing: diagnose, correct, and re-execute the command.
+   * Uses exponential backoff between retries and respects configured limits.
+   *
+   * @param command The original command that failed
+   * @param result The failed execution result
+   * @param execFn A function to re-execute a corrected command
+   * @param attempt Current retry attempt (0-indexed)
+   * @returns The healed result on success, or null if healing is not possible
+   */
+  public async heal(
+    command: string,
+    result: ExecResult,
+    execFn: (cmd: string) => Promise<ExecResult>,
+    attempt: number = 0,
+  ): Promise<ExecResult | null> {
+    const config = this.config?.autoRetry;
+    if (!config?.enabled) return null;
+
+    const maxRetries = config.maxRetries ?? 3;
+    if (attempt >= maxRetries) return null;
+
+    // Determine if this failure type is retryable
+    const failureType = this.classifyFailure(result);
+    const retryable: RetryableFailureType[] = config.retryable ?? [
+      "command_not_found",
+      "file_not_found",
+    ];
+    if (failureType && !retryable.includes(failureType)) return null;
+    // If we cannot classify the failure at all, skip healing
+    if (!failureType) return null;
+
+    // Try to determine a corrected command
+    const correction = this.suggestCorrection(command, result);
+    if (!correction) return null;
+
+    // Exponential backoff
+    const delay = (config.baseDelayMs ?? 100) * Math.pow(2, attempt);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+
+    // Execute the corrected command
+    const retryResult = await execFn(correction);
+    if (retryResult.exitCode === 0) {
+      return retryResult;
+    }
+
+    // Recursive retry with incremented attempt
+    return this.heal(correction, retryResult, execFn, attempt + 1);
+  }
+
+  /**
+   * Classify a failure result into a known category.
+   * Returns null if the failure does not match any recognized pattern.
+   */
+  public classifyFailure(result: ExecResult): RetryableFailureType | null {
+    const stderr = result.stderr.toLowerCase();
+    if (stderr.includes("command not found") || stderr.includes("not found")) {
+      return "command_not_found";
+    }
+    if (stderr.includes("no such file") || stderr.includes("cannot open")) {
+      return "file_not_found";
+    }
+    if (stderr.includes("permission denied")) {
+      return "permission_denied";
+    }
+    if (stderr.includes("timed out") || stderr.includes("timeout")) {
+      return "timeout";
+    }
+    return null;
+  }
+
+  /**
+   * Attempt to produce a corrected command string based on error analysis.
+   * Uses Levenshtein distance to find close matches for typo'd commands.
+   */
+  public suggestCorrection(command: string, result: ExecResult): string | null {
+    const stderr = result.stderr;
+
+    // Pattern: "command not found" with a close match
+    if (stderr.toLowerCase().includes("command not found")) {
+      const parts = command.trim().split(/\s+/);
+      const cmd = parts[0];
+      const knownCommands = [
+        "grep",
+        "echo",
+        "cat",
+        "ls",
+        "cd",
+        "pwd",
+        "find",
+        "sed",
+        "awk",
+        "sort",
+        "head",
+        "tail",
+        "wc",
+        "tr",
+        "cut",
+        "mkdir",
+        "rm",
+        "cp",
+        "mv",
+        "touch",
+        "chmod",
+        "chown",
+        "curl",
+        "wget",
+        "tar",
+        "gzip",
+        "gunzip",
+        "unzip",
+        "diff",
+        "patch",
+        "tee",
+        "xargs",
+        "date",
+        "env",
+        "export",
+        "source",
+        "test",
+        "true",
+        "false",
+        "printf",
+        "read",
+        "basename",
+        "dirname",
+      ];
+
+      // Find closest match by edit distance
+      let bestMatch: string | null = null;
+      let bestDist = Infinity;
+      for (const known of knownCommands) {
+        const dist = levenshtein(cmd, known);
+        if (dist < bestDist && dist <= 2) {
+          bestDist = dist;
+          bestMatch = known;
+        }
+      }
+
+      if (bestMatch) {
+        const correctedParts = [...parts];
+        correctedParts[0] = bestMatch;
+        return correctedParts.join(" ");
+      }
+    }
+
+    // Pattern: "no such file or directory" - try common path corrections
+    if (stderr.toLowerCase().includes("no such file")) {
+      // Attempt to fix double slashes or trailing issues
+      const corrected = command.replace(/\/\//g, "/");
+      if (corrected !== command) {
+        return corrected;
+      }
     }
 
     return null;
