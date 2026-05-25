@@ -1,8 +1,8 @@
-# Ag-Bash User Guide: The Agentic Shell (v3.0.0)
+# Ag-Bash User Guide: The Agentic Shell (v4.1.0)
 
 Welcome to **Ag-Bash**, the industry-standard secure runtime designed specifically for AI agents and high-fidelity virtual environments. This guide walks you through the core concepts, installation, and advanced workflows of the Ag-Bash ecosystem.
 
-> **Version note**: This guide covers Ag-Bash v3.0.0. If you are upgrading from v2.x, see the [Migration](#migrating-from-v2x) section below for breaking changes.
+> **Version note**: This guide covers Ag-Bash v4.1.0. If you are upgrading from v2.x or v3.x, see the [Migration](#migrating-from-v2x) section below for breaking changes.
 
 ---
 

@@ -11,9 +11,9 @@ This repository is organized into a modular monorepo to support independent vers
 
 | Package | Version | Description |
 | :--- | :--- | :--- |
-| [`@ag-bash/bash`](./packages/bash) | `v3.0.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
-| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v3.0.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
-| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v3.0.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
+| [`@ag-bash/bash`](./packages/bash) | `v4.1.0` | **Core Engine**: The virtual shell, filesystem, and sandboxed runtimes. |
+| [`@ag-bash/mcp-server`](./packages/mcp-server) | `v4.1.0` | **MCP Server**: A standalone Model Context Protocol server for seamless agent integration. |
+| [`@ag-bash/agent-bridge`](./packages/agent-bridge) | `v4.1.0` | **Agent Bridge**: Terminal UI bridge for AI agent communication. |
 
 ---
 
@@ -79,6 +79,7 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
+- **v4.1 Architecture**: RunLoop execution model, Tagged Template literals for ergonomic shell scripting, and Self-Healing error recovery with automatic retry and environment repair.
 - **v3.0 Architecture** *(Breaking)*: Dependency Injection via `ServiceContainer`, restructured `BashOptions` API with grouped sub-objects, and zero singletons.
 - **FNV-1a ASTCache**: Non-cryptographic hashing with true LRU eviction for high-frequency script execution.
 - **Pipeline Early Termination**: Static AST analysis detects `head -N` patterns and truncates upstream output.

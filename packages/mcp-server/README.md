@@ -75,8 +75,8 @@ Full access to the Nexus Prime toolset for high-fidelity code manipulation and a
 
 - **Read-Only Root**: By default, the server mounts your current project root as a **Read-Only** overlay. Any changes made by the agent stay in the virtual memory and never touch your real files.
 - **In-Process Sandbox**: No external VM required; execution is isolated using Ag-Bash's internal security logic.
-- **Sanitized Errors (v3.0.0)**: JSON-RPC error messages strip file paths and cap at 200 characters to prevent information leakage.
-- **Zero Console Leakage (v3.0.0)**: Library code never writes to `console.*` — all diagnostics flow through structured error handlers.
+- **Sanitized Errors (v4.1.0)**: JSON-RPC error messages strip file paths and cap at 200 characters to prevent information leakage.
+- **Zero Console Leakage (v4.1.0)**: Library code never writes to `console.*` — all diagnostics flow through structured error handlers.
 - **Resource Limits**: Protects against infinite loops, excessive memory, and session-wide network traffic accounting.
 - **Orchestration Governance**: Enforces agent nesting limits to prevent recursive loops in multi-agent workflows.
 

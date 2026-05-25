@@ -1,4 +1,4 @@
-# 🏛️ Ag-Bash Architecture (v3.0.0)
+# 🏛️ Ag-Bash Architecture (v4.1.0)
 
 This document provides a deep dive into the high-performance architectural components of **v3.0.0**, building on the foundations laid in **v2.0.0 "Nexus Prime"** and **v2.4.x "Project V-Next"**.
 

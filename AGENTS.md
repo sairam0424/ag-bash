@@ -2,7 +2,7 @@
 
 ## Project Structure & Architecture
 
-Ag-Bash is a pnpm monorepo (v3.0.0) with three packages: `@ag-bash/bash` (core shell engine), `@ag-bash/mcp-server` (MCP protocol server), and `@ag-bash/agent-bridge` (terminal UI bridge).
+Ag-Bash is a pnpm monorepo (v4.1.0) with three packages: `@ag-bash/bash` (core shell engine), `@ag-bash/mcp-server` (MCP protocol server), and `@ag-bash/agent-bridge` (terminal UI bridge).
 
 **Core pipeline**: Input Script → Tree-sitter Parser (`src/parser/`) → AST (`src/ast/`) → Interpreter (`src/interpreter/`) → ExecResult
 
