@@ -2,7 +2,6 @@ import type { ScriptNode } from "../ast/types.js";
 
 interface ASTCacheOptions {
   maxEntries?: number;
-  ttlMs?: number;
 }
 
 interface ASTCacheStats {
@@ -15,28 +14,23 @@ interface ASTCacheStats {
  * LRU cache for parsed Bash ASTs keyed by script source text.
  *
  * Uses FNV-1a hashing for fast, non-cryptographic cache key generation.
+ * Keys include the input length prefix to mitigate hash collisions.
  * Inputs shorter than 64 characters are used directly as keys (no hashing).
  * Eviction follows true LRU order: accessed entries are promoted to the
  * tail of the internal Map, and the least-recently-used entry (head) is
- * evicted when the cache exceeds `maxEntries`. Entries older than `ttlMs`
- * are treated as missing and removed on access.
+ * evicted when the cache exceeds `maxEntries` (default 1000).
  *
  * Can be reconfigured at runtime via `configure()`.
  */
 export class ASTCache {
-  private cache: Map<string, { ast: ScriptNode; timestamp: number }> =
-    new Map();
+  private cache: Map<string, ScriptNode> = new Map();
   private maxEntries = 1000;
-  private ttlMs = 3600000;
   private hits = 0;
   private misses = 0;
 
   configure(opts: ASTCacheOptions): void {
     if (opts.maxEntries !== undefined) {
       this.maxEntries = opts.maxEntries;
-    }
-    if (opts.ttlMs !== undefined) {
-      this.ttlMs = opts.ttlMs;
     }
     while (this.cache.size > this.maxEntries) {
       const oldest = this.cache.keys().next().value;
@@ -48,21 +42,19 @@ export class ASTCache {
     if (input.length < 64) {
       return input;
     }
-    return fnv1a(input);
+    return `${input.length}:${fnv1a(input)}`;
   }
 
   get(input: string): ScriptNode | null {
     const key = this.getKey(input);
-    const entry = this.cache.get(key);
+    const ast = this.cache.get(key);
 
-    if (entry) {
-      if (Date.now() - entry.timestamp < this.ttlMs) {
-        this.hits++;
-        this.cache.delete(key);
-        this.cache.set(key, entry);
-        return entry.ast;
-      }
+    if (ast) {
+      this.hits++;
+      // Promote to tail for LRU ordering
       this.cache.delete(key);
+      this.cache.set(key, ast);
+      return ast;
     }
 
     this.misses++;
@@ -79,7 +71,7 @@ export class ASTCache {
       if (oldest !== undefined) this.cache.delete(oldest);
     }
 
-    this.cache.set(key, { ast, timestamp: Date.now() });
+    this.cache.set(key, ast);
   }
 
   clear(): void {

@@ -3,7 +3,7 @@ import { ASTCache } from "./ASTCache.js";
 import type { ScriptNode } from "../ast/types.js";
 
 /**
- * Unit tests for ASTCache — LRU cache with FNV-1a hashing and TTL expiration.
+ * Unit tests for ASTCache — LRU cache with FNV-1a hashing and length-prefixed keys.
  */
 
 function makeAST(id = 1): ScriptNode {
@@ -168,42 +168,25 @@ describe("ASTCache", () => {
     });
   });
 
-  describe("TTL expiration", () => {
-    it("should return entry before TTL expires", () => {
-      cache.configure({ ttlMs: 5000 });
+  describe("no TTL — entries persist until LRU eviction", () => {
+    it("should retain entries regardless of elapsed time", () => {
       const ast = makeAST();
       cache.set("echo hello", ast);
-      vi.advanceTimersByTime(4999);
+      vi.advanceTimersByTime(999999999);
       expect(cache.get("echo hello")).toBe(ast);
     });
 
-    it("should return null after TTL expires", () => {
-      cache.configure({ ttlMs: 5000 });
-      cache.set("echo hello", makeAST());
-      vi.advanceTimersByTime(5001);
-      expect(cache.get("echo hello")).toBeNull();
-    });
-
-    it("should remove expired entry from cache on access", () => {
-      cache.configure({ ttlMs: 1000 });
-      cache.set("a", makeAST());
-      vi.advanceTimersByTime(1500);
-      cache.get("a"); // Triggers removal
-      expect(cache.stats().size).toBe(0);
-    });
-
-    it("should handle TTL of 0 (immediately expired)", () => {
-      cache.configure({ ttlMs: 0 });
-      cache.set("a", makeAST());
-      vi.advanceTimersByTime(1);
-      expect(cache.get("a")).toBeNull();
-    });
-
-    it("should not expire entries with very large TTL", () => {
-      cache.configure({ ttlMs: 999999999 });
-      cache.set("a", makeAST());
-      vi.advanceTimersByTime(100000);
+    it("should only evict via LRU when at capacity", () => {
+      cache.configure({ maxEntries: 2 });
+      cache.set("a", makeAST(1));
+      cache.set("b", makeAST(2));
+      vi.advanceTimersByTime(999999999);
+      // Both still present — no TTL eviction
       expect(cache.get("a")).not.toBeNull();
+      expect(cache.get("b")).not.toBeNull();
+      // Inserting a third triggers LRU eviction of "a" (promoted "b" via get above)
+      cache.set("c", makeAST(3));
+      expect(cache.get("a")).toBeNull();
     });
   });
 
@@ -234,10 +217,10 @@ describe("ASTCache", () => {
       expect(cache.stats().size).toBe(2);
     });
 
-    it("should count expired entry access as a miss", () => {
-      cache.configure({ ttlMs: 100 });
+    it("should count evicted entry access as a miss", () => {
+      cache.configure({ maxEntries: 1 });
       cache.set("a", makeAST());
-      vi.advanceTimersByTime(200);
+      cache.set("b", makeAST(2)); // evicts "a"
       cache.get("a");
       expect(cache.stats().misses).toBe(1);
       expect(cache.stats().hits).toBe(0);
@@ -284,18 +267,9 @@ describe("ASTCache", () => {
       expect(cache.stats().size).toBe(5);
     });
 
-    it("should update ttlMs", () => {
-      cache.set("a", makeAST());
-      cache.configure({ ttlMs: 500 });
-      vi.advanceTimersByTime(600);
-      expect(cache.get("a")).toBeNull();
-    });
-
-    it("should allow configuring only maxEntries without affecting ttlMs", () => {
-      cache.configure({ ttlMs: 10000 });
+    it("should retain entries after reconfiguration if within capacity", () => {
       cache.set("a", makeAST());
       cache.configure({ maxEntries: 500 });
-      vi.advanceTimersByTime(9000);
       expect(cache.get("a")).not.toBeNull();
     });
 

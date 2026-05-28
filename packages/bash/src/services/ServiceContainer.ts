@@ -4,6 +4,9 @@
  * Replaces the singleton pattern used in v2.x with explicit instance
  * ownership. Each Bash instance creates its own ServiceContainer,
  * ensuring full isolation between shell instances.
+ *
+ * v5.0.0: Lazy initialization for all services except astCache and sharedBus.
+ * Services are only instantiated on first access, reducing startup cost.
  */
 
 import { Orchestrator } from "../agentic/Orchestrator.js";
@@ -42,55 +45,132 @@ export interface ServiceContainer {
 export function createDefaultServices(
   overrides?: Partial<ServiceContainer>,
 ): ServiceContainer {
-  const bus = overrides?.sharedBus ?? new SharedStateBus();
-  const taskManager = overrides?.taskManager ?? new TaskManager();
-  const teamManager = overrides?.teamManager ?? new TeamManager();
-  const gitTracker = overrides?.gitTracker ?? new GitTracker();
-  const cronScheduler = overrides?.cronScheduler ?? new CronScheduler();
-  const worktreeManager = overrides?.worktreeManager ?? new WorktreeManager();
+  // Eager services - universally needed
+  const astCache = overrides?.astCache ?? new ASTCache();
+  const sharedBus = overrides?.sharedBus ?? new SharedStateBus();
 
-  taskManager.setBus(bus);
-  teamManager.setBus(bus);
-  gitTracker.setBus(bus);
-  cronScheduler.setBus(bus);
-  worktreeManager.setBus(bus);
-
-  const sessionManager = overrides?.sessionManager ?? new SessionManager();
-  const mcpClient = overrides?.mcpClient ?? new McpClient();
+  // Lazy backing fields
+  let _sessionManager: SessionManager | null =
+    overrides?.sessionManager ?? null;
+  let _agentManager: AgentManager | null = overrides?.agentManager ?? null;
+  let _mcpClient: McpClient | null = overrides?.mcpClient ?? null;
+  let _orchestrator: Orchestrator | null = overrides?.orchestrator ?? null;
+  let _lspManager: LSPManager | null = overrides?.lspManager ?? null;
+  let _taskManager: TaskManager | null = overrides?.taskManager ?? null;
+  let _teamManager: TeamManager | null = overrides?.teamManager ?? null;
+  let _agentMemory: AgentMemory | null = overrides?.agentMemory ?? null;
+  let _gitTracker: GitTracker | null = overrides?.gitTracker ?? null;
+  let _cronScheduler: CronScheduler | null = overrides?.cronScheduler ?? null;
+  let _worktreeManager: WorktreeManager | null =
+    overrides?.worktreeManager ?? null;
+  let _parser: typeof TreeSitterParser | null = overrides?.parser ?? null;
 
   let disposed = false;
 
   return {
-    astCache: overrides?.astCache ?? new ASTCache(),
-    sharedBus: bus,
-    sessionManager,
-    agentManager: overrides?.agentManager ?? new AgentManager(),
-    mcpClient,
-    orchestrator: overrides?.orchestrator ?? new Orchestrator(),
-    lspManager: overrides?.lspManager ?? new LSPManager(),
-    taskManager,
-    teamManager,
-    agentMemory: overrides?.agentMemory ?? new AgentMemory(),
-    gitTracker,
-    cronScheduler,
-    worktreeManager,
-    parser: overrides?.parser ?? TreeSitterParser,
+    astCache,
+    sharedBus,
+
+    get sessionManager(): SessionManager {
+      _sessionManager ??= new SessionManager();
+      return _sessionManager;
+    },
+
+    get agentManager(): AgentManager {
+      _agentManager ??= new AgentManager();
+      return _agentManager;
+    },
+
+    get mcpClient(): McpClient {
+      _mcpClient ??= new McpClient();
+      return _mcpClient;
+    },
+
+    get orchestrator(): Orchestrator {
+      _orchestrator ??= new Orchestrator();
+      return _orchestrator;
+    },
+
+    get lspManager(): LSPManager {
+      _lspManager ??= new LSPManager();
+      return _lspManager;
+    },
+
+    get taskManager(): TaskManager {
+      if (!_taskManager) {
+        _taskManager = new TaskManager();
+        _taskManager.setBus(sharedBus);
+      }
+      return _taskManager;
+    },
+
+    get teamManager(): TeamManager {
+      if (!_teamManager) {
+        _teamManager = new TeamManager();
+        _teamManager.setBus(sharedBus);
+      }
+      return _teamManager;
+    },
+
+    get agentMemory(): AgentMemory {
+      _agentMemory ??= new AgentMemory();
+      return _agentMemory;
+    },
+
+    get gitTracker(): GitTracker {
+      if (!_gitTracker) {
+        _gitTracker = new GitTracker();
+        _gitTracker.setBus(sharedBus);
+      }
+      return _gitTracker;
+    },
+
+    get cronScheduler(): CronScheduler {
+      if (!_cronScheduler) {
+        _cronScheduler = new CronScheduler();
+        _cronScheduler.setBus(sharedBus);
+      }
+      return _cronScheduler;
+    },
+
+    get worktreeManager(): WorktreeManager {
+      if (!_worktreeManager) {
+        _worktreeManager = new WorktreeManager();
+        _worktreeManager.setBus(sharedBus);
+      }
+      return _worktreeManager;
+    },
+
+    get parser(): typeof TreeSitterParser {
+      _parser ??= TreeSitterParser;
+      return _parser;
+    },
+
     async dispose(): Promise<void> {
       if (disposed) return;
       disposed = true;
 
       const errors: Error[] = [];
-      const services = [cronScheduler, gitTracker, mcpClient, sessionManager];
 
-      for (const svc of services) {
-        try {
-          await svc.dispose();
-        } catch (e: unknown) {
-          errors.push(e instanceof Error ? e : new Error(String(e)));
+      // Only dispose services that were actually instantiated
+      const disposables: Array<{ dispose(): Promise<void> } | null> = [
+        _cronScheduler,
+        _gitTracker,
+        _mcpClient,
+        _sessionManager,
+      ];
+
+      for (const svc of disposables) {
+        if (svc) {
+          try {
+            await svc.dispose();
+          } catch (e: unknown) {
+            errors.push(e instanceof Error ? e : new Error(String(e)));
+          }
         }
       }
 
-      bus.destroy();
+      sharedBus.destroy();
 
       if (errors.length > 0) {
         throw new AggregateError(

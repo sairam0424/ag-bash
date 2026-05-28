@@ -132,8 +132,6 @@ export class RunLoop {
   }
 
   private async runTurn(response: GenerateResponse): Promise<TurnEvent> {
-    const toolCallResults: TurnEvent["toolCalls"] = [];
-
     // Add assistant message with tool calls
     this.messages.push({
       role: "assistant",
@@ -141,34 +139,128 @@ export class RunLoop {
       toolCalls: response.toolCalls,
     });
 
-    // Run each tool call via the sandboxed virtual shell
-    for (const toolCall of response.toolCalls ?? []) {
-      const start = Date.now();
-      const result = await this.invokeToolCall(toolCall);
-      const durationMs = Date.now() - start;
+    const toolCalls = response.toolCalls ?? [];
 
-      toolCallResults.push({
-        name: toolCall.name,
-        args: toolCall.args,
-        result,
-        durationMs,
-      });
+    // Execute tool calls - parallel when safe, sequential otherwise.
+    // Tools that modify shared state (bash/run_command) mutate cwd, env vars,
+    // and filesystem. Only parallelize read-only tools that don't share state.
+    const toolCallResults = await this.executeToolCalls(toolCalls);
 
-      // Add tool result message
+    // Append tool result messages in order (preserves message ordering
+    // regardless of execution strategy)
+    for (const entry of toolCallResults) {
       this.messages.push({
         role: "tool",
-        content: result,
-        toolCallId: toolCall.id,
+        content: entry.result,
+        toolCallId: entry.toolCallId,
       });
     }
 
     return {
       turnNumber: this.budget.turns,
-      toolCalls: toolCallResults,
+      toolCalls: toolCallResults.map((entry) => ({
+        name: entry.name,
+        args: entry.args,
+        result: entry.result,
+        durationMs: entry.durationMs,
+      })),
       inputTokens: response.usage.inputTokens,
       outputTokens: response.usage.outputTokens,
       cumulativeTokens: this.budget.totalTokens,
     };
+  }
+
+  /**
+   * Determines whether a tool call is read-only (safe for parallel execution).
+   * Write tools modify shared state (cwd, env, filesystem) and must run sequentially.
+   */
+  private isReadOnlyTool(toolCall: ToolCall): boolean {
+    // bash and run_command tools modify shared shell state (env, cwd, files)
+    // and must always be executed sequentially to avoid race conditions.
+    const writableTools = new Set(["bash", "run_command"]);
+    return !writableTools.has(toolCall.name);
+  }
+
+  /**
+   * Execute tool calls with optimal parallelism:
+   * - Single tool call: await directly (no Promise.all overhead)
+   * - Multiple read-only tools: parallel via Promise.all
+   * - Any write tool present: sequential execution (preserves state ordering)
+   */
+  private async executeToolCalls(
+    toolCalls: ToolCall[],
+  ): Promise<
+    Array<{
+      name: string;
+      args: Record<string, unknown>;
+      result: string;
+      durationMs: number;
+      toolCallId: string;
+    }>
+  > {
+    // Fast path: single tool call, no overhead
+    if (toolCalls.length === 1) {
+      const toolCall = toolCalls[0];
+      const start = Date.now();
+      const result = await this.invokeToolCall(toolCall);
+      const durationMs = Date.now() - start;
+      return [
+        {
+          name: toolCall.name,
+          args: toolCall.args,
+          result,
+          durationMs,
+          toolCallId: toolCall.id,
+        },
+      ];
+    }
+
+    // Check if all tool calls are read-only (safe for parallel execution)
+    const allReadOnly = toolCalls.every((tc) => this.isReadOnlyTool(tc));
+
+    if (allReadOnly) {
+      // Parallel execution - all tools are read-only and don't share mutable state
+      const results = await Promise.all(
+        toolCalls.map(async (toolCall) => {
+          const start = Date.now();
+          const result = await this.invokeToolCall(toolCall);
+          const durationMs = Date.now() - start;
+          return {
+            name: toolCall.name,
+            args: toolCall.args,
+            result,
+            durationMs,
+            toolCallId: toolCall.id,
+          };
+        }),
+      );
+      return results;
+    }
+
+    // Sequential execution - write tools present, must preserve ordering
+    const results: Array<{
+      name: string;
+      args: Record<string, unknown>;
+      result: string;
+      durationMs: number;
+      toolCallId: string;
+    }> = [];
+
+    for (const toolCall of toolCalls) {
+      const start = Date.now();
+      const result = await this.invokeToolCall(toolCall);
+      const durationMs = Date.now() - start;
+
+      results.push({
+        name: toolCall.name,
+        args: toolCall.args,
+        result,
+        durationMs,
+        toolCallId: toolCall.id,
+      });
+    }
+
+    return results;
   }
 
   /**
