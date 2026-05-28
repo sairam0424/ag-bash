@@ -1,6 +1,11 @@
 import type { IFileSystem } from "./fs/interface.js";
 import type { ExecutionLimits } from "./limits.js";
+import type {
+  SemanticSymbol,
+  SymbolOccurrence,
+} from "./lsp/semantic-engine.js";
 import type { SecureFetch } from "./network/index.js";
+import type { ServiceContainer } from "./services/ServiceContainer.js";
 
 /**
  * Lightweight interface for feature coverage tracking during fuzzing.
@@ -145,6 +150,43 @@ export interface TraceEvent {
  */
 export type TraceCallback = (event: TraceEvent) => void;
 
+/**
+ * Minimal interface exposing Bash instance capabilities to commands.
+ * Replaces raw `any` reference to the Bash class, providing only the
+ * surface area that commands actually need.
+ */
+export interface BashHost {
+  /** Service container for accessing shared services (agents, MCP, etc.) */
+  readonly services: ServiceContainer;
+  /** Execution limits configuration */
+  readonly limits: Required<ExecutionLimits>;
+  /** Semantic engine for symbol resolution */
+  readonly semanticEngine: {
+    findDefinition(name: string, scope?: string): SemanticSymbol | undefined;
+    getOccurrences(name: string): SymbolOccurrence[];
+    getAllSymbols(): SemanticSymbol[];
+    indexNode(node: unknown, path?: string, language?: string): void;
+  };
+  /** Workspace indexer for symbol search */
+  readonly indexer: {
+    findSymbols(query?: string): Promise<unknown[]>;
+  };
+  /** LSP manager for language server notifications */
+  readonly lsp: {
+    notifyDidChange(filePath: string, content: string): void;
+  };
+  /** Toolbox for registering MCP tools */
+  readonly toolbox: {
+    registerMcpTools(connectionId: string, tools: unknown[]): void;
+  };
+  /** Whether agentic mode is enabled */
+  readonly agentic?: boolean;
+  /** Set the shell mode (execute or plan) */
+  setMode(mode: "execute" | "plan"): void;
+  /** Get the current shell mode */
+  getMode(): "execute" | "plan";
+}
+
 export interface CommandContext {
   /** Virtual filesystem interface for file operations */
   fs: IFileSystem;
@@ -237,8 +279,7 @@ export interface CommandContext {
   /** Current session ID for stateful REPLs */
   sessionId?: string;
   /** Reference to the parent Bash instance (for service access) */
-  // biome-ignore lint/suspicious/noExplicitAny: Reference to circular Bash instance
-  bash?: any;
+  bash?: BashHost;
 }
 
 export interface Command {

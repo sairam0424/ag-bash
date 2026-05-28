@@ -270,12 +270,21 @@ export interface IFileSystem {
    * Create a snapshot of the current filesystem state (writable layers/memory).
    * Used for state persistence and rollbacks in agentic workflows.
    */
-  snapshot(): Promise<unknown>;
+  snapshot(): Promise<FileSystemSnapshot>;
 
   /**
    * Restore the filesystem state from a previously captured snapshot.
    */
-  restore(snapshot: unknown): Promise<void>;
+  restore(snapshot: FileSystemSnapshot): Promise<void>;
+}
+
+/**
+ * Opaque branded type representing a filesystem snapshot.
+ * Each filesystem implementation produces its own internal structure,
+ * but consumers should treat this as an opaque handle for restore operations.
+ */
+export interface FileSystemSnapshot {
+  readonly __brand: "FileSystemSnapshot";
 }
 
 /**

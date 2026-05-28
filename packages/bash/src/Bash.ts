@@ -29,7 +29,11 @@ import {
 } from "./custom-commands.js";
 import { InMemoryFs } from "./fs/in-memory-fs/in-memory-fs.js";
 import { initFilesystem } from "./fs/init.js";
-import type { IFileSystem, InitialFiles } from "./fs/interface.js";
+import type {
+  FileSystemSnapshot,
+  IFileSystem,
+  InitialFiles,
+} from "./fs/interface.js";
 import { MountableFs } from "./fs/mountable-fs/index.js";
 import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
 import {
@@ -1075,10 +1079,7 @@ export class Bash extends EventEmitter {
   async createDelta(base: BashSnapshot): Promise<BashDelta> {
     const current = await this.snapshot();
     const delta = diffState(base, current);
-    delta.fsDelta = diffFs(
-      base.fs as Map<string, any>,
-      current.fs as Map<string, any>,
-    );
+    delta.fsDelta = diffFs(base.fs, current.fs);
     return delta;
   }
 
@@ -1288,6 +1289,10 @@ export class Bash extends EventEmitter {
     this.services.sharedBus.destroy();
     this.services.astCache.clear();
   }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.destroy();
+  }
 }
 
 /**
@@ -1295,7 +1300,7 @@ export class Bash extends EventEmitter {
  */
 export interface BashSnapshot {
   state: InterpreterState;
-  fs: unknown;
+  fs: FileSystemSnapshot;
 }
 
 /**

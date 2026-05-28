@@ -15,6 +15,7 @@ export type {
 export type {
   BashLogger,
   BashOptions,
+  BashSnapshot,
   ExecOptions,
   JavaScriptConfig,
 } from "./Bash.js";
@@ -44,6 +45,7 @@ export type {
   FileEntry,
   FileInit,
   FileSystemFactory,
+  FileSystemSnapshot,
   FsEntry,
   FsStat,
   InitialFiles,
@@ -120,6 +122,7 @@ export {
   SecurityViolationError,
   SecurityViolationLogger,
 } from "./security/index.js";
+export type { Disposable, BusAware } from "./services/types.js";
 export type { MemoryEntry, MemoryScope } from "./services/AgentMemory.js";
 export { AgentMemory } from "./services/AgentMemory.js";
 export {
@@ -160,14 +163,27 @@ export type {
 } from "./transform/types.js";
 export type {
   BashExecResult,
+  BashHost,
   Command,
   CommandContext,
   ExecResult,
   IFileSystem,
+  Observation,
 } from "./types.js";
 // Tagged template API (zx-style ergonomic shell)
 export { createShell, type TaggedShell } from "./template/index.js";
 export { shellEscape } from "./template/index.js";
+
+// Event system
+export type {
+  BashEventMap,
+  ExecEndEvent,
+  ExecStartEvent,
+  ToolEndEvent,
+  ToolProgressEvent,
+  ToolStartEvent,
+  TypedEventEmitter,
+} from "./events.js";
 
 // Observability
 export { ObservationSummarizer } from "./observability/ObservationSummarizer.js";

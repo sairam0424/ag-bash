@@ -132,6 +132,12 @@ export interface VariableAttributeState {
   /** Set of temporarily exported variable names (for prefix assignments like FOO=bar cmd) */
   tempExportedVars?: Set<string>;
   /**
+   * Dirty flag for incremental exported env caching (2.6).
+   * Set to true whenever exportedVars, tempExportedVars, or exported var values change.
+   * The interpreter uses this to avoid rebuilding the exported env record on every call.
+   */
+  exportedEnvDirty?: boolean;
+  /**
    * Stack of sets tracking variables exported within each local scope.
    * When a function returns and a local scope is popped, if a variable was
    * exported only in that scope (not before entering), the export attribute
@@ -494,4 +500,14 @@ export interface InterpreterContext {
   sessionId?: string;
   /** Reference to the parent Bash instance */
   bash?: any;
+
+  // ---- Trap Execution Guards ----
+  /** True while the ERR trap handler is executing (prevents recursion) */
+  __executingErrTrap?: boolean;
+  /** True once the EXIT trap has fired (ensures idempotent execution) */
+  __exitTrapFired?: boolean;
+  /** True while the RETURN trap handler is executing (prevents recursion) */
+  __executingReturnTrap?: boolean;
+  /** True while the DEBUG trap handler is executing (prevents recursion) */
+  __executingDebugTrap?: boolean;
 }

@@ -7,6 +7,7 @@
  */
 
 import type { BashSnapshot } from "../Bash.js";
+import type { FileSystemSnapshot } from "../fs/interface.js";
 import type { InterpreterState } from "../interpreter/types.js";
 
 export interface BashDelta {
@@ -96,14 +97,20 @@ export function diffState(
 /**
  * Diffs two VFS snapshots. Handles both raw Maps and MountableFs snapshot objects.
  */
-export function diffFs(baseFs: any, currentFs: any): FsDelta {
+export function diffFs(baseFs: FileSystemSnapshot, currentFs: FileSystemSnapshot): FsDelta {
   const modified: Record<string, string | Uint8Array> = Object.create(null);
   const deleted: string[] = [];
 
+  // Cast to internal representation for diffing.
+  // FileSystemSnapshot is an opaque branded type; internally it may be a Map
+  // (InMemoryFs) or an object with a `base` Map (MountableFs).
+  const baseRaw = baseFs as unknown as Record<string, unknown>;
+  const currentRaw = currentFs as unknown as Record<string, unknown>;
+
   // Unwrap MountableFs snapshots if necessary
-  const bMap = baseFs && baseFs.base instanceof Map ? baseFs.base : baseFs;
+  const bMap = baseRaw && baseRaw.base instanceof Map ? baseRaw.base : baseRaw;
   const cMap =
-    currentFs && currentFs.base instanceof Map ? currentFs.base : currentFs;
+    currentRaw && currentRaw.base instanceof Map ? currentRaw.base : currentRaw;
 
   if (cMap instanceof Map && bMap instanceof Map) {
     for (const [path, entry] of cMap.entries()) {

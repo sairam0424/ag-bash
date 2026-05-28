@@ -1,10 +1,24 @@
 import type { Bash } from "@ag-bash/bash";
-import type { AgentAdapter } from "./adapters.js";
+import type { AgentAdapter, HitlInterruption, ToolOutput } from "./adapters.js";
 import {
   formatForTerminal,
   type TerminalWriter,
   type UIMessage,
 } from "./index.js";
+
+/**
+ * Type guard for HITL interruption payloads in tool output.
+ */
+function isHitlInterruption(output: ToolOutput): output is HitlInterruption {
+  return (
+    typeof output === "object" &&
+    output !== null &&
+    "interrupted" in output &&
+    output["interrupted"] === true &&
+    "question" in output &&
+    typeof output["question"] === "string"
+  );
+}
 
 export interface OrchestratorOptions {
   bash: Bash;
@@ -19,7 +33,7 @@ export interface OrchestratorOptions {
  */
 export class AgentOrchestrator {
   private messages: UIMessage[] = [];
-  private snapshots: Map<string, any> = new Map();
+  private snapshots: Map<string, unknown> = new Map();
   private messageIdCounter = 0;
 
   constructor(private options: OrchestratorOptions) {}
@@ -288,8 +302,8 @@ export class AgentOrchestrator {
             fullText += "\n";
           }
 
-          if (chunk.toolName === "bash" && chunk.input.command) {
-            const lines = String(chunk.input.command).split("\n");
+          if (chunk.toolName === "bash" && chunk.input["command"]) {
+            const lines = String(chunk.input["command"]).split("\n");
             writer.write(`\x1b[36m$ ${lines[0]}\x1b[0m\r\n`);
             for (let i = 1; i < lines.length; i++)
               writer.write(`\x1b[36m${lines[i]}\x1b[0m\r\n`);
@@ -300,12 +314,16 @@ export class AgentOrchestrator {
             writer.write(
               `\x1b[35m[Orchestrator] Created snapshot ${snapId}\x1b[0m\r\n`,
             );
-          } else if (chunk.toolName === "restore" && chunk.input.snapshotId) {
-            const snap = this.snapshots.get(chunk.input.snapshotId);
+          } else if (
+            chunk.toolName === "restore" &&
+            typeof chunk.input["snapshotId"] === "string"
+          ) {
+            const snapshotId = chunk.input["snapshotId"];
+            const snap = this.snapshots.get(snapshotId);
             if (snap) {
-              await bash.restore(snap);
+              await bash.restore(snap as Awaited<ReturnType<Bash["snapshot"]>>);
               writer.write(
-                `\x1b[35m[Orchestrator] Restored to ${chunk.input.snapshotId}\x1b[0m\r\n`,
+                `\x1b[35m[Orchestrator] Restored to ${snapshotId}\x1b[0m\r\n`,
               );
             }
           } else if (chunk.toolName === "index_workspace") {
@@ -332,19 +350,14 @@ export class AgentOrchestrator {
           if (existing) existing.result = resultStr;
 
           // Check for interruption (HITL)
-          if (
-            chunk.output &&
-            typeof chunk.output === "object" &&
-            (chunk.output as any).interrupted
-          ) {
-            const hitl = chunk.output as any;
+          if (isHitlInterruption(chunk.output)) {
             writer.write(
-              `\r\n\x1b[33m💡 HITL Prompt: ${hitl.question}\x1b[0m\r\n`,
+              `\r\n\x1b[33m💡 HITL Prompt: ${chunk.output.question}\x1b[0m\r\n`,
             );
             // We break the loop to allow the caller to handle the interaction
             return {
               type: "interrupted",
-              question: hitl.question,
+              question: chunk.output.question,
               toolCallId: chunk.toolCallId,
             };
           }

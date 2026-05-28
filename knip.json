@@ -1,10 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
-    "src/index.ts!",
+    "src/index.ts",
     "src/browser.ts!",
     "src/cli/ag-bash.ts!",
-    "src/cli/shell.ts!",
+    "src/cli/shell.ts",
     "src/vitest-setup.ts",
     "src/comparison-tests/vitest.setup.ts",
     "src/shims/browser-dns.ts"
@@ -13,17 +13,18 @@
   "ignore": [
     "src/spec-tests/**",
     "src/banned-patterns-test.ts",
-    "src/security/fuzzing/**"
+    "src/security/fuzzing/**",
+    "src/**/*.d.ts"
   ],
   "ignoreBinaries": ["tsx"],
   "rules": {
-    "exports": "off",
-    "dependencies": "off",
+    "exports": "warn",
+    "dependencies": "warn",
     "devDependencies": "off",
     "unlisted": "off",
     "unresolved": "off",
     "optionalPeerDependencies": "off",
     "types": "off",
-    "files": "off"
+    "files": "warn"
   }
 }

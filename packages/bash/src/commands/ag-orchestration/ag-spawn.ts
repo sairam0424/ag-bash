@@ -31,7 +31,9 @@ export const agSpawn: Command = {
 
     try {
       const manager = ctx.bash.services.agentManager;
-      await manager.spawn(id, command, ctx.bash);
+      // AgentManager.spawn requires the full Bash instance at runtime.
+      // BashHost is the narrow command-facing interface; the actual value is always Bash.
+      await manager.spawn(id, command, ctx.bash as unknown as import("../../Bash.js").Bash);
       return {
         stdout: `Spawned sub-agent ${id} in background.\n`,
         stderr: "",

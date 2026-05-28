@@ -20,6 +20,10 @@ export const agWait: Command = {
       };
     }
 
+    if (!ctx.bash) {
+      return { stdout: "", stderr: "ag-wait: no bash host available\n", exitCode: 1 };
+    }
+
     try {
       const manager = ctx.bash.services.agentManager;
       const result = await manager.wait(id);

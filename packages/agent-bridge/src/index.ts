@@ -1,9 +1,10 @@
+import type { Bash } from "@ag-bash/bash";
 import { defineCommand } from "@ag-bash/bash";
 
 export * from "./adapters.js";
 export * from "./orchestrator.js";
 
-import { FetchAgentAdapter } from "./adapters.js";
+import { type AgentAdapter, FetchAgentAdapter } from "./adapters.js";
 import { AgentOrchestrator } from "./orchestrator.js";
 
 /**
@@ -29,6 +30,8 @@ export interface AgentBridgeOptions {
   apiEndpoint?: string;
   maxToolOutputLines?: number;
   onStateUpdate?: (messages: UIMessage[]) => void;
+  bash?: Bash;
+  adapter?: AgentAdapter;
 }
 
 /**
@@ -66,7 +69,7 @@ export function createAgentBridge(
     onStateUpdate,
     bash,
     adapter: customAdapter,
-  } = options as any;
+  } = options;
 
   const adapter = customAdapter || new FetchAgentAdapter(apiEndpoint);
 
