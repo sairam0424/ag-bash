@@ -586,7 +586,7 @@ export class BridgeHandler {
       controller.abort();
       const message = e instanceof Error ? e.message : String(e);
       this.protocol.setErrorCode(ErrorCode.IO_ERROR);
-      this.protocol.setResultFromString(message);
+      this.protocol.setResultFromString(sanitizeErrorMessage(message));
       this.protocol.setStatus(Status.ERROR);
     }
   }

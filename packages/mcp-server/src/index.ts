@@ -14,6 +14,12 @@ function sanitizeErrorMessage(error: unknown): string {
   return sanitized.length > 200 ? `${sanitized.slice(0, 200)}...` : sanitized;
 }
 
+/** Maximum JSON-RPC request size (16MB) */
+const MAX_REQUEST_SIZE = 16 * 1024 * 1024;
+
+/** Maximum base64 encoded payload length (~16MB decoded) */
+const MAX_BASE64_LENGTH = 22_000_000;
+
 /**
  * Ag-Bash MCP Server (Dependency-Free Implementation)
  *
@@ -31,6 +37,7 @@ class AgBashServer {
     this.bash = new Bash({
       network: {
         dangerouslyAllowFullInternetAccess: true,
+        denyPrivateRanges: true,
       },
       runtimes: { python: true, javascript: true },
       security: { defenseInDepth: true },
@@ -111,6 +118,12 @@ class AgBashServer {
   private async handleRequest(request: any) {
     const { method, params, id } = request;
 
+    if (typeof method !== "string") {
+      return this.sendResponse(id ?? null, {
+        error: { code: -32600, message: "Invalid Request: method must be a string" },
+      });
+    }
+
     try {
       switch (method) {
         case "initialize": {
@@ -124,7 +137,7 @@ class AgBashServer {
               },
               serverInfo: {
                 name: "ag-bash",
-                version: "4.1.0",
+                version: "5.0.0",
               },
             },
           });
@@ -302,6 +315,9 @@ class AgBashServer {
             });
           } else if (name === "restore") {
             const encodedSnapshot = String(args?.snapshot || "");
+            if (encodedSnapshot.length > MAX_BASE64_LENGTH) {
+              return this.sendResponse(id, { error: { code: -32602, message: "Payload too large" } });
+            }
             const parsed = JSON.parse(
               Buffer.from(encodedSnapshot, "base64").toString("utf-8"),
             );
@@ -330,6 +346,9 @@ class AgBashServer {
             });
           } else if (name === "create_delta") {
             const encodedBase = String(args?.baseSnapshot || "");
+            if (encodedBase.length > MAX_BASE64_LENGTH) {
+              return this.sendResponse(id, { error: { code: -32602, message: "Payload too large" } });
+            }
             const parsedBase = JSON.parse(
               Buffer.from(encodedBase, "base64").toString("utf-8"),
             );
@@ -359,6 +378,9 @@ class AgBashServer {
             });
           } else if (name === "apply_delta") {
             const encodedDelta = String(args?.delta || "");
+            if (encodedDelta.length > MAX_BASE64_LENGTH) {
+              return this.sendResponse(id, { error: { code: -32602, message: "Payload too large" } });
+            }
             const parsedDelta = JSON.parse(
               Buffer.from(encodedDelta, "base64").toString("utf-8"),
             );
@@ -542,6 +564,10 @@ class AgBashServer {
       const lines = data.toString().split("\n");
       for (const line of lines) {
         if (!line.trim()) continue;
+        if (line.length > MAX_REQUEST_SIZE) {
+          console.error("JSON-RPC message exceeds maximum allowed size");
+          continue;
+        }
         try {
           const request = JSON.parse(line);
           this.handleRequest(request);
