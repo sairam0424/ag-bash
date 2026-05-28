@@ -89,23 +89,40 @@ describe("Testing Utilities", () => {
     it("passes on non-zero exit code", async () => {
       const bash = createTestBash();
       const result = await bash.exec("false");
-      expect(() => assertFails(result)).not.toThrow();
+      await expect(assertFails(result)).resolves.toBeUndefined();
     });
 
     it("throws on zero exit code", async () => {
       const bash = createTestBash();
       const result = await bash.exec("true");
-      expect(() => assertFails(result)).toThrow(
-        "Expected non-zero exit code, got 0",
+      await expect(assertFails(result)).rejects.toThrow(
+        "Expected failure but got success",
       );
     });
 
     it("checks specific exit code when provided", async () => {
       const bash = createTestBash();
       const result = await bash.exec("exit 2");
-      expect(() => assertFails(result, 2)).not.toThrow();
-      expect(() => assertFails(result, 3)).toThrow(
-        "Expected exit code 3, got 2",
+      await expect(assertFails(result, 2)).resolves.toBeUndefined();
+      await expect(assertFails(result, 3)).rejects.toThrow(
+        "Expected exit code 3 but got 2",
+      );
+    });
+
+    it("checks stderr matches regex when provided", async () => {
+      const bash = createTestBash();
+      const result = await bash.exec("cat /no/such/file");
+      await expect(assertFails(result, /No such file/)).resolves.toBeUndefined();
+      await expect(assertFails(result, /wrong pattern/)).rejects.toThrow(
+        "Expected stderr to match",
+      );
+    });
+
+    it("accepts a Promise<ExecResult> directly", async () => {
+      const bash = createTestBash();
+      await expect(assertFails(bash.exec("false"))).resolves.toBeUndefined();
+      await expect(assertFails(bash.exec("true"))).rejects.toThrow(
+        "Expected failure but got success",
       );
     });
   });

@@ -16,17 +16,41 @@ export function assertSuccess(result: ExecResult): string {
 
 /**
  * Asserts that the result exited with a non-zero code.
- * Optionally checks for a specific exit code.
+ * Optionally checks for a specific exit code or a regex pattern against stderr.
+ *
+ * @param result - The execution result (or a Promise resolving to one)
+ * @param expected - If a number, asserts that specific exit code. If a RegExp, asserts stderr matches.
+ *
+ * @example
+ * ```ts
+ * // Assert any failure
+ * await assertFails(bash.exec("false"));
+ *
+ * // Assert specific exit code
+ * await assertFails(bash.exec("exit 2"), 2);
+ *
+ * // Assert stderr matches a pattern
+ * await assertFails(bash.exec("cat /no/such/file"), /No such file/);
+ * ```
  */
-export function assertFails(result: ExecResult, expectedCode?: number): void {
-  if (result.exitCode === 0) {
+export async function assertFails(
+  result: ExecResult | Promise<ExecResult>,
+  expected?: number | RegExp,
+): Promise<void> {
+  const r = await result;
+  if (r.exitCode === 0) {
     throw new Error(
-      `Expected non-zero exit code, got 0.\nStdout: ${result.stdout}`,
+      `Expected failure but got success. stdout: ${r.stdout}`,
     );
   }
-  if (expectedCode !== undefined && result.exitCode !== expectedCode) {
+  if (typeof expected === "number" && r.exitCode !== expected) {
     throw new Error(
-      `Expected exit code ${expectedCode}, got ${result.exitCode}`,
+      `Expected exit code ${expected} but got ${r.exitCode}`,
+    );
+  }
+  if (expected instanceof RegExp && !expected.test(r.stderr)) {
+    throw new Error(
+      `Expected stderr to match ${expected} but got: ${r.stderr}`,
     );
   }
 }
