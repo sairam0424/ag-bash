@@ -9,7 +9,7 @@ Ag-Bash is an AI-native bash interpreter written in TypeScript. It is organized 
 - **`@ag-bash/bash`**: The core shell engine, filesystem, and sandboxed runtimes.
 - **`@ag-bash/agent-bridge`**: Terminal UI bridge for AI agent communication.
 - **`@ag-bash/mcp-server`**: Standalone Model Context Protocol server.
-- **Version Baseline**: `v4.1.0` (Major Release)
+- **Version Baseline**: `v5.0.0` (Major Release)
 
 ## Commands
 
@@ -49,21 +49,31 @@ pnpm --filter @ag-bash/mcp-server build   # Bundle standalone MCP binary
 ### Core Pipeline (`@ag-bash/bash`)
 
 ```text
-Input Script → Parser (src/parser/) → AST (src/ast/) → Interpreter (src/interpreter/) → ExecResult
+Input Script → Lexer (src/lexer/) → Parser (src/parser/) → AST (src/ast/) → Interpreter (src/interpreter/) → ExecResult
 ```
 
 ### Key Modules
 
+- **Lexer**: Tokenization layer split into its own `src/lexer/` subdirectory (v5.0.0).
 - **Parser**: Tree-sitter powered recursive descent parser with `ASTCache`.
 - **Interpreter**: Core execution loop with SharedStateBus and Resource Accounting.
 - **Filesystem**: Pluggable VFS (InMemory, Overlay, ReadWrite).
 - **Runtimes**: CPython (WASM) and QuickJS (WASM) with SharedStateBus bridge.
+- **BashToolbox**: Builtin command implementations split into `src/toolbox/` subdirectory (v5.0.0).
+
+### ServiceContainer (v5.0.0)
+
+- **Lazy initialization**: All 14 services are lazily constructed on first access.
+- **Eager services** (instantiated at container creation): `astCache`, `sharedBus`.
+- **BashHost interface**: Typed command dispatch via the `BashHost` interface for all builtin commands.
+- **AsyncDisposable**: The `Bash` instance implements `AsyncDisposable` (`await using bash = ...`) for deterministic cleanup.
 
 ## Development Guidelines
 
 - **Null Prototypes**: All `Record<string, T>` must use null prototypes via `Object.create(null)` or `nullPrototype()` to prevent prototype pollution.
 - **Security Gates**: All filesystem access MUST go through `resolveAndValidate` security gates in the respective FS implementation.
 - **Sandbox Pure**: No Node.js native dependencies allowed in the core package (except optional WASM runtimes).
-- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v4.1.0).
+- **Defense-in-Depth Defaults**: `defenseInDepth` defaults to enabled in v5.0.0 — all sandbox contexts automatically block `Function`, `eval`, `setTimeout`, and `process.*` unless explicitly opted out.
+- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v5.0.0).
 - **Nexus Suite**: Integrated surgical editing (`ag-edit`), semantic diffing (`ag-diff`), and snapshots (`ag-snapshot`).
 - **E2E First**: Always verify changes with `bash scripts/e2e-verify.sh` to ensure protocol and persistence stability.

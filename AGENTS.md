@@ -2,16 +2,22 @@
 
 ## Project Structure & Architecture
 
-Ag-Bash is a pnpm monorepo (v4.1.0) with three packages: `@ag-bash/bash` (core shell engine), `@ag-bash/mcp-server` (MCP protocol server), and `@ag-bash/agent-bridge` (terminal UI bridge).
+Ag-Bash is a pnpm monorepo (v5.0.0) with three packages: `@ag-bash/bash` (core shell engine), `@ag-bash/mcp-server` (MCP protocol server), and `@ag-bash/agent-bridge` (terminal UI bridge).
 
-**v4.1.0 export paths** (in addition to the main `@ag-bash/bash` entry):
+**v5.0.0 export paths** (in addition to the main `@ag-bash/bash` entry):
 - `@ag-bash/bash/agent-runtime` — RunLoop for autonomous agent execution
 - `@ag-bash/bash/testing` — Test utilities (`createTestBash`, `assertSuccess`, `assertFails`)
 
-**Core pipeline**: Input Script → Tree-sitter Parser (`src/parser/`) → AST (`src/ast/`) → Interpreter (`src/interpreter/`) → ExecResult
+**Core pipeline**: Input Script → Lexer (`src/lexer/`) → Tree-sitter Parser (`src/parser/`) → AST (`src/ast/`) → Interpreter (`src/interpreter/`) → ExecResult
+
+**New in v5.0.0**:
+- `src/lexer/` — Tokenization layer split into its own subdirectory
+- `src/toolbox/` — Builtin command implementations (BashToolbox) split into subdirectory
 
 **Key architectural patterns**:
-- **ServiceContainer DI** (v3.0 breaking change): All services are per-`Bash` instance via `createDefaultServices()`. No singletons except `DefenseInDepthBox` (security necessity). Multiple Bash instances share zero mutable state.
+- **ServiceContainer DI** (v3.0 breaking change, v5.0.0 lazy rewrite): All services are per-`Bash` instance via `createDefaultServices()`. No singletons except `DefenseInDepthBox` (security necessity). Multiple Bash instances share zero mutable state. In v5.0.0, the container uses lazy initialization (14 lazy, 2 eager: `astCache` + `sharedBus`).
+- **BashHost interface**: Typed command dispatch for all builtins via the `BashHost` interface.
+- **AsyncDisposable**: `Bash` implements `AsyncDisposable` for deterministic resource cleanup.
 - **14 services** in `src/services/`: ASTCache, SharedStateBus, AgentManager, SessionManager, TaskManager, TeamManager, WorktreeManager, AgentMemory, McpClient, Orchestrator, LSPManager, GitTracker, CronScheduler, PermissionManager.
 - **Pluggable filesystems**: InMemoryFs, OverlayFs (CoW), ReadWriteFs, MountableFs — all gated by `resolveAndValidate()`.
 - **WASM runtimes**: CPython and QuickJS sandboxed via SharedStateBus bridge (opt-in).
@@ -25,6 +31,7 @@ pnpm typecheck                                   # Type check all packages
 pnpm lint                                        # Lint all packages
 bash scripts/force-build.sh                      # Full monorepo force build
 bash scripts/e2e-verify.sh                       # Full E2E verification suite
+pnpm --filter @ag-bash/bash build:browser-core   # Build browser-compatible core bundle
 pnpm --filter @ag-bash/bash validate             # Pre-publish gate: lint + knip + typecheck + build + worker-sync + test + wasm + dist
 ```
 
@@ -104,7 +111,13 @@ describe("Feature", () => {
 });
 ```
 
-**460+ test files**: unit, spec (BusyBox format for sed/grep/awk/jq), comparison, and fuzz suites.
+**464+ test files**: unit, spec (BusyBox format for sed/grep/awk/jq), comparison, and fuzz suites.
+
+**New in v5.0.0** (4 additional test files):
+- `lexer/` subdirectory tokenization tests
+- `toolbox/` subdirectory builtin command tests
+- `service-container.lazy.test.ts` — verifies lazy instantiation behavior
+- `async-disposable.test.ts` — verifies deterministic cleanup via `AsyncDisposable`
 
 ## Security Constraints (Non-Negotiable)
 
@@ -113,7 +126,8 @@ describe("Feature", () => {
 - **Sandbox purity**: No Node.js natives in core (WASM runtimes opt-in)
 - **Regex safety**: `re2js` linear-time engine prevents ReDoS from user patterns
 - **Resource accounting**: Memory (50MB default), CPU (30s), Network (100MB), Agent nesting (max 3)
-- **Defense-in-depth**: AsyncLocalStorage monkey-patching blocks Function, eval, setTimeout, process.* in sandbox context
+- **Defense-in-depth**: AsyncLocalStorage monkey-patching blocks Function, eval, setTimeout, process.* in sandbox context. **Defaults to enabled** in v5.0.0 (fail-closed).
+- **SharedStateBus limits**: Event queue bounded at 10,000 entries; subscribers capped at 256 per topic to prevent resource exhaustion.
 - **E2E verification**: Run `bash scripts/e2e-verify.sh` before protocol-affecting commits
 
 ## Commit Conventions
@@ -126,6 +140,7 @@ Format: `type(scope): description`
 
 ## CI/CD
 
-GitHub Actions: `lint.yml` (biome + banned patterns + knip + build + worker-sync), `typecheck.yml`, `unit-tests.yml`, `python-tests.yml`, `comparison-tests.yml`.
+GitHub Actions: `quality.yml` (biome + banned patterns + knip + build + worker-sync + typecheck), `tests.yml` (unit, WASM, comparison, python — Node 20/22/24 matrix).
 
-**Lint pipeline**: Biome check → banned patterns script → knip → build → worker sync check. Any failure blocks merge.
+**Quality pipeline** (`quality.yml`): Biome check → banned patterns script → knip → build → worker sync check → typecheck. Any failure blocks merge.
+**Test pipeline** (`tests.yml`): Unit tests → WASM tests → comparison tests → python tests. Runs in parallel across Node versions.

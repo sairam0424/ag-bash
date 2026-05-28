@@ -813,6 +813,7 @@ async function processScalarAssignment(
     if (ctx.state.options.allexport) {
       ctx.state.exportedVars = ctx.state.exportedVars || new Set();
       ctx.state.exportedVars.add(targetName);
+      ctx.state.exportedEnvDirty = true;
     }
     if (ctx.state.tempEnvBindings?.some((b) => b.has(targetName))) {
       ctx.state.mutatedTempEnvVars = ctx.state.mutatedTempEnvVars || new Set();

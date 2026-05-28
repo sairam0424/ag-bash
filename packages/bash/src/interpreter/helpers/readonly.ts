@@ -63,6 +63,7 @@ export function markExported(ctx: InterpreterContext, name: string): void {
   const wasExported = ctx.state.exportedVars?.has(name) ?? false;
   ctx.state.exportedVars = ctx.state.exportedVars || new Set();
   ctx.state.exportedVars.add(name);
+  ctx.state.exportedEnvDirty = true;
 
   // If we're in a local scope and the variable is local, track it
   if (ctx.state.localScopes.length > 0) {
@@ -94,4 +95,5 @@ export function markExported(ctx: InterpreterContext, name: string): void {
  */
 export function unmarkExported(ctx: InterpreterContext, name: string): void {
   ctx.state.exportedVars?.delete(name);
+  ctx.state.exportedEnvDirty = true;
 }

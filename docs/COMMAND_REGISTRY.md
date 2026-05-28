@@ -1,4 +1,4 @@
-# Ag-Bash Command Registry (v4.1.0)
+# Ag-Bash Command Registry (v5.0.0)
 
 This registry provides a categorized index of the **150+ commands** supported by Ag-Bash. All commands are virtualized, sandboxed, and optimized for Project V-Next.
 
@@ -167,7 +167,7 @@ This registry provides a categorized index of the **150+ commands** supported by
 
 ## Discoverability & Diagnostics
 
-*Commands for exploring the shell's capabilities and verifying setup health (v4.1.0).*
+*Commands for exploring the shell's capabilities and verifying setup health (v5.0.0).*
 
 | Command | Description | Registry Link |
 | :--- | :--- | :--- |
