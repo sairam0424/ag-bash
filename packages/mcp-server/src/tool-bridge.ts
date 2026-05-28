@@ -1,6 +1,14 @@
 import type { Bash } from "@ag-bash/bash";
 
 /**
+ * MCP tool annotations per the Model Context Protocol spec.
+ */
+export interface McpToolAnnotations {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+}
+
+/**
  * MCP tool descriptor matching the Model Context Protocol tool listing format.
  */
 export interface McpToolDescriptor {
@@ -11,6 +19,7 @@ export interface McpToolDescriptor {
     properties: Record<string, unknown>;
     required?: string[];
   };
+  annotations?: McpToolAnnotations;
 }
 
 /**
@@ -49,6 +58,23 @@ export class McpToolBridge {
   }
 
   /**
+   * Resolve isReadOnly/isDestructive which can be boolean or function.
+   * When a function, call with empty args to get the default hint.
+   */
+  private resolveHint(
+    value: ((args: unknown) => boolean) | boolean | undefined,
+  ): boolean {
+    if (typeof value === "function") {
+      try {
+        return value({}) ?? false;
+      } catch {
+        return false;
+      }
+    }
+    return value ?? false;
+  }
+
+  /**
    * List all available BashToolbox tools in MCP format.
    * Excludes tools that are natively handled by the MCP server (run_bash, etc.).
    */
@@ -59,6 +85,15 @@ export class McpToolBridge {
     for (const [name, entry] of Object.entries(agenticTools)) {
       // Skip tools that already exist as native MCP tools
       if (NATIVE_MCP_TOOLS.has(name)) continue;
+
+      // Resolve annotations from the raw tool metadata
+      const rawTool = this.bash.toolbox.getTool(name);
+      const annotations: McpToolAnnotations = {
+        readOnlyHint: rawTool ? this.resolveHint(rawTool.isReadOnly) : false,
+        destructiveHint: rawTool
+          ? this.resolveHint(rawTool.isDestructive)
+          : false,
+      };
 
       descriptors.push({
         name,
@@ -71,6 +106,7 @@ export class McpToolBridge {
               ? entry.inputSchema.required
               : undefined,
         },
+        annotations,
       });
     }
 
@@ -105,9 +141,13 @@ export class McpToolBridge {
         isError,
       };
     } catch (error: unknown) {
-      const raw = error instanceof Error ? error.message : "Unknown error occurred";
-      const sanitized = raw.replace(/\/[\w./-]+/g, "[path]").replace(/[A-Z]:\\[\w\\.-]+/g, "[path]");
-      const message = sanitized.length > 200 ? `${sanitized.slice(0, 200)}...` : sanitized;
+      const raw =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      const sanitized = raw
+        .replace(/\/[\w./-]+/g, "[path]")
+        .replace(/[A-Z]:\\[\w\\.-]+/g, "[path]");
+      const message =
+        sanitized.length > 200 ? `${sanitized.slice(0, 200)}...` : sanitized;
       return {
         content: [{ type: "text", text: `Error: ${message}` }],
         isError: true,
