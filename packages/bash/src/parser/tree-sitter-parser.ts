@@ -8,7 +8,7 @@ import * as TreeSitter from "./vendor/web-tree-sitter.js";
 export class TreeSitterParser {
   private static parser: any = null;
   private static languages: Map<string, any> = new Map();
-  private static isInitializing = false;
+  private static initPromise: Promise<void> | null = null;
 
   static async init(options: {
     webTreeSitterWasm: string | Uint8Array;
@@ -23,14 +23,18 @@ export class TreeSitterParser {
     )
       return;
 
-    if (TreeSitterParser.isInitializing) {
-      while (TreeSitterParser.isInitializing) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      return;
+    if (TreeSitterParser.initPromise) {
+      return TreeSitterParser.initPromise;
     }
 
-    TreeSitterParser.isInitializing = true;
+    TreeSitterParser.initPromise = TreeSitterParser.doInit(options);
+    return TreeSitterParser.initPromise;
+  }
+
+  private static async doInit(options: {
+    webTreeSitterWasm: string | Uint8Array;
+    grammars?: Record<string, string | Uint8Array>;
+  }): Promise<void> {
     try {
       const { Parser, Language } = TreeSitter as any;
 
@@ -80,7 +84,7 @@ export class TreeSitterParser {
 
       // Default to bash if available and nothing set
       if (
-        !TreeSitterParser.parser.getLanguage() &&
+        !TreeSitterParser.parser.language &&
         TreeSitterParser.languages.has("bash")
       ) {
         TreeSitterParser.parser.setLanguage(
@@ -88,10 +92,9 @@ export class TreeSitterParser {
         );
       }
     } catch (e) {
+      TreeSitterParser.initPromise = null;
       const errorMsg = e instanceof Error ? e.message : String(e);
       throw new Error(`Failed to initialize TreeSitterParser: ${errorMsg}`);
-    } finally {
-      TreeSitterParser.isInitializing = false;
     }
   }
 
@@ -133,12 +136,12 @@ export class TreeSitterParser {
 
   static getLanguage(name?: string): any {
     if (name) return TreeSitterParser.languages.get(name);
-    return TreeSitterParser.parser?.getLanguage();
+    return TreeSitterParser.parser?.language;
   }
 
   static resetForTest(): void {
     TreeSitterParser.parser = null;
     TreeSitterParser.languages.clear();
-    TreeSitterParser.isInitializing = false;
+    TreeSitterParser.initPromise = null;
   }
 }
