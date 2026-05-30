@@ -169,7 +169,12 @@ export type {
   ExecResult,
   IFileSystem,
   Observation,
+  OutputSink,
+  StreamChunk,
 } from "./types.js";
+// Streaming API (true incremental output via bash.execStream())
+export { StreamingExecutor } from "./streaming/StreamingExecutor.js";
+export type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
 // Tagged template API (zx-style ergonomic shell)
 export { createShell, type TaggedShell } from "./template/index.js";
 export { shellEscape } from "./template/index.js";
