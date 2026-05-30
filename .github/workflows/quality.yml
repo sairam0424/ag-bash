@@ -21,8 +21,11 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # Supply-chain gate (E3): audit MUST fail the build on high/critical
+      # advisories. Do NOT add continue-on-error here — that silently masks
+      # vulnerable transitive dependencies. Pin patched versions via the
+      # pnpm.overrides block in the root package.json when an advisory lands.
       - run: pnpm audit --audit-level=high
-        continue-on-error: true
       - run: pnpm lint
       - run: pnpm --filter @ag-bash/bash knip
       - run: pnpm typecheck
