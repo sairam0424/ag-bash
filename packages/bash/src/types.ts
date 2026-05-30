@@ -28,6 +28,7 @@ export interface Observation {
     | "limit_exceeded"
     | "syntax_error"
     | "security_violation"
+    | "destructive"
     | "suggestion"
     | "unknown";
   message: string;
@@ -39,6 +40,21 @@ export interface Observation {
   suggestions?: string[];
   /** Detailed technical context */
   context?: Record<string, unknown>;
+  /**
+   * Stable, machine-readable code for this observation (e.g. "ENOENT",
+   * "CMD_NOT_FOUND", "EACCES"). Unlike `type` (a coarse category) and
+   * `message` (human prose that may change), `code` is a stable identifier
+   * agents can switch on without parsing English. Optional for backward
+   * compatibility with observations produced before A3.
+   */
+  code?: string;
+  /**
+   * Confidence (0..1) that this observation correctly diagnoses the failure.
+   * Source-emitted observations (the interpreter/command KNEW the typed cause)
+   * are high-confidence (1.0). Heuristic/regex-scraped observations from
+   * AgTrace are lower. Optional for backward compatibility.
+   */
+  confidence?: number;
 }
 
 /**
@@ -80,6 +96,27 @@ export interface BashExecResult extends ExecResult {
   env: Record<string, string>;
   metadata?: Record<string, unknown>;
 }
+
+/**
+ * A single incremental output fragment produced during execution.
+ * Emitted to an {@link OutputSink} as commands write to stdout/stderr,
+ * preserving the order in which the bytes were produced.
+ */
+export interface StreamChunk {
+  /** Which standard stream produced this fragment. */
+  type: "stdout" | "stderr";
+  /** The raw text fragment. The concatenation of all fragments of a given
+   *  type equals the corresponding buffered ExecResult field, byte-for-byte. */
+  data: string;
+}
+
+/**
+ * Opt-in callback that receives output fragments incrementally as a script
+ * executes. When NOT supplied to exec(), execution is byte-identical to the
+ * buffered path with zero measurable overhead (the sink is simply never
+ * invoked). Used by StreamingExecutor to drive true incremental streaming.
+ */
+export type OutputSink = (chunk: StreamChunk) => void;
 
 /** Options for exec calls within commands (internal API) */
 export interface CommandExecOptions {
@@ -160,6 +197,20 @@ export interface BashHost {
   readonly services: ServiceContainer;
   /** Execution limits configuration */
   readonly limits: Required<ExecutionLimits>;
+  /**
+   * The virtual filesystem backing this shell. Sub-agent spawning layers a
+   * CoW overlay on top of this parent filesystem.
+   */
+  readonly fs: IFileSystem;
+  /**
+   * Current agent nesting depth (0 for a root shell). Used to enforce the
+   * `maxAgentNesting` limit when spawning sub-agents.
+   */
+  readonly nestingDepth: number;
+  /** Returns the current working directory. */
+  getCwd(): string;
+  /** Returns a snapshot of the environment variables as a null-prototype record. */
+  getEnv(): Record<string, string>;
   /** Semantic engine for symbol resolution */
   readonly semanticEngine: {
     findDefinition(name: string, scope?: string): SemanticSymbol | undefined;
