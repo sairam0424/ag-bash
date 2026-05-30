@@ -2,23 +2,27 @@
 
 ## Project Structure & Architecture
 
-Ag-Bash is a pnpm monorepo (v5.0.0) with three packages: `@ag-bash/bash` (core shell engine), `@ag-bash/mcp-server` (MCP protocol server), and `@ag-bash/agent-bridge` (terminal UI bridge).
+Ag-Bash is a pnpm monorepo (v6.0.0) with three packages: `@ag-bash/bash` (core shell engine), `@ag-bash/mcp-server` (MCP protocol server), and `@ag-bash/agent-bridge` (terminal UI bridge).
 
-**v5.0.0 export paths** (in addition to the main `@ag-bash/bash` entry):
+**v6.0.0 export paths** (in addition to the main `@ag-bash/bash` entry):
 - `@ag-bash/bash/agent-runtime` — RunLoop for autonomous agent execution
 - `@ag-bash/bash/testing` — Test utilities (`createTestBash`, `assertSuccess`, `assertFails`)
 
-**Core pipeline**: Input Script → Lexer (`src/lexer/`) → Tree-sitter Parser (`src/parser/`) → AST (`src/ast/`) → Interpreter (`src/interpreter/`) → ExecResult
+**Core pipeline**: Input Script → ExecutionPipeline [Normalize → Parse (`src/parser/lexer/`) → Transform → Sandbox → Interpret (`src/interpreter/`) → Persist] → BashExecResult
 
-**New in v5.0.0**:
-- `src/lexer/` — Tokenization layer split into its own subdirectory
-- `src/toolbox/` — Builtin command implementations (BashToolbox) split into subdirectory
+**New in v6.0.0**:
+- `src/parser/lexer/` — Tokenization layer in parser subdirectory
+- `src/agentic/toolbox/` — Builtin command implementations (BashToolbox) in agentic subdirectory
+- `src/execution/` — ExecutionPipeline (sole engine), stages, and DestructiveStage
+- `src/streaming/` — StreamingExecutor and true incremental output
+- `bash.fork()` / `bash.speculate()` — Copy-on-write branching for agentic speculation
+- `bash.execStream()` — AsyncGenerator-based streaming output
 
 **Key architectural patterns**:
-- **ServiceContainer DI** (v3.0 breaking change, v5.0.0 lazy rewrite): All services are per-`Bash` instance via `createDefaultServices()`. No singletons except `DefenseInDepthBox` (security necessity). Multiple Bash instances share zero mutable state. In v5.0.0, the container uses lazy initialization (14 lazy, 2 eager: `astCache` + `sharedBus`).
+- **ServiceContainer DI** (v3.0 breaking change, v6.0.0 registry pattern): All services are per-`Bash` instance via `createDefaultServices()`. No singletons except `DefenseInDepthBox` (security necessity). Multiple Bash instances share zero mutable state. The container uses lazy initialization with a registry pattern (2 eager: `astCache` + `sharedBus`).
 - **BashHost interface**: Typed command dispatch for all builtins via the `BashHost` interface.
 - **AsyncDisposable**: `Bash` implements `AsyncDisposable` for deterministic resource cleanup.
-- **14 services** in `src/services/`: ASTCache, SharedStateBus, AgentManager, SessionManager, TaskManager, TeamManager, WorktreeManager, AgentMemory, McpClient, Orchestrator, LSPManager, GitTracker, CronScheduler, PermissionManager.
+- **ServiceContainer registry** in `src/services/`: ASTCache, SharedStateBus, AgentManager, SessionManager, TaskManager, TeamManager, WorktreeManager, AgentMemory (now persistent across sessions), McpClient, Orchestrator, LSPManager, GitTracker, CronScheduler, PermissionManager.
 - **Pluggable filesystems**: InMemoryFs, OverlayFs (CoW), ReadWriteFs, MountableFs — all gated by `resolveAndValidate()`.
 - **WASM runtimes**: CPython and QuickJS sandboxed via SharedStateBus bridge (opt-in).
 

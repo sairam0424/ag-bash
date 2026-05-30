@@ -1,6 +1,6 @@
-# Ag-Bash Architecture (v5.0.0)
+# Ag-Bash Architecture (v6.0.0)
 
-This document provides a deep dive into the high-performance architectural components of **v3.0.0**, building on the foundations laid in **v2.0.0 "Nexus Prime"** and **v2.4.x "Project V-Next"**.
+This document provides a deep dive into the high-performance architectural components of **v6.0.0**, building on the foundations laid in **v3.0.0 "ServiceContainer"**, **v5.0.0 "Hardened"**, and the pipeline-first design introduced in v6.0.0.
 
 ---
 
@@ -50,9 +50,9 @@ The `ASTCache` is an LRU (Least Recently Used) cache that stores parsed Tree-sit
 
 - **Keying**: Input script strings are hashed using **FNV-1a** (non-cryptographic) for browser compatibility and ~10x faster key generation than the previous SHA-256 approach.
 - **Short-circuit**: Inputs shorter than 64 characters bypass hashing entirely for maximum throughput.
-- **LRU Eviction**: Uses JavaScript `Map` insertion-order semantics (delete + re-set) for O(1) promotion. A fixed memory footprint (default 100 entries) ensures the cache doesn't grow unbounded.
-- **TTL**: Entries have a default TTL of 1 hour to prevent stale state in dynamic scripts.
-- **Observability**: `stats()` exposes hit/miss counters; `configure()` allows runtime tuning of capacity and TTL.
+- **LRU Eviction**: Uses JavaScript `Map` insertion-order semantics (delete + re-set) for O(1) promotion. A fixed memory footprint (default 100 entries) ensures the cache doesn't grow unbounded. Pure LRU with no TTL — entries are evicted only when capacity is exceeded.
+- **64-bit FNV-1a**: Hash keys include input length to prevent collision bugs. The 64-bit variant provides sufficient distribution for realistic script populations.
+- **Observability**: `stats()` exposes hit/miss counters; `configure()` allows runtime tuning of capacity.
 
 ---
 

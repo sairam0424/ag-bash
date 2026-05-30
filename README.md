@@ -17,17 +17,24 @@ This repository is organized into a modular monorepo to support independent vers
 
 ---
 
-## What's New in v4.1
+## What's New in v6.0.0
 
 | Feature | Description |
 | :--- | :--- |
-| **Agent RunLoop** | Autonomous LLM execution loop — feed a goal, get back a completed task. Supports tool calling, streaming, and configurable termination policies. |
-| **Self-Healing** | Typo correction and auto-retry. When a command fails due to a mistyped name or missing dependency, the engine repairs the environment and retries transparently. |
-| **Discoverability** | Built-in `commands`, `about`, and `doctor` tools let agents introspect the shell's capabilities, health, and configuration without guessing. |
+| **ExecutionPipeline** | The composable 6-stage pipeline (normalize, parse, transform, sandbox, interpret, persist) is now the sole execution engine. The legacy monolith path has been removed. |
+| **Fork-Speculation** | `bash.fork()` creates isolated copy-on-write branches; `bash.speculate()` runs N candidates in parallel and keeps the winner. Core moat for agentic workflows. |
+| **Observations at Source** | Every command produces typed `Observation` objects with `code` and `confidence` fields, surfacing issues without blocking execution. |
+| **True Streaming** | `bash.execStream()` yields stdout/stderr chunks via AsyncGenerator as statements produce output, byte-identical to buffered exec. |
+| **RunLoop v2** | Extended with `mode`, `healer`, and `memory` configuration. AgentMemory now persists across sessions. |
+| **MCP 2025-06-18** | Protocol bumped to latest spec with back-compat preserved for 2024-11-05 clients. Code Mode slice for structured output. |
+| **Destructive Detection** | AST-based gate detects `rm -rf /`, fork bombs, and decode-pipe-to-shell patterns structurally. Default policy: WARN. |
+| **OTEL at Exec Level** | Optional `AgBashTracer` wraps each `exec()` call in an OpenTelemetry span. Zero overhead when `@opentelemetry/api` is absent. |
 
 ---
 
 ## Installation
+
+**Requires Node.js >=20.6.0.** For full ESM-hook security hardening, Node.js >=23.5 is recommended.
 
 ```bash
 # Latest (recommended)
@@ -114,8 +121,9 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
-- **v4.1 Architecture**: RunLoop execution model, Tagged Template literals for ergonomic shell scripting, and Self-Healing error recovery with automatic retry and environment repair.
-- **v3.0 Architecture** *(Breaking)*: Dependency Injection via `ServiceContainer`, restructured `BashOptions` API with grouped sub-objects, and zero singletons.
+- **v6.0 Architecture**: ExecutionPipeline as sole engine, fork-speculation, observations-at-source, true streaming, OTEL tracing, destructive-detection gate.
+- **v6.0 RunLoop**: Autonomous LLM execution loop with observation forwarding, AgenticHealer self-correction, AgentMemory persistence, plan-mode write-gating, and BudgetManager stopping conditions.
+- **v3.0 DI** *(Breaking)*: Dependency Injection via `ServiceContainer`, restructured `BashOptions` API with grouped sub-objects, and zero singletons.
 - **FNV-1a ASTCache**: Non-cryptographic hashing with true LRU eviction for high-frequency script execution.
 - **Pipeline Early Termination**: Static AST analysis detects `head -N` patterns and truncates upstream output.
 - **Type-Safe Core**: Eliminated `any` types from core services, interpreter, and error hierarchy (`unknown` throughout).
@@ -144,6 +152,8 @@ Then, add the server to your MCP configuration:
 
 | Version | Codename | Highlights |
 | :--- | :--- | :--- |
+| **v6.0** | *Pipeline* | ExecutionPipeline default, fork-speculation, streaming, OTEL, destructive gate, Node >=20.6 |
+| **v5.0** | *Hardened* | Lazy ServiceContainer, defense-in-depth default ON, SSRF prevention, ASTCache 64-bit FNV-1a |
 | **v4.1** | *Runtime* | Agent RunLoop, Trap signals, Self-Healing error recovery, OpenTelemetry spans |
 | **v3.0** | *Breaking Redesign* | ServiceContainer DI, new `BashOptions` grouped API, zero singletons |
 | **v2.x** | *Nexus Prime* | Agentic tools (`ag-hover`, `ag-explain`), MCP integration, Planning Mode |
