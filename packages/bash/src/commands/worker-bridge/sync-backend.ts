@@ -7,6 +7,7 @@
 
 import {
   Flags,
+  MAX_CHUNK_SIZE,
   OpCode,
   type OpCodeType,
   ProtocolBuffer,
@@ -25,20 +26,37 @@ export class SyncBackend {
     this.operationTimeoutMs = operationTimeoutMs;
   }
 
-  private execSync(
-    opCode: OpCodeType,
-    path: string,
-    data?: Uint8Array,
-    flags = 0,
-    mode = 0,
-  ): { success: boolean; result?: Uint8Array; error?: string } {
+  /**
+   * Send one framed round-trip. Used directly for non-chunked operations and
+   * internally by the chunked read/write helpers.
+   */
+  private execFrame(opCode: OpCodeType, framing: {
+    path: string;
+    data?: Uint8Array;
+    flags?: number;
+    mode?: number;
+    offset?: number;
+    totalLength?: number;
+    more?: boolean;
+  }): { success: boolean; result?: Uint8Array; error?: string } {
     this.protocol.reset();
     this.protocol.setOpCode(opCode);
-    this.protocol.setPath(path);
-    this.protocol.setFlags(flags);
-    this.protocol.setMode(mode);
-    if (data) {
-      this.protocol.setData(data);
+    this.protocol.setPath(framing.path);
+    this.protocol.setFlags(framing.flags ?? 0);
+    this.protocol.setMode(framing.mode ?? 0);
+    if (framing.data) {
+      // setDataChunk records offset/total/more even when offset is 0 and there
+      // is a single chunk, keeping the main-thread state machine uniform.
+      this.protocol.setDataChunk(
+        framing.data,
+        framing.offset ?? 0,
+        framing.totalLength ?? framing.data.length,
+        framing.more ?? false,
+      );
+    } else {
+      this.protocol.setOffset(framing.offset ?? 0);
+      this.protocol.setTotalLength(framing.totalLength ?? 0);
+      this.protocol.setMore(framing.more ?? false);
     }
 
     this.protocol.setStatus(Status.READY);
@@ -62,19 +80,84 @@ export class SyncBackend {
     };
   }
 
+  private execSync(
+    opCode: OpCodeType,
+    path: string,
+    data?: Uint8Array,
+    flags = 0,
+    mode = 0,
+  ): { success: boolean; result?: Uint8Array; error?: string } {
+    return this.execFrame(opCode, { path, data, flags, mode });
+  }
+
+  /**
+   * Read a file of arbitrary size by draining it from the main thread one
+   * <=MAX_CHUNK_SIZE chunk at a time. The first round-trip returns the total
+   * payload size; subsequent round-trips request the remaining byte ranges.
+   */
   readFile(path: string): Uint8Array {
-    const result = this.execSync(OpCode.READ_FILE, path);
-    if (!result.success) {
-      throw new Error(result.error || "Failed to read file");
+    const first = this.execFrame(OpCode.READ_FILE, { path, offset: 0 });
+    if (!first.success) {
+      throw new Error(first.error || "Failed to read file");
     }
-    return result.result ?? new Uint8Array(0);
+    const total = this.protocol.getTotalLength();
+    const firstChunk = first.result ?? new Uint8Array(0);
+    if (firstChunk.length >= total) {
+      return firstChunk;
+    }
+
+    const out = new Uint8Array(total);
+    out.set(firstChunk, 0);
+    let offset = firstChunk.length;
+    while (offset < total) {
+      const next = this.execFrame(OpCode.READ_FILE, { path, offset });
+      if (!next.success) {
+        throw new Error(next.error || "Failed to read file");
+      }
+      const chunk = next.result ?? new Uint8Array(0);
+      if (chunk.length === 0) {
+        // Defensive: main thread reported no progress; avoid an infinite loop.
+        throw new Error("Chunked read stalled: empty chunk before completion");
+      }
+      out.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return out;
   }
 
   writeFile(path: string, data: Uint8Array): void {
-    const result = this.execSync(OpCode.WRITE_FILE, path, data);
-    if (!result.success) {
-      throw new Error(result.error || "Failed to write file");
-    }
+    this.writeChunked(OpCode.WRITE_FILE, path, data);
+  }
+
+  /**
+   * Write a payload of arbitrary size by streaming it to the main thread one
+   * <=MAX_CHUNK_SIZE chunk at a time. The main thread buffers chunks keyed by
+   * (opCode, path) and commits to the filesystem only on the final chunk.
+   */
+  private writeChunked(
+    opCode: OpCodeType,
+    path: string,
+    data: Uint8Array,
+  ): void {
+    const total = data.length;
+    // Even an empty payload needs one round-trip to create/truncate the file.
+    let offset = 0;
+    do {
+      const end = Math.min(offset + MAX_CHUNK_SIZE, total);
+      const chunk = data.subarray(offset, end);
+      const more = end < total;
+      const result = this.execFrame(opCode, {
+        path,
+        data: chunk,
+        offset,
+        totalLength: total,
+        more,
+      });
+      if (!result.success) {
+        throw new Error(result.error || "Failed to write file");
+      }
+      offset = end;
+    } while (offset < total);
   }
 
   stat(path: string): {
@@ -142,10 +225,7 @@ export class SyncBackend {
   }
 
   appendFile(path: string, data: Uint8Array): void {
-    const result = this.execSync(OpCode.APPEND_FILE, path, data);
-    if (!result.success) {
-      throw new Error(result.error || "Failed to append file");
-    }
+    this.writeChunked(OpCode.APPEND_FILE, path, data);
   }
 
   symlink(target: string, linkPath: string): void {

@@ -28,6 +28,8 @@ export declare class BridgeHandler {
   private outputLimitExceeded;
   private startTime;
   private timeoutMs;
+  private writeAccumulator;
+  private readCache;
   constructor(
     sharedBuffer: SharedArrayBuffer,
     fs: IFileSystem,
@@ -60,6 +62,7 @@ export declare class BridgeHandler {
   private handleOperation;
   private resolvePath;
   private handleReadFile;
+  private accumulateChunkedPayload;
   private handleWriteFile;
   private handleStat;
   private handleLstat;
