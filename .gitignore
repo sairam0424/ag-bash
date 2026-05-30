@@ -35,3 +35,6 @@ test_output.txt
 
 # Example Lockfiles (Dynamic/Untracked)
 examples/*/pnpm-lock.yaml
+
+# Perf-bench CI artifact (the committed baseline is bench-baseline.json)
+packages/bash/bench-results.json

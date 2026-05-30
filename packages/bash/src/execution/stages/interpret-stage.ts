@@ -8,13 +8,21 @@
 
 import type { AgenticHealer } from "../../agentic/agentic-healer.js";
 import type { Bash, BashOptions, ExecOptions } from "../../Bash.js";
-import type { DebuggerBridge, InterpreterOptions } from "../../interpreter/index.js";
+import type { MountableFs } from "../../fs/mountable-fs/index.js";
+import type {
+  DebuggerBridge,
+  InterpreterOptions,
+} from "../../interpreter/index.js";
 import { Interpreter } from "../../interpreter/index.js";
 import type { ExecutionLimits } from "../../limits.js";
 import type { SemanticEngine } from "../../lsp/semantic-engine.js";
 import type { SecureFetch } from "../../network/index.js";
-import type { CommandRegistry, BashExecResult, FeatureCoverageWriter, TraceCallback } from "../../types.js";
-import type { MountableFs } from "../../fs/mountable-fs/index.js";
+import type {
+  BashExecResult,
+  CommandRegistry,
+  FeatureCoverageWriter,
+  TraceCallback,
+} from "../../types.js";
 import type { PipelineContext, PipelineStage, StageResult } from "../types.js";
 
 /**
@@ -25,7 +33,10 @@ export interface InterpretStageConfig {
   fs: MountableFs;
   commands: CommandRegistry;
   limits: Required<ExecutionLimits>;
-  execFn: (commandLine: string, options?: ExecOptions) => Promise<BashExecResult>;
+  execFn: (
+    commandLine: string,
+    options?: ExecOptions,
+  ) => Promise<BashExecResult>;
   secureFetch: SecureFetch | undefined;
   sleepFn: ((ms: number) => Promise<void>) | undefined;
   traceFn: TraceCallback | undefined;
@@ -37,6 +48,13 @@ export interface InterpretStageConfig {
   semanticEngine: SemanticEngine;
   agenticHealer: AgenticHealer | undefined;
   bash: Bash;
+  /**
+   * Whether the interpreter should require an active defense-in-depth context.
+   * Mirrors the monolith's `defenseBox?.isEnabled() === true` computed in
+   * Bash.exec from the real DefenseInDepthBox (NOT inferred from the handle,
+   * because a box may be activated yet report isEnabled() === false).
+   */
+  requireDefenseContext: boolean;
 }
 
 export class InterpretStage implements PipelineStage {
@@ -62,10 +80,6 @@ export class InterpretStage implements PipelineStage {
       return { continue: false, result: fallback };
     }
 
-    const defenseBox = defenseHandle
-      ? { isEnabled: () => true }
-      : undefined;
-
     const interpreterOptions: InterpreterOptions = {
       fs: this.config.fs,
       commands: this.config.commands,
@@ -75,7 +89,7 @@ export class InterpretStage implements PipelineStage {
       sleep: this.config.sleepFn,
       trace: this.config.traceFn,
       coverage: this.config.coverageWriter,
-      requireDefenseContext: defenseBox?.isEnabled() === true,
+      requireDefenseContext: this.config.requireDefenseContext,
       jsBootstrapCode: this.config.jsBootstrapCode,
       onCommandNotFound: this.config.onCommandNotFound,
       agentic: this.config.agentic,
@@ -85,6 +99,9 @@ export class InterpretStage implements PipelineStage {
       agenticHealer: options?.agenticHealer ?? this.config.agenticHealer,
       sharedBus: context.services.sharedBus,
       bash: this.config.bash,
+      // Per-call opt-in streaming sink (threaded from ExecOptions.onChunk).
+      // Undefined for normal buffered execs => byte-identical behavior.
+      sink: options?.onChunk,
     };
 
     const interpreter = new Interpreter(interpreterOptions, execState);

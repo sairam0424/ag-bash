@@ -42,10 +42,11 @@ export const agSnapshotCommand: Command = {
             `${snapshotId}.json`,
           );
 
-          let fsSnapshot = await ctx.fs.snapshot?.();
-          // If it's a Map (from InMemoryFs), convert to entries for JSON
-          if (fsSnapshot instanceof Map) {
-            fsSnapshot = Array.from(fsSnapshot.entries());
+          const rawSnapshot: unknown = await ctx.fs.snapshot?.();
+          // If it's a Map (from InMemoryFs), convert to entries for JSON serialization
+          let fsSnapshot: unknown = rawSnapshot;
+          if (rawSnapshot instanceof Map) {
+            fsSnapshot = Array.from(rawSnapshot.entries());
           }
 
           const snapshotData = {

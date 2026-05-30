@@ -22,6 +22,7 @@ import {
 import type {
   CpOptions,
   DirentEntry,
+  FileSystemSnapshot,
   FsStat,
   IFileSystem,
   MkdirOptions,
@@ -1438,7 +1439,7 @@ export class OverlayFs implements IFileSystem {
     }
   }
 
-  async snapshot(): Promise<unknown> {
+  async snapshot(): Promise<FileSystemSnapshot> {
     // Deep copy the memory map
     const memoryCopy = new Map<string, MemoryEntry>();
     for (const [path, entry] of this.memory.entries()) {
@@ -1456,11 +1457,11 @@ export class OverlayFs implements IFileSystem {
     return {
       memory: memoryCopy,
       deleted: new Set(this.deleted),
-    };
+    } as unknown as FileSystemSnapshot;
   }
 
-  async restore(snapshot: unknown): Promise<void> {
-    const s = snapshot as {
+  async restore(snapshot: FileSystemSnapshot): Promise<void> {
+    const s = snapshot as unknown as {
       memory: Map<string, MemoryEntry>;
       deleted: Set<string>;
     };

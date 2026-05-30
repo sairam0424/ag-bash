@@ -44,6 +44,9 @@ echo ""
 # Pre-publish checks
 echo "── Pre-publish Checks ──"
 
+echo -n "  Supply-chain audit (high/critical)... "
+pnpm audit --audit-level=high 2>/dev/null && echo "✓" || { echo "✗ FAILED — high/critical advisory; pin a patched version via pnpm.overrides"; exit 1; }
+
 echo -n "  Type check... "
 pnpm --filter @ag-bash/bash typecheck 2>/dev/null && echo "✓" || { echo "✗ FAILED"; exit 1; }
 
@@ -67,7 +70,11 @@ for pkg in "${PACKAGES[@]}"; do
   PKG_NAME=$(node -e "console.log(require('./${pkg}/package.json').name)")
   echo -n "  ${PKG_NAME}@${VERSION}... "
 
-  if cd "$pkg" && pnpm publish --no-git-checks $DRY_RUN 2>/dev/null; then
+  # --provenance (E3): emit a Sigstore provenance attestation linking the
+  # tarball to its build origin. Honored when publishing from CI with OIDC
+  # (id-token); local runs without OIDC warn and skip the attestation but still
+  # publish. The canonical provenance path is .github/workflows/publish.yml.
+  if cd "$pkg" && pnpm publish --provenance --no-git-checks $DRY_RUN 2>/dev/null; then
     echo "✓ published"
   else
     echo "⚠ skipped (may already exist)"

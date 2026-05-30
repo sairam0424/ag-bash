@@ -3,7 +3,7 @@ import { ASTCache } from "./ASTCache.js";
 import type { ScriptNode } from "../ast/types.js";
 
 /**
- * Unit tests for ASTCache — LRU cache with FNV-1a hashing and TTL expiration.
+ * Unit tests for ASTCache — LRU cache with FNV-1a hashing and length-prefixed keys.
  */
 
 function makeAST(id = 1): ScriptNode {
@@ -168,42 +168,25 @@ describe("ASTCache", () => {
     });
   });
 
-  describe("TTL expiration", () => {
-    it("should return entry before TTL expires", () => {
-      cache.configure({ ttlMs: 5000 });
+  describe("no TTL — entries persist until LRU eviction", () => {
+    it("should retain entries regardless of elapsed time", () => {
       const ast = makeAST();
       cache.set("echo hello", ast);
-      vi.advanceTimersByTime(4999);
+      vi.advanceTimersByTime(999999999);
       expect(cache.get("echo hello")).toBe(ast);
     });
 
-    it("should return null after TTL expires", () => {
-      cache.configure({ ttlMs: 5000 });
-      cache.set("echo hello", makeAST());
-      vi.advanceTimersByTime(5001);
-      expect(cache.get("echo hello")).toBeNull();
-    });
-
-    it("should remove expired entry from cache on access", () => {
-      cache.configure({ ttlMs: 1000 });
-      cache.set("a", makeAST());
-      vi.advanceTimersByTime(1500);
-      cache.get("a"); // Triggers removal
-      expect(cache.stats().size).toBe(0);
-    });
-
-    it("should handle TTL of 0 (immediately expired)", () => {
-      cache.configure({ ttlMs: 0 });
-      cache.set("a", makeAST());
-      vi.advanceTimersByTime(1);
-      expect(cache.get("a")).toBeNull();
-    });
-
-    it("should not expire entries with very large TTL", () => {
-      cache.configure({ ttlMs: 999999999 });
-      cache.set("a", makeAST());
-      vi.advanceTimersByTime(100000);
+    it("should only evict via LRU when at capacity", () => {
+      cache.configure({ maxEntries: 2 });
+      cache.set("a", makeAST(1));
+      cache.set("b", makeAST(2));
+      vi.advanceTimersByTime(999999999);
+      // Both still present — no TTL eviction
       expect(cache.get("a")).not.toBeNull();
+      expect(cache.get("b")).not.toBeNull();
+      // Inserting a third triggers LRU eviction of "a" (promoted "b" via get above)
+      cache.set("c", makeAST(3));
+      expect(cache.get("a")).toBeNull();
     });
   });
 
@@ -234,10 +217,10 @@ describe("ASTCache", () => {
       expect(cache.stats().size).toBe(2);
     });
 
-    it("should count expired entry access as a miss", () => {
-      cache.configure({ ttlMs: 100 });
+    it("should count evicted entry access as a miss", () => {
+      cache.configure({ maxEntries: 1 });
       cache.set("a", makeAST());
-      vi.advanceTimersByTime(200);
+      cache.set("b", makeAST(2)); // evicts "a"
       cache.get("a");
       expect(cache.stats().misses).toBe(1);
       expect(cache.stats().hits).toBe(0);
@@ -284,18 +267,9 @@ describe("ASTCache", () => {
       expect(cache.stats().size).toBe(5);
     });
 
-    it("should update ttlMs", () => {
-      cache.set("a", makeAST());
-      cache.configure({ ttlMs: 500 });
-      vi.advanceTimersByTime(600);
-      expect(cache.get("a")).toBeNull();
-    });
-
-    it("should allow configuring only maxEntries without affecting ttlMs", () => {
-      cache.configure({ ttlMs: 10000 });
+    it("should retain entries after reconfiguration if within capacity", () => {
       cache.set("a", makeAST());
       cache.configure({ maxEntries: 500 });
-      vi.advanceTimersByTime(9000);
       expect(cache.get("a")).not.toBeNull();
     });
 
@@ -369,6 +343,71 @@ describe("ASTCache", () => {
       const ast = makeAST();
       cache.set("echo '\u{1F600}\u{1F680}\u{2603}'", ast);
       expect(cache.get("echo '\u{1F600}\u{1F680}\u{2603}'")).toBe(ast);
+    });
+  });
+
+  describe("64-bit hash collision resistance", () => {
+    it("should produce DIFFERENT keys for two distinct scripts of >64 chars", () => {
+      // Two distinct long scripts that previously risked colliding under a
+      // 32-bit hash must now map to separate cache slots.
+      const scriptA = `echo alpha; ${"a".repeat(80)}; run-thing --flag=1`;
+      const scriptB = `echo bravo; ${"b".repeat(80)}; run-thing --flag=2`;
+      expect(scriptA.length).toBeGreaterThan(64);
+      expect(scriptB.length).toBeGreaterThan(64);
+
+      const astA = makeAST(1);
+      const astB = makeAST(2);
+      cache.set(scriptA, astA);
+      cache.set(scriptB, astB);
+
+      // Distinct keys => no clobbering: each script returns its OWN AST.
+      expect(cache.get(scriptA)).toBe(astA);
+      expect(cache.get(scriptB)).toBe(astB);
+      // Both coexist in the cache simultaneously.
+      expect(cache.stats().size).toBe(2);
+    });
+
+    it("should not collide across many distinct long inputs", () => {
+      cache.configure({ maxEntries: 1000 });
+      const count = 500;
+      const asts: ScriptNode[] = [];
+      for (let i = 0; i < count; i++) {
+        // Each input is >64 chars and unique.
+        const input = `${"prefix-".repeat(10)}variant-${i}-${"suffix".repeat(2)}`;
+        expect(input.length).toBeGreaterThan(64);
+        const ast = makeAST(i);
+        asts.push(ast);
+        cache.set(input, ast);
+      }
+      // No collisions => every distinct input occupies its own slot.
+      expect(cache.stats().size).toBe(count);
+      for (let i = 0; i < count; i++) {
+        const input = `${"prefix-".repeat(10)}variant-${i}-${"suffix".repeat(2)}`;
+        expect(cache.get(input)).toBe(asts[i]);
+      }
+    });
+  });
+
+  describe("synchronous getKey / hot-path contract", () => {
+    it("get returns synchronously (no promise/await) immediately after construction", () => {
+      const freshCache = new ASTCache();
+      const ast = makeAST();
+      const longInput = "z".repeat(128);
+
+      // set must return synchronously (undefined, not a thenable).
+      const setResult: unknown = freshCache.set(longInput, ast);
+      expect(setResult).toBeUndefined();
+
+      // get must return the value synchronously, never a Promise.
+      const result: unknown = freshCache.get(longInput);
+      expect(result).toBe(ast);
+      expect(result).not.toBeInstanceOf(Promise);
+      expect(typeof (result as { then?: unknown })?.then).not.toBe("function");
+
+      // A miss is also synchronous and returns null (not a Promise).
+      const miss: unknown = freshCache.get("y".repeat(128));
+      expect(miss).toBeNull();
+      expect(miss).not.toBeInstanceOf(Promise);
     });
   });
 });

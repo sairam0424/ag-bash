@@ -31,6 +31,8 @@ export const agSpawn: Command = {
 
     try {
       const manager = ctx.bash.services.agentManager;
+      // AgentManager.spawn consumes only the BashHost surface (fs, limits,
+      // nestingDepth, getEnv, getCwd), so ctx.bash is passed directly with no cast.
       await manager.spawn(id, command, ctx.bash);
       return {
         stdout: `Spawned sub-agent ${id} in background.\n`,

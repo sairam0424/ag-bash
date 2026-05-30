@@ -30,6 +30,13 @@
  * ```
  */
 
+// Browser secondary defense (opt-in intrinsic freeze; AsyncLocalStorage-free)
+export {
+  type BrowserHardeningOptions,
+  type BrowserHardeningResult,
+  hardenBrowserGlobals,
+  isBrowserHardened,
+} from "./browser-hardening.js";
 // Main class (for main thread with AsyncLocalStorage context tracking)
 export {
   DefenseInDepthBox,

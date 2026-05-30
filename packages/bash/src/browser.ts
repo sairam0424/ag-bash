@@ -47,6 +47,17 @@ export {
   RedirectNotAllowedError,
   TooManyRedirectsError,
 } from "./network/index.js";
+// Browser secondary defense (opt-in). The Node.js DefenseInDepthBox is a no-op
+// in browsers (no AsyncLocalStorage); call hardenBrowserGlobals() once at
+// startup for Node-parity secondary depth. See SECURITY.md.
+export type {
+  BrowserHardeningOptions,
+  BrowserHardeningResult,
+} from "./security/browser-hardening.js";
+export {
+  hardenBrowserGlobals,
+  isBrowserHardened,
+} from "./security/browser-hardening.js";
 export type {
   BashExecResult,
   Command,

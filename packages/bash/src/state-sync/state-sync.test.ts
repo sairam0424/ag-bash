@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { applyStateDelta, diffFs, diffState, type BashDelta, type FsDelta } from "./index.js";
 import type { InterpreterState } from "../interpreter/types.js";
 import type { BashSnapshot } from "../Bash.js";
+import type { FileSystemSnapshot } from "../fs/interface.js";
 
 /* ================================================================== */
 /*  Helpers                                                            */
@@ -31,7 +32,7 @@ function createSnapshot(opts: {
       cwd: opts.cwd ?? "/home/user",
       functions,
     } as unknown as InterpreterState,
-    fs: undefined,
+    fs: undefined as unknown as FileSystemSnapshot,
   };
 }
 
@@ -55,13 +56,14 @@ function createState(opts: {
 
 /**
  * Creates a mock VFS map for diffFs tests.
+ * Returns as FileSystemSnapshot (opaque branded type) for type compatibility.
  */
-function createFsMap(files: Record<string, string>): Map<string, { type: string; content: string }> {
+function createFsMap(files: Record<string, string>): FileSystemSnapshot {
   const map = new Map<string, { type: string; content: string }>();
   for (const [path, content] of Object.entries(files)) {
     map.set(path, { type: "file", content });
   }
-  return map;
+  return map as unknown as FileSystemSnapshot;
 }
 
 /* ================================================================== */
@@ -406,8 +408,8 @@ describe("diffFs", () => {
     const innerCurrent = createFsMap({ "/file.txt": "new" });
 
     // Simulate MountableFs snapshot wrapping
-    const baseFs = { base: innerBase };
-    const currentFs = { base: innerCurrent };
+    const baseFs = { base: innerBase } as unknown as FileSystemSnapshot;
+    const currentFs = { base: innerCurrent } as unknown as FileSystemSnapshot;
 
     const delta = diffFs(baseFs, currentFs);
 
@@ -415,7 +417,10 @@ describe("diffFs", () => {
   });
 
   it("handles non-Map inputs gracefully (returns empty delta)", () => {
-    const delta = diffFs(null, null);
+    const delta = diffFs(
+      null as unknown as FileSystemSnapshot,
+      null as unknown as FileSystemSnapshot,
+    );
 
     expect(Object.keys(delta.modified)).toHaveLength(0);
     expect(delta.deleted).toHaveLength(0);
@@ -428,7 +433,10 @@ describe("diffFs", () => {
     currentFs.set("/dir", { type: "directory" });
     currentFs.set("/file.txt", { type: "file", content: "data" });
 
-    const delta = diffFs(baseFs, currentFs);
+    const delta = diffFs(
+      baseFs as unknown as FileSystemSnapshot,
+      currentFs as unknown as FileSystemSnapshot,
+    );
 
     // Only files with content should appear in modified
     expect(delta.modified["/file.txt"]).toBe("data");

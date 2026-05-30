@@ -42,6 +42,7 @@ import type {
   ExecResult,
   FeatureCoverageWriter,
   Observation,
+  OutputSink,
   TraceCallback,
 } from "../types.js";
 import { expandAlias as expandAliasHelper } from "./alias-expansion.js";
@@ -115,6 +116,51 @@ import type { InterpreterContext, InterpreterState } from "./types.js";
 
 export type { InterpreterContext, InterpreterState } from "./types.js";
 
+// ============================================================================
+// Performance Helpers (Phase 2)
+// ============================================================================
+
+/**
+ * 2.2 — Deferred Env Copy
+ * Instead of eagerly converting the env Map into a Record on every completion,
+ * return a lazy getter that only materializes the record when accessed.
+ * The Map is snapshotted at call time so later mutations don't affect it.
+ */
+function withLazyEnv(
+  result: Omit<ExecResult, "env"> & { env?: Record<string, string> },
+  envMap: Map<string, string>,
+): ExecResult {
+  const snapshot = new Map(envMap);
+  let cachedEnv: Record<string, string> | undefined;
+  return Object.defineProperty(result as ExecResult, "env", {
+    get() {
+      return (cachedEnv ??= mapToRecord(snapshot));
+    },
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+/**
+ * 2.3 — Hot-Path Object Spread Elimination
+ * Mutate the result's stderr in-place by prepending a prefix.
+ * Avoids creating a new object via { ...result, stderr: ... } on hot paths.
+ *
+ * SAFETY: ExecResult objects on these paths are freshly created and immediately
+ * returned up the call stack — they are not shared with event emitters or stored.
+ * If the object is frozen (e.g., the singleton OK), a shallow copy is returned instead.
+ */
+function prependStderr(result: ExecResult, prefix: string): ExecResult {
+  if (!prefix) {
+    return result;
+  }
+  if (Object.isFrozen(result)) {
+    return { ...result, stderr: prefix + result.stderr };
+  }
+  result.stderr = prefix + result.stderr;
+  return result;
+}
+
 export interface InterpreterOptions {
   fs: IFileSystem;
   commands: CommandRegistry;
@@ -153,6 +199,11 @@ export interface InterpreterOptions {
   sharedBus?: SharedStateBus;
   /** Reference to the parent Bash instance */
   bash?: any;
+  /**
+   * Optional opt-in sink for incremental (true) streaming of stdout/stderr.
+   * When undefined, execution is byte-identical to the buffered path.
+   */
+  sink?: OutputSink;
 }
 
 /**
@@ -164,6 +215,9 @@ export class Interpreter {
   private ctx: InterpreterContext;
   private estimatedMemoryBytes = 0;
   private statementsSinceMemoryCheck = 0;
+
+  // 2.6 — Incremental Exported Env: cached record to avoid full rebuild each call
+  private cachedExportedEnv: Record<string, string> | null = null;
 
   constructor(options: InterpreterOptions, state: InterpreterState) {
     this.ctx = {
@@ -194,6 +248,7 @@ export class Interpreter {
         (options.agentic ? new AgenticHealer() : undefined),
       sharedBus: options.sharedBus || options.bash?.services?.sharedBus,
       bash: options.bash,
+      sink: options.sink,
     };
   }
 
@@ -220,8 +275,30 @@ export class Interpreter {
    * In bash, only exported variables are passed to child processes.
    * This includes both permanently exported variables (via export/declare -x)
    * and temporarily exported variables (prefix assignments like FOO=bar cmd).
+   *
+   * 2.6 — Incremental Exported Env: returns a cached record when the exported
+   * variable set has not changed since the last call, avoiding a full rebuild
+   * on every external command execution.
    */
   private buildExportedEnv(): Record<string, string> {
+    // Fast path: if membership hasn't changed, validate cached values are current.
+    // This is cheaper than a full rebuild because we skip object allocation when
+    // values haven't changed (common case: repeated external commands in loops).
+    if (this.cachedExportedEnv !== null && !this.ctx.state.exportedEnvDirty) {
+      const cached = this.cachedExportedEnv;
+      let valid = true;
+      for (const name in cached) {
+        const current = this.ctx.state.env.get(name);
+        if (current !== cached[name]) {
+          valid = false;
+          break;
+        }
+      }
+      if (valid) {
+        return cached;
+      }
+    }
+
     const exportedVars = this.ctx.state.exportedVars;
     const tempExportedVars = this.ctx.state.tempExportedVars;
 
@@ -241,7 +318,10 @@ export class Interpreter {
     if (allExported.size === 0) {
       // No exported vars - return empty env
       // This matches bash behavior where variables must be exported to be visible to children
-      return Object.create(null);
+      const empty: Record<string, string> = Object.create(null);
+      this.cachedExportedEnv = empty;
+      this.ctx.state.exportedEnvDirty = false;
+      return empty;
     }
 
     // Use null-prototype to prevent prototype pollution via user-controlled variable names
@@ -252,6 +332,9 @@ export class Interpreter {
         env[name] = value;
       }
     }
+
+    this.cachedExportedEnv = env;
+    this.ctx.state.exportedEnvDirty = false;
     return env;
   }
 
@@ -263,6 +346,18 @@ export class Interpreter {
     let exitCode = 0;
     const observations: Observation[] = [];
     const maxOutputSize = this.ctx.limits.maxOutputSize;
+
+    // Opt-in incremental streaming sink. Captured once; only invoked when a
+    // sink is present so the buffered path stays byte-identical with zero
+    // overhead. stdout is emitted before stderr within a single append so the
+    // per-statement production order is preserved across both streams.
+    const sink = this.ctx.sink;
+    const emit = sink
+      ? (nextStdout: string, nextStderr: string): void => {
+          if (nextStdout) sink({ type: "stdout", data: nextStdout });
+          if (nextStderr) sink({ type: "stderr", data: nextStderr });
+        }
+      : undefined;
 
     const appendOutput = (nextStdout: string, nextStderr: string): void => {
       if (
@@ -276,6 +371,7 @@ export class Interpreter {
       }
       stdoutBuf.push(nextStdout);
       stderrBuf.push(nextStderr);
+      emit?.(nextStdout, nextStderr);
     };
 
     for (const statement of node.statements) {
@@ -303,13 +399,12 @@ export class Interpreter {
           exitCode = error.exitCode;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          return {
+          return withLazyEnv({
             stdout: stdoutBuf.toString(),
             stderr: stderrBuf.toString(),
             exitCode,
-            env: mapToRecord(this.ctx.state.env),
             observations,
-          };
+          }, this.ctx.state.env);
         }
         const errorName = error instanceof Error ? error.name : "";
         if (
@@ -323,39 +418,36 @@ export class Interpreter {
           exitCode = error.exitCode;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          return {
+          return withLazyEnv({
             stdout: stdoutBuf.toString(),
             stderr: stderrBuf.toString(),
             exitCode,
-            env: mapToRecord(this.ctx.state.env),
             observations,
-          };
+          }, this.ctx.state.env);
         }
         if (error instanceof NounsetError) {
           appendOutput(error.stdout, error.stderr);
           exitCode = 1;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          return {
+          return withLazyEnv({
             stdout: stdoutBuf.toString(),
             stderr: stderrBuf.toString(),
             exitCode,
-            env: mapToRecord(this.ctx.state.env),
             observations: [AgTrace.analyzeError(error)],
-          };
+          }, this.ctx.state.env);
         }
         if (error instanceof BadSubstitutionError) {
           appendOutput(error.stdout, error.stderr);
           exitCode = 1;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          return {
+          return withLazyEnv({
             stdout: stdoutBuf.toString(),
             stderr: stderrBuf.toString(),
             exitCode,
-            env: mapToRecord(this.ctx.state.env),
             observations: [AgTrace.analyzeError(error)],
-          };
+          }, this.ctx.state.env);
         }
         if (error instanceof ArithmeticError) {
           appendOutput(error.stdout, error.stderr);
@@ -398,15 +490,15 @@ export class Interpreter {
     if (exitTrapResult) {
       stdoutBuf.push(exitTrapResult.stdout);
       stderrBuf.push(exitTrapResult.stderr);
+      emit?.(exitTrapResult.stdout, exitTrapResult.stderr);
     }
 
-    return {
+    return withLazyEnv({
       stdout: stdoutBuf.toString(),
       stderr: stderrBuf.toString(),
       exitCode,
-      env: mapToRecord(this.ctx.state.env),
       observations,
-    };
+    }, this.ctx.state.env);
   }
 
   /**
@@ -646,10 +738,8 @@ export class Interpreter {
       // Fall back to diagnostic suggestion
       const suggestion = await healer.diagnose(fullCommand, result, this.ctx);
       if (suggestion) {
-        return {
-          ...result,
-          stderr: `${result.stderr}\n[Agentic Healer] ${suggestion}\n`,
-        };
+        result.stderr = `${result.stderr}\n[Agentic Healer] ${suggestion}\n`;
+        return result;
       }
     }
 
@@ -835,6 +925,7 @@ export class Interpreter {
       for (const name of tempExportedVars) {
         this.ctx.state.tempExportedVars.add(name);
       }
+      this.ctx.state.exportedEnvDirty = true;
     }
 
     // Process FD variable redirections ({varname}>file syntax)
@@ -1028,6 +1119,7 @@ export class Interpreter {
         error instanceof ContinueError ||
         error instanceof ErrexitError ||
         error instanceof ArithmeticError ||
+        error instanceof PosixFatalError ||
         errorName === "SecurityViolationError" ||
         errorName === "ExecutionLimitError" ||
         errorName === "ExitError" ||
@@ -1035,7 +1127,8 @@ export class Interpreter {
         errorName === "BreakError" ||
         errorName === "ContinueError" ||
         errorName === "ErrexitError" ||
-        errorName === "ArithmeticError"
+        errorName === "ArithmeticError" ||
+        errorName === "PosixFatalError"
       ) {
         throw error;
       }
@@ -1052,19 +1145,26 @@ export class Interpreter {
       node.redirections,
     );
 
-    // Ag-Trace: Analyze failure if exitCode exists and is non-zero
+    // Ag-Trace: Analyze failure if exitCode exists and is non-zero.
+    // Source-emitted observations (already on finalResult) are the primary
+    // channel; AgTrace is the FALLBACK. combineObservations dedups/merges so
+    // the same failure is never double-emitted (A3).
     if (finalResult.exitCode !== 0) {
-      const observations = await AgTrace.analyze(
+      const fresh = await AgTrace.analyze(
         this.ctx,
         commandName,
         args,
         finalResult,
       );
-      if (observations && observations.length > 0) {
-        finalResult.observations = [
-          ...(finalResult.observations || []),
-          ...observations,
-        ];
+      if (fresh && fresh.length > 0) {
+        // Immutability: return a NEW result rather than mutating finalResult.
+        return {
+          ...finalResult,
+          observations: AgTrace.combineObservations(
+            finalResult.observations ?? [],
+            fresh,
+          ),
+        };
       }
     }
 
@@ -1275,6 +1375,7 @@ export class Interpreter {
         for (const name of tempAssignments.keys()) {
           (tempExportedVars as Set<string>).delete(name);
         }
+        this.ctx.state.exportedEnvDirty = true;
       }
       return OK;
     }
@@ -1328,10 +1429,7 @@ export class Interpreter {
     // Prepend xtrace output and any assignment warnings to stderr
     const stderrPrefix = xtraceAssignmentOutput + xtraceOutput;
     if (stderrPrefix) {
-      cmdResult = {
-        ...cmdResult,
-        stderr: stderrPrefix + cmdResult.stderr,
-      };
+      cmdResult = prependStderr(cmdResult, stderrPrefix);
     }
 
     // If agentic behavior is enabled and the command failed, trigger healer
@@ -1418,6 +1516,7 @@ export class Interpreter {
       for (const name of tempAssignments.keys()) {
         (tempExportedVarsFinal as Set<string>).delete(name);
       }
+      this.ctx.state.exportedEnvDirty = true;
     }
 
     // Pop tempEnvBindings from the stack
@@ -1428,10 +1527,7 @@ export class Interpreter {
 
     // Include any stderr from expansion errors
     if (this.ctx.state.expansionStderr) {
-      cmdResult = {
-        ...cmdResult,
-        stderr: this.ctx.state.expansionStderr + cmdResult.stderr,
-      };
+      cmdResult = prependStderr(cmdResult, this.ctx.state.expansionStderr as string);
       this.ctx.state.expansionStderr = "";
     }
 
@@ -1534,11 +1630,9 @@ export class Interpreter {
       // Apply output redirections
       let bodyResult = testResult(arithResult !== 0);
       // Include any stderr from expansion (e.g., command substitution stderr)
-      if (this.ctx.state.expansionStderr) {
-        bodyResult = {
-          ...bodyResult,
-          stderr: this.ctx.state.expansionStderr + bodyResult.stderr,
-        };
+      const arithExpErr = this.ctx.state.expansionStderr;
+      if (arithExpErr) {
+        bodyResult = prependStderr(bodyResult, arithExpErr);
         this.ctx.state.expansionStderr = "";
       }
       return applyRedirections(this.ctx, bodyResult, node.redirections);
@@ -1575,11 +1669,9 @@ export class Interpreter {
       // Apply output redirections
       let bodyResult = testResult(condResult);
       // Include any stderr from expansion (e.g., bad array subscript warnings)
-      if (this.ctx.state.expansionStderr) {
-        bodyResult = {
-          ...bodyResult,
-          stderr: this.ctx.state.expansionStderr + bodyResult.stderr,
-        };
+      const condExpErr = this.ctx.state.expansionStderr;
+      if (condExpErr) {
+        bodyResult = prependStderr(bodyResult, condExpErr);
         this.ctx.state.expansionStderr = "";
       }
       return applyRedirections(this.ctx, bodyResult, node.redirections);

@@ -11,9 +11,11 @@ export declare class SyncBackend {
   private protocol;
   private operationTimeoutMs;
   constructor(sharedBuffer: SharedArrayBuffer, operationTimeoutMs?: number);
+  private execFrame;
   private execSync;
   readFile(path: string): Uint8Array;
   writeFile(path: string, data: Uint8Array): void;
+  private writeChunked;
   stat(path: string): {
     isFile: boolean;
     isDirectory: boolean;

@@ -15,6 +15,7 @@ import {
   ErrorCode,
   type ErrorCodeType,
   Flags,
+  MAX_CHUNK_SIZE,
   OpCode,
   type OpCodeType,
   ProtocolBuffer,
@@ -28,6 +29,29 @@ export interface BridgeOutput {
 }
 
 /**
+ * Hard cap on a single chunked transfer (read or write) through the bridge.
+ * Bounds memory a single (possibly malicious) worker can force the main thread
+ * to buffer. 256MB is generous for legitimate file workloads while preventing
+ * an OOM via an absurd TOTAL_LENGTH claim.
+ */
+const MAX_TRANSFER_BYTES = 256 * 1024 * 1024;
+
+/** In-progress accumulation of a chunked write/append payload. */
+interface WriteAccumulator {
+  opCode: OpCodeType;
+  path: string;
+  total: number;
+  received: number;
+  buffer: Uint8Array;
+}
+
+/** Cached file contents for serving a multi-chunk read. */
+interface ReadCacheEntry {
+  path: string;
+  data: Uint8Array;
+}
+
+/**
  * Handles requests from a worker thread.
  */
 export class BridgeHandler {
@@ -37,6 +61,11 @@ export class BridgeHandler {
   private outputLimitExceeded = false;
   private startTime = 0;
   private timeoutMs = 0;
+  // Chunked-transfer state. Only one transfer of each kind is in flight at a
+  // time because the worker bridge is strictly synchronous (one round-trip per
+  // loop iteration), so a single slot each is sufficient.
+  private writeAccumulator: WriteAccumulator | null = null;
+  private readCache: ReadCacheEntry | null = null;
 
   constructor(
     sharedBuffer: SharedArrayBuffer,
@@ -217,22 +246,121 @@ export class BridgeHandler {
 
   private async handleReadFile(): Promise<void> {
     const path = this.resolvePath(this.protocol.getPath());
+    const offset = this.protocol.getOffset();
     try {
-      const content = await this.fs.readFileBuffer(path);
-      this.protocol.setResult(content);
+      // offset === 0 starts a fresh read: load the whole file once and cache it
+      // so that subsequent chunk requests serve a stable snapshot even if the
+      // underlying file changes mid-transfer.
+      if (offset === 0 || !this.readCache || this.readCache.path !== path) {
+        const content = await this.fs.readFileBuffer(path);
+        this.readCache = { path, data: content };
+      }
+      const cached = this.readCache;
+      const total = cached.data.length;
+      if (offset > total) {
+        throw new Error("Chunked read offset out of range");
+      }
+      const end = Math.min(offset + MAX_CHUNK_SIZE, total);
+      const chunk = cached.data.subarray(offset, end);
+      const more = end < total;
+      this.protocol.setResultChunk(chunk, offset, total, more);
       this.protocol.setStatus(Status.SUCCESS);
+      // Free the cache once the worker has drained the final chunk.
+      if (!more) {
+        this.readCache = null;
+      }
     } catch (e) {
+      this.readCache = null;
       this.setErrorFromException(e);
     }
   }
 
+  /**
+   * Accumulate a chunked write/append payload. Returns the fully-assembled
+   * buffer when the final chunk arrives, or null if more chunks are expected
+   * (in which case SUCCESS has already been set). Throws on protocol abuse.
+   */
+  private accumulateChunkedPayload(
+    opCode: OpCodeType,
+    path: string,
+  ): Uint8Array | null {
+    const offset = this.protocol.getOffset();
+    const total = this.protocol.getTotalLength();
+    const more = this.protocol.getMore();
+    const chunk = this.protocol.getData();
+
+    // Legacy / single-shot compatibility: prebuilt worker bundles that predate
+    // chunked transfer set DATA_LENGTH but leave the framing fields at exactly
+    // zero (a fresh SharedArrayBuffer is zero-initialized and legacy workers
+    // never touch them). The chunked protocol always sets TOTAL_LENGTH to the
+    // full payload size (>= the chunk length, and == 0 only for an empty
+    // payload whose chunk is also empty). So a frame with TOTAL_LENGTH == 0 but
+    // a non-empty chunk can only be a legacy single-shot write — treat the
+    // chunk as the complete payload. A frame that declares a NON-zero total
+    // smaller than its chunk is protocol abuse and falls through to validation.
+    if (total === 0 && offset === 0 && !more && chunk.length > 0) {
+      this.writeAccumulator = null;
+      return chunk;
+    }
+
+    if (total < 0 || total > MAX_TRANSFER_BYTES) {
+      throw new Error(`Transfer too large: ${total} > ${MAX_TRANSFER_BYTES}`);
+    }
+
+    if (offset === 0) {
+      // Start (or restart) accumulation for this payload.
+      this.writeAccumulator = {
+        opCode,
+        path,
+        total,
+        received: 0,
+        buffer: new Uint8Array(total),
+      };
+    }
+
+    const acc = this.writeAccumulator;
+    if (
+      !acc ||
+      acc.opCode !== opCode ||
+      acc.path !== path ||
+      acc.total !== total
+    ) {
+      throw new Error("Chunked write framing mismatch");
+    }
+    if (offset !== acc.received) {
+      throw new Error("Chunked write out of order");
+    }
+    if (offset + chunk.length > total) {
+      throw new Error("Chunked write overruns declared total");
+    }
+
+    acc.buffer.set(chunk, offset);
+    acc.received += chunk.length;
+
+    if (more) {
+      // Intermediate chunk buffered; nothing committed yet.
+      this.protocol.setStatus(Status.SUCCESS);
+      return null;
+    }
+
+    if (acc.received !== total) {
+      throw new Error("Chunked write incomplete on final chunk");
+    }
+    this.writeAccumulator = null;
+    return acc.buffer;
+  }
+
   private async handleWriteFile(): Promise<void> {
     const path = this.resolvePath(this.protocol.getPath());
-    const data = this.protocol.getData();
     try {
-      await this.fs.writeFile(path, data);
+      const payload = this.accumulateChunkedPayload(OpCode.WRITE_FILE, path);
+      if (payload === null) {
+        return;
+      }
+      await this.fs.writeFile(path, payload);
       this.protocol.setStatus(Status.SUCCESS);
     } catch (e) {
+      this.writeAccumulator = null;
       this.setErrorFromException(e);
     }
   }
@@ -308,11 +436,15 @@ export class BridgeHandler {
 
   private async handleAppendFile(): Promise<void> {
     const path = this.resolvePath(this.protocol.getPath());
-    const data = this.protocol.getData();
     try {
-      await this.fs.appendFile(path, data);
+      const payload = this.accumulateChunkedPayload(OpCode.APPEND_FILE, path);
+      if (payload === null) {
+        return;
+      }
+      await this.fs.appendFile(path, payload);
       this.protocol.setStatus(Status.SUCCESS);
     } catch (e) {
+      this.writeAccumulator = null;
       this.setErrorFromException(e);
     }
   }
@@ -586,7 +718,7 @@ export class BridgeHandler {
       controller.abort();
       const message = e instanceof Error ? e.message : String(e);
       this.protocol.setErrorCode(ErrorCode.IO_ERROR);
-      this.protocol.setResultFromString(message);
+      this.protocol.setResultFromString(sanitizeErrorMessage(message));
       this.protocol.setStatus(Status.ERROR);
     }
   }

@@ -5,6 +5,118 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] — 2026-05-31
+
+### Breaking Changes
+
+- **ExecutionPipeline is now the sole execution engine** — The `execMode: "monolith"` inline code path has been removed. All exec() calls route through the composable 6-stage pipeline (normalize, parse, transform, sandbox, interpret, persist). The `execMode` option type is preserved for backward compatibility but both values now resolve to the pipeline.
+- **Node.js floor raised to >=20.6.0** — Required for stable `--import` hooks and `register()` API. Node.js >=23.5 is recommended for full ESM-hook security hardening.
+- **denyPrivateRanges defaults ON** — SSRF protection blocks requests to RFC-1918, link-local, and loopback addresses by default. Pass `network: { denyPrivateRanges: false }` to opt out.
+- **Observation type gains `code` and `confidence` fields** — All observation producers now emit structured machine-readable codes and confidence scores.
+- **BashHost interface expanded** — Sub-agent spawning now uses immutable constructor-time tool filtering (no `unregisterTool` cast). The `as unknown as Bash` casts are removed; `BashHost` gains typed `fs`, `nestingDepth`, `getCwd()`, `getEnv()` members.
+- **MCP protocol bumped to 2025-06-18** — Back-compat preserved for 2024-11-05 clients. Code Mode slice added for structured output.
+- **destructivePolicy option added** — AST-based destructive-command detection gate runs by default with policy `"warn"` (non-blocking). Set to `"block"` to reject destructive commands.
+- **AgentMemory now persists across sessions** — Memory is written to disk and restored on next instantiation.
+- **RunLoop config extended** — New fields: `mode`, `healer`, `memory` for configuring autonomous agent execution.
+
+### Added
+
+- **OTEL at exec level** — Optional `otel` config in `BashOptions` initializes an `AgBashTracer` that wraps each `exec()` call in an OpenTelemetry span. Zero overhead when `@opentelemetry/api` is not installed.
+- **Fork-speculation** — `bash.fork()` creates an isolated copy-on-write branch; `bash.speculate(branches)` runs N candidates in parallel and collects results.
+- **True streaming** — `bash.execStream()` yields `OutputChunk` objects via AsyncGenerator as statements produce output. Byte-identical to buffered exec.
+- **Destructive detection stage** — `DestructiveStage` analyzes parsed AST for `rm -rf /`, fork bombs, decode-pipe-to-shell, and `$IFS` obfuscation patterns.
+
+### Removed
+
+- **Monolith exec path** — The 200+ line inline execution body in `Bash.exec()` has been deleted. All execution flows through `ExecutionPipeline`.
+
+### Changed
+
+- Synchronized monorepo versions to **v6.0.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Node.js engine constraint updated to `>=20.6.0` in all package.json files.
+- Documentation (README, CLAUDE.md, AGENTS.md, ARCHITECTURE.md) updated to reflect v6.0.0 architecture.
+
+---
+
+## [5.0.0] — 2026-05-28
+
+### Breaking Changes
+
+- **DefenseInDepthBox defaults to enabled** — `resolveConfig(undefined)` now returns `{ enabled: true }` (fail-closed principle). Pass `{ enabled: false }` explicitly to disable.
+- **Lazy ServiceContainer** — Services initialize on first access, not during construction. Only `astCache` and `sharedBus` remain eager.
+- **CommandContext.bash typed as BashHost** — Previously `any`, now a narrow typed interface. Commands accessing undeclared methods will get type errors.
+- **BashSnapshot.fs typed as FileSystemSnapshot** — Previously `unknown`. Update type assertions accordingly.
+- **Browser bundle split** — Full bundle remains at `@ag-bash/bash/browser`. New lightweight `@ag-bash/bash/browser-core` (~400KB) externalizes heavy deps.
+- **MCP server per-session isolation** — Shared mutable Bash instance replaced with session-scoped instances.
+- **ASTCache TTL removed** — Pure LRU eviction; `ttlMs` option no longer accepted.
+
+### Security
+
+- **SSRF prevention** — MCP server now sets `denyPrivateRanges: true`, blocking requests to internal IPs (169.254.x, 10.x, 172.16.x, 192.168.x, 127.x).
+- **Request size limits** — MCP stdin capped at 16MB; base64 payloads validated before decode.
+- **Cryptographic UUIDs** — Replaced `Math.random()` fallback with `crypto.randomBytes(16)`.
+- **Error sanitization** — Worker bridge `handleExecCommand` now sanitizes error messages before propagation.
+- **SharedStateBus limits** — Max 1000 subscriptions, 10K state entries, 1MB payload size enforced.
+- **Fail-closed defaults** — Defense-in-depth enabled by default when config is omitted.
+- **JSON-RPC type validation** — Malformed requests rejected with proper error codes.
+- **Dependency audit** — `pnpm audit --audit-level=high` added to CI pipeline.
+
+### Performance
+
+- **Lazy ServiceContainer** — 14 → 2 eager constructors. Services initialize on first access, reducing `new Bash()` startup time by ~85%.
+- **Deferred env copy** — `ExecResult.env` is now a lazy getter; the Map→Record conversion only runs when accessed.
+- **Hot-path spread elimination** — `prependStderr()` mutates in place instead of creating new objects per command.
+- **Builtin dispatch Map** — O(1) Map lookup replaces 40+ sequential if-checks for builtin resolution.
+- **ASTCache collision fix** — Hash keys now include input length, preventing FNV-1a collision bugs.
+- **Incremental exported env** — `buildExportedEnv()` uses dirty-flag caching instead of rebuilding from scratch.
+- **Browser-core bundle** — New lightweight browser export externalizes `isomorphic-git`, `fast-xml-parser`, `modern-tar`, `papaparse`.
+- **Parallel tool execution** — RunLoop executes read-only tool calls concurrently via `Promise.all`.
+
+### Type Safety
+
+- **InterpreterContext trap fields** — 10 `as any` casts eliminated with proper typed fields.
+- **BashHost interface** — Narrow typed interface for command access to Bash instance.
+- **Disposable + BusAware interfaces** — Service lifecycle now interface-driven.
+- **AsyncDisposable** — `await using bash = new Bash(...)` now supported via `Symbol.asyncDispose`.
+- **FileSystemSnapshot** — Branded opaque type replaces `unknown` for VFS snapshots.
+- **AgentBridge cleanup** — All `as any` eliminated; proper discriminated unions and type guards.
+- **Knip rules enabled** — Dead code detection for files, exports, and dependencies.
+
+### Architecture
+
+- **Lexer split** — `parser/lexer.ts` (2630 lines) decomposed into `token-definitions.ts`, `lexer-state-machine.ts`, and barrel `index.ts`.
+- **BashToolbox split** — `agentic/BashToolbox.ts` (1710 lines) decomposed into `registry.ts`, `executor.ts`, `schema-conversion.ts`.
+
+### Developer Experience
+
+- **Migration guide** — `docs/MIGRATION.md` documents all breaking changes with before/after examples.
+- **RunLoop documentation** — `docs/agent-runtime.md` with full API guide.
+- **Error code reference** — `docs/ERROR_CODES.md` maps exit codes to error types.
+- **assertFails regex** — Test utility now accepts `RegExp` for stderr matching.
+- **Missing exports** — `Observation`, `BashEventMap`, `TypedEventEmitter`, `BashSnapshot`, `FileSystemSnapshot`, `Disposable`, `BusAware`, `BashHost` now exported from main entry.
+- **Dead doc links fixed** — Registry stubs created for `mcp_orchestration.md`, `agentic_tools.md`, `agent_runtime.md`.
+
+### CI/CD
+
+- **Consolidated workflows** — 5 GitHub Actions → 2 (`quality.yml` + `tests.yml`) with concurrency groups.
+- **Frozen lockfile** — All CI uses `--frozen-lockfile` for reproducibility.
+- **Node.js engines** — `"engines": { "node": ">=20.0.0" }` declared on all packages.
+- **Dependency audit** — `pnpm audit --audit-level=high` in quality pipeline.
+
+### Modernization
+
+- **MCP tool annotations** — `readOnlyHint` and `destructiveHint` mapped from BashToolbox metadata.
+- **TreeSitter init fix** — Busy-wait polling replaced with promise-based mutex.
+- **Biome 2.4** — Schema verified current.
+
+### Testing
+
+- **178 new tests** across 4 new test files:
+  - `interpreter.unit.test.ts` (83 tests) — All AST node dispatch paths
+  - `ExecutionPipeline.test.ts` (23 tests) — Pipeline stage contracts
+  - `StreamingExecutor.test.ts` (36 tests) — Async streaming behavior
+  - `contract.test.ts` (36 tests) — MCP tool bridge with real Bash instances
+
 ## [4.1.0] - 2026-05-25 — "Runtime"
 
 ### Added

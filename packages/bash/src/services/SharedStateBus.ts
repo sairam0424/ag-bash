@@ -3,6 +3,10 @@
  * Allows Bash, Python, and JavaScript runtimes to publish and subscribe to state changes.
  */
 
+const MAX_SUBSCRIPTIONS = 1000;
+const MAX_STATE_ENTRIES = 10_000;
+const MAX_PAYLOAD_BYTES = 1_048_576; // 1MB
+
 export type BusEvent = {
   type: string;
   source: string;
@@ -24,6 +28,16 @@ export class SharedStateBus {
   }
 
   publish(type: string, source: string, payload: unknown): void {
+    // Enforce payload size limit for object/array payloads
+    if (payload !== null && typeof payload === "object") {
+      const serialized = JSON.stringify(payload);
+      if (serialized.length > MAX_PAYLOAD_BYTES) {
+        throw new Error(
+          "SharedStateBus: payload exceeds maximum size limit",
+        );
+      }
+    }
+
     const event: BusEvent = {
       type,
       source,
@@ -64,6 +78,11 @@ export class SharedStateBus {
   }
 
   subscribe(type: string, callback: BusCallback): () => void {
+    // Enforce maximum subscription count
+    if (this.subscriberCount() >= MAX_SUBSCRIPTIONS) {
+      throw new Error("SharedStateBus: maximum subscriptions exceeded");
+    }
+
     if (!this.listeners.has(type)) {
       this.listeners.set(type, new Set());
     }
@@ -78,6 +97,10 @@ export class SharedStateBus {
   }
 
   setState(key: string, value: unknown, source: string = "system"): void {
+    // Enforce maximum state entries for new keys
+    if (!this.state.has(key) && this.state.size >= MAX_STATE_ENTRIES) {
+      throw new Error("SharedStateBus: maximum state entries exceeded");
+    }
     this.state.set(key, value);
     this.publish(`state:${key}`, source, value);
   }

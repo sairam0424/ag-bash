@@ -71,14 +71,14 @@ export async function executeErrTrap(
   if (pipelineNegated) return null;
 
   // Prevent infinite recursion: mark that we are executing an ERR trap
-  const trapState = (ctx as any).__executingErrTrap;
+  const trapState = ctx.__executingErrTrap;
   if (trapState) return null;
 
-  (ctx as any).__executingErrTrap = true;
+  ctx.__executingErrTrap = true;
   try {
     return await executeTrap(ctx, "ERR");
   } finally {
-    (ctx as any).__executingErrTrap = false;
+    ctx.__executingErrTrap = false;
   }
 }
 
@@ -94,8 +94,8 @@ export async function executeErrTrap(
 export async function executeExitTrap(
   ctx: InterpreterContext,
 ): Promise<ExecResult | null> {
-  if ((ctx as any).__exitTrapFired) return null;
-  (ctx as any).__exitTrapFired = true;
+  if (ctx.__exitTrapFired) return null;
+  ctx.__exitTrapFired = true;
   return executeTrap(ctx, "EXIT");
 }
 
@@ -109,12 +109,12 @@ export async function executeExitTrap(
 export async function executeReturnTrap(
   ctx: InterpreterContext,
 ): Promise<ExecResult | null> {
-  if ((ctx as any).__executingReturnTrap) return null;
-  (ctx as any).__executingReturnTrap = true;
+  if (ctx.__executingReturnTrap) return null;
+  ctx.__executingReturnTrap = true;
   try {
     return await executeTrap(ctx, "RETURN");
   } finally {
-    (ctx as any).__executingReturnTrap = false;
+    ctx.__executingReturnTrap = false;
   }
 }
 
@@ -129,13 +129,13 @@ export async function executeDebugTrap(
   ctx: InterpreterContext,
 ): Promise<ExecResult | null> {
   // Prevent recursion: DEBUG trap executing commands should not re-trigger DEBUG
-  const trapState = (ctx as any).__executingDebugTrap;
+  const trapState = ctx.__executingDebugTrap;
   if (trapState) return null;
 
-  (ctx as any).__executingDebugTrap = true;
+  ctx.__executingDebugTrap = true;
   try {
     return await executeTrap(ctx, "DEBUG");
   } finally {
-    (ctx as any).__executingDebugTrap = false;
+    ctx.__executingDebugTrap = false;
   }
 }

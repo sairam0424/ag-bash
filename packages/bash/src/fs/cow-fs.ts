@@ -17,6 +17,7 @@ import type {
   CpOptions,
   DirentEntry,
   FileContent,
+  FileSystemSnapshot,
   FsStat,
   IFileSystem,
   MkdirOptions,
@@ -541,7 +542,7 @@ export class CowFs implements IFileSystem {
     this.modifiedPaths.add(normalized);
   }
 
-  async snapshot(): Promise<unknown> {
+  async snapshot(): Promise<FileSystemSnapshot> {
     const memoryCopy = new Map<string, CowEntry>();
     for (const [path, entry] of this.local.entries()) {
       const entryCopy = { ...entry };
@@ -555,11 +556,11 @@ export class CowFs implements IFileSystem {
       local: memoryCopy,
       deleted: new Set(this.deleted),
       modifiedPaths: new Set(this.modifiedPaths),
-    };
+    } as unknown as FileSystemSnapshot;
   }
 
-  async restore(snapshot: unknown): Promise<void> {
-    const s = snapshot as {
+  async restore(snapshot: FileSystemSnapshot): Promise<void> {
+    const s = snapshot as unknown as {
       local: Map<string, CowEntry>;
       deleted: Set<string>;
       modifiedPaths: Set<string>;

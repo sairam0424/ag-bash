@@ -19,7 +19,12 @@ import type { AgentMemory, MemoryEntry, MemoryScope } from "./AgentMemory.js";
 
 export interface SyncFs {
   exists(path: string): Promise<boolean>;
-  readFile(path: string, encoding?: string): Promise<string>;
+  // `encoding` is narrowed to the literal `"utf-8"` (the only value this
+  // module ever passes) so that the ag-bash VFS implementations — whose
+  // `readFile` accepts `ReadFileOptions | BufferEncoding` (a domain-local
+  // `BufferEncoding` that excludes e.g. "utf16le") — remain structurally
+  // assignable to `SyncFs` without coupling this file to the fs interface.
+  readFile(path: string, encoding?: "utf-8"): Promise<string>;
   writeFile(path: string, content: string): Promise<void>;
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
 }

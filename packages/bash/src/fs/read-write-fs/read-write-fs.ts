@@ -22,6 +22,7 @@ import {
 import type {
   CpOptions,
   DirentEntry,
+  FileSystemSnapshot,
   FsStat,
   IFileSystem,
   MkdirOptions,
@@ -83,7 +84,7 @@ export class ReadWriteFs implements IFileSystem {
     this.canonicalRoot = fs.realpathSync(this.root);
   }
 
-  snapshot(): any {
+  async snapshot(): Promise<FileSystemSnapshot> {
     // ReadWriteFs directly wraps the real filesystem.
     // Atomic snapshots of the real OS filesystem are not supported.
     // To enable stateful branching on real files, use OverlayFs on top of ReadWriteFs.
@@ -91,10 +92,10 @@ export class ReadWriteFs implements IFileSystem {
       type: "ReadWriteFs",
       root: this.root,
       timestamp: Date.now(),
-    };
+    } as unknown as FileSystemSnapshot;
   }
 
-  async restore(_state: unknown): Promise<void> {
+  async restore(_state: FileSystemSnapshot): Promise<void> {
     // ReadWriteFs does not support restoration of previous states.
     // If you need to revert changes to a real filesystem, you should have
     // used an OverlayFs layer above it to capture those changes in memory.

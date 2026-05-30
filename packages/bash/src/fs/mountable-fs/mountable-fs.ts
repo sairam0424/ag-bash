@@ -3,6 +3,7 @@ import type {
   BufferEncoding,
   CpOptions,
   FileContent,
+  FileSystemSnapshot,
   FsStat,
   IFileSystem,
   MkdirOptions,
@@ -75,8 +76,8 @@ export class MountableFs implements IFileSystem {
     }
   }
 
-  async snapshot(): Promise<any> {
-    const mountSnapshots = new Map<string, any>();
+  async snapshot(): Promise<FileSystemSnapshot> {
+    const mountSnapshots = new Map<string, FileSystemSnapshot>();
     for (const [path, entry] of this.mounts) {
       mountSnapshots.set(path, await entry.filesystem.snapshot());
     }
@@ -84,19 +85,23 @@ export class MountableFs implements IFileSystem {
     return {
       base: await this.baseFs.snapshot(),
       mounts: mountSnapshots,
-    };
+    } as unknown as FileSystemSnapshot;
   }
 
-  async restore(state: any): Promise<void> {
-    if (!state || typeof state !== "object") {
+  async restore(state: FileSystemSnapshot): Promise<void> {
+    const s = state as unknown as {
+      base: FileSystemSnapshot;
+      mounts: Map<string, FileSystemSnapshot>;
+    };
+    if (!s || typeof s !== "object") {
       throw new Error("Invalid state for MountableFs.restore()");
     }
 
     // Restore base filesystem
-    await this.baseFs.restore(state.base);
+    await this.baseFs.restore(s.base);
 
     // Restore mounts
-    const stateMounts = state.mounts as Map<string, any>;
+    const stateMounts = s.mounts;
 
     // 1. Remove mounts not in state
     for (const path of this.mounts.keys()) {

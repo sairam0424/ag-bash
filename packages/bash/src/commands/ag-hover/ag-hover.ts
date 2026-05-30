@@ -69,6 +69,10 @@ export const agHoverCommand: Command = {
         };
       }
 
+      if (!ctx.bash) {
+        return { stdout: "", stderr: "ag-hover: no bash host available\n", exitCode: 1 };
+      }
+
       const definition = ctx.bash.semanticEngine.findDefinition(symbolName);
       if (definition) {
         let output = `--- Hover Info for '${symbolName}' ---\n`;

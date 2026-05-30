@@ -11,7 +11,20 @@ import type { Bash, ExecOptions } from "../Bash.js";
 import type { InterpreterState } from "../interpreter/types.js";
 import type { DefenseInDepthHandle } from "../security/types.js";
 import type { ServiceContainer } from "../services/ServiceContainer.js";
-import type { BashExecResult } from "../types.js";
+import type { BashExecResult, Observation } from "../types.js";
+
+/**
+ * A non-blocking destructive-command warning produced by the DestructiveStage
+ * under the WARN policy. The script STILL executes; this is merged into the
+ * final result (observation + stderr line) by the pipeline runner so the
+ * warning rides on the interpreter-produced result.
+ */
+export interface PendingDestructiveWarning {
+  /** Typed observation to append to result.observations. */
+  observation: Observation;
+  /** Human-readable stderr warning line (already newline-terminated). */
+  stderr: string;
+}
 
 /**
  * Mutable context threaded through all pipeline stages.
@@ -38,6 +51,14 @@ export interface PipelineContext {
   defenseHandle: DefenseInDepthHandle | undefined;
   /** Final execution result (populated by interpret or error stage) */
   result: BashExecResult | undefined;
+  /**
+   * Pending non-blocking destructive warning (populated by DestructiveStage
+   * under WARN policy). Merged into the final result by the pipeline runner
+   * AFTER interpret produces it, so the script still executes with the warning
+   * attached. Undefined when no destructive command was detected, or under the
+   * BLOCK / ALLOW policies (BLOCK short-circuits; ALLOW emits nothing).
+   */
+  pendingDestructiveWarning: PendingDestructiveWarning | undefined;
 }
 
 /**

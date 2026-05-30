@@ -7,6 +7,7 @@ import type {
   FileContent,
   FileEntry,
   FileInit,
+  FileSystemSnapshot,
   FsEntry,
   FsStat,
   IFileSystem,
@@ -840,7 +841,7 @@ export class InMemoryFs implements IFileSystem {
     entry.mtime = mtime;
   }
 
-  async snapshot(): Promise<unknown> {
+  async snapshot(): Promise<FileSystemSnapshot> {
     // Deep copy the data map
     const snapshotData = new Map<string, FsEntry>();
     for (const [path, entry] of this.data.entries()) {
@@ -856,17 +857,18 @@ export class InMemoryFs implements IFileSystem {
 
       snapshotData.set(path, entryCopy);
     }
-    return snapshotData;
+    return snapshotData as unknown as FileSystemSnapshot;
   }
 
-  async restore(snapshot: unknown): Promise<void> {
-    if (!(snapshot instanceof Map)) {
+  async restore(snapshot: FileSystemSnapshot): Promise<void> {
+    const data = snapshot as unknown as Map<string, FsEntry>;
+    if (!(data instanceof Map)) {
       throw new Error("Invalid snapshot: expected Map");
     }
 
     this.data.clear();
-    for (const [path, entry] of snapshot.entries()) {
-      const entryCopy = { ...(entry as FsEntry) };
+    for (const [path, entry] of data.entries()) {
+      const entryCopy = { ...entry };
       if (entryCopy.type === "file" && "content" in entryCopy) {
         if (entryCopy.content instanceof Uint8Array) {
           entryCopy.content = new Uint8Array(entryCopy.content);

@@ -1,0 +1,69 @@
+name: Publish
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Run npm publish in --dry-run mode (no upload)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Required for npm provenance: the OIDC token lets npm cryptographically
+  # attest (Sigstore) that this build came from this workflow/commit (E3).
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # registry-url is required for npm to read NODE_AUTH_TOKEN and to
+          # mint the OIDC provenance attestation against the public registry.
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      # Supply-chain gate (E3): block publish on any high/critical advisory.
+      - run: pnpm audit --audit-level=high
+
+      # Verify registry signatures of installed dependencies via the npm CLI
+      # (Sigstore + npm registry keys). Best-effort on the pnpm store layout:
+      # report but do not hard-fail if the lockfile shape is unsupported.
+      - name: Verify dependency signatures
+        run: npm audit signatures || echo "::warning::npm audit signatures could not verify all packages (pnpm store layout); review manually"
+
+      - run: pnpm build
+
+      # npm provenance requires npm >= 9.5 and the modern publish path. We use
+      # `npm publish` (not `pnpm publish`) per package so --provenance is honored
+      # and the Sigstore attestation is generated from the OIDC id-token.
+      - name: Publish @ag-bash/bash
+        working-directory: packages/bash
+        run: npm publish --provenance --access public ${{ inputs.dry-run && '--dry-run' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @ag-bash/mcp-server
+        working-directory: packages/mcp-server
+        run: npm publish --provenance --access public ${{ inputs.dry-run && '--dry-run' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @ag-bash/agent-bridge
+        working-directory: packages/agent-bridge
+        run: npm publish --provenance --access public ${{ inputs.dry-run && '--dry-run' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

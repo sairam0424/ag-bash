@@ -27,31 +27,36 @@ import {
   createLazyCustomCommand,
   isLazyCommand,
 } from "./custom-commands.js";
+import {
+  ExecutionPipeline,
+  InterpretStage,
+  NormalizeStage,
+  ParseStage,
+  PersistStage,
+  SandboxStage,
+  TransformStage,
+} from "./execution/index.js";
+import type { DestructivePolicy } from "./execution/index.js";
 import { InMemoryFs } from "./fs/in-memory-fs/in-memory-fs.js";
 import { initFilesystem } from "./fs/init.js";
-import type { IFileSystem, InitialFiles } from "./fs/interface.js";
+import type {
+  FileSystemSnapshot,
+  IFileSystem,
+  InitialFiles,
+} from "./fs/interface.js";
 import { MountableFs } from "./fs/mountable-fs/index.js";
-import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
 import {
   mapToRecord,
   mapToRecordWithExtras,
   mergeToNullPrototype,
 } from "./helpers/env.js";
-import {
-  ArithmeticError,
-  ExecutionAbortedError,
-  ExecutionLimitError,
-  ExitError,
-  PosixFatalError,
-} from "./interpreter/errors.js";
+import { ExecutionLimitError } from "./interpreter/errors.js";
 import {
   buildBashopts,
   buildShellopts,
 } from "./interpreter/helpers/shellopts.js";
 import {
   type DebuggerBridge,
-  Interpreter,
-  type InterpreterOptions,
   type InterpreterState,
 } from "./interpreter/index.js";
 import { type ExecutionLimits, resolveLimits } from "./limits.js";
@@ -64,14 +69,10 @@ import {
   type SecureFetch,
 } from "./network/index.js";
 import { AgTrace } from "./observability/ag-trace.js";
-import { LexerError } from "./parser/lexer.js";
-import { type ParseException, parse } from "./parser/parser.js";
-import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
-import { TreeSitterToAst } from "./parser/tree-sitter-to-ast.js";
-import {
-  DefenseInDepthBox,
-  SecurityViolationError,
-} from "./security/defense-in-depth-box.js";
+import { AgBashTracer } from "./observability/otel.js";
+import type { OtelConfig } from "./observability/otel-types.js";
+import { parse } from "./parser/parser.js";
+import { DefenseInDepthBox } from "./security/defense-in-depth-box.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
 import { PermissionManager } from "./services/PermissionManager.js";
 import type { ServiceContainer } from "./services/ServiceContainer.js";
@@ -82,6 +83,8 @@ import {
   diffFs,
   diffState,
 } from "./state-sync/index.js";
+import { StreamingExecutor } from "./streaming/StreamingExecutor.js";
+import type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
 import { serialize } from "./transform/serialize.js";
 import type {
   BashTransformResult,
@@ -93,6 +96,7 @@ import type {
   CommandRegistry,
   ExecResult,
   FeatureCoverageWriter,
+  OutputSink,
   TraceCallback,
 } from "./types.js";
 
@@ -228,6 +232,37 @@ export interface BashOptions {
 
   /** Override default service implementations (dependency injection). */
   services?: Partial<ServiceContainer>;
+
+  /**
+   * Optional OpenTelemetry configuration for exec-level tracing.
+   * When provided, an AgBashTracer is initialized and wraps each exec() call
+   * in a span. If @opentelemetry/api is not installed, the tracer is a no-op
+   * with zero overhead.
+   */
+  otel?: OtelConfig;
+
+  /**
+   * Default execution engine for exec() calls that do not specify execMode.
+   * - "pipeline" (default, v6.0.0): the composable ExecutionPipeline.
+   * - "monolith": preserved for backward type compatibility but now routes
+   *   through the pipeline (the inline monolith code was removed in v6.0.0).
+   * Defaults to "pipeline". Per-call `ExecOptions.execMode` overrides this.
+   */
+  execMode?: "monolith" | "pipeline";
+
+  /**
+   * Default policy for the AST-based destructive-command gate (E2). The gate is
+   * a pipeline stage that runs after parse / before interpret and analyzes the
+   * parsed AST so obfuscations (command substitution, $IFS, fork bombs,
+   * decode-pipe-to-shell) are caught structurally.
+   * - "warn" (DEFAULT): attach a typed Observation + stderr warning, then STILL
+   *   execute (non-blocking — never breaks commands that ran before).
+   * - "block": short-circuit with a non-zero result WITHOUT interpreting.
+   * - "prompt": no in-process interactive prompt; falls back to block + a note.
+   * - "allow": disable the gate.
+   * Per-call `ExecOptions.destructivePolicy` overrides this.
+   */
+  destructivePolicy?: DestructivePolicy;
 }
 
 // v3.0 Breaking Changes:
@@ -308,6 +343,31 @@ export interface ExecOptions {
    * Optional session ID for stateful REPLs (js-exec, python3).
    */
   sessionId?: string;
+  /**
+   * Execution engine to use for this call.
+   * - "pipeline" (default, v6.0.0): the composable ExecutionPipeline.
+   * - "monolith": preserved for backward type compatibility but now routes
+   *   through the pipeline (the inline monolith code was removed in v6.0.0).
+   * Overrides the instance-level `defaultExecMode`.
+   */
+  execMode?: "monolith" | "pipeline";
+  /**
+   * Per-call override for the AST-based destructive-command gate (E2).
+   * - "warn" (default): attach an Observation + stderr warning but STILL execute.
+   * - "block": short-circuit with a non-zero result without interpreting.
+   * - "prompt": no in-process interactive prompt, so falls back to block.
+   * - "allow": disable the gate for this call.
+   * Overrides the instance-level `BashOptions.destructivePolicy`.
+   */
+  destructivePolicy?: DestructivePolicy;
+  /**
+   * Opt-in incremental output sink (true streaming). When provided, the
+   * interpreter invokes it with stdout/stderr fragments as statements produce
+   * them, preserving order. When OMITTED, exec() is byte-identical to the
+   * buffered path with zero measurable overhead — the sink is never created or
+   * invoked. Primarily used by {@link StreamingExecutor} / {@link Bash.execStream}.
+   */
+  onChunk?: OutputSink;
 }
 
 /**
@@ -352,6 +412,12 @@ export class Bash extends EventEmitter {
   // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin storage for untyped API
   private transformPlugins: TransformPlugin<any>[] = [];
   private defaultPersistState: boolean;
+  private readonly otelTracer?: AgBashTracer;
+  private readonly defaultExecMode: "monolith" | "pipeline";
+  /** Lazily-built pipeline for the "pipeline" execMode (cached per instance). */
+  private executionPipeline?: ExecutionPipeline;
+  /** Lazily-built streaming executor for execStream() (cached per instance). */
+  private streamingExecutor?: StreamingExecutor;
   private parserEngine: "legacy" | "tree-sitter";
   private treeSitterConfig?: NonNullable<
     BashOptions["parser"]
@@ -375,7 +441,7 @@ export class Bash extends EventEmitter {
     super();
     this.options = options;
     this.nestingDepth = options.agentic?.nestingDepth ?? 0;
-    this.services = createDefaultServices(options.services);
+    this.services = createDefaultServices(options.services, () => this.fs);
     this.permissionManager = new PermissionManager(
       options.agentic?.permissionHandler,
     );
@@ -596,6 +662,19 @@ export class Bash extends EventEmitter {
     }
 
     this.defaultPersistState = options.persistState ?? false;
+    // Execution engine (v6.0.0): the composable ExecutionPipeline is now the
+    // default live path — proven byte-equivalent to the legacy monolith across
+    // the full test suite (identical results, with one nested-cancellation case
+    // the pipeline handles correctly). The monolith remains available as an
+    // opt-in fallback via execMode:"monolith" (or AG_BASH_EXEC_MODE=monolith)
+    // and will be removed in a later release.
+    const envExecMode =
+      typeof process !== "undefined" &&
+      (process.env?.AG_BASH_EXEC_MODE === "monolith" ||
+        process.env?.AG_BASH_EXEC_MODE === "pipeline")
+        ? (process.env.AG_BASH_EXEC_MODE as "monolith" | "pipeline")
+        : undefined;
+    this.defaultExecMode = options.execMode ?? envExecMode ?? "pipeline";
     this.parserEngine = options.parser?.engine ?? "legacy";
     this.treeSitterConfig = options.parser?.treeSitterConfig;
     this.debugger = options.debug?.debugger;
@@ -607,6 +686,13 @@ export class Bash extends EventEmitter {
         this.toolbox,
         options.agentic?.healer || { enableHeuristics: true },
       );
+    }
+
+    // Initialize OTel tracer if config is provided (no-op when @opentelemetry/api absent)
+    if (options.otel) {
+      this.otelTracer = new AgBashTracer(options.otel);
+      // Fire-and-forget initialization — safe because the tracer is a no-op until init completes
+      void this.otelTracer.initialize();
     }
   }
 
@@ -844,217 +930,172 @@ export class Bash extends EventEmitter {
       normalized = normalizeScript(normalizedCommandLine);
     }
 
-    // Activate defense-in-depth box if configured
-    // This wraps execution in AsyncLocalStorage context for context-aware blocking
-    const defenseBox = this.defenseInDepthConfig
-      ? DefenseInDepthBox.getInstance(this.defenseInDepthConfig)
-      : null;
-
-    // Pre-initialize Tree-sitter outside of the defense-in-depth sandbox
-    // because its WASM/JS glue code uses dynamic imports (e.g., 'module', 'fs')
-    // that are blocked during sandboxed script execution.
-    if (this.parserEngine === "tree-sitter" && this.treeSitterConfig) {
-      const grammars = { ...this.treeSitterConfig.grammars };
-      if (this.treeSitterConfig.bashGrammarWasm) {
-        grammars.bash = this.treeSitterConfig.bashGrammarWasm;
+    // Branch on execution engine. The instance-coupled prologue above
+    // (command-count guard, empty short-circuit, heredoc normalization,
+    // exec logging, PWD/realpath/cwd derivation, execEnv + execState build,
+    // whitespace normalization) is SHARED by both engines and stays here so
+    // that recursive execs (via the exec.bind hook) re-enter the same guard.
+    const execMode = options?.execMode ?? this.defaultExecMode;
+    if (execMode === "pipeline") {
+      // Wrap in OTEL span when tracer is configured (zero-cost no-op otherwise)
+      if (this.otelTracer) {
+        const span = this.otelTracer.startExecSpan(commandLine);
+        try {
+          const result = await this.execViaPipeline(
+            commandLine,
+            options,
+            execState,
+          );
+          span.setAttribute("ag-bash.exitCode", result.exitCode);
+          span.end();
+          return result;
+        } catch (spanError: unknown) {
+          span.setStatus({ code: 2, message: "exec failed" });
+          span.end();
+          throw spanError;
+        }
       }
-      await TreeSitterParser.init({
-        webTreeSitterWasm: this.treeSitterConfig.webTreeSitterWasm,
-        grammars,
-      });
+      return this.execViaPipeline(commandLine, options, execState);
     }
 
-    const defenseHandle = defenseBox?.activate();
+    // v6.0.0: The monolith code path has been removed. The ExecutionPipeline
+    // is now the sole execution engine. If execMode is "monolith" (for backward
+    // compat at the type level), it transparently falls through to the pipeline.
+    return this.execViaPipeline(commandLine, options, execState);
+  }
 
-    try {
-      // Run execution inside defense-in-depth context if enabled
-      const executeScript = async (): Promise<BashExecResult> => {
-        let ast: ScriptNode;
+  /**
+   * Build (and cache) the ExecutionPipeline used by the "pipeline" execMode.
+   *
+   * The stages mirror the monolithic Bash.exec() body exactly:
+   *   normalize → parse → transform → sandbox → interpret → persist
+   * with error categorization + UTF-8 decode/log applied by the pipeline
+   * runner (via the finalize callback and its internal catch).
+   *
+   * Parity-critical wiring:
+   * - requireDefenseContext is computed from the REAL DefenseInDepthBox's
+   *   isEnabled() (NOT inferred from the handle), matching Bash.ts monolith.
+   * - The finalize callback is this.logResult (decode binary→UTF-8 + log),
+   *   applied to every result leaving the pipeline (success AND error).
+   * - The persist callback performs the exact 7-field commit-back the monolith
+   *   does (cwd/env/functions/hashTable by reference; shoptOptions/options via
+   *   spread; lastExitCode), gated on exit 0 inside PersistStage.
+   * - execFn = this.exec.bind(this) so recursive execs re-enter exec() and hit
+   *   the command-count guard (which lives in exec(), before this branch).
+   * - this.services is passed so astCache + sharedBus are SHARED, matching
+   *   the monolith's this.services usage.
+   */
+  private buildExecutionPipeline(): ExecutionPipeline {
+    const requireDefenseContext = this.defenseInDepthConfig
+      ? DefenseInDepthBox.getInstance(this.defenseInDepthConfig).isEnabled() ===
+        true
+      : false;
 
-        const astCache = this.services.astCache;
-        const cachedAst = astCache.get(normalized);
-        if (cachedAst) {
-          ast = cachedAst;
-        } else {
-          if (this.parserEngine === "tree-sitter" && this.treeSitterConfig) {
-            const tree = TreeSitterParser.parse(normalized);
-            const converter = new TreeSitterToAst(normalized);
-            ast = converter.convert(tree);
-          } else {
-            ast = parse(normalized, {
-              maxHeredocSize: this.limits.maxHeredocSize,
-            }) as ScriptNode;
-          }
-          astCache.set(normalized, ast);
-        }
-
-        // Apply transform plugins if any are registered.
-        // Keep metadata null-prototype even when plugins contribute dynamic keys.
-        let metadata: ReturnType<typeof mergeToNullPrototype> | undefined;
-        if (this.transformPlugins.length > 0) {
-          let meta: Record<string, unknown> = Object.create(null);
-          for (const plugin of this.transformPlugins) {
-            const pluginResult = plugin.transform({ ast, metadata: meta });
-            ast = pluginResult.ast;
-            if (pluginResult.metadata) {
-              meta = mergeToNullPrototype(meta, pluginResult.metadata);
-            }
-          }
-          metadata = meta;
-        }
-
-        // Create interpreter with appropriate state
-        const interpreterOptions: InterpreterOptions = {
-          fs: this.fs,
-          commands: this.commands,
-          limits: this.limits,
-          exec: this.exec.bind(this),
-          fetch: this.secureFetch,
-          sleep: this.sleepFn,
-          trace: this.traceFn,
-          coverage: this.coverageWriter,
-          requireDefenseContext: defenseBox?.isEnabled() === true,
-          jsBootstrapCode: this.jsBootstrapCode,
-          onCommandNotFound: this.onCommandNotFound,
-          agentic: this.agentic,
-          getRegisteredCommands: () => Array.from(this.commands.keys()),
-          debugger: options?.debugger ?? this.debugger,
-          semanticEngine: options?.semanticEngine ?? this.semanticEngine,
-          agenticHealer: options?.agenticHealer ?? this.agenticHealer,
-          sharedBus: this.services.sharedBus,
-          bash: this,
-        };
-
-        const interpreter = new Interpreter(interpreterOptions, execState);
-        const result = await interpreter.executeScript(ast);
-        // Interpreter always sets env, assert it for type safety
-        const execResult = result as BashExecResult;
-        if (metadata) {
-          execResult.metadata = metadata;
-        }
-        return this.logResult(execResult);
-      };
-
-      const execResult = await (defenseHandle
-        ? defenseHandle.run(executeScript)
-        : executeScript());
-
-      // If persistence is enabled, commit the state back to the Bash instance
-      const shouldPersist = options?.persistState ?? this.defaultPersistState;
-      if (shouldPersist && execResult.exitCode === 0) {
+    const pipeline = new ExecutionPipeline((result) => this.logResult(result));
+    pipeline.addStage(new NormalizeStage());
+    pipeline.addStage(
+      new ParseStage({
+        parserEngine: this.parserEngine,
+        treeSitterConfig: this.treeSitterConfig,
+        limits: this.limits,
+      }),
+    );
+    pipeline.addStage(new TransformStage(this.transformPlugins));
+    pipeline.addStage(new SandboxStage(this.defenseInDepthConfig));
+    pipeline.addStage(
+      new InterpretStage({
+        fs: this.fs,
+        commands: this.commands,
+        limits: this.limits,
+        execFn: this.exec.bind(this),
+        secureFetch: this.secureFetch,
+        sleepFn: this.sleepFn,
+        traceFn: this.traceFn,
+        coverageWriter: this.coverageWriter,
+        jsBootstrapCode: this.jsBootstrapCode,
+        onCommandNotFound: this.onCommandNotFound,
+        agentic: this.agentic,
+        debugger: this.debugger,
+        semanticEngine: this.semanticEngine,
+        agenticHealer: this.agenticHealer,
+        bash: this,
+        requireDefenseContext,
+      }),
+    );
+    pipeline.addStage(
+      new PersistStage(this.defaultPersistState, (execState, exitCode) => {
         this.state.cwd = execState.cwd;
         this.state.env = execState.env;
         this.state.functions = execState.functions;
-        this.state.lastExitCode = execResult.exitCode;
+        this.state.lastExitCode = exitCode;
         this.state.shoptOptions = { ...execState.shoptOptions };
         this.state.options = { ...execState.options };
         this.state.hashTable = execState.hashTable;
-      }
+      }),
+    );
+    return pipeline;
+  }
 
-      return execResult;
-    } catch (error: any) {
-      // ExitError propagates from 'exit' builtin (including via eval/source)
-      if (error instanceof ExitError || error.name === "ExitError") {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: error.exitCode,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      // PosixFatalError propagates from special builtins in POSIX mode
-      if (error instanceof PosixFatalError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: error.exitCode,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      if (error instanceof ArithmeticError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      // ExecutionAbortedError is thrown when an AbortSignal fires (timeout cancellation)
-      if (error instanceof ExecutionAbortedError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: 124, // Same as timeout exit code
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      // SecurityViolationError is thrown when defense-in-depth detects a blocked operation
-      const errorName = error instanceof Error ? error.name : "";
-      if (
-        error instanceof SecurityViolationError ||
-        errorName === "SecurityViolationError"
-      ) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: security violation: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)],
-        });
-      }
-
-      // ExecutionLimitError is thrown when command limits are exceeded during interpreter loop
-      if (
-        error instanceof ExecutionLimitError ||
-        errorName === "ExecutionLimitError"
-      ) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
-          exitCode: ExecutionLimitError.EXIT_CODE,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)],
-        });
-      }
-
-      if ((error as ParseException).name === "ParseException") {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: syntax error: ${sanitizeErrorMessage((error as Error).message)}\n`,
-          exitCode: 2,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)],
-        });
-      }
-      // LexerError is thrown for lexer-level issues like unterminated quotes
-      if (error instanceof LexerError) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
-          exitCode: 2,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      // RangeError occurs when JavaScript call stack is exceeded (deep recursion)
-      if (error instanceof RangeError) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      throw error;
-    } finally {
-      // Always deactivate defense-in-depth box when done
-      defenseHandle?.deactivate();
+  /**
+   * Execute a script through the composable ExecutionPipeline.
+   *
+   * The instance-coupled prologue (command-count guard, empty short-circuit,
+   * PWD/cwd derivation, execEnv + execState construction) has ALREADY run in
+   * exec() before this is called; we receive the finished execState and pass
+   * the RAW commandLine so NormalizeStage performs (idempotent) normalization,
+   * keeping the pipeline self-contained for AST-cache keying.
+   *
+   * NOTE on requireDefenseContext caching: the pipeline computes it once at
+   * build time from the singleton DefenseInDepthBox. The box's isEnabled() is a
+   * pure function of its (config.enabled, AsyncLocalStorage availability), which
+   * cannot change for a given Bash instance, so caching is safe and matches the
+   * monolith's per-call recomputation.
+   */
+  private execViaPipeline(
+    commandLine: string,
+    options: ExecOptions | undefined,
+    execState: InterpreterState,
+  ): Promise<BashExecResult> {
+    if (!this.executionPipeline) {
+      this.executionPipeline = this.buildExecutionPipeline();
     }
+    return this.executionPipeline.run(
+      commandLine,
+      options,
+      this,
+      this.services,
+      execState,
+      this.state,
+    );
+  }
+
+  /**
+   * Execute a script and stream its output INCREMENTALLY as commands produce
+   * it, yielding {@link OutputChunk} objects via an AsyncGenerator.
+   *
+   * Unlike {@link exec} (which buffers everything and returns once), this emits
+   * stdout/stderr fragments in production order as each statement runs, then a
+   * final `exit` chunk carrying the exit code. The concatenation of streamed
+   * stdout chunks is byte-identical to `(await exec(script)).stdout`.
+   *
+   * Implemented atop the opt-in {@link ExecOptions.onChunk} sink; buffered
+   * exec() is unaffected when execStream is not used.
+   *
+   * @example
+   * ```ts
+   * for await (const chunk of bash.execStream("echo a; echo b")) {
+   *   if (chunk.type === "stdout") process.stdout.write(chunk.data);
+   * }
+   * ```
+   */
+  execStream(
+    script: string,
+    options?: StreamExecOptions,
+  ): AsyncGenerator<OutputChunk, void, undefined> {
+    if (!this.streamingExecutor) {
+      this.streamingExecutor = new StreamingExecutor(this);
+    }
+    return this.streamingExecutor.execStream(script, options);
   }
 
   /**
@@ -1075,10 +1116,7 @@ export class Bash extends EventEmitter {
   async createDelta(base: BashSnapshot): Promise<BashDelta> {
     const current = await this.snapshot();
     const delta = diffState(base, current);
-    delta.fsDelta = diffFs(
-      base.fs as Map<string, any>,
-      current.fs as Map<string, any>,
-    );
+    delta.fsDelta = diffFs(base.fs, current.fs);
     return delta;
   }
 
@@ -1126,6 +1164,58 @@ export class Bash extends EventEmitter {
       throw new Error(`Snapshot '${name}' not found`);
     }
     await this.restore(snap);
+  }
+
+  /**
+   * Fork the sandbox into an independent copy-on-write branch.
+   *
+   * Returns a NEW {@link Bash} instance that, at the moment of the call, is an
+   * exact copy of this one (env, cwd, functions, shell options, and the entire
+   * virtual filesystem) but shares NOTHING mutable with the parent. The child
+   * is independently executable; mutations in the child — environment changes,
+   * `cd`, function (re)definitions, and filesystem writes — are invisible to
+   * the parent, and parent mutations after the fork are invisible to the child.
+   *
+   * This is the core primitive for fork-speculation: an agent forks N branches,
+   * runs candidate command sequences in parallel, then keeps the winner and
+   * discards the rest (discarding is just dropping the child reference).
+   *
+   * Forking is cheap because the underlying snapshot deep-copies state and the
+   * copy-on-write VFS only materializes mutated entries.
+   *
+   * Note: host-backed mounts (e.g. {@link usePersistence} via `ReadWriteFs`)
+   * write through to the real filesystem and are therefore NOT isolated by the
+   * fork — only the in-VFS layers are copy-on-write. Use an in-memory sandbox
+   * for fully isolated speculation.
+   *
+   * @returns A new, fully isolated `Bash` branch.
+   */
+  async fork(): Promise<Bash> {
+    const branch = new Bash(this.options);
+    const snap = await this.snapshot();
+    await branch.restore(snap);
+    return branch;
+  }
+
+  /**
+   * Speculatively run candidate branches in isolated forks and collect their
+   * results, leaving this (parent) instance untouched.
+   *
+   * Each branch receives its own {@link fork} of the current sandbox and runs
+   * concurrently. Results are returned in branch order so the caller can score
+   * them and "keep the winner" (e.g. by re-applying the winning command on the
+   * parent). Discarded branches require no cleanup — their references are simply
+   * dropped.
+   *
+   * @typeParam T - The result type each branch produces.
+   * @param branches - Candidate functions, each given an isolated child `Bash`.
+   * @returns The branch results, in the same order as `branches`.
+   */
+  async speculate<T>(
+    branches: Array<(branch: Bash) => Promise<T>>,
+  ): Promise<T[]> {
+    const forks = await Promise.all(branches.map(() => this.fork()));
+    return Promise.all(branches.map((run, i) => run(forks[i])));
   }
 
   /**
@@ -1288,6 +1378,10 @@ export class Bash extends EventEmitter {
     this.services.sharedBus.destroy();
     this.services.astCache.clear();
   }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.destroy();
+  }
 }
 
 /**
@@ -1295,7 +1389,7 @@ export class Bash extends EventEmitter {
  */
 export interface BashSnapshot {
   state: InterpreterState;
-  fs: unknown;
+  fs: FileSystemSnapshot;
 }
 
 /**

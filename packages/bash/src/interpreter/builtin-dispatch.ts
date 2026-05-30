@@ -7,6 +7,7 @@
 
 import { isBrowserExcludedCommand } from "../commands/browser-excluded.js";
 import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
+import { AgTrace } from "../observability/ag-trace.js";
 import { awaitWithDefenseContext } from "../security/defense-context.js";
 import {
   DefenseInDepthBox,
@@ -54,7 +55,7 @@ import { createDefenseAwareCommandContext } from "./defense-aware-command-contex
 import { ExecutionLimitError } from "./errors.js";
 import { callFunction } from "./functions.js";
 import { getErrorMessage } from "./helpers/errors.js";
-import { failure, OK, testResult } from "./helpers/result.js";
+import { failure, obs, OK, testResult } from "./helpers/result.js";
 import { SHELL_BUILTINS } from "./helpers/shell-constants.js";
 import {
   findFirstInPath as findFirstInPathHelper,
@@ -101,6 +102,87 @@ export interface BuiltinDispatchContext {
 }
 
 /**
+ * Handler type for builtin dispatch map entries.
+ * Receives the full dispatch arguments and returns an ExecResult or null.
+ */
+type BuiltinHandler = (
+  dispatchCtx: BuiltinDispatchContext,
+  args: string[],
+  stdin: string,
+  stdinSourceFd: number,
+) => Promise<ExecResult> | ExecResult;
+
+/**
+ * Special builtins that cannot be overridden by functions.
+ * These are checked BEFORE user-defined function lookup.
+ */
+const SPECIAL_BUILTIN_MAP = new Map<string, BuiltinHandler>();
+SPECIAL_BUILTIN_MAP.set("export", ({ ctx }, args) => handleExport(ctx, args));
+SPECIAL_BUILTIN_MAP.set("unset", ({ ctx }, args) => handleUnset(ctx, args));
+SPECIAL_BUILTIN_MAP.set("exit", ({ ctx }, args) => handleExit(ctx, args));
+SPECIAL_BUILTIN_MAP.set("local", ({ ctx }, args) => handleLocal(ctx, args));
+SPECIAL_BUILTIN_MAP.set("set", ({ ctx }, args) => handleSet(ctx, args));
+SPECIAL_BUILTIN_MAP.set("break", ({ ctx }, args) => handleBreak(ctx, args));
+SPECIAL_BUILTIN_MAP.set("continue", ({ ctx }, args) => handleContinue(ctx, args));
+SPECIAL_BUILTIN_MAP.set("return", ({ ctx }, args) => handleReturn(ctx, args));
+SPECIAL_BUILTIN_MAP.set("shift", ({ ctx }, args) => handleShift(ctx, args));
+SPECIAL_BUILTIN_MAP.set("getopts", ({ ctx }, args) => handleGetopts(ctx, args));
+SPECIAL_BUILTIN_MAP.set("compgen", ({ ctx }, args) => handleCompgen(ctx, args));
+SPECIAL_BUILTIN_MAP.set("complete", ({ ctx }, args) => handleComplete(ctx, args));
+SPECIAL_BUILTIN_MAP.set("compopt", ({ ctx }, args) => handleCompopt(ctx, args));
+SPECIAL_BUILTIN_MAP.set("pushd", ({ ctx }, args) => handlePushd(ctx, args));
+SPECIAL_BUILTIN_MAP.set("popd", ({ ctx }, args) => handlePopd(ctx, args));
+SPECIAL_BUILTIN_MAP.set("dirs", ({ ctx }, args) => handleDirs(ctx, args));
+SPECIAL_BUILTIN_MAP.set("source", ({ ctx }, args) => handleSource(ctx, args));
+SPECIAL_BUILTIN_MAP.set(".", ({ ctx }, args) => handleSource(ctx, args));
+SPECIAL_BUILTIN_MAP.set("read", ({ ctx }, args, stdin, stdinSourceFd) =>
+  handleRead(ctx, args, stdin, stdinSourceFd),
+);
+SPECIAL_BUILTIN_MAP.set("mapfile", ({ ctx }, args, stdin) => handleMapfile(ctx, args, stdin));
+SPECIAL_BUILTIN_MAP.set("readarray", ({ ctx }, args, stdin) => handleMapfile(ctx, args, stdin));
+SPECIAL_BUILTIN_MAP.set("declare", ({ ctx }, args) => handleDeclare(ctx, args));
+SPECIAL_BUILTIN_MAP.set("typeset", ({ ctx }, args) => handleDeclare(ctx, args));
+SPECIAL_BUILTIN_MAP.set("readonly", ({ ctx }, args) => handleReadonly(ctx, args));
+SPECIAL_BUILTIN_MAP.set("trap", ({ ctx }, args) => handleTrap(ctx, args));
+
+/**
+ * Regular builtins that CAN be overridden by user-defined functions.
+ * These are checked AFTER user-defined function lookup.
+ */
+const REGULAR_BUILTIN_MAP = new Map<string, BuiltinHandler>();
+REGULAR_BUILTIN_MAP.set("eval", ({ ctx }, args, stdin) => handleEval(ctx, args, stdin));
+REGULAR_BUILTIN_MAP.set("cd", ({ ctx }, args) => handleCd(ctx, args));
+REGULAR_BUILTIN_MAP.set(":", () => OK);
+REGULAR_BUILTIN_MAP.set("true", () => OK);
+REGULAR_BUILTIN_MAP.set("false", () => testResult(false));
+REGULAR_BUILTIN_MAP.set("let", ({ ctx }, args) => handleLet(ctx, args));
+REGULAR_BUILTIN_MAP.set("command", (dispatchCtx, args, stdin) =>
+  handleCommandBuiltin(dispatchCtx, args, stdin),
+);
+REGULAR_BUILTIN_MAP.set("builtin", (dispatchCtx, args, stdin) =>
+  handleBuiltinBuiltin(dispatchCtx, args, stdin),
+);
+REGULAR_BUILTIN_MAP.set("alias", ({ ctx }, args) => handleAlias(ctx, args));
+REGULAR_BUILTIN_MAP.set("unalias", ({ ctx }, args) => handleUnalias(ctx, args));
+REGULAR_BUILTIN_MAP.set("shopt", ({ ctx }, args) => handleShopt(ctx, args));
+REGULAR_BUILTIN_MAP.set("exec", ({ runCommand }, args, stdin) => {
+  if (args.length === 0) return OK;
+  const [cmd, ...rest] = args;
+  return runCommand(cmd, rest, [], stdin, false, false, -1);
+});
+REGULAR_BUILTIN_MAP.set("wait", () => OK);
+REGULAR_BUILTIN_MAP.set("type", ({ ctx }, args) =>
+  handleTypeHelper(
+    ctx,
+    args,
+    (name) => findFirstInPathHelper(ctx, name),
+    (name) => findCommandInPathHelper(ctx, name),
+  ),
+);
+REGULAR_BUILTIN_MAP.set("hash", ({ ctx }, args) => handleHash(ctx, args));
+REGULAR_BUILTIN_MAP.set("help", ({ ctx }, args) => handleHelp(ctx, args));
+
+/**
  * Dispatch a command to the appropriate builtin handler or external command.
  * Returns null if the command should be handled by external command resolution.
  */
@@ -121,145 +203,32 @@ export async function dispatchBuiltin(
     ctx.coverage.hit(`bash:builtin:${commandName}`);
   }
 
-  // Built-in commands (special builtins that cannot be overridden by functions)
-  if (commandName === "export") {
-    return handleExport(ctx, args);
-  }
-  if (commandName === "unset") {
-    return handleUnset(ctx, args);
-  }
-  if (commandName === "exit") {
-    return handleExit(ctx, args);
-  }
-  if (commandName === "local") {
-    return handleLocal(ctx, args);
-  }
-  if (commandName === "set") {
-    return handleSet(ctx, args);
-  }
-  if (commandName === "break") {
-    return handleBreak(ctx, args);
-  }
-  if (commandName === "continue") {
-    return handleContinue(ctx, args);
-  }
-  if (commandName === "return") {
-    return handleReturn(ctx, args);
-  }
-  // In POSIX mode, eval is a special builtin that cannot be overridden by functions
-  // In non-POSIX mode (bash default), functions can override eval
+  // Special case: eval in POSIX mode is a special builtin (cannot be overridden by functions)
   if (commandName === "eval" && ctx.state.options.posix) {
     return handleEval(ctx, args, stdin);
   }
-  if (commandName === "shift") {
-    return handleShift(ctx, args);
+
+  // Check special builtins (cannot be overridden by functions)
+  const specialHandler = SPECIAL_BUILTIN_MAP.get(commandName);
+  if (specialHandler) {
+    return specialHandler(dispatchCtx, args, stdin, stdinSourceFd);
   }
-  if (commandName === "getopts") {
-    return handleGetopts(ctx, args);
-  }
-  if (commandName === "compgen") {
-    return handleCompgen(ctx, args);
-  }
-  if (commandName === "complete") {
-    return handleComplete(ctx, args);
-  }
-  if (commandName === "compopt") {
-    return handleCompopt(ctx, args);
-  }
-  if (commandName === "pushd") {
-    return await handlePushd(ctx, args);
-  }
-  if (commandName === "popd") {
-    return handlePopd(ctx, args);
-  }
-  if (commandName === "dirs") {
-    return handleDirs(ctx, args);
-  }
-  if (commandName === "source" || commandName === ".") {
-    return handleSource(ctx, args);
-  }
-  if (commandName === "read") {
-    return handleRead(ctx, args, stdin, stdinSourceFd);
-  }
-  if (commandName === "mapfile" || commandName === "readarray") {
-    return handleMapfile(ctx, args, stdin);
-  }
-  if (commandName === "declare" || commandName === "typeset") {
-    return handleDeclare(ctx, args);
-  }
-  if (commandName === "readonly") {
-    return handleReadonly(ctx, args);
-  }
-  if (commandName === "trap") {
-    return handleTrap(ctx, args);
-  }
-  // User-defined functions override most builtins (except special ones above)
-  // This needs to happen before true/false/let which are regular builtins
+
+  // User-defined functions override regular builtins (except special ones above)
   if (!skipFunctions) {
     const func = ctx.state.functions.get(commandName);
     if (func) {
       return callFunction(ctx, func, args, stdin);
     }
   }
-  // Simple builtins (can be overridden by functions)
-  // eval: In non-POSIX mode, functions can override eval (handled above for POSIX mode)
-  if (commandName === "eval") {
-    return handleEval(ctx, args, stdin);
+
+  // Check regular builtins (can be overridden by functions)
+  const regularHandler = REGULAR_BUILTIN_MAP.get(commandName);
+  if (regularHandler) {
+    return regularHandler(dispatchCtx, args, stdin, stdinSourceFd);
   }
-  if (commandName === "cd") {
-    return await handleCd(ctx, args);
-  }
-  if (commandName === ":" || commandName === "true") {
-    return OK;
-  }
-  if (commandName === "false") {
-    return testResult(false);
-  }
-  if (commandName === "let") {
-    return handleLet(ctx, args);
-  }
-  if (commandName === "command") {
-    return handleCommandBuiltin(dispatchCtx, args, stdin);
-  }
-  if (commandName === "builtin") {
-    return handleBuiltinBuiltin(dispatchCtx, args, stdin);
-  }
-  if (commandName === "alias") {
-    return handleAlias(ctx, args);
-  }
-  if (commandName === "unalias") {
-    return handleUnalias(ctx, args);
-  }
-  if (commandName === "shopt") {
-    return handleShopt(ctx, args);
-  }
-  if (commandName === "exec") {
-    // exec - replace shell with command (stub: just run the command)
-    if (args.length === 0) {
-      return OK;
-    }
-    const [cmd, ...rest] = args;
-    return runCommand(cmd, rest, [], stdin, false, false, -1);
-  }
-  if (commandName === "wait") {
-    // wait - wait for background jobs (stub: no-op in this context)
-    return OK;
-  }
-  if (commandName === "type") {
-    return await handleTypeHelper(
-      ctx,
-      args,
-      (name) => findFirstInPathHelper(ctx, name),
-      (name) => findCommandInPathHelper(ctx, name),
-    );
-  }
-  if (commandName === "hash") {
-    return handleHash(ctx, args);
-  }
-  if (commandName === "help") {
-    return handleHelp(ctx, args);
-  }
-  // Test commands
+
+  // Test commands: [ and test
   // Note: [[ is NOT handled here because it's a keyword, not a command.
   if (commandName === "[" || commandName === "test") {
     let testArgs = args;
@@ -403,17 +372,37 @@ export async function executeExternalCommand(
         `bash: ${commandName}: command not available in browser environments.${suggestFlag} ` +
           `Exclude '${commandName}' from your commands or use the Node.js bundle.\n`,
         127,
+        [obs.commandNotFound(commandName)],
       );
     }
-    return failure(`bash: ${commandName}: command not found\n`, 127);
+    // A3: emit a typed command_not_found observation AT THE SOURCE — the
+    // interpreter KNOWS resolution failed, so we attach it directly instead
+    // of relying on AgTrace's stderr regex. Suggestions are computed here
+    // from the registered command list.
+    const suggestion = AgTrace.suggestCommand(
+      commandName,
+      Array.from(ctx.commands.keys()),
+    );
+    return failure(`bash: ${commandName}: command not found\n`, 127, [
+      obs.commandNotFound(
+        commandName,
+        suggestion ? [suggestion] : undefined,
+      ),
+    ]);
   }
   // Handle error cases from resolveCommand
   if ("error" in resolved) {
     if (resolved.error === "permission_denied") {
-      return failure(`bash: ${commandName}: Permission denied\n`, 126);
+      // A3: typed permission_denied at the source.
+      return failure(`bash: ${commandName}: Permission denied\n`, 126, [
+        obs.permissionDenied(resolved.path ?? commandName, commandName),
+      ]);
     }
-    // not_found error
-    return failure(`bash: ${commandName}: No such file or directory\n`, 127);
+    // not_found error — a path-form command (contains "/") that didn't exist.
+    // A3: typed file_not_found at the source.
+    return failure(`bash: ${commandName}: No such file or directory\n`, 127, [
+      obs.fileNotFound(resolved.path ?? commandName, commandName),
+    ]);
   }
   // Handle user scripts (executable files without registered command handlers)
   if ("script" in resolved) {

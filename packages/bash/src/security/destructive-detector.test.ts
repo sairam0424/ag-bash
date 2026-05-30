@@ -5,8 +5,13 @@
  * with zero tolerance for false negatives on known dangerous commands.
  */
 import { describe, expect, it } from "vitest";
+import type { ScriptNode } from "../ast/types.js";
+import { parse } from "../parser/parser.js";
 import { GitTracker } from "../services/GitTracker.js";
-import { detectDestructiveCommand } from "./destructive-command-detector.js";
+import {
+  analyzeDestructiveAst,
+  detectDestructiveCommand,
+} from "./destructive-command-detector.js";
 
 // ─── Destructive Command Detector ──────────────────────────────────────────
 
@@ -232,6 +237,99 @@ describe("detectDestructiveCommand", () => {
     it("does NOT detect rm -f without -r", () => {
       expect(detectDestructiveCommand("rm -f file.txt")).toBeNull();
     });
+  });
+});
+
+// ─── AST-based Destructive Detector (E2) ────────────────────────────────────
+
+describe("analyzeDestructiveAst", () => {
+  const toAst = (script: string): ScriptNode => parse(script) as ScriptNode;
+  const analyze = (script: string) =>
+    analyzeDestructiveAst(toAst(script), script);
+
+  // ── DETECTED corpus (structural, obfuscation-resistant) ─────────────────
+  describe("DETECTED — must flag structurally", () => {
+    const detected: Array<{ cmd: string; code: string; desc: string }> = [
+      { cmd: "rm -rf /", code: "DESTRUCTIVE_RM_ROOT", desc: "rm -rf root" },
+      {
+        cmd: "rm -rf $(echo /)",
+        code: "DESTRUCTIVE_RM_ROOT",
+        desc: "rm -rf with command substitution target",
+      },
+      {
+        cmd: "rm -rf $IFS/",
+        code: "DESTRUCTIVE_RM_ROOT",
+        desc: "rm -rf with $IFS expansion",
+      },
+      {
+        cmd: "rm -rf ${IFS}",
+        code: "DESTRUCTIVE_RM_ROOT",
+        desc: "rm -rf with ${IFS} expansion",
+      },
+      { cmd: ":(){ :|:& };:", code: "FORK_BOMB", desc: "fork bomb" },
+      {
+        cmd: "dd if=/dev/zero of=/dev/sda",
+        code: "DESTRUCTIVE_DD_DEVICE",
+        desc: "dd to raw device",
+      },
+      {
+        cmd: "mkfs.ext4 /dev/sda",
+        code: "DESTRUCTIVE_MKFS",
+        desc: "mkfs filesystem format",
+      },
+      {
+        cmd: "base64 -d payload | sh",
+        code: "DESTRUCTIVE_DECODE_PIPE_SHELL",
+        desc: "base64 decode piped to sh",
+      },
+    ];
+
+    for (const { cmd, code, desc } of detected) {
+      it(`flags "${cmd}" — ${desc}`, () => {
+        const finding = analyze(cmd);
+        expect(finding).not.toBeNull();
+        expect(finding?.severity).toBe("critical");
+        expect(finding?.code).toBe(code);
+      });
+    }
+  });
+
+  // ── NOT FLAGGED corpus (false-positive guards via AST position) ─────────
+  describe("NOT FLAGGED — false-positive guards", () => {
+    const safe: Array<{ cmd: string; desc: string }> = [
+      {
+        cmd: "rm -rf ./build",
+        desc: "relative path is safe, not catastrophic",
+      },
+      {
+        cmd: 'echo "rm -rf /"',
+        desc: "dangerous string is an echo argument, not an rm command",
+      },
+      {
+        cmd: 'grep -r "rm -rf" .',
+        desc: "dangerous string is a grep pattern argument",
+      },
+      { cmd: "rm file.txt", desc: "rm single file (no -rf)" },
+      { cmd: "rm -rf node_modules", desc: "named dir, not catastrophic" },
+      { cmd: "ls -la /", desc: "ls of root is harmless" },
+      {
+        cmd: 'echo "base64 -d x | sh"',
+        desc: "decode-pipe string inside an echo arg is not a pipe",
+      },
+    ];
+
+    for (const { cmd, desc } of safe) {
+      it(`does NOT flag "${cmd}" — ${desc}`, () => {
+        expect(analyze(cmd)).toBeNull();
+      });
+    }
+  });
+
+  it("returns a typed finding with command + stable code", () => {
+    const finding = analyze("rm -rf /");
+    expect(finding?.command).toBe("rm");
+    expect(finding?.category).toBe("file");
+    expect(typeof finding?.code).toBe("string");
   });
 });
 
