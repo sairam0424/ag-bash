@@ -17,9 +17,20 @@
  * - Transform API, Services, Security modules
  */
 
-export type { BashOptions } from "./Bash.js";
-export { Bash } from "./Bash.js";
 export type { CreateBashToolOptions } from "./ai.js";
 export { createBashTool } from "./ai.js";
+export type { BashOptions } from "./Bash.js";
+export { Bash } from "./Bash.js";
 export { InMemoryFs } from "./fs/in-memory-fs/index.js";
+// Browser secondary defense (opt-in). The Node.js DefenseInDepthBox is a no-op
+// in browsers (no AsyncLocalStorage); call hardenBrowserGlobals() once at
+// startup for Node-parity secondary depth. See SECURITY.md.
+export type {
+  BrowserHardeningOptions,
+  BrowserHardeningResult,
+} from "./security/browser-hardening.js";
+export {
+  hardenBrowserGlobals,
+  isBrowserHardened,
+} from "./security/browser-hardening.js";
 export type { ExecResult, Observation } from "./types.js";
