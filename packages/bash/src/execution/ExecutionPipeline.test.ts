@@ -1,305 +1,348 @@
 /**
- * ExecutionPipeline Stage Tests
+ * ExecutionPipeline parallel-run EQUIVALENCE HARNESS.
  *
- * Tests each stage's input/output contract within the composable
- * execution pipeline architecture:
- *   Normalize → Parse → Transform → Sandbox → Interpret → Persist → Error
+ * This file proves byte-for-byte equivalence between the two execution
+ * engines wired into Bash.exec():
+ *   - execMode: "monolith" — the historical inline Bash.exec() body.
+ *   - execMode: "pipeline" — the composable ExecutionPipeline (normalize →
+ *     parse → transform → sandbox → interpret → persist + error categorization).
+ *
+ * Mechanics (per the P2.1 parity map / harnessPlan):
+ *   1. For each corpus case, construct TWO FRESH Bash instances from the SAME
+ *      options object (so this.state starts identical). NEVER reuse one
+ *      instance for both modes — state would cross-contaminate.
+ *   2. Run the script (or sequence) once with execMode:"monolith" and once with
+ *      execMode:"pipeline".
+ *   3. Deep-equal the full BashExecResult: stdout/stderr (EXACT bytes — catches
+ *      the decodeBinaryToUtf8 gap), exitCode, env (key-order-insensitive),
+ *      observations, metadata.
+ *   4. Surface the historically-missing pipeline error catch by failing loudly
+ *      if the pipeline THROWS where the monolith returned a structured result.
+ *
+ * .test.ts files are exempt from the banned-pattern rules (plain objects ok).
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import type { BashOptions, ExecOptions } from "../Bash.js";
 import { Bash } from "../Bash.js";
+import { DefenseInDepthBox } from "../security/defense-in-depth-box.js";
+import type { ScriptNode } from "../ast/types.js";
+import type { TransformPlugin } from "../transform/types.js";
 import type { BashExecResult } from "../types.js";
 
-describe("ExecutionPipeline", () => {
-  let bash: Bash;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-  beforeEach(() => {
-    bash = new Bash();
+/** Normalize a result for deep-equality, dropping non-comparable internals. */
+function snapshotResult(r: BashExecResult): Record<string, unknown> {
+  return {
+    stdout: r.stdout,
+    stderr: r.stderr,
+    exitCode: r.exitCode,
+    // env compared as a plain object (key order is irrelevant to toEqual).
+    env: { ...r.env },
+    observations: r.observations ?? null,
+    metadata: r.metadata ?? null,
+    stdoutEncoding: r.stdoutEncoding ?? null,
+  };
+}
+
+/**
+ * A single step in a corpus case: a script + per-call options. Multiple steps
+ * model persistence/state across exec() calls on the SAME instance.
+ */
+interface Step {
+  script: string;
+  options?: Omit<ExecOptions, "execMode">;
+}
+
+interface Case {
+  name: string;
+  /** Bash constructor options (identical for both engines). */
+  bashOptions?: BashOptions;
+  /** Sequence of exec() calls. The FINAL result is compared. */
+  steps: Step[];
+  /** Optional per-instance setup (e.g. register a transform plugin). */
+  setup?: (bash: Bash) => void;
+}
+
+/**
+ * Run one case end-to-end under a single engine and return the FINAL result.
+ * A fresh Bash instance is built so state starts identical to the other engine.
+ */
+async function runCase(
+  c: Case,
+  execMode: "monolith" | "pipeline",
+): Promise<BashExecResult> {
+  // Reset the defense-in-depth singleton so cases with differing
+  // defenseInDepth configs don't trip the config-conflict guard.
+  DefenseInDepthBox.resetInstance();
+  const bash = new Bash(c.bashOptions);
+  c.setup?.(bash);
+  let last: BashExecResult = {
+    stdout: "",
+    stderr: "",
+    exitCode: 0,
+    env: {},
+  };
+  for (const step of c.steps) {
+    last = await bash.exec(step.script, { ...step.options, execMode });
+  }
+  return last;
+}
+
+/**
+ * A transform plugin that prepends a marker observation via metadata and
+ * leaves the AST untouched. Exercises the transform stage + null-proto merge.
+ */
+const markerPlugin: TransformPlugin = {
+  name: "marker",
+  transform({ ast }: { ast: ScriptNode }) {
+    return { ast, metadata: { marker: "applied", count: 1 } };
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Corpus — MUST cover every gap from the P2.1 parity map.
+// ---------------------------------------------------------------------------
+
+const corpus: Case[] = [
+  // --- Plain happy paths ---
+  { name: "plain echo", steps: [{ script: "echo hello" }] },
+  {
+    name: "multi-line indented",
+    steps: [{ script: "\n        echo a\n        echo b\n      " }],
+  },
+  { name: "pipeline + cat", steps: [{ script: 'echo "hi there" | cat' }] },
+  { name: "semicolon list", steps: [{ script: "echo one; echo two" }] },
+  { name: "subshell", steps: [{ script: "(echo sub)" }] },
+  { name: "stderr redirect", steps: [{ script: "echo err >&2" }] },
+  {
+    name: "var assign + subst",
+    steps: [{ script: 'X=42; echo "val=$X"' }],
+  },
+  { name: "command substitution", steps: [{ script: "echo $(echo nested)" }] },
+  {
+    name: "for loop",
+    steps: [{ script: "for i in 1 2 3; do echo $i; done" }],
+  },
+  {
+    name: "function def + call",
+    steps: [{ script: 'greet() { echo "hi $1"; }\ngreet world' }],
+  },
+
+  // --- UTF-8 / multibyte (catches decodeBinaryToUtf8 gap) ---
+  { name: "utf8 CJK", steps: [{ script: "echo 你好世界" }] },
+  { name: "utf8 emoji", steps: [{ script: "echo 🚀✨🔥" }] },
+  { name: "utf8 cyrillic", steps: [{ script: "printf 'Привет\\n'" }] },
+  {
+    name: "utf8 mixed via var",
+    steps: [{ script: 'NAME="café"; echo "héllo $NAME"' }],
+  },
+
+  // --- Empty / whitespace short-circuit ---
+  { name: "empty script", steps: [{ script: "" }] },
+  { name: "whitespace only", steps: [{ script: "   \n\t\n  " }] },
+  {
+    name: "empty with cwd",
+    bashOptions: { files: { "/work/keep.txt": "x" } },
+    steps: [{ script: "", options: { cwd: "/work" } }],
+  },
+
+  // --- Heredocs ---
+  {
+    name: "heredoc EOF",
+    steps: [{ script: "cat <<EOF\nline1\nline2\nEOF" }],
+  },
+  {
+    name: "heredoc dash strip",
+    steps: [{ script: "cat <<-EOF\n\tindented\nEOF" }],
+  },
+  {
+    name: "heredoc quoted delim",
+    steps: [{ script: "cat <<'EOF'\nno $expansion here\nEOF" }],
+  },
+
+  // --- cwd / realpath / PWD / env merge / replaceEnv ---
+  {
+    name: "cwd option pwd",
+    bashOptions: { files: { "/proj/a.txt": "1" } },
+    steps: [{ script: "pwd", options: { cwd: "/proj" } }],
+  },
+  {
+    name: "options.env merge",
+    steps: [{ script: "echo $FOO", options: { env: { FOO: "barval" } } }],
+  },
+  {
+    name: "replaceEnv true",
+    bashOptions: { env: { ORIG: "original" } },
+    steps: [
+      {
+        script: "echo ${ORIG:-gone} ${ONLY:-x}",
+        options: { replaceEnv: true, env: { ONLY: "set" } },
+      },
+    ],
+  },
+  {
+    name: "cwd with explicit PWD in env",
+    bashOptions: { files: { "/proj/a.txt": "1" } },
+    steps: [
+      {
+        script: "echo $PWD",
+        options: { cwd: "/proj", env: { PWD: "/custom/pwd" } },
+      },
+    ],
+  },
+
+  // --- AST cache repeat (same script twice on one instance) ---
+  {
+    name: "ast cache repeat",
+    steps: [{ script: "echo cached" }, { script: "echo cached" }],
+  },
+
+  // --- Transform plugin registered ---
+  {
+    name: "transform plugin metadata",
+    setup: (bash) => bash.registerTransformPlugin(markerPlugin),
+    steps: [{ script: "echo transformed" }],
+  },
+
+  // --- Defense-in-depth on / off ---
+  {
+    name: "defenseInDepth true",
+    bashOptions: { security: { defenseInDepth: true } },
+    steps: [{ script: "echo guarded" }],
+  },
+  {
+    name: "defenseInDepth false",
+    bashOptions: { security: { defenseInDepth: false } },
+    steps: [{ script: "echo unguarded" }],
+  },
+
+  // --- Error classes ---
+  { name: "syntax error (parse)", steps: [{ script: "if then fi" }] },
+  {
+    name: "lexer error unterminated quote",
+    steps: [{ script: 'echo "unterminated' }],
+  },
+  { name: "arithmetic div by zero", steps: [{ script: "echo $((1/0))" }] },
+  { name: "exit builtin code 7", steps: [{ script: "exit 7" }] },
+  { name: "exit builtin code 0", steps: [{ script: "exit 0" }] },
+  { name: "command not found 127", steps: [{ script: "nonexistent_cmd_xyz" }] },
+  {
+    name: "PosixFatalError (posix shift)",
+    steps: [{ script: "set -o posix; shift 3" }],
+  },
+  {
+    name: "abort signal pre-aborted",
+    steps: [
+      {
+        script: "echo should-not-run",
+        options: (() => {
+          const c = new AbortController();
+          c.abort();
+          return { signal: c.signal };
+        })(),
+      },
+    ],
+  },
+  {
+    name: "ExecutionLimit low maxCommandCount",
+    bashOptions: { executionLimits: { maxCommandCount: 3 } },
+    steps: [{ script: "for i in 1 2 3 4 5 6 7 8; do echo $i; done" }],
+  },
+
+  // --- Error AFTER mutation (catches error-env-source gap) ---
+  {
+    name: "export then arithmetic error",
+    steps: [{ script: "export MUT=1; echo $((1/0))" }],
+  },
+  {
+    name: "export then exit nonzero",
+    steps: [{ script: "export MUT2=1; exit 5" }],
+  },
+
+  // --- Persistence across two execs ---
+  {
+    name: "persist export across execs",
+    bashOptions: { persistState: true },
+    steps: [
+      { script: "export PVAR=persisted" },
+      { script: "echo ${PVAR:-missing}" },
+    ],
+  },
+  {
+    name: "no-persist export across execs",
+    bashOptions: { persistState: false },
+    steps: [
+      { script: "export EVAR=ephemeral" },
+      { script: "echo ${EVAR:-missing}" },
+    ],
+  },
+  {
+    name: "persist blocked on failure",
+    bashOptions: { persistState: true },
+    steps: [
+      { script: "export FVAR=x; false" },
+      { script: "echo ${FVAR:-missing}" },
+    ],
+  },
+  {
+    name: "persist cd across execs",
+    bashOptions: {
+      persistState: true,
+      files: { "/sub/f.txt": "1" },
+    },
+    steps: [{ script: "cd /sub" }, { script: "pwd" }],
+  },
+  {
+    name: "persist function across execs",
+    bashOptions: { persistState: true },
+    steps: [
+      { script: "myfn() { echo fnbody; }" },
+      { script: "myfn" },
+    ],
+  },
+
+  // --- env in result reflects assignments ---
+  {
+    name: "export visible in result env",
+    steps: [{ script: "export RESVAR=hello" }],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// The harness
+// ---------------------------------------------------------------------------
+
+describe("ExecutionPipeline parity (monolith vs pipeline)", () => {
+  afterEach(() => {
+    DefenseInDepthBox.resetInstance();
   });
 
-  describe("Normalize Stage", () => {
-    it("should short-circuit empty scripts with exit code 0", async () => {
-      const result = await bash.exec("");
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toBe("");
+  for (const c of corpus) {
+    it(`byte-equal: ${c.name}`, async () => {
+      const monolith = await runCase(c, "monolith");
+
+      let pipeline: BashExecResult;
+      try {
+        pipeline = await runCase(c, "pipeline");
+      } catch (err) {
+        // The pipeline must NEVER throw where the monolith returned a result.
+        // (Historically run() had no catch and would throw on ExitError etc.)
+        throw new Error(
+          `pipeline THREW for case "${c.name}" but monolith returned ` +
+            `exitCode=${monolith.exitCode}. Error: ${String(err)}`,
+        );
+      }
+
+      expect(snapshotResult(pipeline)).toEqual(snapshotResult(monolith));
     });
+  }
 
-    it("should short-circuit whitespace-only scripts with exit code 0", async () => {
-      const result = await bash.exec("   \n\t\n  ");
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toBe("");
-    });
-
-    it("should normalize leading whitespace in multi-line scripts", async () => {
-      const result = await bash.exec(`
-        echo hello
-        echo world
-      `);
-      expect(result.stdout).toBe("hello\nworld\n");
-      expect(result.exitCode).toBe(0);
-    });
-
-    it("should preserve heredoc content during normalization", async () => {
-      const result = await bash.exec(`
-        cat <<EOF
-  indented content
-  another line
-EOF
-      `);
-      expect(result.stdout).toContain("indented content");
-      expect(result.stdout).toContain("another line");
-    });
-
-    it("should skip normalization when rawScript option is true", async () => {
-      const script = "  echo preserved";
-      const result = await bash.exec(script, { rawScript: true });
-      // With rawScript, the leading whitespace should not affect execution
-      // The script still runs but whitespace is preserved for heredocs etc.
-      expect(result.exitCode).toBe(0);
-    });
-  });
-
-  describe("Parse Stage", () => {
-    it("should parse a simple command into executable AST", async () => {
-      const result = await bash.exec("echo hello");
-      expect(result.stdout).toBe("hello\n");
-      expect(result.exitCode).toBe(0);
-    });
-
-    it("should parse compound commands (if/then/fi)", async () => {
-      const result = await bash.exec(`
-        if true; then
-          echo yes
-        fi
-      `);
-      expect(result.stdout).toBe("yes\n");
-      expect(result.exitCode).toBe(0);
-    });
-
-    it("should parse pipeline commands", async () => {
-      const result = await bash.exec('echo "hello world" | cat');
-      expect(result.stdout).toBe("hello world\n");
-    });
-
-    it("should produce syntax error for invalid scripts", async () => {
-      const result = await bash.exec("if then fi");
-      expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("syntax error");
-    });
-
-    it("should parse command lists with semicolons", async () => {
-      const result = await bash.exec("echo one; echo two");
-      expect(result.stdout).toBe("one\ntwo\n");
-    });
-
-    it("should parse subshells", async () => {
-      const result = await bash.exec("(echo sub)");
-      expect(result.stdout).toBe("sub\n");
-    });
-
-    it("should report unterminated quotes as parse error", async () => {
-      const result = await bash.exec('echo "unterminated');
-      expect(result.exitCode).not.toBe(0);
-      expect(result.stderr.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("Transform Stage", () => {
-    it("should pass through when no transform plugins are registered", async () => {
-      // Default Bash instance has no transform plugins - should work normally
-      const result = await bash.exec("echo transformed");
-      expect(result.stdout).toBe("transformed\n");
-      expect(result.exitCode).toBe(0);
-    });
-
-    it("should not alter simple command output when transforms are inactive", async () => {
-      const result = await bash.exec("echo one; echo two; echo three");
-      expect(result.stdout).toBe("one\ntwo\nthree\n");
-    });
-  });
-
-  describe("Sandbox Stage", () => {
-    it("should execute normally when sandbox is not configured", async () => {
-      const bash = new Bash();
-      const result = await bash.exec("echo safe");
-      expect(result.stdout).toBe("safe\n");
-      expect(result.exitCode).toBe(0);
-    });
-
-    it("should allow standard operations within sandbox constraints", async () => {
-      const bash = new Bash({
-        security: { defenseInDepth: true },
-      });
-      const result = await bash.exec("echo sandbox");
-      expect(result.stdout).toBe("sandbox\n");
-      expect(result.exitCode).toBe(0);
-    });
-  });
-
-  describe("Interpret Stage", () => {
-    it("should produce stdout from echo commands", async () => {
-      const result = await bash.exec("echo output");
-      expect(result.stdout).toBe("output\n");
-    });
-
-    it("should produce stderr from error output", async () => {
-      const result = await bash.exec("echo error >&2");
-      expect(result.stderr).toBe("error\n");
-      expect(result.stdout).toBe("");
-    });
-
-    it("should return exit code from last command", async () => {
-      const result = await bash.exec("true");
-      expect(result.exitCode).toBe(0);
-
-      const result2 = await bash.exec("false");
-      expect(result2.exitCode).toBe(1);
-    });
-
-    it("should populate environment variables in result", async () => {
-      const result = await bash.exec("export MY_VAR=hello");
-      expect(result.env).toBeDefined();
-      expect(result.env.MY_VAR).toBe("hello");
-    });
-
-    it("should handle variable assignment and substitution", async () => {
-      const result = await bash.exec('X=42; echo "val=$X"');
-      expect(result.stdout).toBe("val=42\n");
-    });
-
-    it("should handle command substitution", async () => {
-      const result = await bash.exec("echo $(echo nested)");
-      expect(result.stdout).toBe("nested\n");
-    });
-
-    it("should execute for loops", async () => {
-      const result = await bash.exec(`
-        for i in 1 2 3; do
-          echo $i
-        done
-      `);
-      expect(result.stdout).toBe("1\n2\n3\n");
-    });
-
-    it("should execute while loops", async () => {
-      const result = await bash.exec(`
-        i=0
-        while [ $i -lt 3 ]; do
-          echo $i
-          i=$((i+1))
-        done
-      `);
-      expect(result.stdout).toBe("0\n1\n2\n");
-    });
-
-    it("should handle exit builtin", async () => {
-      const result = await bash.exec("exit 42");
-      expect(result.exitCode).toBe(42);
-    });
-
-    it("should handle function definitions and calls", async () => {
-      const result = await bash.exec(`
-        greet() { echo "hi $1"; }
-        greet world
-      `);
-      expect(result.stdout).toBe("hi world\n");
-    });
-  });
-
-  describe("Error Stage (categorizeError)", () => {
-    it("should handle parse exceptions with exit code 2", async () => {
-      const result = await bash.exec("((()))");
-      // Malformed arithmetic/syntax should give non-zero exit
-      expect(result.exitCode).not.toBe(0);
-    });
-
-    it("should handle command not found with appropriate exit code", async () => {
-      const result = await bash.exec("nonexistent_command_xyz");
-      expect(result.exitCode).toBe(127);
-      expect(result.stderr).toContain("not found");
-    });
-
-    it("should handle abort signal with exit code 124", async () => {
-      const controller = new AbortController();
-      controller.abort();
-
-      const result = await bash.exec("echo should-not-run", {
-        signal: controller.signal,
-      });
-      expect(result.exitCode).toBe(124);
-    });
-
-    it("should propagate exit errors from exit builtin", async () => {
-      const result = await bash.exec("exit 7");
-      expect(result.exitCode).toBe(7);
-    });
-
-    it("should handle arithmetic errors gracefully", async () => {
-      const result = await bash.exec("echo $((1/0))");
-      expect(result.exitCode).not.toBe(0);
-      expect(result.stderr.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("Persist Stage", () => {
-    it("should persist state after successful execution with persistState", async () => {
-      const bash = new Bash({ persistState: true });
-      await bash.exec("export PERSIST_VAR=persisted");
-
-      // Second execution should see the persisted variable
-      const result = await bash.exec("echo $PERSIST_VAR");
-      expect(result.stdout).toBe("persisted\n");
-    });
-
-    it("should not persist state after failed execution", async () => {
-      const bash = new Bash({ persistState: true });
-      await bash.exec("export FAIL_VAR=should_not_persist; false");
-
-      const result = await bash.exec("echo ${FAIL_VAR:-empty}");
-      expect(result.stdout).toBe("empty\n");
-    });
-
-    it("should not persist state when persistState is disabled", async () => {
-      const bash = new Bash({ persistState: false });
-      await bash.exec("export EPHEMERAL=gone");
-
-      const result = await bash.exec("echo ${EPHEMERAL:-missing}");
-      expect(result.stdout).toBe("missing\n");
-    });
-  });
-
-  describe("Pipeline Composition", () => {
-    it("should execute all stages in order for a complete script", async () => {
-      const result = await bash.exec(`
-        greeting="hello"
-        echo "$greeting world"
-      `);
-      expect(result.stdout).toBe("hello world\n");
-      expect(result.exitCode).toBe(0);
-    });
-
-    it("should short-circuit on parse error without reaching interpret", async () => {
-      const result = await bash.exec('echo "unclosed');
-      expect(result.exitCode).not.toBe(0);
-      // stdout should be empty since interpret stage was never reached
-      expect(result.stdout).toBe("");
-    });
-
-    it("should clean up defense handle in finally block", async () => {
-      // Execute with defense-in-depth enabled - even on error, cleanup should occur
-      const bash = new Bash({ security: { defenseInDepth: true } });
-      const result = await bash.exec("echo works");
-      expect(result.stdout).toBe("works\n");
-    });
-
-    it("should return env record from completed pipeline", async () => {
-      const result = await bash.exec("export KEY=value", {
-        env: { EXTRA: "extra" },
-      });
-      expect(result.env).toBeDefined();
-      expect(typeof result.env).toBe("object");
-    });
+  it("ran the full parity corpus", () => {
+    // Sentinel: makes the corpus size visible in the test report.
+    expect(corpus.length).toBeGreaterThanOrEqual(40);
   });
 });
