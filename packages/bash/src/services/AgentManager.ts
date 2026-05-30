@@ -7,8 +7,8 @@
 import { Bash } from "../Bash.js";
 import { CowFs } from "../fs/cow-fs.js";
 import type { IFileSystem } from "../fs/interface.js";
+import type { BashHost, ExecResult } from "../types.js";
 import { AgentConflictError } from "./AgentConflictError.js";
-import type { ExecResult } from "../types.js";
 
 export interface SubAgent {
   id: string;
@@ -28,7 +28,7 @@ export class AgentManager {
   async spawn(
     id: string,
     command: string,
-    parentBash: Bash,
+    parentBash: BashHost,
   ): Promise<SubAgent> {
     if (this.agents.has(id)) {
       throw new Error(`Agent with ID ${id} already exists`);

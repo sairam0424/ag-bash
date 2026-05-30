@@ -7,6 +7,12 @@
  *
  * v5.0.0: Lazy initialization for all services except astCache and sharedBus.
  * Services are only instantiated on first access, reducing startup cost.
+ *
+ * v6.0.0: Descriptor-registry model. Each lazy service is described by a
+ * {@link ServiceDescriptor} carrying metadata (bus-aware, disposable). The
+ * registry centralizes bus wiring and ensures dispose() iterates EVERY
+ * instantiated disposable instead of a hardcoded subset. AgentMemory is
+ * hydrated from / persisted to the VFS via an optional fs accessor.
  */
 
 import { Orchestrator } from "../agentic/Orchestrator.js";
@@ -15,6 +21,11 @@ import { ASTCache } from "../parser/ASTCache.js";
 import { TreeSitterParser } from "../parser/tree-sitter-parser.js";
 import { AgentManager } from "./AgentManager.js";
 import { AgentMemory } from "./AgentMemory.js";
+import {
+  loadMemoryFromFs,
+  type SyncFs,
+  saveMemoryToFs,
+} from "./AgentMemorySync.js";
 import { CronScheduler } from "./CronScheduler.js";
 import { GitTracker } from "./GitTracker.js";
 import { McpClient } from "./McpClient.js";
@@ -39,11 +50,48 @@ export interface ServiceContainer {
   cronScheduler: CronScheduler;
   worktreeManager: WorktreeManager;
   parser: typeof TreeSitterParser;
+  /**
+   * Guarantee the AgentMemory instance has finished hydrating from the VFS.
+   * Synchronous `agentMemory` access returns an instance immediately and
+   * kicks off hydration in the background; callers that need a
+   * guaranteed-loaded store should await this. Resolves immediately (no-op)
+   * when no fs accessor was supplied or hydration already completed.
+   */
+  ensureAgentMemoryHydrated(): Promise<void>;
   dispose(): Promise<void>;
+}
+
+/**
+ * A bus-aware service exposes `setBus` so the container can centrally wire it
+ * to the shared state bus on construction.
+ */
+interface BusAware {
+  setBus(bus: SharedStateBus): void;
+}
+
+/**
+ * A disposable service exposes an async `dispose` for deterministic cleanup.
+ */
+interface Disposable {
+  dispose(): Promise<void>;
+}
+
+/**
+ * Per-service descriptor used by the registry. `getInstance` returns the
+ * already-constructed backing instance WITHOUT triggering lazy construction
+ * (so dispose() never instantiates a service merely to dispose it).
+ */
+interface ServiceDescriptor {
+  readonly key: string;
+  readonly isBusAware: boolean;
+  readonly isDisposable: boolean;
+  /** Returns the current backing instance, or null if never instantiated. */
+  getInstance(): object | null;
 }
 
 export function createDefaultServices(
   overrides?: Partial<ServiceContainer>,
+  fsAccessor?: () => SyncFs,
 ): ServiceContainer {
   // Eager services - universally needed
   const astCache = overrides?.astCache ?? new ASTCache();
@@ -65,7 +113,112 @@ export function createDefaultServices(
     overrides?.worktreeManager ?? null;
   let _parser: typeof TreeSitterParser | null = overrides?.parser ?? null;
 
+  // Memoized AgentMemory hydration promise. Created on first agentMemory
+  // access (when an fsAccessor is present) and awaited by
+  // ensureAgentMemoryHydrated().
+  let _agentMemoryHydration: Promise<void> | null = null;
+
   let disposed = false;
+
+  /**
+   * Centralized lazy-construction helper for bus-aware services. Wires the
+   * shared bus exactly once, on construction, replacing the previous five
+   * ad-hoc `setBus` call sites.
+   */
+  function wireBus<T extends BusAware>(instance: T): T {
+    instance.setBus(sharedBus);
+    return instance;
+  }
+
+  function ensureAgentMemoryInstance(): AgentMemory {
+    if (_agentMemory) return _agentMemory;
+    _agentMemory = new AgentMemory();
+    // Kick off (memoized) hydration in the background when an fs accessor is
+    // available. Failures degrade gracefully - loadMemoryFromFs already
+    // tolerates missing scope dirs and corrupt files.
+    if (fsAccessor && !_agentMemoryHydration) {
+      const memory = _agentMemory;
+      _agentMemoryHydration = (async (): Promise<void> => {
+        try {
+          await loadMemoryFromFs(memory, fsAccessor());
+        } catch {
+          // Hydration is best-effort; never block on a broken VFS.
+        }
+      })();
+    }
+    return _agentMemory;
+  }
+
+  // The descriptor registry. Order matters: dispose() iterates in reverse to
+  // tear down in reverse construction order (mirrors the prior behavior).
+  const registry: readonly ServiceDescriptor[] = [
+    {
+      key: "sessionManager",
+      isBusAware: false,
+      isDisposable: true,
+      getInstance: (): object | null => _sessionManager,
+    },
+    {
+      key: "agentManager",
+      isBusAware: false,
+      isDisposable: false,
+      getInstance: (): object | null => _agentManager,
+    },
+    {
+      key: "mcpClient",
+      isBusAware: false,
+      isDisposable: true,
+      getInstance: (): object | null => _mcpClient,
+    },
+    {
+      key: "orchestrator",
+      isBusAware: false,
+      isDisposable: false,
+      getInstance: (): object | null => _orchestrator,
+    },
+    {
+      key: "lspManager",
+      isBusAware: false,
+      isDisposable: false,
+      getInstance: (): object | null => _lspManager,
+    },
+    {
+      key: "taskManager",
+      isBusAware: true,
+      isDisposable: false,
+      getInstance: (): object | null => _taskManager,
+    },
+    {
+      key: "teamManager",
+      isBusAware: true,
+      isDisposable: false,
+      getInstance: (): object | null => _teamManager,
+    },
+    {
+      key: "agentMemory",
+      isBusAware: false,
+      isDisposable: false,
+      getInstance: (): object | null => _agentMemory,
+    },
+    {
+      key: "gitTracker",
+      isBusAware: true,
+      isDisposable: true,
+      getInstance: (): object | null => _gitTracker,
+    },
+    {
+      key: "cronScheduler",
+      isBusAware: true,
+      isDisposable: true,
+      getInstance: (): object | null => _cronScheduler,
+    },
+    {
+      key: "worktreeManager",
+      isBusAware: true,
+      isDisposable: false,
+      getInstance: (): object | null => _worktreeManager,
+    },
+  ];
 
   return {
     astCache,
@@ -97,47 +250,31 @@ export function createDefaultServices(
     },
 
     get taskManager(): TaskManager {
-      if (!_taskManager) {
-        _taskManager = new TaskManager();
-        _taskManager.setBus(sharedBus);
-      }
+      _taskManager ??= wireBus(new TaskManager());
       return _taskManager;
     },
 
     get teamManager(): TeamManager {
-      if (!_teamManager) {
-        _teamManager = new TeamManager();
-        _teamManager.setBus(sharedBus);
-      }
+      _teamManager ??= wireBus(new TeamManager());
       return _teamManager;
     },
 
     get agentMemory(): AgentMemory {
-      _agentMemory ??= new AgentMemory();
-      return _agentMemory;
+      return ensureAgentMemoryInstance();
     },
 
     get gitTracker(): GitTracker {
-      if (!_gitTracker) {
-        _gitTracker = new GitTracker();
-        _gitTracker.setBus(sharedBus);
-      }
+      _gitTracker ??= wireBus(new GitTracker());
       return _gitTracker;
     },
 
     get cronScheduler(): CronScheduler {
-      if (!_cronScheduler) {
-        _cronScheduler = new CronScheduler();
-        _cronScheduler.setBus(sharedBus);
-      }
+      _cronScheduler ??= wireBus(new CronScheduler());
       return _cronScheduler;
     },
 
     get worktreeManager(): WorktreeManager {
-      if (!_worktreeManager) {
-        _worktreeManager = new WorktreeManager();
-        _worktreeManager.setBus(sharedBus);
-      }
+      _worktreeManager ??= wireBus(new WorktreeManager());
       return _worktreeManager;
     },
 
@@ -146,27 +283,44 @@ export function createDefaultServices(
       return _parser;
     },
 
+    async ensureAgentMemoryHydrated(): Promise<void> {
+      // Constructing the instance also schedules hydration (when an fs
+      // accessor is present), so ensure it exists first.
+      ensureAgentMemoryInstance();
+      if (_agentMemoryHydration) {
+        await _agentMemoryHydration;
+      }
+    },
+
     async dispose(): Promise<void> {
       if (disposed) return;
       disposed = true;
 
       const errors: Error[] = [];
 
-      // Only dispose services that were actually instantiated
-      const disposables: Array<{ dispose(): Promise<void> } | null> = [
-        _cronScheduler,
-        _gitTracker,
-        _mcpClient,
-        _sessionManager,
-      ];
-
-      for (const svc of disposables) {
-        if (svc) {
-          try {
-            await svc.dispose();
-          } catch (e: unknown) {
-            errors.push(e instanceof Error ? e : new Error(String(e)));
+      // Persist AgentMemory before tearing down, if it was instantiated and an
+      // fs accessor is available. Wait for any in-flight hydration first so we
+      // never save a partially-loaded store over good data.
+      if (_agentMemory && fsAccessor) {
+        try {
+          if (_agentMemoryHydration) {
+            await _agentMemoryHydration;
           }
+          await saveMemoryToFs(_agentMemory, fsAccessor());
+        } catch (e: unknown) {
+          errors.push(e instanceof Error ? e : new Error(String(e)));
+        }
+      }
+
+      // Dispose every instantiated disposable, in reverse construction order.
+      for (const descriptor of [...registry].reverse()) {
+        if (!descriptor.isDisposable) continue;
+        const instance = descriptor.getInstance();
+        if (!instance) continue;
+        try {
+          await (instance as Disposable).dispose();
+        } catch (e: unknown) {
+          errors.push(e instanceof Error ? e : new Error(String(e)));
         }
       }
 
