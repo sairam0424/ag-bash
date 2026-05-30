@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] — 2026-05-31
+
+### Breaking Changes
+
+- **ExecutionPipeline is now the sole execution engine** — The `execMode: "monolith"` inline code path has been removed. All exec() calls route through the composable 6-stage pipeline (normalize, parse, transform, sandbox, interpret, persist). The `execMode` option type is preserved for backward compatibility but both values now resolve to the pipeline.
+- **Node.js floor raised to >=20.6.0** — Required for stable `--import` hooks and `register()` API. Node.js >=23.5 is recommended for full ESM-hook security hardening.
+- **denyPrivateRanges defaults ON** — SSRF protection blocks requests to RFC-1918, link-local, and loopback addresses by default. Pass `network: { denyPrivateRanges: false }` to opt out.
+- **Observation type gains `code` and `confidence` fields** — All observation producers now emit structured machine-readable codes and confidence scores.
+- **BashHost interface expanded** — Sub-agent spawning now uses immutable constructor-time tool filtering (no `unregisterTool` cast). The `as unknown as Bash` casts are removed; `BashHost` gains typed `fs`, `nestingDepth`, `getCwd()`, `getEnv()` members.
+- **MCP protocol bumped to 2025-06-18** — Back-compat preserved for 2024-11-05 clients. Code Mode slice added for structured output.
+- **destructivePolicy option added** — AST-based destructive-command detection gate runs by default with policy `"warn"` (non-blocking). Set to `"block"` to reject destructive commands.
+- **AgentMemory now persists across sessions** — Memory is written to disk and restored on next instantiation.
+- **RunLoop config extended** — New fields: `mode`, `healer`, `memory` for configuring autonomous agent execution.
+
+### Added
+
+- **OTEL at exec level** — Optional `otel` config in `BashOptions` initializes an `AgBashTracer` that wraps each `exec()` call in an OpenTelemetry span. Zero overhead when `@opentelemetry/api` is not installed.
+- **Fork-speculation** — `bash.fork()` creates an isolated copy-on-write branch; `bash.speculate(branches)` runs N candidates in parallel and collects results.
+- **True streaming** — `bash.execStream()` yields `OutputChunk` objects via AsyncGenerator as statements produce output. Byte-identical to buffered exec.
+- **Destructive detection stage** — `DestructiveStage` analyzes parsed AST for `rm -rf /`, fork bombs, decode-pipe-to-shell, and `$IFS` obfuscation patterns.
+
+### Removed
+
+- **Monolith exec path** — The 200+ line inline execution body in `Bash.exec()` has been deleted. All execution flows through `ExecutionPipeline`.
+
+### Changed
+
+- Synchronized monorepo versions to **v6.0.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Node.js engine constraint updated to `>=20.6.0` in all package.json files.
+- Documentation (README, CLAUDE.md, AGENTS.md, ARCHITECTURE.md) updated to reflect v6.0.0 architecture.
+
+---
+
 ## [5.0.0] — 2026-05-28
 
 ### Breaking Changes
