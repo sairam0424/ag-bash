@@ -345,4 +345,69 @@ describe("ASTCache", () => {
       expect(cache.get("echo '\u{1F600}\u{1F680}\u{2603}'")).toBe(ast);
     });
   });
+
+  describe("64-bit hash collision resistance", () => {
+    it("should produce DIFFERENT keys for two distinct scripts of >64 chars", () => {
+      // Two distinct long scripts that previously risked colliding under a
+      // 32-bit hash must now map to separate cache slots.
+      const scriptA = `echo alpha; ${"a".repeat(80)}; run-thing --flag=1`;
+      const scriptB = `echo bravo; ${"b".repeat(80)}; run-thing --flag=2`;
+      expect(scriptA.length).toBeGreaterThan(64);
+      expect(scriptB.length).toBeGreaterThan(64);
+
+      const astA = makeAST(1);
+      const astB = makeAST(2);
+      cache.set(scriptA, astA);
+      cache.set(scriptB, astB);
+
+      // Distinct keys => no clobbering: each script returns its OWN AST.
+      expect(cache.get(scriptA)).toBe(astA);
+      expect(cache.get(scriptB)).toBe(astB);
+      // Both coexist in the cache simultaneously.
+      expect(cache.stats().size).toBe(2);
+    });
+
+    it("should not collide across many distinct long inputs", () => {
+      cache.configure({ maxEntries: 1000 });
+      const count = 500;
+      const asts: ScriptNode[] = [];
+      for (let i = 0; i < count; i++) {
+        // Each input is >64 chars and unique.
+        const input = `${"prefix-".repeat(10)}variant-${i}-${"suffix".repeat(2)}`;
+        expect(input.length).toBeGreaterThan(64);
+        const ast = makeAST(i);
+        asts.push(ast);
+        cache.set(input, ast);
+      }
+      // No collisions => every distinct input occupies its own slot.
+      expect(cache.stats().size).toBe(count);
+      for (let i = 0; i < count; i++) {
+        const input = `${"prefix-".repeat(10)}variant-${i}-${"suffix".repeat(2)}`;
+        expect(cache.get(input)).toBe(asts[i]);
+      }
+    });
+  });
+
+  describe("synchronous getKey / hot-path contract", () => {
+    it("get returns synchronously (no promise/await) immediately after construction", () => {
+      const freshCache = new ASTCache();
+      const ast = makeAST();
+      const longInput = "z".repeat(128);
+
+      // set must return synchronously (undefined, not a thenable).
+      const setResult: unknown = freshCache.set(longInput, ast);
+      expect(setResult).toBeUndefined();
+
+      // get must return the value synchronously, never a Promise.
+      const result: unknown = freshCache.get(longInput);
+      expect(result).toBe(ast);
+      expect(result).not.toBeInstanceOf(Promise);
+      expect(typeof (result as { then?: unknown })?.then).not.toBe("function");
+
+      // A miss is also synchronous and returns null (not a Promise).
+      const miss: unknown = freshCache.get("y".repeat(128));
+      expect(miss).toBeNull();
+      expect(miss).not.toBeInstanceOf(Promise);
+    });
+  });
 });
