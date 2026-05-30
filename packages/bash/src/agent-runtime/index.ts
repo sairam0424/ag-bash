@@ -7,9 +7,12 @@ export type {
   LLMProvider,
   Message,
   RunLoopConfig,
+  RunLoopHealerConfig,
+  RunLoopMemoryConfig,
   RunLoopResult,
   RunLoopStatus,
   ToolCall,
+  ToolCallResult,
   ToolSchema,
   TurnEvent,
 } from "./types.js";
