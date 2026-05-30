@@ -17,6 +17,7 @@ import type {
   CommandRegistry,
   ExecResult,
   FeatureCoverageWriter,
+  OutputSink,
   TraceCallback,
 } from "../types.js";
 import type { DebuggerBridge } from "./debugger/debugger.js";
@@ -500,6 +501,12 @@ export interface InterpreterContext {
   sessionId?: string;
   /** Reference to the parent Bash instance */
   bash?: any;
+  /**
+   * Optional opt-in sink that receives stdout/stderr fragments incrementally
+   * as statements produce them (true streaming). When undefined (the default),
+   * execution is byte-identical to the buffered path with zero overhead.
+   */
+  sink?: OutputSink;
 
   // ---- Trap Execution Guards ----
   /** True while the ERR trap handler is executing (prevents recursion) */
