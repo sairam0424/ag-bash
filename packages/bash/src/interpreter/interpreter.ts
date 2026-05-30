@@ -42,6 +42,7 @@ import type {
   ExecResult,
   FeatureCoverageWriter,
   Observation,
+  OutputSink,
   TraceCallback,
 } from "../types.js";
 import { expandAlias as expandAliasHelper } from "./alias-expansion.js";
@@ -198,6 +199,11 @@ export interface InterpreterOptions {
   sharedBus?: SharedStateBus;
   /** Reference to the parent Bash instance */
   bash?: any;
+  /**
+   * Optional opt-in sink for incremental (true) streaming of stdout/stderr.
+   * When undefined, execution is byte-identical to the buffered path.
+   */
+  sink?: OutputSink;
 }
 
 /**
@@ -242,6 +248,7 @@ export class Interpreter {
         (options.agentic ? new AgenticHealer() : undefined),
       sharedBus: options.sharedBus || options.bash?.services?.sharedBus,
       bash: options.bash,
+      sink: options.sink,
     };
   }
 
@@ -340,6 +347,18 @@ export class Interpreter {
     const observations: Observation[] = [];
     const maxOutputSize = this.ctx.limits.maxOutputSize;
 
+    // Opt-in incremental streaming sink. Captured once; only invoked when a
+    // sink is present so the buffered path stays byte-identical with zero
+    // overhead. stdout is emitted before stderr within a single append so the
+    // per-statement production order is preserved across both streams.
+    const sink = this.ctx.sink;
+    const emit = sink
+      ? (nextStdout: string, nextStderr: string): void => {
+          if (nextStdout) sink({ type: "stdout", data: nextStdout });
+          if (nextStderr) sink({ type: "stderr", data: nextStderr });
+        }
+      : undefined;
+
     const appendOutput = (nextStdout: string, nextStderr: string): void => {
       if (
         stdoutBuf.length + stderrBuf.length + nextStdout.length + nextStderr.length >
@@ -352,6 +371,7 @@ export class Interpreter {
       }
       stdoutBuf.push(nextStdout);
       stderrBuf.push(nextStderr);
+      emit?.(nextStdout, nextStderr);
     };
 
     for (const statement of node.statements) {
@@ -470,6 +490,7 @@ export class Interpreter {
     if (exitTrapResult) {
       stdoutBuf.push(exitTrapResult.stdout);
       stderrBuf.push(exitTrapResult.stderr);
+      emit?.(exitTrapResult.stdout, exitTrapResult.stderr);
     }
 
     return withLazyEnv({
@@ -1098,6 +1119,7 @@ export class Interpreter {
         error instanceof ContinueError ||
         error instanceof ErrexitError ||
         error instanceof ArithmeticError ||
+        error instanceof PosixFatalError ||
         errorName === "SecurityViolationError" ||
         errorName === "ExecutionLimitError" ||
         errorName === "ExitError" ||
@@ -1105,7 +1127,8 @@ export class Interpreter {
         errorName === "BreakError" ||
         errorName === "ContinueError" ||
         errorName === "ErrexitError" ||
-        errorName === "ArithmeticError"
+        errorName === "ArithmeticError" ||
+        errorName === "PosixFatalError"
       ) {
         throw error;
       }
@@ -1122,19 +1145,26 @@ export class Interpreter {
       node.redirections,
     );
 
-    // Ag-Trace: Analyze failure if exitCode exists and is non-zero
+    // Ag-Trace: Analyze failure if exitCode exists and is non-zero.
+    // Source-emitted observations (already on finalResult) are the primary
+    // channel; AgTrace is the FALLBACK. combineObservations dedups/merges so
+    // the same failure is never double-emitted (A3).
     if (finalResult.exitCode !== 0) {
-      const observations = await AgTrace.analyze(
+      const fresh = await AgTrace.analyze(
         this.ctx,
         commandName,
         args,
         finalResult,
       );
-      if (observations && observations.length > 0) {
-        finalResult.observations = [
-          ...(finalResult.observations || []),
-          ...observations,
-        ];
+      if (fresh && fresh.length > 0) {
+        // Immutability: return a NEW result rather than mutating finalResult.
+        return {
+          ...finalResult,
+          observations: AgTrace.combineObservations(
+            finalResult.observations ?? [],
+            fresh,
+          ),
+        };
       }
     }
 

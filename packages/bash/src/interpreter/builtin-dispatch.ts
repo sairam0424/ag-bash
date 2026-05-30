@@ -7,6 +7,7 @@
 
 import { isBrowserExcludedCommand } from "../commands/browser-excluded.js";
 import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
+import { AgTrace } from "../observability/ag-trace.js";
 import { awaitWithDefenseContext } from "../security/defense-context.js";
 import {
   DefenseInDepthBox,
@@ -54,7 +55,7 @@ import { createDefenseAwareCommandContext } from "./defense-aware-command-contex
 import { ExecutionLimitError } from "./errors.js";
 import { callFunction } from "./functions.js";
 import { getErrorMessage } from "./helpers/errors.js";
-import { failure, OK, testResult } from "./helpers/result.js";
+import { failure, obs, OK, testResult } from "./helpers/result.js";
 import { SHELL_BUILTINS } from "./helpers/shell-constants.js";
 import {
   findFirstInPath as findFirstInPathHelper,
@@ -371,17 +372,37 @@ export async function executeExternalCommand(
         `bash: ${commandName}: command not available in browser environments.${suggestFlag} ` +
           `Exclude '${commandName}' from your commands or use the Node.js bundle.\n`,
         127,
+        [obs.commandNotFound(commandName)],
       );
     }
-    return failure(`bash: ${commandName}: command not found\n`, 127);
+    // A3: emit a typed command_not_found observation AT THE SOURCE — the
+    // interpreter KNOWS resolution failed, so we attach it directly instead
+    // of relying on AgTrace's stderr regex. Suggestions are computed here
+    // from the registered command list.
+    const suggestion = AgTrace.suggestCommand(
+      commandName,
+      Array.from(ctx.commands.keys()),
+    );
+    return failure(`bash: ${commandName}: command not found\n`, 127, [
+      obs.commandNotFound(
+        commandName,
+        suggestion ? [suggestion] : undefined,
+      ),
+    ]);
   }
   // Handle error cases from resolveCommand
   if ("error" in resolved) {
     if (resolved.error === "permission_denied") {
-      return failure(`bash: ${commandName}: Permission denied\n`, 126);
+      // A3: typed permission_denied at the source.
+      return failure(`bash: ${commandName}: Permission denied\n`, 126, [
+        obs.permissionDenied(resolved.path ?? commandName, commandName),
+      ]);
     }
-    // not_found error
-    return failure(`bash: ${commandName}: No such file or directory\n`, 127);
+    // not_found error — a path-form command (contains "/") that didn't exist.
+    // A3: typed file_not_found at the source.
+    return failure(`bash: ${commandName}: No such file or directory\n`, 127, [
+      obs.fileNotFound(resolved.path ?? commandName, commandName),
+    ]);
   }
   // Handle user scripts (executable files without registered command handlers)
   if ("script" in resolved) {
