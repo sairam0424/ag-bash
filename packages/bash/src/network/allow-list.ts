@@ -139,6 +139,52 @@ export function isUrlAllowed(
 }
 
 /**
+ * Cloud metadata endpoint IP addresses (link-local). These expose instance
+ * credentials and MUST never be reachable. They are also covered by the
+ * private-range checks (169.254.0.0/16, fc00::/7), but are enumerated here so
+ * metadata is blocked explicitly even if a caller relaxes other ranges.
+ */
+const METADATA_IPS: ReadonlySet<string> = new Set([
+  "169.254.169.254", // AWS / GCP / Azure / OpenStack IMDS
+  "fd00:ec2::254", // AWS IMDS over IPv6
+]);
+
+/**
+ * Cloud metadata endpoint hostnames. Blocked by name so DNS rebinding cannot
+ * surface metadata through a benign-looking name.
+ */
+const METADATA_HOSTNAMES: ReadonlySet<string> = new Set([
+  "metadata.google.internal", // GCP
+  "metadata.goog", // GCP alias
+  "metadata", // GCP short name
+]);
+
+/**
+ * Check whether a hostname or resolved IP address targets a cloud metadata
+ * endpoint. Matches both the well-known IP literals and the well-known
+ * hostnames (case-insensitive, brackets stripped).
+ */
+export function isMetadataEndpoint(hostnameOrIp: string): boolean {
+  const normalized = normalizeHostname(hostnameOrIp);
+  if (METADATA_HOSTNAMES.has(normalized)) {
+    return true;
+  }
+  if (METADATA_IPS.has(normalized)) {
+    return true;
+  }
+  // Match the IP form even when expressed in an alternate (octal/hex/IPv6
+  // mapped) notation by canonicalizing through the IPv4/IPv6 parsers.
+  const ipv4 = parseIpv4(normalized);
+  if (ipv4) {
+    const canonical = `${ipv4[0]}.${ipv4[1]}.${ipv4[2]}.${ipv4[3]}`;
+    if (METADATA_IPS.has(canonical)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Check if a hostname is a private/loopback IP address.
  * Only checks the string format — does not perform DNS resolution.
  */

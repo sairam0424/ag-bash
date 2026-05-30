@@ -11,6 +11,35 @@ import { expect, vi } from "vitest";
 import type { BashOptions } from "../../Bash.js";
 import { Bash } from "../../Bash.js";
 import { Sandbox } from "../../sandbox/index.js";
+import type { DnsLookupResult, NetworkConfig } from "../types.js";
+
+/**
+ * Deterministic DNS resolver for tests. As of v6.0.0 `denyPrivateRanges`
+ * defaults ON, so any test using a domain hostname would otherwise perform a
+ * real `dns.lookup` (which hangs/varies in offline CI). This stub resolves all
+ * hostnames to a fixed PUBLIC address so allow-list/firewall/redirect tests
+ * stay deterministic and never touch the network. Tests that specifically
+ * exercise the private-range/rebinding policy override `_dnsResolve` with
+ * their own resolver.
+ */
+export function publicResolver(): (
+  hostname: string,
+) => Promise<DnsLookupResult[]> {
+  return () => Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
+}
+
+/**
+ * Merges a default public DNS resolver into a network config when the test
+ * did not provide its own `_dnsResolve`. Preserves all other settings so the
+ * test's intent is unchanged; only DNS is made deterministic.
+ */
+function withDefaultResolver(
+  network: NetworkConfig | undefined,
+): NetworkConfig | undefined {
+  if (!network) return network;
+  if (network._dnsResolve) return network;
+  return { ...network, _dnsResolve: publicResolver() };
+}
 
 // Unique markers in mock responses to verify we're not hitting real network
 const MOCK_MARKER: string = "MOCK_RESPONSE_12345";
@@ -125,7 +154,10 @@ export interface EnvAdapter {
  * Creates an adapter for Bash
  */
 export function createBashAdapter(options: BashOptions): EnvAdapter {
-  const env = new Bash({ ...options });
+  const env = new Bash({
+    ...options,
+    network: withDefaultResolver(options.network),
+  });
   return {
     exec: (cmd) => env.exec(cmd),
     readFile: (path) => env.readFile(path),
@@ -138,7 +170,9 @@ export function createBashAdapter(options: BashOptions): EnvAdapter {
 export async function createSandboxAdapter(
   options: BashOptions,
 ): Promise<EnvAdapter> {
-  const sandbox = await Sandbox.create({ network: options.network });
+  const sandbox = await Sandbox.create({
+    network: withDefaultResolver(options.network),
+  });
   return {
     exec: async (cmd) => {
       const command = await sandbox.runCommand(cmd);

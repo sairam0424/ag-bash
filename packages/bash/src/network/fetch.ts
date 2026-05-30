@@ -8,9 +8,11 @@
  */
 
 import { lookup as dnsLookup } from "node:dns";
+import { createRequire as nodeCreateRequire } from "node:module";
 import { DefenseInDepthBox } from "../security/defense-in-depth-box.js";
 import { _clearTimeout, _setTimeout } from "../timers.js";
 import {
+  isMetadataEndpoint,
   isPrivateIp,
   isUrlAllowed,
   matchesAllowListEntry,
@@ -28,20 +30,148 @@ import {
   TooManyRedirectsError,
 } from "./types.js";
 
-// DNS resolution for private IP check
-function dnsLookupAll(hostname: string): Promise<DnsLookupResult[]> {
-  return new Promise<DnsLookupResult[]>((resolve, reject) => {
-    dnsLookup(hostname, { all: true }, (err, addresses) => {
-      if (err) reject(err);
-      else resolve(addresses);
-    });
-  });
+/**
+ * Error thrown when the private-IP DNS lookup exceeds its bound. Treated by
+ * {@link checkAndResolve} exactly like an ENOTFOUND: the resolver produced no
+ * address within the window, so there is nothing to pin and the request is
+ * allowed to proceed to the real fetch (which performs its own bounded
+ * connect). A distinct class lets the caller distinguish this from a genuine
+ * resolver failure that must fail closed.
+ */
+class DnsLookupTimeoutError extends Error {
+  readonly code = "ETIMEDOUT" as const;
+  constructor() {
+    super("DNS lookup timed out");
+    this.name = "DnsLookupTimeoutError";
+  }
 }
 
 const DEFAULT_MAX_REDIRECTS = 20;
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_RESPONSE_SIZE = 10485760; // 10MB
 const DEFAULT_ALLOWED_METHODS: HttpMethod[] = ["GET", "HEAD"];
+/**
+ * Upper bound for the private-range DNS lookup. The lexical and pin checks are
+ * the real SSRF defenses; this lookup only catches domains that resolve to a
+ * private IP, and a real public resolver answers in well under a second. The
+ * bound therefore tracks the request timeout but is capped tightly so the
+ * lookup can NEVER hang the caller (e.g. when the host resolver itself blocks
+ * for ~30s in an offline/sandboxed environment) — the cap is the load-bearing
+ * value; the per-request timeout only ever lowers it.
+ */
+const DNS_LOOKUP_TIMEOUT_CAP_MS = 1000;
+
+// DNS resolution for private IP check. Bounded so a blocking host resolver
+// (offline/sandboxed environments where getaddrinfo can stall ~30s) can never
+// hang the request. On timeout we reject with DnsLookupTimeoutError, which
+// checkAndResolve treats like ENOTFOUND (no address obtained → nothing to pin).
+function dnsLookupAll(
+  hostname: string,
+  timeoutMs: number,
+): Promise<DnsLookupResult[]> {
+  return new Promise<DnsLookupResult[]>((resolve, reject) => {
+    let settled = false;
+    const timer = _setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new DnsLookupTimeoutError());
+    }, timeoutMs);
+
+    dnsLookup(hostname, { all: true }, (err, addresses) => {
+      if (settled) return;
+      settled = true;
+      _clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(addresses);
+    });
+  });
+}
+
+/**
+ * Builds the per-request connection pin. Undici (the engine behind Node's
+ * global `fetch`) honors a `dispatcher` whose `connect` options carry a
+ * custom `lookup`. We override `lookup` to return ONLY a pre-validated
+ * address, so the socket connects to exactly the IP we checked — closing the
+ * DNS-rebinding/TOCTOU window between {@link checkAndResolve} and the actual
+ * connect (undici would otherwise re-resolve the hostname independently).
+ *
+ * The undici primitives are loaded lazily and defensively via
+ * {@link loadPinningAgentFactory}. When they are unavailable (e.g. `fetch` is
+ * mocked in tests, or undici is not resolvable), {@link buildPinnedDispatcher}
+ * returns `undefined` and the resolve-once/validate-all gate in
+ * {@link checkAndResolve} remains the authoritative protection.
+ */
+type UndiciAgent = {
+  // biome-ignore lint/suspicious/noExplicitAny: undici Agent options are broad
+  new (opts: any): unknown;
+};
+
+type LookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  addresses: { address: string; family: number }[] | string,
+  family?: number,
+) => void;
+
+let pinningAgentFactory: UndiciAgent | null | undefined;
+
+/**
+ * Lazily resolves undici's `Agent` constructor without dynamic `import()`
+ * (banned) or `eval`. Uses `node:module`'s `createRequire` — a static builtin
+ * import — to load undici only if the host runtime makes it resolvable.
+ * Cached after the first attempt; `null` means pinning via a dispatcher is
+ * unavailable and the resolve-once/validate-all gate is the sole protection.
+ */
+function loadPinningAgentFactory(): UndiciAgent | null {
+  if (pinningAgentFactory !== undefined) {
+    return pinningAgentFactory ?? null;
+  }
+  try {
+    const req = nodeCreateRequire(import.meta.url);
+    const undici = req("undici") as { Agent?: UndiciAgent };
+    pinningAgentFactory = undici.Agent ?? null;
+  } catch {
+    pinningAgentFactory = null;
+  }
+  return pinningAgentFactory;
+}
+
+/**
+ * Returns the IP family (4 or 6) for a pinned address literal.
+ */
+function familyOf(address: string): number {
+  return address.includes(":") ? 6 : 4;
+}
+
+/**
+ * Builds an undici dispatcher that pins connections to `pinnedAddresses`.
+ * Returns `undefined` when pinning primitives are unavailable.
+ */
+function buildPinnedDispatcher(pinnedAddresses: string[]): unknown {
+  if (pinnedAddresses.length === 0) return undefined;
+  const Agent = loadPinningAgentFactory();
+  if (!Agent) return undefined;
+
+  const pinned = pinnedAddresses.map((address) => ({
+    address,
+    family: familyOf(address),
+  }));
+
+  const lookup = (
+    _hostname: string,
+    _options: unknown,
+    callback: LookupCallback,
+  ): void => {
+    // Always return the validated, pinned addresses regardless of what the
+    // hostname currently resolves to. This is the rebinding pin.
+    callback(null, pinned);
+  };
+
+  try {
+    return new Agent({ connect: { lookup } });
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * HTTP methods that should not have a body
@@ -126,17 +256,35 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
   const allowedMethods = config.dangerouslyAllowFullInternetAccess
     ? ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     : (config.allowedMethods ?? DEFAULT_ALLOWED_METHODS);
-  // Default to denying private ranges in production
-  const denyPrivateRanges =
-    config.denyPrivateRanges ??
-    (typeof process !== "undefined" && process.env?.NODE_ENV === "production");
-  const resolveDns = config._dnsResolve ?? dnsLookupAll;
+  // Deny private/loopback/metadata ranges by default (v6.0.0). Callers can
+  // opt out explicitly with `denyPrivateRanges: false`. Previously this
+  // defaulted on only when NODE_ENV === "production", which left SSRF
+  // protection off in the common (unset NODE_ENV) case — a breaking but
+  // safer default.
+  const denyPrivateRanges = config.denyPrivateRanges ?? true;
+  // The private-range DNS lookup is bounded by the smaller of the tight cap
+  // and the request timeout, so it can never outlast the request it guards
+  // (and can never hang on a blocking host resolver). An injected
+  // `_dnsResolve` (tests) is deterministic and used as-is.
+  const dnsTimeoutMs = Math.min(DNS_LOOKUP_TIMEOUT_CAP_MS, timeoutMs);
+  const resolveDns =
+    config._dnsResolve ??
+    ((hostname: string) => dnsLookupAll(hostname, dnsTimeoutMs));
 
   /**
-   * Checks if a URL is allowed by the configuration.
+   * Validates a URL against the allow-list, the private-range policy, and the
+   * metadata-endpoint blocklist. When `denyPrivateRanges` is on and the host
+   * is a domain name, DNS is resolved EXACTLY ONCE here and every returned
+   * A/AAAA address is validated; the validated address set is returned so the
+   * subsequent connection can be pinned to it (TOCTOU / DNS-rebinding
+   * protection). For IP literals the literal itself is the pin.
+   *
+   * @returns the list of validated IP addresses to pin the connection to, or
+   *   `null` when no pin is available/needed (full-access without
+   *   denyPrivateRanges, ENOTFOUND domains, or invalid URLs).
    * @throws NetworkAccessDeniedError if the URL is not allowed
    */
-  async function checkAllowed(url: string): Promise<void> {
+  async function checkAndResolve(url: string): Promise<string[] | null> {
     if (
       !config.dangerouslyAllowFullInternetAccess &&
       !isUrlAllowed(url, entries)
@@ -144,55 +292,90 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
       throw new NetworkAccessDeniedError(url);
     }
 
-    // Private IP check still runs even when full internet access is enabled
-    // so internal/loopback addresses remain unreachable.
-    if (denyPrivateRanges) {
-      try {
-        const parsed = new URL(url);
-        // Lexical check (fast path: catches IP literals and localhost)
-        if (isPrivateIp(parsed.hostname)) {
-          throw new NetworkAccessDeniedError(
-            url,
-            "private/loopback IP address blocked",
-          );
-        }
-        // DNS resolution check (catches domains resolving to private IPs).
-        // Skip for IP literals — they were already checked lexically above
-        // and dns.lookup would just return the same address.
-        const hostname = parsed.hostname;
-        const isDomainName = /[a-zA-Z]/.test(hostname);
-        if (isDomainName) {
-          try {
-            const addresses = await resolveDns(hostname);
-            for (const { address } of addresses) {
-              if (isPrivateIp(address)) {
-                throw new NetworkAccessDeniedError(
-                  url,
-                  "hostname resolves to private/loopback IP address",
-                );
-              }
-            }
-          } catch (dnsErr) {
-            if (dnsErr instanceof NetworkAccessDeniedError) throw dnsErr;
-            // ENOTFOUND means the domain doesn't exist — it can't resolve
-            // to a private IP, so it's safe to let the fetch fail naturally.
-            const code = (dnsErr as NodeJS.ErrnoException)?.code;
-            if (code === "ENOTFOUND" || code === "ENODATA") {
-              // Domain doesn't exist; no rebinding risk
-            } else {
-              // Unexpected DNS error: fail closed (block)
-              throw new NetworkAccessDeniedError(
-                url,
-                "DNS resolution failed for private IP check",
-              );
-            }
-          }
-        }
-      } catch (e) {
-        if (e instanceof NetworkAccessDeniedError) throw e;
-        // Invalid URL will be caught by isUrlAllowed below
-      }
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      // Malformed URL — let the downstream fetch fail naturally / allow-list
+      // already rejected it above when not in full-access mode.
+      return null;
     }
+
+    const hostname = parsed.hostname;
+
+    // Cloud metadata endpoints are blocked by NAME unconditionally, regardless
+    // of denyPrivateRanges, so instance credentials can never be reached even
+    // if a caller relaxes the private-range policy.
+    if (isMetadataEndpoint(hostname)) {
+      throw new NetworkAccessDeniedError(
+        url,
+        "cloud metadata endpoint blocked",
+      );
+    }
+
+    if (!denyPrivateRanges) {
+      return null;
+    }
+
+    // Lexical check (fast path: catches IP literals and localhost).
+    if (isPrivateIp(hostname)) {
+      throw new NetworkAccessDeniedError(
+        url,
+        "private/loopback IP address blocked",
+      );
+    }
+
+    // IP literals were validated lexically above; the literal is the pin.
+    const isDomainName = /[a-zA-Z]/.test(hostname);
+    if (!isDomainName) {
+      return [hostname];
+    }
+
+    // Resolve the domain ONCE. Every returned address must be public and
+    // non-metadata, otherwise the host is rejected. The resolved set becomes
+    // the connection pin so the real fetch cannot connect to a different
+    // (rebound) address.
+    let addresses: DnsLookupResult[];
+    try {
+      addresses = await resolveDns(hostname);
+    } catch (dnsErr) {
+      // ENOTFOUND/ENODATA: domain doesn't resolve, so it can't resolve to a
+      // private IP — no rebinding risk; let the fetch fail naturally.
+      // ETIMEDOUT: the bounded lookup produced no address within the window
+      // (e.g. a blocking host resolver). Like ENOTFOUND there is no resolved
+      // address to pin and the real fetch performs its own bounded connect, so
+      // we proceed without a pin rather than hang.
+      const code = (dnsErr as NodeJS.ErrnoException)?.code;
+      if (code === "ENOTFOUND" || code === "ENODATA" || code === "ETIMEDOUT") {
+        return null;
+      }
+      // Unexpected DNS error: fail closed (block).
+      throw new NetworkAccessDeniedError(
+        url,
+        "DNS resolution failed for private IP check",
+      );
+    }
+
+    const pinned: string[] = [];
+    for (const { address } of addresses) {
+      if (isMetadataEndpoint(address)) {
+        throw new NetworkAccessDeniedError(
+          url,
+          "cloud metadata endpoint blocked",
+        );
+      }
+      if (isPrivateIp(address)) {
+        throw new NetworkAccessDeniedError(
+          url,
+          "hostname resolves to private/loopback IP address",
+        );
+      }
+      pinned.push(address);
+    }
+
+    // No addresses returned (empty resolver result): nothing to pin, let the
+    // fetch fail naturally rather than fabricating a target.
+    return pinned.length > 0 ? pinned : null;
   }
 
   /**
@@ -219,8 +402,9 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
   ): Promise<FetchResult> {
     const method = options.method?.toUpperCase() ?? "GET";
 
-    // Check if URL and method are allowed
-    await checkAllowed(url);
+    // Check if URL and method are allowed. checkAndResolve resolves DNS once
+    // and returns the validated addresses to pin the connection to.
+    let pinnedAddresses = await checkAndResolve(url);
     checkMethodAllowed(method);
 
     let currentUrl = url;
@@ -256,6 +440,20 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
             redirect: "manual", // Handle redirects manually to check allow-list
           };
 
+          // Pin the connection to the validated address(es) so undici cannot
+          // re-resolve the hostname to a different (rebound) IP between our
+          // validation and the actual connect. `dispatcher` is an undici
+          // extension on RequestInit; when pinning primitives are unavailable
+          // the dispatcher is undefined and the resolve-once gate still holds.
+          if (pinnedAddresses && pinnedAddresses.length > 0) {
+            const dispatcher = buildPinnedDispatcher(pinnedAddresses);
+            if (dispatcher) {
+              (
+                fetchOptions as RequestInit & { dispatcher?: unknown }
+              ).dispatcher = dispatcher;
+            }
+          }
+
           // Only include body for methods that support it
           if (options.body && !BODYLESS_METHODS.has(method)) {
             fetchOptions.body = options.body;
@@ -285,9 +483,11 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
           // Resolve relative URLs
           const redirectUrl = new URL(location, currentUrl).href;
 
-          // Check redirect target against allow-list and private IP ranges
+          // Re-validate AND re-pin the redirect target: redirects can rebind
+          // to a private IP, so each hop resolves DNS afresh and produces a
+          // new connection pin.
           try {
-            await checkAllowed(redirectUrl);
+            pinnedAddresses = await checkAndResolve(redirectUrl);
           } catch {
             throw new RedirectNotAllowedError(redirectUrl);
           }

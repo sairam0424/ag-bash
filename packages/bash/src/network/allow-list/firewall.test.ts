@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createSecureFetch } from "../fetch.js";
 import type { AllowedUrlEntry } from "../types.js";
-import { originalFetch } from "./shared.js";
+import { originalFetch, publicResolver } from "./shared.js";
 
 /** Extract headers from RequestInit into a plain record */
 function extractHeaders(init?: RequestInit): Record<string, string> {
@@ -84,7 +84,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://api.example.com/v1/chat");
 
     expect(calls).toHaveLength(1);
@@ -102,7 +105,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://api.example.com/data", {
       headers: { "Content-Type": "application/json", "X-Custom": "value" },
     });
@@ -124,7 +130,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://api.example.com/data", {
       headers: { Authorization: "Bearer user-injected" },
     });
@@ -145,7 +154,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     // User attempts bypass using different casing
     await secureFetch("https://api.example.com/data", {
       headers: { authorization: "Bearer user-injected" },
@@ -170,7 +182,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://api.example.com/data");
 
     expect(calls).toHaveLength(1);
@@ -192,7 +207,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://other-api.com/data", {
       headers: { "X-Custom": "value" },
     });
@@ -219,7 +237,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://plain.com/start");
 
     expect(calls).toHaveLength(2);
@@ -246,7 +267,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://secret-api.com/start");
 
     expect(calls).toHaveLength(2);
@@ -270,7 +294,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
 
     await secureFetch("https://public-api.com/data");
     await secureFetch("https://private-api.com/data");
@@ -298,7 +325,10 @@ describe("firewall header transforms", () => {
 
     const entries: AllowedUrlEntry[] = [{ url: "https://api.example.com" }];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://api.example.com/data");
 
     expect(calls).toHaveLength(1);
@@ -319,7 +349,10 @@ describe("firewall header transforms", () => {
       "https://api.example.com/v2/",
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
 
     // /v1/ path — should get firewall headers
     await secureFetch("https://api.example.com/v1/chat");
@@ -346,7 +379,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
 
     await secureFetch("https://api.example.com/v1/users");
     await secureFetch("https://api.example.com/v2/users");
@@ -367,7 +403,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
 
     await secureFetch("https://api.example.com/any/path");
     await secureFetch("https://api.example.com/other");
@@ -391,7 +430,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://api.example.com/data");
 
     expect(calls).toHaveLength(1);
@@ -410,7 +452,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://api.example.com/data", {
       headers: { Cookie: "user_session=should_be_replaced" },
     });
@@ -431,7 +476,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     await secureFetch("https://api.example.com/data", {
       headers: { Cookie: "session=abc; tracking=xyz" },
     });
@@ -453,7 +501,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
     // Pass Headers with two Cookie entries via append()
     const userHeaders = new Headers();
     userHeaders.append("Cookie", "session=abc");
@@ -486,7 +537,10 @@ describe("firewall header transforms", () => {
       },
     ];
 
-    const secureFetch = createSecureFetch({ allowedUrlPrefixes: entries });
+    const secureFetch = createSecureFetch({
+      allowedUrlPrefixes: entries,
+      _dnsResolve: publicResolver(),
+    });
 
     // /v1/ matches both entries
     await secureFetch("https://api.example.com/v1/chat");
