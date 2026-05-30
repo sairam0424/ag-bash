@@ -551,11 +551,14 @@ export async function executePipeline(
   }
   // With lastpipe, the last command already updated $_ in the main shell context
 
-  // Attach all observations collected across the pipeline
+  // Attach all observations collected across the pipeline.
+  // `allObservations` already includes the last command's observations
+  // (pushed during the loop above), so we must NOT concatenate
+  // `lastResult.observations` again or single-command pipelines double-emit.
   if (allObservations.length > 0) {
     lastResult = {
       ...lastResult,
-      observations: [...(lastResult.observations || []), ...allObservations],
+      observations: allObservations,
     };
   }
 

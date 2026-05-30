@@ -13,23 +13,35 @@ import type { ExecResult, Observation } from "../types.js";
 export class AgTrace {
   /**
    * Analyze a command execution failure and generate observations.
+   *
+   * AgTrace is the FALLBACK channel (A3): it regex-scrapes English stderr
+   * for failures that the source could not emit a typed observation for
+   * (e.g. WASM/external commands). Observations the SOURCE already emitted
+   * are passed via `existing` so AgTrace can DEDUP/GATE and avoid producing
+   * a duplicate for the same failure. Scraped observations are lower
+   * confidence (0.5) than source-emitted ones (1.0).
    */
   static async analyze(
     ctx: InterpreterContext,
     command: string,
     args: string[],
     result: ExecResult,
+    existing: readonly Observation[] = result.observations ?? [],
   ): Promise<Observation[]> {
     const observations: Observation[] = [];
+    const hasType = (type: Observation["type"]): boolean =>
+      existing.some((o) => o.type === type);
 
     // 1. Command Not Found / Typos
+    // GATE: skip if the source already emitted a typed command_not_found.
     if (
-      result.exitCode === 127 ||
-      result.stderr.includes("command not found")
+      !hasType("command_not_found") &&
+      (result.exitCode === 127 || result.stderr.includes("command not found"))
     ) {
       const suggestion = AgTrace.getCommandSuggestion(ctx, command);
       observations.push({
         type: "command_not_found",
+        confidence: 0.5,
         message: `Command '${command}' not found.`,
         command,
         suggestions: suggestion ? [suggestion] : [],
@@ -40,6 +52,15 @@ export class AgTrace {
     }
 
     // 2. File / Directory Not Found
+    //
+    // The SOURCE (readFiles, command resolution) emits a plain, high-confidence
+    // file_not_found. AgTrace still runs its richer path analysis to ENRICH —
+    // it can detect a missing PARENT directory (directory_not_found) or a
+    // case-insensitive match (a "Correct the casing" suggestion) that the
+    // source cannot. Dedup is handled downstream by
+    // {@link AgTrace.combineObservations}: a fresh observation that matches an
+    // existing one by type+path is MERGED (suggestions folded in) rather than
+    // double-emitted; anything genuinely new is appended.
     if (
       result.stderr.toLowerCase().includes("no such file or directory") ||
       result.stderr.toLowerCase().includes("does not exist")
@@ -49,14 +70,19 @@ export class AgTrace {
       );
       if (pathArg) {
         const obs = await AgTrace.analyzePathFailure(ctx, pathArg);
-        if (obs) observations.push(obs);
+        if (obs) observations.push({ confidence: 0.5, ...obs });
       }
     }
 
     // 3. Permission Denied
-    if (result.stderr.includes("Permission denied")) {
+    // GATE: skip if the source already emitted permission_denied.
+    if (
+      !hasType("permission_denied") &&
+      result.stderr.includes("Permission denied")
+    ) {
       observations.push({
         type: "permission_denied",
+        confidence: 0.5,
         message:
           "Operation permitted by security policy or filesystem constraints.",
         command,
@@ -122,6 +148,52 @@ export class AgTrace {
     }
 
     return observations;
+  }
+
+  /**
+   * Combine source-emitted observations with AgTrace's fresh (fallback)
+   * observations into a single deduplicated list (A3).
+   *
+   * Dedup/merge rules, applied immutably (always new objects/arrays):
+   *  - A fresh observation that ENRICHES an existing one (same `type` AND same
+   *    `path`) is MERGED into it: the existing observation gains the fresh
+   *    `suggestions` (unioned) and keeps its higher source `confidence`. This
+   *    keeps exactly one observation per failure while preserving the
+   *    actionable fix (e.g. a case-insensitive "Correct the casing" hint).
+   *  - A fresh observation with no matching existing one is appended.
+   *
+   * @param existing - Source-emitted (high-confidence) observations.
+   * @param fresh - AgTrace fallback observations from {@link AgTrace.analyze}.
+   */
+  static combineObservations(
+    existing: readonly Observation[],
+    fresh: readonly Observation[],
+  ): Observation[] {
+    // Start from immutable copies of the existing source observations.
+    let merged: Observation[] = existing.map((o) => ({ ...o }));
+    const toAppend: Observation[] = [];
+
+    for (const f of fresh) {
+      const idx = merged.findIndex(
+        (e) => e.type === f.type && e.path === f.path,
+      );
+      if (idx === -1) {
+        toAppend.push(f);
+        continue;
+      }
+      // Enrich the matching existing observation with the fresh suggestions.
+      const target = merged[idx];
+      const suggestions = Array.from(
+        new Set([...(target.suggestions ?? []), ...(f.suggestions ?? [])]),
+      );
+      const enriched: Observation = {
+        ...target,
+        ...(suggestions.length > 0 ? { suggestions } : {}),
+      };
+      merged = merged.map((o, i) => (i === idx ? enriched : o));
+    }
+
+    return [...merged, ...toAppend];
   }
 
   /**
@@ -191,14 +263,19 @@ export class AgTrace {
 
   /**
    * Get a command typo suggestion using Levenshtein distance.
+   *
+   * Public so source emitters (e.g. command-not-found in builtin-dispatch)
+   * can attach the same "did you mean" candidate to a typed Observation at
+   * the source, instead of relying on AgTrace's stderr regex pass.
+   *
+   * @param command - The unresolved command name.
+   * @param candidates - Candidate command names to match against.
+   * @returns The closest match within the typo threshold, or null.
    */
-  private static getCommandSuggestion(
-    ctx: InterpreterContext,
+  static suggestCommand(
     command: string,
+    candidates: readonly string[],
   ): string | null {
-    const commands = ctx.getRegisteredCommands
-      ? ctx.getRegisteredCommands()
-      : [];
     // Built-in keywords that might not be in registered commands
     const builtins = [
       "cd",
@@ -211,7 +288,7 @@ export class AgTrace {
       "eval",
       "read",
     ];
-    const all = Array.from(new Set([...commands, ...builtins]));
+    const all = Array.from(new Set([...candidates, ...builtins]));
 
     let bestMatch: string | null = null;
     let minDistance = Infinity;
@@ -227,6 +304,19 @@ export class AgTrace {
     // Heuristic: threshold depends on length
     const threshold = command.length <= 4 ? 1 : 2;
     return minDistance <= threshold ? bestMatch : null;
+  }
+
+  /**
+   * Get a command typo suggestion from the interpreter's registered commands.
+   */
+  private static getCommandSuggestion(
+    ctx: InterpreterContext,
+    command: string,
+  ): string | null {
+    const commands = ctx.getRegisteredCommands
+      ? ctx.getRegisteredCommands()
+      : [];
+    return AgTrace.suggestCommand(command, commands);
   }
 
   /**
