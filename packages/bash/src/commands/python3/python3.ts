@@ -64,6 +64,33 @@ const python3Help = {
     "CPython runs in WebAssembly, so execution may be slower than native Python.",
     "Standard library modules are available (no pip install).",
     "Maximum execution time is 30 seconds by default.",
+    "",
+    "Capability matrix (CPython on WebAssembly via Emscripten):",
+    "",
+    "  Works — pure-Python / WASM-safe stdlib:",
+    "    json, re, math, cmath, random, datetime, time, decimal, fractions,",
+    "    hashlib, hmac, secrets, base64, binascii, struct, codecs,",
+    "    collections, itertools, functools, operator, heapq, bisect, copy,",
+    "    enum, dataclasses, typing, string, textwrap, unicodedata,",
+    "    csv, io, statistics, uuid, pprint, difflib, array.",
+    "",
+    "  Works — bridged to the host through the worker bridge (no native syscalls):",
+    "    Virtual filesystem I/O (open/read/write, os.path, pathlib, shutil,",
+    "      tempfile against the sandboxed VFS).",
+    "    sqlite3 — served via the host SQLite bridge, not a native libsqlite3.",
+    "    Outbound HTTP via urllib/http.client ONLY when the shell was started",
+    "      with network access enabled; routed through the host's vetted fetch",
+    "      (SSRF-guarded). Disabled by default.",
+    "",
+    "  Structurally impossible — NOT available, and cannot be polyfilled here:",
+    "    threading / _thread / concurrent.futures thread pools (no WASM threads).",
+    "    multiprocessing / fork / subprocess (no process model in the worker).",
+    "    socket / asyncio raw transports / selectors (no host socket API).",
+    "    ssl (no socket layer to wrap).",
+    "    ctypes / native extension modules / C-accelerated 3rd-party wheels.",
+    "    signal handlers, os.fork, mmap-backed shared memory.",
+    "  Importing these raises ModuleNotFoundError or fails at first use —",
+    "  by design, not a bug. Use the bridged equivalents above instead.",
   ],
 };
 
@@ -174,7 +201,7 @@ function parseArgs(args: string[]): ParsedArgs | ExecResult {
 type QueuedExecution = {
   input: WorkerInput;
   resolve: (result: WorkerOutput) => void;
-  workerRef?: { current: Worker | null };
+  workerRef?: { current: Worker | null; terminateOnAttach?: boolean };
   requireDefenseContext?: boolean;
   /** Set to true when the request times out before execution starts */
   canceled?: boolean;
@@ -366,7 +393,27 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
   const _worker = w;
   // Fresh worker for each execution (unless persistent)
   const attachListeners = (w: Worker) => {
-    if (next.workerRef) next.workerRef.current = w;
+    if (next.workerRef) {
+      // F1 hardening: if the owning executePython already decided to tear down
+      // (bridge error / deadline) before this worker finished spawning, the
+      // worker would otherwise leak. Honor a pending teardown request the
+      // instant the worker becomes available.
+      if (next.workerRef.terminateOnAttach && !next.input.persistent) {
+        void w.terminate();
+        next.workerRef.current = null;
+        if (!next.resolved) {
+          next.resolved = true;
+          next.resolve({
+            success: false,
+            error: "Worker terminated before execution completed",
+          });
+          queueState.isExecuting = false;
+          void processNextExecution(queueState);
+        }
+        return;
+      }
+      next.workerRef.current = w;
+    }
 
     const onMessage = bindDefenseContextCallback(
       next.requireDefenseContext,
@@ -537,7 +584,9 @@ async function executePython(
     sessionId: sessionId || ctx.sessionId,
   };
 
-  const workerRef: { current: Worker | null } = { current: null };
+  const workerRef: { current: Worker | null; terminateOnAttach?: boolean } = {
+    current: null,
+  };
 
   const workerPromise = new Promise<WorkerOutput>((resolve) => {
     const queueEntry: QueuedExecution = {
@@ -637,6 +686,26 @@ async function executePython(
       success: false,
       error: sanitizeHostErrorMessage(`bridge error: ${errMsg}`),
     };
+  } finally {
+    // F1 hardening: guarantee a non-persistent worker is terminated no matter
+    // which race branch settled first. A worker blocked mid-Atomics.wait when
+    // the bridge loop or a deadline expires would otherwise leak — the
+    // per-callback terminate() calls cover the happy paths, but the
+    // `worker_fail` / `bridge error` branches above can return while the worker
+    // thread is still alive. terminate() is idempotent, so a redundant call on
+    // an already-terminated worker is harmless. Persistent (session) workers
+    // are intentionally left running for reuse.
+    if (!workerInput.persistent) {
+      if (workerRef.current) {
+        void workerRef.current.terminate();
+        workerRef.current = null;
+      } else {
+        // The worker may still be spawning (e.g. the bridge threw before
+        // attachListeners ran). Request teardown so it is terminated the
+        // instant it becomes available — closing the late-spawn leak window.
+        workerRef.terminateOnAttach = true;
+      }
+    }
   }
 
   if (!workerResult.success && workerResult.error) {
