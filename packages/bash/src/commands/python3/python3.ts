@@ -117,9 +117,23 @@ function parseArgs(args: string[]): ParsedArgs | ExecResult {
     return result;
   }
 
-  const firstArgIndex = args.findIndex((arg) => {
-    return !arg.startsWith("-") || arg === "-" || arg === "--";
-  });
+  // Find the first positional argument (script file / "--" / "-"). Options that
+  // take a value (currently only "--session VALUE") must have their VALUE
+  // skipped here, otherwise the value is mistaken for the script file
+  // (e.g. `--session sessA -c CODE` would treat "sessA" as a file to open).
+  let firstArgIndex = -1;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--session") {
+      // Skip the option AND its value, if present.
+      i++;
+      continue;
+    }
+    if (!arg.startsWith("-") || arg === "-" || arg === "--") {
+      firstArgIndex = i;
+      break;
+    }
+  }
 
   for (
     let i = 0;
@@ -272,7 +286,7 @@ function findWorkerPath(): string {
   return _workerPath;
 }
 
-async function getWorkerPath() {
+function getWorkerPathSync(): string | URL {
   if (_workerPathCache) return _workerPathCache;
   const path = findWorkerPath();
   _workerPathCache = path;
@@ -377,32 +391,35 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
   queueState.isExecuting = true;
 
   const sessionManager = next.sessionManager;
-  let w: Worker | null = null;
   const sessionId = next.input.sessionId;
 
+  // A python worker runs CPython with EXIT_RUNTIME and terminates itself via
+  // os._exit() after a single callMain (see worker.ts). It therefore CANNOT be
+  // reused for a second execution — the thread is already gone. So every exec
+  // gets its own fresh worker, including the subsequent execs of a persistent
+  // session. The session entry exists only so the lifecycle (no eager teardown
+  // for `persistent`, explicit closeSession) is honored; we replace its worker
+  // handle with each fresh worker and tear down the previous one to avoid a
+  // leak. Spawning happens in EXACTLY ONE place below (the try block) so the
+  // worker that self-fires from workerData is the same one we attach listeners
+  // to — eliminating the double-dispatch where two workers ran one input
+  // against a single shared bridge and doubled stdout (e.g. '52\n52\n').
   if (sessionId && sessionManager) {
-    const session = sessionManager.getSession(sessionId);
-    if (session && session.type === "python") {
-      w = session.worker;
+    const stale = sessionManager.getSession(sessionId);
+    if (stale && stale.type === "python") {
+      void stale.worker.terminate();
     }
   }
 
-  if (!w) {
-    const workerPath = await getWorkerPath();
-    w = await DefenseInDepthBox.runTrustedAsync(async () => {
-      const { Worker: NodeWorker } = await import("node:worker_threads");
-      return new NodeWorker(workerPath as string, {
-        workerData: next.input,
-      });
-    });
-
+  // Register the fresh worker (created in the spawn block below) under the
+  // session id so closeSession()/dispose() can terminate the latest one.
+  const registerSession = (worker: Worker): void => {
     if (sessionId && sessionManager) {
-      sessionManager.createSession("python", w, sessionId);
+      sessionManager.createSession("python", worker, sessionId);
     }
-  }
+  };
 
-  const _worker = w;
-  // Fresh worker for each execution (unless persistent)
+  // Listeners are attached to the single spawned worker (see the try block).
   const attachListeners = (w: Worker) => {
     if (next.workerRef) {
       // F1 hardening: if the owning executePython already decided to tear down
@@ -519,30 +536,30 @@ async function processNextExecution(queueState: QueueState): Promise<void> {
   };
 
   try {
-    await DefenseInDepthBox.runTrustedAsync(async () => {
-      if (
-        typeof process !== "undefined" &&
-        process.versions &&
-        process.versions.node
-      ) {
-        const path = await getWorkerPath();
-        const { Worker: NodeWorker } = await import("node:worker_threads");
-        const w = new NodeWorker(path as string, {
-          workerData: next.input,
-        });
-        attachListeners(w);
-        return w;
-      }
-      const path = await getWorkerPath();
-      const w = new (
-        Worker as unknown as {
-          new (url: string | URL, options?: { type: "module" }): Worker;
-        }
-      )(path as string | URL, {
-        type: "module",
-      });
-      attachListeners(w);
-      return w;
+    const isNode =
+      typeof process !== "undefined" &&
+      !!process.versions &&
+      !!process.versions.node;
+
+    // Spawn the SINGLE worker fully synchronously. The worker path is cached
+    // and the worker_threads `Worker` is statically imported, so there is no
+    // await between dispatch and worker construction. This guarantees
+    // attachListeners runs — recording workerRef.current — before
+    // processNextExecution yields control back to the owning executePython,
+    // so its teardown guard always sees the live worker and an in-flight spawn
+    // can never escape it. (Previously a redundant second spawn provided this
+    // timing as a side effect; that double-spawn was the stdout-doubling bug.)
+    const path = getWorkerPathSync();
+    DefenseInDepthBox.runTrusted(() => {
+      const w = isNode
+        ? new Worker(path as string, { workerData: next.input })
+        : new (
+            Worker as unknown as {
+              new (url: string | URL, options?: { type: "module" }): Worker;
+            }
+          )(path as string | URL, { type: "module" });
+      attachListeners(w as Worker);
+      registerSession(w as Worker);
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
