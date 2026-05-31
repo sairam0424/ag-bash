@@ -84,6 +84,7 @@ import {
 } from "./errors.js";
 import { expandWord, expandWordWithGlob } from "./expansion.js";
 import { executeFunctionDef } from "./functions.js";
+import { OutputBuffer } from "./helpers/output-buffer.js";
 import {
   checkFdLimit,
   result as createExecResult,
@@ -92,7 +93,6 @@ import {
   testResult,
   throwExecutionLimit,
 } from "./helpers/result.js";
-import { OutputBuffer } from "./helpers/output-buffer.js";
 import { isPosixSpecialBuiltin } from "./helpers/shell-constants.js";
 import {
   isWordLiteralMatch,
@@ -131,6 +131,8 @@ function withLazyEnv(
   envMap: Map<string, string>,
 ): ExecResult {
   const snapshot = new Map(envMap);
+  // @banned-pattern-ignore: type annotation only; the cached value is always the
+  // null-prototype object returned by mapToRecord(), never a plain {} literal.
   let cachedEnv: Record<string, string> | undefined;
   return Object.defineProperty(result as ExecResult, "env", {
     get() {
@@ -287,7 +289,7 @@ export class Interpreter {
     if (this.cachedExportedEnv !== null && !this.ctx.state.exportedEnvDirty) {
       const cached = this.cachedExportedEnv;
       let valid = true;
-      for (const name in cached) {
+      for (const name of Object.keys(cached)) {
         const current = this.ctx.state.env.get(name);
         if (current !== cached[name]) {
           valid = false;
@@ -361,7 +363,10 @@ export class Interpreter {
 
     const appendOutput = (nextStdout: string, nextStderr: string): void => {
       if (
-        stdoutBuf.length + stderrBuf.length + nextStdout.length + nextStderr.length >
+        stdoutBuf.length +
+          stderrBuf.length +
+          nextStdout.length +
+          nextStderr.length >
         maxOutputSize
       ) {
         throwExecutionLimit(
@@ -399,12 +404,15 @@ export class Interpreter {
           exitCode = error.exitCode;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          return withLazyEnv({
-            stdout: stdoutBuf.toString(),
-            stderr: stderrBuf.toString(),
-            exitCode,
-            observations,
-          }, this.ctx.state.env);
+          return withLazyEnv(
+            {
+              stdout: stdoutBuf.toString(),
+              stderr: stderrBuf.toString(),
+              exitCode,
+              observations,
+            },
+            this.ctx.state.env,
+          );
         }
         const errorName = error instanceof Error ? error.name : "";
         if (
@@ -418,36 +426,45 @@ export class Interpreter {
           exitCode = error.exitCode;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          return withLazyEnv({
-            stdout: stdoutBuf.toString(),
-            stderr: stderrBuf.toString(),
-            exitCode,
-            observations,
-          }, this.ctx.state.env);
+          return withLazyEnv(
+            {
+              stdout: stdoutBuf.toString(),
+              stderr: stderrBuf.toString(),
+              exitCode,
+              observations,
+            },
+            this.ctx.state.env,
+          );
         }
         if (error instanceof NounsetError) {
           appendOutput(error.stdout, error.stderr);
           exitCode = 1;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          return withLazyEnv({
-            stdout: stdoutBuf.toString(),
-            stderr: stderrBuf.toString(),
-            exitCode,
-            observations: [AgTrace.analyzeError(error)],
-          }, this.ctx.state.env);
+          return withLazyEnv(
+            {
+              stdout: stdoutBuf.toString(),
+              stderr: stderrBuf.toString(),
+              exitCode,
+              observations: [AgTrace.analyzeError(error)],
+            },
+            this.ctx.state.env,
+          );
         }
         if (error instanceof BadSubstitutionError) {
           appendOutput(error.stdout, error.stderr);
           exitCode = 1;
           this.ctx.state.lastExitCode = exitCode;
           this.ctx.state.env.set("?", String(exitCode));
-          return withLazyEnv({
-            stdout: stdoutBuf.toString(),
-            stderr: stderrBuf.toString(),
-            exitCode,
-            observations: [AgTrace.analyzeError(error)],
-          }, this.ctx.state.env);
+          return withLazyEnv(
+            {
+              stdout: stdoutBuf.toString(),
+              stderr: stderrBuf.toString(),
+              exitCode,
+              observations: [AgTrace.analyzeError(error)],
+            },
+            this.ctx.state.env,
+          );
         }
         if (error instanceof ArithmeticError) {
           appendOutput(error.stdout, error.stderr);
@@ -493,12 +510,15 @@ export class Interpreter {
       emit?.(exitTrapResult.stdout, exitTrapResult.stderr);
     }
 
-    return withLazyEnv({
-      stdout: stdoutBuf.toString(),
-      stderr: stderrBuf.toString(),
-      exitCode,
-      observations,
-    }, this.ctx.state.env);
+    return withLazyEnv(
+      {
+        stdout: stdoutBuf.toString(),
+        stderr: stderrBuf.toString(),
+        exitCode,
+        observations,
+      },
+      this.ctx.state.env,
+    );
   }
 
   /**
@@ -547,7 +567,9 @@ export class Interpreter {
         this.estimatedMemoryBytes = this.estimateMemoryUsage();
         this.statementsSinceMemoryCheck = 0;
       }
-      if (this.estimatedMemoryBytes > this.ctx.limits.maxMemoryAccountingBytes) {
+      if (
+        this.estimatedMemoryBytes > this.ctx.limits.maxMemoryAccountingBytes
+      ) {
         throwExecutionLimit(
           `memory limit exceeded: ${Math.round(this.estimatedMemoryBytes / 1024 / 1024)}MB exceeds ${Math.round(this.ctx.limits.maxMemoryAccountingBytes / 1024 / 1024)}MB limit`,
           "memory",
@@ -722,7 +744,9 @@ export class Interpreter {
         fullCommand = parts.join(" ");
       }
       if (!fullCommand) {
-        const stderrMatch = result.stderr.match(/:\s*(.+?):\s*command not found/);
+        const stderrMatch = result.stderr.match(
+          /:\s*(.+?):\s*command not found/,
+        );
         if (stderrMatch) fullCommand = stderrMatch[1].trim();
       }
 
@@ -1527,7 +1551,10 @@ export class Interpreter {
 
     // Include any stderr from expansion errors
     if (this.ctx.state.expansionStderr) {
-      cmdResult = prependStderr(cmdResult, this.ctx.state.expansionStderr as string);
+      cmdResult = prependStderr(
+        cmdResult,
+        this.ctx.state.expansionStderr as string,
+      );
       this.ctx.state.expansionStderr = "";
     }
 

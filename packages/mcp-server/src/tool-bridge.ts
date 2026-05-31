@@ -66,7 +66,7 @@ export class McpToolBridge {
   ): boolean {
     if (typeof value === "function") {
       try {
-        return value({}) ?? false;
+        return value(Object.create(null)) ?? false;
       } catch {
         return false;
       }

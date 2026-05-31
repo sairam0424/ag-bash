@@ -23,7 +23,7 @@ export class AgBashTracer {
   private initialized = false;
 
   constructor(config?: OtelConfig) {
-    this.config = config ?? {};
+    this.config = config ?? (Object.create(null) as OtelConfig);
   }
 
   /** Attempt to initialize OTel. Call once at startup. Safe to call multiple times. */
@@ -46,7 +46,7 @@ export class AgBashTracer {
     const span = this.tracer.startSpan("ag-bash.exec", {
       attributes: {
         "ag-bash.script": script.slice(0, 500),
-        ...(this.config.attributes ?? {}),
+        ...(this.config.attributes ?? null),
       },
     });
     return span;
@@ -58,7 +58,7 @@ export class AgBashTracer {
       attributes: {
         "ag-bash.tool.name": toolName,
         "ag-bash.tool.args": JSON.stringify(args).slice(0, 500),
-        ...(this.config.attributes ?? {}),
+        ...(this.config.attributes ?? null),
       },
     });
     return span;
@@ -67,10 +67,13 @@ export class AgBashTracer {
   /** Create a span for a statement (only if statementLevel is enabled) */
   startStatementSpan(type: string, line?: number): OtelSpan {
     if (!this.config.statementLevel) return NOOP_SPAN;
-    const attrs: Record<string, string | number> = {
-      "ag-bash.statement.type": type,
-      ...(this.config.attributes ?? {}),
-    };
+    const attrs: Record<string, string | number> = Object.create(null);
+    attrs["ag-bash.statement.type"] = type;
+    if (this.config.attributes) {
+      for (const [key, value] of Object.entries(this.config.attributes)) {
+        attrs[key] = value;
+      }
+    }
     if (line !== undefined) attrs["ag-bash.statement.line"] = line;
     return this.tracer.startSpan(`ag-bash.statement.${type}`, {
       attributes: attrs,
