@@ -283,6 +283,17 @@ function generateWorkerProtocolToken(): string {
   return randomBytes(16).toString("hex");
 }
 
+/**
+ * Generate an unguessable per-execution stderr sentinel. The wrapped Python
+ * script writes this exact token as its final stderr line before `sys.exit()`,
+ * letting the worker distinguish genuine program stderr from CPython
+ * finalization teardown noise. Distinct from the protocol token so the
+ * worker-host auth secret never enters Python-readable space.
+ */
+function generateStderrSentinel(): string {
+  return `__jb_done_${randomBytes(16).toString("hex")}__`;
+}
+
 function normalizeWorkerMessage(
   msg: unknown,
   expectedProtocolToken: string,
@@ -582,6 +593,7 @@ async function executePython(
     timeoutMs,
     persistent: !!sessionId || !!ctx.sessionId,
     sessionId: sessionId || ctx.sessionId,
+    stderrSentinel: generateStderrSentinel(),
   };
 
   const workerRef: { current: Worker | null; terminateOnAttach?: boolean } = {
