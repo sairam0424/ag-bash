@@ -22,6 +22,38 @@ import { Theme } from "./theme.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Resolve the Tree-sitter `parser/vendor` directory that holds the WASM assets.
+ *
+ * The shell runs from two layouts with different nesting depths relative to the
+ * package root, so a single hardcoded relative path cannot serve both:
+ *   - src (tsx):    __dirname = src/cli       -> ../parser/vendor
+ *   - dist (bundle): __dirname = dist/bin/shell -> ../../parser/vendor
+ *
+ * The build copies the WASM assets into `dist/parser/vendor` (see the
+ * `cp src/parser/vendor/* dist/parser/vendor/` step in package.json and the
+ * note in scripts/setup-vendor.js). We probe ordered candidates and return the
+ * first whose `web-tree-sitter.wasm` exists, keeping resolution deterministic.
+ */
+function resolveVendorDir(): string {
+  const candidates = [
+    // dist bundle: dist/bin/shell -> dist/parser/vendor
+    path.join(__dirname, "..", "..", "parser", "vendor"),
+    // src via tsx: src/cli -> src/parser/vendor
+    path.join(__dirname, "..", "parser", "vendor"),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, "web-tree-sitter.wasm"))) {
+      return dir;
+    }
+  }
+  // Fall back to the dist layout; downstream init surfaces a clear ENOENT
+  // if the assets are genuinely missing.
+  return candidates[0];
+}
+
+const vendorDir = resolveVendorDir();
+
 // ANSI colors
 
 interface ShellOptions {
@@ -73,14 +105,8 @@ class VirtualShell {
       parser: {
         engine: "tree-sitter",
         treeSitterConfig: {
-          webTreeSitterWasm: path.join(
-            __dirname,
-            "../parser/vendor/web-tree-sitter.wasm",
-          ),
-          bashGrammarWasm: path.join(
-            __dirname,
-            "../../vendor/tree-sitter-bash.wasm",
-          ),
+          webTreeSitterWasm: path.join(vendorDir, "web-tree-sitter.wasm"),
+          bashGrammarWasm: path.join(vendorDir, "tree-sitter-bash.wasm"),
         },
       },
     });
