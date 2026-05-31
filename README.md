@@ -154,7 +154,7 @@ Then, add the server to your MCP configuration:
 | :--- | :--- | :--- |
 | **v6.0** | *Pipeline* | ExecutionPipeline default, fork-speculation, streaming, OTEL, destructive gate, Node >=20.6 |
 | **v5.0** | *Hardened* | Lazy ServiceContainer, defense-in-depth default ON, SSRF prevention, ASTCache 64-bit FNV-1a |
-| **v4.1** | *Runtime* | Agent RunLoop, Trap signals, Self-Healing error recovery, OpenTelemetry spans |
+| **v4.1** | *Runtime* | Introduced Agent RunLoop, Trap signal handlers, Self-Healing recovery, and OpenTelemetry spans (default/extended in v6.0) |
 | **v3.0** | *Breaking Redesign* | ServiceContainer DI, new `BashOptions` grouped API, zero singletons |
 | **v2.x** | *Nexus Prime* | Agentic tools (`ag-hover`, `ag-explain`), MCP integration, Planning Mode |
 | **v1.x** | *Genesis* | Initial release, core interpreter, in-memory filesystem, basic builtins |
