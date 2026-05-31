@@ -18,12 +18,11 @@ const distVendorDir = resolve(__dirname, "../../dist/parser/vendor");
 /**
  * Run the bundled shell non-interactively by piping a script to stdin.
  *
- * NOTE: We assert only on the WASM/grammar-load path here. The shell's
- * non-interactive read loop attaches its `line` listener AFTER awaiting the
- * initial discovery scan, so piped lines can be drained before the listener
- * is registered — a separate, pre-existing pipeline bug unrelated to vendor
- * path resolution. The marker for the path bug is a Tree-sitter init failure
- * on stderr (an aborted WASM load), which is what these tests detect.
+ * The non-interactive read loop attaches its `line`/`close` listeners BEFORE
+ * awaiting the initial discovery scan and buffers lines, so piped input is no
+ * longer drained-and-lost during the scan await. These tests cover both the
+ * WASM/grammar-load path (Tree-sitter init markers on stderr) and the buffered
+ * piped-stdin execution path (stdout must contain command output in order).
  */
 async function runShell(
   script: string,
@@ -77,6 +76,30 @@ describe("ag-shell bundled binary", () => {
       "Failed to initialize TreeSitterParser",
     );
     expect(result.stderr).not.toContain("ENOENT");
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("executes piped stdin and emits its output (no dropped lines)", async () => {
+    // Regression for the readline race: the non-interactive `line` listener
+    // was attached only AFTER `await discovery.scan()`, so readline drained
+    // the piped stream during the await and lost every line. Buffering before
+    // the scan must preserve the command so its output reaches stdout.
+    const result = await runShell("echo hi\n");
+    expect(result.stdout).toContain("hi");
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("preserves order across multiple piped lines", async () => {
+    const result = await runShell("echo one\necho two\necho three\n");
+    expect(result.stdout).toContain("one");
+    expect(result.stdout).toContain("two");
+    expect(result.stdout).toContain("three");
+    // Order must be preserved: drained buffer then live lines, in sequence.
+    const idxOne = result.stdout.indexOf("one");
+    const idxTwo = result.stdout.indexOf("two");
+    const idxThree = result.stdout.indexOf("three");
+    expect(idxOne).toBeLessThan(idxTwo);
+    expect(idxTwo).toBeLessThan(idxThree);
     expect(result.exitCode).toBe(0);
   });
 });
