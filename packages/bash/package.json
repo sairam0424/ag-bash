@@ -45,25 +45,25 @@
     "./slim": {
       "import": {
         "types": "./dist/slim.d.ts",
-        "default": "./dist/bundle/slim.js"
+        "default": "./dist/slim.js"
       }
     },
     "./advanced": {
       "import": {
         "types": "./dist/advanced.d.ts",
-        "default": "./dist/bundle/advanced.js"
+        "default": "./dist/advanced.js"
       }
     },
     "./testing": {
       "import": {
         "types": "./dist/testing.d.ts",
-        "default": "./dist/bundle/testing.js"
+        "default": "./dist/testing.js"
       }
     },
     "./ai": {
       "import": {
         "types": "./dist/ai/index.d.ts",
-        "default": "./dist/bundle/ai.js"
+        "default": "./dist/ai.js"
       }
     },
     "./agent-runtime": {
