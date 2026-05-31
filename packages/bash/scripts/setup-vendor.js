@@ -51,5 +51,9 @@ copyFile(wtWasm, path.join(ROOT_VENDOR, "web-tree-sitter.wasm")); // Also used i
 // 2. tree-sitter-bash (Grammar WASM)
 const bashGrammar = findModuleFile("tree-sitter-bash", "tree-sitter-bash.wasm");
 copyFile(bashGrammar, path.join(ROOT_VENDOR, "tree-sitter-bash.wasm"));
+// Also place into src/parser/vendor so the build's `cp src/parser/vendor/*`
+// carries it into dist/parser/vendor — the dir the bundled bin reads at runtime
+// (mirrors how web-tree-sitter.wasm is provisioned to both vendor dirs above).
+copyFile(bashGrammar, path.join(SRC_VENDOR, "tree-sitter-bash.wasm"));
 
 console.log("[setup-vendor] Binary synchronization COMPLETE.");
