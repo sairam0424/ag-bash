@@ -4,17 +4,24 @@ import { resolve } from "node:path";
 import process from "node:process";
 import { build } from "esbuild";
 
+// Compare the freshly-bundled worker against the built artifact that
+// `pnpm build:worker` actually emits (dist/), not the gitignored, never-written
+// src/.../worker.js sibling. The dist artifact is the file shipped to npm
+// (package.json `files` includes dist/), and `build:worker` produces it with the
+// same effective esbuild options used below (esm/node/external, no minify), so a
+// clean build is byte-identical and the gate passes — failing only when worker.ts
+// is edited without a rebuild.
 const WORKERS = [
   {
     name: "python3",
     ts: "src/commands/python3/worker.ts",
-    js: "src/commands/python3/worker.js",
+    js: "dist/commands/python3/worker.js",
     external: ["../../../vendor/cpython-emscripten/*"],
   },
   {
     name: "js-exec",
     ts: "src/commands/js-exec/worker.ts",
-    js: "src/commands/js-exec/worker.js",
+    js: "dist/commands/js-exec/worker.js",
     external: ["quickjs-emscripten"],
   },
 ];

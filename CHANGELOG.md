@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.2] — 2026-05-31
+
+Patch release fixing two build-provisioning defects (the application code was
+correct in both cases; the build shipped the wrong artifacts).
+
+### Fixed
+
+- **`ag-bash -c '<command>'` no longer fails with `ENOENT`** — the CLI binary
+  reads `tree-sitter-bash.wasm` from `dist/parser/vendor/`, but the grammar was
+  only provisioned to the root `vendor/` dir, so it never shipped to that path
+  (or into the published tarball). Any real exec — even `echo` — threw
+  `ENOENT` (masked to `'<path>'` by the error sanitizer). The grammar is now
+  copied into `src/parser/vendor/` so the build ships it to `dist/parser/vendor/`
+  and into the published package. Affected the published 6.0.0 and 6.0.1 CLIs.
+- **`check:worker-sync` can pass again** — the gate compared a fresh esbuild
+  bundle of `worker.ts` against a stale, gitignored `src/.../worker.js` that
+  `build:worker` never writes (it emits to `dist/`). Repointed at the `dist/`
+  artifact, so the gate passes on a clean build and fails only on genuine
+  `worker.ts` drift — unblocking the `validate` chain.
+
+## [6.0.1] — 2026-05-31
+
+Patch release. The 6.0.0 publish left `@ag-bash/mcp-server` and
+`@ag-bash/agent-bridge` uninstallable (the `workspace:*` dependency
+protocol leaked to the registry because they were published with
+`npm publish` rather than `pnpm publish`, which rewrites it at pack time).
+This release republishes all three packages with that resolved, and folds
+in several source fixes the 6.0.0 audit surfaced.
+
+### Fixed
+
+- **mcp-server / agent-bridge are installable again** — published via
+  `pnpm publish`, so `@ag-bash/bash` resolves to a real `6.0.1` range
+  instead of the literal `workspace:*` string.
+- **DestructiveStage now runs on the live exec path** — the AST
+  destructive-command gate was implemented and exported in 6.0.0 but never
+  added to the ExecutionPipeline, so it never executed. It now runs between
+  the sandbox and interpret stages (default policy `"warn"`).
+- **Subpath exports resolve** — `./slim`, `./advanced`, `./testing`, and
+  `./ai` pointed at `dist/bundle/*.js` files the build never emits; they now
+  target the emitted `dist/*.js`, fixing `ERR_MODULE_NOT_FOUND`.
+- **Node 24 browser build** — the browser/browser-core esbuild targets now
+  alias `node:module` to the null shim (Node 24 promoted it to an importable
+  builtin), fixing a `Could not resolve "node:module"` build failure.
+
+### Added
+
+- **OTEL span exceptions + duration** — the exec span now calls
+  `recordException` on failure and records an `ag-bash.durationMs` attribute
+  (monotonic `performance.now()`).
+- **CI perf-regression gate** — a `bench` workflow runs the existing
+  `bench:check` (>15% mean-regression threshold) that previously had no CI
+  coverage.
+
 ## [6.0.0] — 2026-05-31
 
 ### Breaking Changes

@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/mcp-server",
-  "version": "6.0.0",
+  "version": "6.0.2",
   "description": "Standalone Model Context Protocol server for Ag-Bash",
   "type": "module",
   "files": [

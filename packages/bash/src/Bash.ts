@@ -28,6 +28,7 @@ import {
   isLazyCommand,
 } from "./custom-commands.js";
 import {
+  DestructiveStage,
   ExecutionPipeline,
   InterpretStage,
   NormalizeStage,
@@ -414,6 +415,12 @@ export class Bash extends EventEmitter {
   private defaultPersistState: boolean;
   private readonly otelTracer?: AgBashTracer;
   private readonly defaultExecMode: "monolith" | "pipeline";
+  /**
+   * Instance-level default policy for the AST destructive-command gate (E2).
+   * Defaults to "warn" (non-blocking). Per-call `ExecOptions.destructivePolicy`
+   * overrides this inside the DestructiveStage.
+   */
+  private readonly defaultDestructivePolicy: DestructivePolicy;
   /** Lazily-built pipeline for the "pipeline" execMode (cached per instance). */
   private executionPipeline?: ExecutionPipeline;
   /** Lazily-built streaming executor for execStream() (cached per instance). */
@@ -675,6 +682,7 @@ export class Bash extends EventEmitter {
         ? (process.env.AG_BASH_EXEC_MODE as "monolith" | "pipeline")
         : undefined;
     this.defaultExecMode = options.execMode ?? envExecMode ?? "pipeline";
+    this.defaultDestructivePolicy = options.destructivePolicy ?? "warn";
     this.parserEngine = options.parser?.engine ?? "legacy";
     this.treeSitterConfig = options.parser?.treeSitterConfig;
     this.debugger = options.debug?.debugger;
@@ -940,6 +948,10 @@ export class Bash extends EventEmitter {
       // Wrap in OTEL span when tracer is configured (zero-cost no-op otherwise)
       if (this.otelTracer) {
         const span = this.otelTracer.startExecSpan(commandLine);
+        // Monotonic start mark for span duration. performance.now() is a
+        // monotonic clock (immune to wall-clock jumps) and is NOT one of the
+        // banned nondeterministic primitives (Date.now / new Date / Math.random).
+        const spanStart = performance.now();
         try {
           const result = await this.execViaPipeline(
             commandLine,
@@ -947,9 +959,14 @@ export class Bash extends EventEmitter {
             execState,
           );
           span.setAttribute("ag-bash.exitCode", result.exitCode);
+          span.setAttribute("ag-bash.durationMs", performance.now() - spanStart);
           span.end();
           return result;
         } catch (spanError: unknown) {
+          // Record the exception event BEFORE setting error status so the span
+          // carries both the typed exception and the error code.
+          span.recordException(spanError);
+          span.setAttribute("ag-bash.durationMs", performance.now() - spanStart);
           span.setStatus({ code: 2, message: "exec failed" });
           span.end();
           throw spanError;
@@ -968,7 +985,7 @@ export class Bash extends EventEmitter {
    * Build (and cache) the ExecutionPipeline used by the "pipeline" execMode.
    *
    * The stages mirror the monolithic Bash.exec() body exactly:
-   *   normalize → parse → transform → sandbox → interpret → persist
+   *   normalize → parse → transform → sandbox → destructive → interpret → persist
    * with error categorization + UTF-8 decode/log applied by the pipeline
    * runner (via the finalize callback and its internal catch).
    *
@@ -1002,6 +1019,13 @@ export class Bash extends EventEmitter {
     );
     pipeline.addStage(new TransformStage(this.transformPlugins));
     pipeline.addStage(new SandboxStage(this.defenseInDepthConfig));
+    // E2 destructive-command gate (R1 wiring): runs AFTER parse/transform (it
+    // analyzes the parsed AST) and BEFORE interpret (so BLOCK can short-circuit
+    // without executing, and WARN can stash a typed observation that the
+    // pipeline runner merges onto the interpreter result). The instance default
+    // policy is "warn" (non-blocking); ExecOptions.destructivePolicy overrides
+    // per-call inside the stage.
+    pipeline.addStage(new DestructiveStage(this.defaultDestructivePolicy));
     pipeline.addStage(
       new InterpretStage({
         fs: this.fs,
