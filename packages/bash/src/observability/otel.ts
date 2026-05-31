@@ -3,6 +3,7 @@ import type { OtelConfig, OtelSpan, OtelTracer } from "./otel-types.js";
 const NOOP_SPAN: OtelSpan = {
   setAttribute() {},
   setStatus() {},
+  recordException() {},
   end() {},
 };
 

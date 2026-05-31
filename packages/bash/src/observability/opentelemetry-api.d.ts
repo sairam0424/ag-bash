@@ -7,6 +7,7 @@ declare module "@opentelemetry/api" {
   interface Span {
     setAttribute(key: string, value: string | number | boolean): void;
     setStatus(status: { code: number; message?: string }): void;
+    recordException(exception: unknown, time?: unknown): void;
     end(): void;
   }
 
