@@ -119,7 +119,9 @@
     "bench": "vitest bench --run --config vitest.bench.config.ts",
     "bench:ci": "vitest bench --run --config vitest.bench.config.ts --outputJson bench-results.json",
     "bench:check": "pnpm bench:ci && node scripts/bench-check.js",
-    "bench:update": "pnpm bench:ci && node scripts/bench-check.js --update"
+    "bench:update": "pnpm bench:ci && node scripts/bench-check.js --update",
+    "fuzz": "node scripts/differential-fuzz.js",
+    "fuzz:diff": "node scripts/differential-fuzz.js --fail-on-divergence"
   },
   "keywords": [],
   "author": "Ag-Bash",
