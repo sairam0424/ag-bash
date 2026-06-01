@@ -38,3 +38,6 @@ examples/*/pnpm-lock.yaml
 
 # Perf-bench CI artifact (the committed baseline is bench-baseline.json)
 packages/bash/bench-results.json
+
+# Private working notes (daily logs) — never commit
+scratch-pad/
