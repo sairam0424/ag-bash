@@ -39,14 +39,22 @@ export default defineConfig({
       // the include globs above were corrected — these WASM suites had never
       // been collected by test:wasm (the old globs matched nothing), so the
       // failures were latent, not caused by the gate change. Excluded to keep
-      // test:wasm green + deterministic; each needs its own fix:
-      //  - js-exec child_process.spawnSync drops args ('hi 0' -> ' 0')
-      //  - security/attacks: nested-js-exec blocking + timeout signal/stdin
-      //    propagation + find -exec quoting gaps
-      //  - error-forwarding runtime-leak probe
-      // See follow-up tasks. Re-include each file as its bug is fixed.
+      // test:wasm green + deterministic. IMPORTANT: bash-parity triage showed
+      // most of these are REAL FUNCTIONAL BUGS, not stale tests — the security
+      // invariant (no escape / marker absent) holds, but ag-bash diverges from
+      // bash on exit codes / argv forwarding. Do NOT "fix" them by editing the
+      // test to expect ag-bash's wrong output; fix the underlying bug:
+      //  - js-exec child_process.spawnSync drops args ('hi 0' -> ' 0') [#49]
+      //  - `timeout` returns 0 instead of 124 on a timed-out command; and
+      //    `timeout echo X` drops its argv — both real bugs the tests caught
+      //  - `env <cmd-looking-arg>` exit code diverges from bash (0 vs 127)
+      //  - js-exec recursion guard: nested cases now stop via dropped-args
+      //    rather than the explicit guard (accidental defense, coupled to #49)
+      //  - error-forwarding runtime-leak probe; browser-bundle composition drift
+      // See follow-up tasks #49-52. Re-include each file as its bug is fixed.
+      // (find-exec-quoting-injection was a GENUINE stale test — ag-bash's
+      // behavior is bash-correct there — so it was realigned + re-included.)
       "src/commands/js-exec/js-exec.node-compat.test.ts",
-      "src/security/attacks/find-exec-quoting-injection.test.ts",
       "src/security/attacks/js-exec-host-runtime-breakout-probes.test.ts",
       "src/security/attacks/js-exec-recursion-guard-bypass.test.ts",
       "src/security/attacks/nested-exec-command-injection.test.ts",
