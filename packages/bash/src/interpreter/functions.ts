@@ -15,7 +15,7 @@ import type {
 import type { ExecResult } from "../types.js";
 import { clearLocalVarStackForScope } from "./builtins/variable-assignment.js";
 import { ExitError, ReturnError } from "./errors.js";
-import { expandWord } from "./expansion.js";
+import { expandHereDocContent, expandWord } from "./expansion.js";
 import { OK, result, throwExecutionLimit } from "./helpers/result.js";
 import { POSIX_SPECIAL_BUILTINS } from "./helpers/shell-constants.js";
 import { applyRedirections, preExpandRedirectTargets } from "./redirections.js";
@@ -58,14 +58,7 @@ async function processInputRedirections(
       redir.target.type === "HereDoc"
     ) {
       const hereDoc = redir.target as HereDocNode;
-      let content = await expandWord(ctx, hereDoc.content);
-      // <<- strips leading tabs from each line
-      if (hereDoc.stripTabs) {
-        content = content
-          .split("\n")
-          .map((line) => line.replace(/^\t+/, ""))
-          .join("\n");
-      }
+      const content = await expandHereDocContent(ctx, hereDoc);
       // Only handle fd 0 (stdin) for now
       const fd = redir.fd ?? 0;
       if (fd === 0) {
