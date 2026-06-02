@@ -129,12 +129,17 @@ export const timeoutCommand: Command = {
         }, durationMs);
       });
 
+      // Compose the full wrapped command as a single shell-quoted line.
+      // Each argv token (including the command name) is single-quoted, so the
+      // wrapped command and its arguments are forwarded literally — no glob,
+      // word-splitting, or expansion — while still resolving command names that
+      // contain spaces. This works regardless of the underlying exec engine,
+      // unlike the `args` injection path which only the monolith engine honors.
       const execPromise = ctx
-        .exec(shellJoinArgs([commandArgs[0]]), {
+        .exec(shellJoinArgs(commandArgs), {
           cwd: ctx.cwd,
           signal: controller.signal,
           stdin: ctx.stdin,
-          args: commandArgs.slice(1),
         })
         .then((result) => ({ timedOut: false as const, result }));
 

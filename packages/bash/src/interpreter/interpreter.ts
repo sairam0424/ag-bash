@@ -1115,6 +1115,19 @@ export class Interpreter {
       }
     }
 
+    // Append extra args injected via exec({ args }) and consume them so only
+    // the FIRST executed command receives them (spawnSync-like semantics). The
+    // values bypass shell parsing entirely, so they are marked quoted to skip
+    // any further word-splitting/globbing. Consumed once: cleared after use.
+    const extraArgs = this.ctx.state.extraArgs;
+    if (extraArgs) {
+      for (const extra of extraArgs) {
+        args.push(extra);
+        quotedArgs.push(true);
+      }
+      this.ctx.state.extraArgs = undefined;
+    }
+
     // Built-in commands are registered with CommandRegistry.
     // External commands are handled by the shell path lookup.
     let execResult: ExecResult;
@@ -1399,16 +1412,6 @@ export class Interpreter {
         this.ctx.state.exportedEnvDirty = true;
       }
       return OK;
-    }
-
-    // Append extra args injected via exec({ args }) and consume them
-    const extraArgs = this.ctx.state.extraArgs;
-    if (extraArgs) {
-      args.push(...(extraArgs as string[]));
-      for (let i = 0; i < (extraArgs as string[]).length; i++) {
-        quotedArgs.push(true);
-      }
-      this.ctx.state.extraArgs = undefined;
     }
 
     // Generate xtrace output before running the command

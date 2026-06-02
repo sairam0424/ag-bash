@@ -193,11 +193,21 @@ export const coreLoaders: LazyCommandDef<CommandName>[] = [
   },
 ];
 
-// OS-native commands (suspended in browser)
+// OS-native commands (suspended in browser).
+//
+// The guard below is written as `typeof __BROWSER__ === "undefined" ||
+// !__BROWSER__` rather than via an intermediate `isBrowser` const. esbuild
+// substitutes `__BROWSER__` with `true` for browser bundles, which folds this
+// to `if (false)` so the whole block (and its tar/yq/xan/sqlite3 imports) is
+// dead-code-eliminated. Routing the negation through an intermediate const
+// derived from a `typeof ... && __BROWSER__` expression defeats esbuild's
+// branch elimination when the target array (`coreLoaders`) has a non-empty
+// initializer, so these heavy/native commands would leak into the browser
+// bundle. The leading `typeof === "undefined"` keeps this safe at runtime in
+// Node/vitest where `__BROWSER__` is never defined (short-circuits to true).
 declare const __BROWSER__: boolean | undefined;
-const isBrowser = typeof __BROWSER__ !== "undefined" && __BROWSER__;
 
-if (!isBrowser) {
+if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
   coreLoaders.push({
     name: "tar" as CommandName,
     load: async () => (await import("../tar/tar.js")).tarCommand,

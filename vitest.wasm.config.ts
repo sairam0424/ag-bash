@@ -35,38 +35,26 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
-      // QUARANTINE (tracked follow-ups): pre-existing failures uncovered when
-      // the include globs above were corrected — these WASM suites had never
-      // been collected by test:wasm (the old globs matched nothing), so the
-      // failures were latent, not caused by the gate change. Excluded to keep
-      // test:wasm green + deterministic. IMPORTANT: bash-parity triage showed
-      // most of these are REAL FUNCTIONAL BUGS, not stale tests — the security
-      // invariant (no escape / marker absent) holds, but ag-bash diverges from
-      // bash on exit codes / argv forwarding. Do NOT "fix" them by editing the
-      // test to expect ag-bash's wrong output; fix the underlying bug:
-      //  - js-exec child_process.spawnSync drops args ('hi 0' -> ' 0') [#49]
-      //  - `timeout` returns 0 instead of 124 on a timed-out command; and
-      //    `timeout echo X` drops its argv — both real bugs the tests caught
-      //  - `env <cmd-looking-arg>` exit code diverges from bash (0 vs 127)
-      //  - js-exec recursion guard: nested cases now stop via dropped-args
-      //    rather than the explicit guard (accidental defense, coupled to #49)
-      //  - error-forwarding runtime-leak probe; browser-bundle composition drift
-      // See follow-up tasks #49-52. Re-include each file as its bug is fixed.
-      // (find-exec-quoting-injection was a GENUINE stale test — ag-bash's
-      // behavior is bash-correct there — so it was realigned + re-included.)
-      "src/commands/js-exec/js-exec.node-compat.test.ts",
-      "src/security/attacks/js-exec-host-runtime-breakout-probes.test.ts",
-      "src/security/attacks/js-exec-recursion-guard-bypass.test.ts",
-      "src/security/attacks/nested-exec-command-injection.test.ts",
-      "src/security/attacks/timeout-post-timeout-side-effect.test.ts",
-      "src/security/attacks/timeout-signal-propagation-gaps.test.ts",
-      "src/security/attacks/timeout-stdin-forwarding.test.ts",
-      "src/security/sandbox/error-forwarding-runtime-leak-probe.test.ts",
-      // js-exec exec semantics + browser-bundle composition drift (the bundle
-      // now includes sqlite3 the test expected stripped) — also pre-existing,
-      // also surfaced by the glob correction. Fail in isolation, not pollution.
-      "src/commands/js-exec/js-exec.exec.test.ts",
-      "src/browser.bundle.test.ts",
+      // QUARANTINE FULLY CLEARED. Correcting the stale include globs (above)
+      // exposed a batch of pre-existing, never-gated failures; each was triaged
+      // bash-parity-first and fixed at the SOURCE (never by editing tests to
+      // expect ag-bash's wrong output). Resolved:
+      //  - argv-drop family (root cause: dead exec({args}) consumer wired live in
+      //    c996b84): timeout, env, js-exec spawnSync, + the security suites that
+      //    rode on it (js-exec-host-runtime-breakout, js-exec-recursion-guard,
+      //    timeout-stdin-forwarding).
+      //  - find-exec / nested-exec quoting: realigned to bash-correct behavior,
+      //    security (injection MARKER ABSENT) invariant preserved + strengthened.
+      //  - `time`: command existed but was never registered + used the dead args
+      //    path — registered it and hardened to shellJoinArgs.
+      //  - error-forwarding leak probe: harness used an unsupported Bash({fs:
+      //    ReadWriteFs}) construction; realigned to the documented mount pattern
+      //    and strengthened the no-host-path-leak assertion.
+      //  - browser.bundle: __BROWSER__ guards weren't tree-shakeable, so
+      //    sqlite3/yq/xan/tar (node-only) leaked into the browser build — fixed
+      //    the guards so they're excluded.
+      // No files remain quarantined. Re-add an exclude here ONLY for a genuinely
+      // intractable, documented reason.
     ],
     pool: "forks",
     // CPython/SQLite/QuickJS WASM workers are heavy and share a per-process
