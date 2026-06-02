@@ -39,14 +39,10 @@ export async function assertFails(
 ): Promise<void> {
   const r = await result;
   if (r.exitCode === 0) {
-    throw new Error(
-      `Expected failure but got success. stdout: ${r.stdout}`,
-    );
+    throw new Error(`Expected failure but got success. stdout: ${r.stdout}`);
   }
   if (typeof expected === "number" && r.exitCode !== expected) {
-    throw new Error(
-      `Expected exit code ${expected} but got ${r.exitCode}`,
-    );
+    throw new Error(`Expected exit code ${expected} but got ${r.exitCode}`);
   }
   if (expected instanceof RegExp && !expected.test(r.stderr)) {
     throw new Error(

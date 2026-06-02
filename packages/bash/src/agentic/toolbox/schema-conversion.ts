@@ -46,10 +46,14 @@ export interface JsonSchemaPropertyOutput {
 export function zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaOutput {
   // ZodObject exposes `.shape` but it is not part of ZodTypeAny's public type.
   // We access it through a typed interface that reflects the runtime structure.
-  interface ZodObjectLike { shape: Record<string, z.ZodTypeAny> }
+  interface ZodObjectLike {
+    shape: Record<string, z.ZodTypeAny>;
+  }
   const objectSchema = schema as unknown as ZodObjectLike;
-  const shape: Record<string, z.ZodTypeAny> = objectSchema.shape ?? (Object.create(null) as Record<string, z.ZodTypeAny>);
-  const properties: Record<string, JsonSchemaPropertyOutput> = Object.create(null);
+  const shape: Record<string, z.ZodTypeAny> =
+    objectSchema.shape ?? (Object.create(null) as Record<string, z.ZodTypeAny>);
+  const properties: Record<string, JsonSchemaPropertyOutput> =
+    Object.create(null);
   const required: string[] = [];
 
   for (const key of Object.keys(shape)) {
@@ -68,18 +72,24 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaOutput {
     } else if (field instanceof z.ZodEnum) {
       type = "string";
       // ZodEnum stores values in _def.values (string[] at runtime)
-      interface ZodEnumDef { _def: { values: string[] } }
+      interface ZodEnumDef {
+        _def: { values: string[] };
+      }
       enumValues = (field as unknown as ZodEnumDef)._def.values;
     } else if (field instanceof z.ZodOptional) {
       // Handle optional fields - unwrap to get inner type
-      interface ZodOptionalDef { _def: { innerType: z.ZodTypeAny } }
+      interface ZodOptionalDef {
+        _def: { innerType: z.ZodTypeAny };
+      }
       const inner = (field as unknown as ZodOptionalDef)._def.innerType;
       if (inner instanceof z.ZodString) type = "string";
       else if (inner instanceof z.ZodNumber) type = "number";
       else if (inner instanceof z.ZodBoolean) type = "boolean";
       else if (inner instanceof z.ZodEnum) {
         type = "string";
-        interface ZodEnumDef { _def: { values: string[] } }
+        interface ZodEnumDef {
+          _def: { values: string[] };
+        }
         enumValues = (inner as unknown as ZodEnumDef)._def.values;
       }
     }
@@ -104,9 +114,13 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaOutput {
 /**
  * Simple JSON Schema to Zod converter for MCP tools.
  */
-export function jsonSchemaToZod(schema: JsonSchema | undefined): z.ZodObject<Record<string, z.ZodTypeAny>> {
+export function jsonSchemaToZod(
+  schema: JsonSchema | undefined,
+): z.ZodObject<Record<string, z.ZodTypeAny>> {
   const shape: Record<string, z.ZodTypeAny> = Object.create(null);
-  const props = schema?.properties ?? (Object.create(null) as Record<string, JsonSchemaProperty>);
+  const props =
+    schema?.properties ??
+    (Object.create(null) as Record<string, JsonSchemaProperty>);
   const requiredFields = schema?.required ?? [];
   for (const key of Object.keys(props)) {
     const prop = props[key];

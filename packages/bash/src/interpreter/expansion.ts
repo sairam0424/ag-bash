@@ -16,7 +16,6 @@ import type {
   WordNode,
   WordPart,
 } from "../ast/types.js";
-import { wordToLiteralString } from "./helpers/array.js";
 import { parseArithmeticExpression } from "../parser/arithmetic-parser.js";
 import { Parser } from "../parser/parser.js";
 import { GlobExpander } from "../shell/glob.js";
@@ -26,6 +25,7 @@ import {
   ExecutionLimitError,
   ExitError,
 } from "./errors.js";
+import { wordToLiteralString } from "./helpers/array.js";
 
 /**
  * Check if a string exceeds the maximum allowed length.

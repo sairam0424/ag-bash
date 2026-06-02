@@ -10,9 +10,7 @@ export class AgentConflictError extends Error {
 
   constructor(agentId: string, conflicts: string[]) {
     const paths = conflicts.join(", ");
-    super(
-      `Agent "${agentId}" has conflicting changes on: ${paths}`,
-    );
+    super(`Agent "${agentId}" has conflicting changes on: ${paths}`);
     this.name = "AgentConflictError";
     this.agentId = agentId;
     this.conflicts = conflicts;

@@ -15,7 +15,11 @@ export const agMcp: Command = {
   name: "ag-mcp",
   execute: async (args: string[], ctx: CommandContext): Promise<ExecResult> => {
     if (!ctx.bash) {
-      return { stdout: "", stderr: "ag-mcp: no bash host available\n", exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: "ag-mcp: no bash host available\n",
+        exitCode: 1,
+      };
     }
     const client = ctx.bash.services.mcpClient;
     const subcommand = args[0];

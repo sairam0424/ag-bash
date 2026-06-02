@@ -7,16 +7,14 @@
  * For the full API, use "@ag-bash/bash" or "@ag-bash/bash/advanced".
  */
 
-// Core class
-export { Bash } from "./Bash.js";
-export type { BashOptions, ExecOptions } from "./Bash.js";
-
 // AI tool integration
 export { createBashTool } from "./ai/index.js";
-
+export type { BashOptions, ExecOptions } from "./Bash.js";
+// Core class
+export { Bash } from "./Bash.js";
+export type { CustomCommand } from "./custom-commands.js";
 // Custom command definition
 export { defineCommand } from "./custom-commands.js";
-export type { CustomCommand } from "./custom-commands.js";
 
 // Filesystem implementations
 export { InMemoryFs } from "./fs/in-memory-fs/index.js";

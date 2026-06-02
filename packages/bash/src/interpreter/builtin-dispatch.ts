@@ -55,7 +55,7 @@ import { createDefenseAwareCommandContext } from "./defense-aware-command-contex
 import { ExecutionLimitError } from "./errors.js";
 import { callFunction } from "./functions.js";
 import { getErrorMessage } from "./helpers/errors.js";
-import { failure, obs, OK, testResult } from "./helpers/result.js";
+import { failure, OK, obs, testResult } from "./helpers/result.js";
 import { SHELL_BUILTINS } from "./helpers/shell-constants.js";
 import {
   findFirstInPath as findFirstInPathHelper,
@@ -123,12 +123,16 @@ SPECIAL_BUILTIN_MAP.set("exit", ({ ctx }, args) => handleExit(ctx, args));
 SPECIAL_BUILTIN_MAP.set("local", ({ ctx }, args) => handleLocal(ctx, args));
 SPECIAL_BUILTIN_MAP.set("set", ({ ctx }, args) => handleSet(ctx, args));
 SPECIAL_BUILTIN_MAP.set("break", ({ ctx }, args) => handleBreak(ctx, args));
-SPECIAL_BUILTIN_MAP.set("continue", ({ ctx }, args) => handleContinue(ctx, args));
+SPECIAL_BUILTIN_MAP.set("continue", ({ ctx }, args) =>
+  handleContinue(ctx, args),
+);
 SPECIAL_BUILTIN_MAP.set("return", ({ ctx }, args) => handleReturn(ctx, args));
 SPECIAL_BUILTIN_MAP.set("shift", ({ ctx }, args) => handleShift(ctx, args));
 SPECIAL_BUILTIN_MAP.set("getopts", ({ ctx }, args) => handleGetopts(ctx, args));
 SPECIAL_BUILTIN_MAP.set("compgen", ({ ctx }, args) => handleCompgen(ctx, args));
-SPECIAL_BUILTIN_MAP.set("complete", ({ ctx }, args) => handleComplete(ctx, args));
+SPECIAL_BUILTIN_MAP.set("complete", ({ ctx }, args) =>
+  handleComplete(ctx, args),
+);
 SPECIAL_BUILTIN_MAP.set("compopt", ({ ctx }, args) => handleCompopt(ctx, args));
 SPECIAL_BUILTIN_MAP.set("pushd", ({ ctx }, args) => handlePushd(ctx, args));
 SPECIAL_BUILTIN_MAP.set("popd", ({ ctx }, args) => handlePopd(ctx, args));
@@ -138,11 +142,17 @@ SPECIAL_BUILTIN_MAP.set(".", ({ ctx }, args) => handleSource(ctx, args));
 SPECIAL_BUILTIN_MAP.set("read", ({ ctx }, args, stdin, stdinSourceFd) =>
   handleRead(ctx, args, stdin, stdinSourceFd),
 );
-SPECIAL_BUILTIN_MAP.set("mapfile", ({ ctx }, args, stdin) => handleMapfile(ctx, args, stdin));
-SPECIAL_BUILTIN_MAP.set("readarray", ({ ctx }, args, stdin) => handleMapfile(ctx, args, stdin));
+SPECIAL_BUILTIN_MAP.set("mapfile", ({ ctx }, args, stdin) =>
+  handleMapfile(ctx, args, stdin),
+);
+SPECIAL_BUILTIN_MAP.set("readarray", ({ ctx }, args, stdin) =>
+  handleMapfile(ctx, args, stdin),
+);
 SPECIAL_BUILTIN_MAP.set("declare", ({ ctx }, args) => handleDeclare(ctx, args));
 SPECIAL_BUILTIN_MAP.set("typeset", ({ ctx }, args) => handleDeclare(ctx, args));
-SPECIAL_BUILTIN_MAP.set("readonly", ({ ctx }, args) => handleReadonly(ctx, args));
+SPECIAL_BUILTIN_MAP.set("readonly", ({ ctx }, args) =>
+  handleReadonly(ctx, args),
+);
 SPECIAL_BUILTIN_MAP.set("trap", ({ ctx }, args) => handleTrap(ctx, args));
 
 /**
@@ -150,7 +160,9 @@ SPECIAL_BUILTIN_MAP.set("trap", ({ ctx }, args) => handleTrap(ctx, args));
  * These are checked AFTER user-defined function lookup.
  */
 const REGULAR_BUILTIN_MAP = new Map<string, BuiltinHandler>();
-REGULAR_BUILTIN_MAP.set("eval", ({ ctx }, args, stdin) => handleEval(ctx, args, stdin));
+REGULAR_BUILTIN_MAP.set("eval", ({ ctx }, args, stdin) =>
+  handleEval(ctx, args, stdin),
+);
 REGULAR_BUILTIN_MAP.set("cd", ({ ctx }, args) => handleCd(ctx, args));
 REGULAR_BUILTIN_MAP.set(":", () => OK);
 REGULAR_BUILTIN_MAP.set("true", () => OK);
@@ -384,10 +396,7 @@ export async function executeExternalCommand(
       Array.from(ctx.commands.keys()),
     );
     return failure(`bash: ${commandName}: command not found\n`, 127, [
-      obs.commandNotFound(
-        commandName,
-        suggestion ? [suggestion] : undefined,
-      ),
+      obs.commandNotFound(commandName, suggestion ? [suggestion] : undefined),
     ]);
   }
   // Handle error cases from resolveCommand

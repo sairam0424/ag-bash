@@ -30,7 +30,11 @@ export const agReferencesCommand: Command = {
     }
 
     if (!ctx.bash) {
-      return { stdout: "", stderr: "ag-references: no bash host available\n", exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: "ag-references: no bash host available\n",
+        exitCode: 1,
+      };
     }
 
     const occurrences = ctx.bash.semanticEngine.getOccurrences(name);

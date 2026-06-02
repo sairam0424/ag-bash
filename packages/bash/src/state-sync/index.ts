@@ -97,7 +97,10 @@ export function diffState(
 /**
  * Diffs two VFS snapshots. Handles both raw Maps and MountableFs snapshot objects.
  */
-export function diffFs(baseFs: FileSystemSnapshot, currentFs: FileSystemSnapshot): FsDelta {
+export function diffFs(
+  baseFs: FileSystemSnapshot,
+  currentFs: FileSystemSnapshot,
+): FsDelta {
   const modified: Record<string, string | Uint8Array> = Object.create(null);
   const deleted: string[] = [];
 

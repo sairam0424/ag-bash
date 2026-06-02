@@ -21,7 +21,11 @@ export const agWait: Command = {
     }
 
     if (!ctx.bash) {
-      return { stdout: "", stderr: "ag-wait: no bash host available\n", exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: "ag-wait: no bash host available\n",
+        exitCode: 1,
+      };
     }
 
     try {
@@ -34,7 +38,11 @@ export const agWait: Command = {
 
       return { stdout: output, stderr: "", exitCode: 0 };
     } catch (e: any) {
-      return { stdout: "", stderr: `Wait failed: ${sanitizeErrorMessage(e.message)}\n`, exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: `Wait failed: ${sanitizeErrorMessage(e.message)}\n`,
+        exitCode: 1,
+      };
     }
   },
 };

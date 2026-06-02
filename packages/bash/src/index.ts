@@ -36,6 +36,16 @@ export {
 // Custom commands API
 export type { CustomCommand, LazyCommand } from "./custom-commands.js";
 export { defineCommand } from "./custom-commands.js";
+// Event system
+export type {
+  BashEventMap,
+  ExecEndEvent,
+  ExecStartEvent,
+  ToolEndEvent,
+  ToolProgressEvent,
+  ToolStartEvent,
+  TypedEventEmitter,
+} from "./events.js";
 export { InMemoryFs } from "./fs/in-memory-fs/index.js";
 export type {
   BufferEncoding,
@@ -96,6 +106,11 @@ export {
 export type { CacheEntry } from "./network/WebCache.js";
 // Phase 4 modules
 export { WebCache } from "./network/WebCache.js";
+// Observability
+export { ObservationSummarizer } from "./observability/ObservationSummarizer.js";
+export { AgBashTracer } from "./observability/otel.js";
+export type { OtelConfig } from "./observability/otel-types.js";
+export type { ToolCallSummary, TurnSummary } from "./observability/types.js";
 // Parser
 export { parse } from "./parser/parser.js";
 export type {
@@ -122,7 +137,6 @@ export {
   SecurityViolationError,
   SecurityViolationLogger,
 } from "./security/index.js";
-export type { Disposable, BusAware } from "./services/types.js";
 export type { MemoryEntry, MemoryScope } from "./services/AgentMemory.js";
 export { AgentMemory } from "./services/AgentMemory.js";
 export {
@@ -142,8 +156,18 @@ export type { Task, TaskStatus } from "./services/TaskManager.js";
 export { TaskManager } from "./services/TaskManager.js";
 export type { AgentMessage, Team } from "./services/TeamManager.js";
 export { TeamManager } from "./services/TeamManager.js";
+export type { BusAware, Disposable } from "./services/types.js";
 export type { Worktree } from "./services/WorktreeManager.js";
 export { WorktreeManager } from "./services/WorktreeManager.js";
+// Streaming API (true incremental output via bash.execStream())
+export { StreamingExecutor } from "./streaming/StreamingExecutor.js";
+export type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
+// Tagged template API (zx-style ergonomic shell)
+export {
+  createShell,
+  shellEscape,
+  type TaggedShell,
+} from "./template/index.js";
 // Transform API
 export { BashTransformPipeline } from "./transform/pipeline.js";
 export type { CommandCollectorMetadata } from "./transform/plugins/command-collector.js";
@@ -172,26 +196,3 @@ export type {
   OutputSink,
   StreamChunk,
 } from "./types.js";
-// Streaming API (true incremental output via bash.execStream())
-export { StreamingExecutor } from "./streaming/StreamingExecutor.js";
-export type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
-// Tagged template API (zx-style ergonomic shell)
-export { createShell, type TaggedShell } from "./template/index.js";
-export { shellEscape } from "./template/index.js";
-
-// Event system
-export type {
-  BashEventMap,
-  ExecEndEvent,
-  ExecStartEvent,
-  ToolEndEvent,
-  ToolProgressEvent,
-  ToolStartEvent,
-  TypedEventEmitter,
-} from "./events.js";
-
-// Observability
-export { ObservationSummarizer } from "./observability/ObservationSummarizer.js";
-export { AgBashTracer } from "./observability/otel.js";
-export type { TurnSummary, ToolCallSummary } from "./observability/types.js";
-export type { OtelConfig } from "./observability/otel-types.js";

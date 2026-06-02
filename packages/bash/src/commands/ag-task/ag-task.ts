@@ -107,13 +107,16 @@ export const agTaskCommand: Command = {
           return { stdout: "No tasks found.\n", stderr: "", exitCode: 0 };
         }
 
-        const statusIcons: Record<string, string> = Object.assign(Object.create(null), {
-          pending: "[ ]",
-          in_progress: "[~]",
-          completed: "[x]",
-          failed: "[!]",
-          blocked: "[#]",
-        });
+        const statusIcons: Record<string, string> = Object.assign(
+          Object.create(null),
+          {
+            pending: "[ ]",
+            in_progress: "[~]",
+            completed: "[x]",
+            failed: "[!]",
+            blocked: "[#]",
+          },
+        );
 
         let output = "Tasks:\n";
         for (const t of tasks) {

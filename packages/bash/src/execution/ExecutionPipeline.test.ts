@@ -23,10 +23,10 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
+import type { ScriptNode } from "../ast/types.js";
 import type { BashOptions, ExecOptions } from "../Bash.js";
 import { Bash } from "../Bash.js";
 import { DefenseInDepthBox } from "../security/defense-in-depth-box.js";
-import type { ScriptNode } from "../ast/types.js";
 import type { TransformPlugin } from "../transform/types.js";
 import type { BashExecResult } from "../types.js";
 
@@ -299,10 +299,7 @@ const corpus: Case[] = [
   {
     name: "persist function across execs",
     bashOptions: { persistState: true },
-    steps: [
-      { script: "myfn() { echo fnbody; }" },
-      { script: "myfn" },
-    ],
+    steps: [{ script: "myfn() { echo fnbody; }" }, { script: "myfn" }],
   },
 
   // --- env in result reflects assignments ---

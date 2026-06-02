@@ -132,7 +132,11 @@ function makeBytes(n: number): Uint8Array {
   return out;
 }
 
-function setup(): { protocol: ProtocolBuffer; fs: InMemoryFs; run: Promise<unknown> } {
+function setup(): {
+  protocol: ProtocolBuffer;
+  fs: InMemoryFs;
+  run: Promise<unknown>;
+} {
   const shared = createSharedBuffer();
   const protocol = new ProtocolBuffer(shared);
   const fs = new InMemoryFs();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Lexer, LexerError, TokenType } from "./lexer.js";
 import type { Token } from "./lexer.js";
+import { Lexer, LexerError, TokenType } from "./lexer.js";
 
 /**
  * Unit tests for the Bash lexer/tokenizer.
@@ -369,7 +369,7 @@ describe("lexer", () => {
       // Line continuation means the backslash-newline is skipped in whitespace
       // "echo" and "hello" should both appear as NAME tokens (valid identifiers)
       const names = tokens.filter(
-        (t) => t.type === TokenType.NAME || t.type === TokenType.WORD
+        (t) => t.type === TokenType.NAME || t.type === TokenType.WORD,
       );
       expect(names.length).toBe(2);
       expect(names[0].value).toBe("echo");
@@ -381,7 +381,9 @@ describe("lexer", () => {
       expect(tokens[0].line).toBe(1);
       // "two" is a NAME token (valid variable name)
       const secondTwo = tokens.find(
-        (t) => (t.type === TokenType.NAME || t.type === TokenType.WORD) && t.value === "two"
+        (t) =>
+          (t.type === TokenType.NAME || t.type === TokenType.WORD) &&
+          t.value === "two",
       );
       expect(secondTwo?.line).toBe(2);
     });
@@ -501,7 +503,7 @@ describe("lexer", () => {
     it("should handle {} as a word (find -exec pattern)", () => {
       const tokens = tokenize("find . -exec rm {} ;");
       const braces = tokens.find(
-        (t) => t.type === TokenType.WORD && t.value === "{}"
+        (t) => t.type === TokenType.WORD && t.value === "{}",
       );
       expect(braces).toBeDefined();
     });

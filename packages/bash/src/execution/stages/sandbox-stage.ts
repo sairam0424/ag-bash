@@ -6,9 +6,7 @@
  * finally block.
  */
 
-import {
-  DefenseInDepthBox,
-} from "../../security/defense-in-depth-box.js";
+import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
 import type { DefenseInDepthConfig } from "../../security/types.js";
 import type { PipelineContext, PipelineStage, StageResult } from "../types.js";
 

@@ -30,15 +30,18 @@ export class SyncBackend {
    * Send one framed round-trip. Used directly for non-chunked operations and
    * internally by the chunked read/write helpers.
    */
-  private execFrame(opCode: OpCodeType, framing: {
-    path: string;
-    data?: Uint8Array;
-    flags?: number;
-    mode?: number;
-    offset?: number;
-    totalLength?: number;
-    more?: boolean;
-  }): { success: boolean; result?: Uint8Array; error?: string } {
+  private execFrame(
+    opCode: OpCodeType,
+    framing: {
+      path: string;
+      data?: Uint8Array;
+      flags?: number;
+      mode?: number;
+      offset?: number;
+      totalLength?: number;
+      more?: boolean;
+    },
+  ): { success: boolean; result?: Uint8Array; error?: string } {
     this.protocol.reset();
     this.protocol.setOpCode(opCode);
     this.protocol.setPath(framing.path);

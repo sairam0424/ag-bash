@@ -9,7 +9,12 @@
  * The schema is a minimal Zod-like object with a parse() method.
  */
 
-import type { LangChainToolDef, LangChainToolSet, ToolDefinition, ToolResult } from "../types.js";
+import type {
+  LangChainToolDef,
+  LangChainToolSet,
+  ToolDefinition,
+  ToolResult,
+} from "../types.js";
 
 /**
  * Create a minimal Zod-like schema object from a JSON Schema definition.
@@ -38,8 +43,15 @@ function createMinimalSchema(
       }
 
       // Validate string types
-      for (const [key, prop] of Object.entries(properties) as [string, { type?: string }][]) {
-        if (key in record && prop.type === "string" && typeof record[key] !== "string") {
+      for (const [key, prop] of Object.entries(properties) as [
+        string,
+        { type?: string },
+      ][]) {
+        if (
+          key in record &&
+          prop.type === "string" &&
+          typeof record[key] !== "string"
+        ) {
           throw new Error(`Field "${key}" must be a string`);
         }
       }

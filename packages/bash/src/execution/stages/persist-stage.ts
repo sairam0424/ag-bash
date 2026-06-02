@@ -13,9 +13,10 @@ import type { PipelineContext, PipelineStage, StageResult } from "../types.js";
  * Callback interface for persisting state back to the Bash instance.
  * Avoids direct coupling to Bash internals.
  */
-export interface PersistCallback {
-  (execState: InterpreterState, exitCode: number): void;
-}
+export type PersistCallback = (
+  execState: InterpreterState,
+  exitCode: number,
+) => void;
 
 export class PersistStage implements PipelineStage {
   readonly name = "persist";

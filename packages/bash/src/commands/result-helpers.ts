@@ -39,6 +39,10 @@ export function fail(stderr: string, exitCode: number = 1): ExecResult {
  * return output("partial data\n", "warning: truncated\n", 0);
  * ```
  */
-export function output(stdout: string, stderr: string, exitCode: number): ExecResult {
+export function output(
+  stdout: string,
+  stderr: string,
+  exitCode: number,
+): ExecResult {
   return { stdout, stderr, exitCode };
 }

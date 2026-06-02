@@ -32,7 +32,10 @@ export interface ParseArgsOptions {
  * parsed.positional;     // ["src/index.ts"]
  * ```
  */
-export function parseArgs(args: string[], options?: ParseArgsOptions): ParsedArgs {
+export function parseArgs(
+  args: string[],
+  options?: ParseArgsOptions,
+): ParsedArgs {
   const booleanSet = new Set(options?.booleanFlags ?? []);
   const flags = new Map<string, string | true>();
   const positional: string[] = [];

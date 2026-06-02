@@ -20,13 +20,12 @@
  * before this stage existed STILL runs — WARN executes.
  */
 
-import type { Observation } from "../../types.js";
-import type { BashExecResult } from "../../types.js";
 import { mapToRecordWithExtras } from "../../helpers/env.js";
 import {
   analyzeDestructiveAst,
   type DestructiveAstFinding,
 } from "../../security/destructive-command-detector.js";
+import type { BashExecResult, Observation } from "../../types.js";
 import type { PipelineContext, PipelineStage, StageResult } from "../types.js";
 
 /**

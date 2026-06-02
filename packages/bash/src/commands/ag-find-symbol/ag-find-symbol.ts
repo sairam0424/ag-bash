@@ -29,7 +29,11 @@ export const agFindSymbolCommand: Command = {
     // We might need to expose it to the command context.
 
     if (!ctx.bash) {
-      return { stdout: "", stderr: "ag-find-symbol: no bash host available\n", exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: "ag-find-symbol: no bash host available\n",
+        exitCode: 1,
+      };
     }
 
     const symbols = await ctx.bash.indexer.findSymbols(query);

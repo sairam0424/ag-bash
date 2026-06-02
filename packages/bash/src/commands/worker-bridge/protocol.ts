@@ -308,9 +308,7 @@ export class ProtocolBuffer {
     more: boolean,
   ): void {
     if (chunk.length > Size.MAX_CHUNK) {
-      throw new Error(
-        `Chunk too large: ${chunk.length} > ${Size.MAX_CHUNK}`,
-      );
+      throw new Error(`Chunk too large: ${chunk.length} > ${Size.MAX_CHUNK}`);
     }
     this.uint8View.set(chunk, Offset.DATA_BUFFER);
     this.setDataLength(chunk.length);
@@ -357,9 +355,7 @@ export class ProtocolBuffer {
     more: boolean,
   ): void {
     if (chunk.length > Size.MAX_CHUNK) {
-      throw new Error(
-        `Chunk too large: ${chunk.length} > ${Size.MAX_CHUNK}`,
-      );
+      throw new Error(`Chunk too large: ${chunk.length} > ${Size.MAX_CHUNK}`);
     }
     this.uint8View.set(chunk, Offset.DATA_BUFFER);
     this.setResultLength(chunk.length);

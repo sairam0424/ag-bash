@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Bash } from "./Bash.js";
-import { obs, OBSERVATION_CODES } from "./interpreter/helpers/result.js";
+import { OBSERVATION_CODES, obs } from "./interpreter/helpers/result.js";
 import type { Observation } from "./types.js";
 
 /**

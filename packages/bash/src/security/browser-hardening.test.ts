@@ -78,9 +78,9 @@ describe("browser secondary defense (hardenBrowserGlobals)", () => {
       Object.prototype.polluted = "yes";
     }).toThrow(TypeError);
     // The polluting property must not have been attached.
-    expect(
-      Object.hasOwn(Object.prototype, "polluted" as PropertyKey),
-    ).toBe(false);
+    expect(Object.hasOwn(Object.prototype, "polluted" as PropertyKey)).toBe(
+      false,
+    );
   });
 
   it("prevents intrinsic-constructor hijacking (Array.prototype.map swap)", () => {

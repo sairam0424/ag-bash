@@ -29,7 +29,7 @@ import { toAnthropic } from "./adapters/anthropic.js";
 import { toLangChain } from "./adapters/langchain.js";
 import { toOpenAI } from "./adapters/openai.js";
 import { toVercel } from "./adapters/vercel.js";
-import { type CreateBashToolOptions, buildToolDefinitions } from "./core.js";
+import { buildToolDefinitions, type CreateBashToolOptions } from "./core.js";
 import type {
   AnthropicToolSet,
   GenericToolSet,
@@ -75,7 +75,9 @@ export interface BashToolBuilder {
  * @param options - Sandbox instance and optional lifecycle hooks.
  * @returns A BashToolBuilder with framework conversion methods.
  */
-export function createBashTool(options: CreateBashToolOptions): BashToolBuilder {
+export function createBashTool(
+  options: CreateBashToolOptions,
+): BashToolBuilder {
   const definitions: ToolDefinition[] = buildToolDefinitions(options);
 
   // Cache adapters lazily to avoid re-computation

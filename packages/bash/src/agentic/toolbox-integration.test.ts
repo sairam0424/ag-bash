@@ -68,10 +68,10 @@ describe("Task Management Tools", () => {
   let _taskId: string;
 
   it("task_create - should create a task with subject and description", async () => {
-    const result = await bash.toolbox.callTool(bash, "task_create", {
+    const result = (await bash.toolbox.callTool(bash, "task_create", {
       subject: "Write unit tests",
       description: "Cover all 19 new tools with integration tests",
-    }) as ToolResult;
+    })) as ToolResult;
     expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("subject", "Write unit tests");
     expect(result).toHaveProperty("status", "pending");
@@ -80,12 +80,16 @@ describe("Task Management Tools", () => {
 
   it("task_list - should return an array containing the created task", async () => {
     // Create a task first so we have something to list
-    const created = await bash.toolbox.callTool(bash, "task_create", {
+    const created = (await bash.toolbox.callTool(bash, "task_create", {
       subject: "List test task",
       description: "A task for the list test",
-    }) as ToolResult;
+    })) as ToolResult;
 
-    const result = await bash.toolbox.callTool(bash, "task_list", {}) as ToolResult[];
+    const result = (await bash.toolbox.callTool(
+      bash,
+      "task_list",
+      {},
+    )) as ToolResult[];
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThanOrEqual(1);
     const found = result.find((t: ToolResult) => t.id === created.id);
@@ -94,10 +98,10 @@ describe("Task Management Tools", () => {
   });
 
   it("task_update - should update task status to in_progress", async () => {
-    const created = await bash.toolbox.callTool(bash, "task_create", {
+    const created = (await bash.toolbox.callTool(bash, "task_create", {
       subject: "Update test task",
       description: "A task to update",
-    }) as ToolResult;
+    })) as ToolResult;
 
     const result = await bash.toolbox.callTool(bash, "task_update", {
       taskId: created.id as string,
@@ -108,10 +112,10 @@ describe("Task Management Tools", () => {
   });
 
   it("task_get - should return the full task object by ID", async () => {
-    const created = await bash.toolbox.callTool(bash, "task_create", {
+    const created = (await bash.toolbox.callTool(bash, "task_create", {
       subject: "Get test task",
       description: "A task to retrieve",
-    }) as ToolResult;
+    })) as ToolResult;
 
     const result = await bash.toolbox.callTool(bash, "task_get", {
       taskId: created.id as string,
@@ -127,10 +131,10 @@ describe("Task Management Tools", () => {
   });
 
   it("task_stop - should stop a task and set status to failed", async () => {
-    const created = await bash.toolbox.callTool(bash, "task_create", {
+    const created = (await bash.toolbox.callTool(bash, "task_create", {
       subject: "Stop test task",
       description: "A task to stop",
-    }) as ToolResult;
+    })) as ToolResult;
 
     // First move to in_progress (valid transition from pending)
     await bash.toolbox.callTool(bash, "task_update", {
@@ -249,7 +253,11 @@ describe("Intelligence Tools", () => {
       command: "git reset --hard",
     });
 
-    const log = await bash.toolbox.callTool(bash, "git_audit_log", {}) as ToolResult[];
+    const log = (await bash.toolbox.callTool(
+      bash,
+      "git_audit_log",
+      {},
+    )) as ToolResult[];
     expect(Array.isArray(log)).toBe(true);
     expect(log.length).toBeGreaterThanOrEqual(2);
 
@@ -317,7 +325,11 @@ describe("Automation Tools", () => {
       prompt: "Hourly check",
     })) as ToolResult;
 
-    const result = (await bash.toolbox.callTool(bash, "cron_list", {})) as ToolResult[];
+    const result = (await bash.toolbox.callTool(
+      bash,
+      "cron_list",
+      {},
+    )) as ToolResult[];
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThanOrEqual(1);
     const found = result.find((j: ToolResult) => j.id === created.id);
@@ -359,7 +371,11 @@ describe("Worktree Tools", () => {
       name: "feature-y",
     });
 
-    const result = (await bash.toolbox.callTool(bash, "exit_worktree", {})) as ToolResult;
+    const result = (await bash.toolbox.callTool(
+      bash,
+      "exit_worktree",
+      {},
+    )) as ToolResult;
     expect(result).toHaveProperty("restored");
     expect(typeof result.restored).toBe("string");
   });
@@ -369,9 +385,9 @@ describe("Worktree Tools", () => {
 
 describe("Search Tools (search_tools)", () => {
   it("should find task-related tools when searching for 'task'", async () => {
-    const result = await bash.toolbox.callTool(bash, "search_tools", {
+    const result = (await bash.toolbox.callTool(bash, "search_tools", {
       query: "task",
-    }) as ToolResult[];
+    })) as ToolResult[];
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThan(0);
 
@@ -389,9 +405,9 @@ describe("Search Tools (search_tools)", () => {
   });
 
   it("should support select:name1,name2 pattern for exact lookup", async () => {
-    const result = await bash.toolbox.callTool(bash, "search_tools", {
+    const result = (await bash.toolbox.callTool(bash, "search_tools", {
       query: "select:task_create,team_create",
-    }) as ToolResult[];
+    })) as ToolResult[];
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(2);
 
