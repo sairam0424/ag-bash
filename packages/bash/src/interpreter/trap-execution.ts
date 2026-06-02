@@ -117,25 +117,3 @@ export async function executeReturnTrap(
     ctx.__executingReturnTrap = false;
   }
 }
-
-/**
- * Execute the DEBUG trap.
- * Fires before each simple command execution.
- *
- * @param ctx - The interpreter context
- * @returns The trap execution result, or null if no handler registered
- */
-export async function executeDebugTrap(
-  ctx: InterpreterContext,
-): Promise<ExecResult | null> {
-  // Prevent recursion: DEBUG trap executing commands should not re-trigger DEBUG
-  const trapState = ctx.__executingDebugTrap;
-  if (trapState) return null;
-
-  ctx.__executingDebugTrap = true;
-  try {
-    return await executeTrap(ctx, "DEBUG");
-  } finally {
-    ctx.__executingDebugTrap = false;
-  }
-}
