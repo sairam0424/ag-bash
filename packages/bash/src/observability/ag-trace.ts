@@ -188,7 +188,7 @@ export class AgTrace {
       );
       const enriched: Observation = {
         ...target,
-        ...(suggestions.length > 0 ? { suggestions } : {}),
+        ...(suggestions.length > 0 ? { suggestions } : null),
       };
       merged = merged.map((o, i) => (i === idx ? enriched : o));
     }

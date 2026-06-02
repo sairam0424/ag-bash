@@ -30,6 +30,7 @@ import type { MemoryScope } from "../services/AgentMemory.js";
 import type { ExecResult, Observation } from "../types.js";
 import { BudgetManager } from "./BudgetManager.js";
 import type {
+  BudgetConfig,
   GenerateResponse,
   LLMProvider,
   Message,
@@ -68,7 +69,9 @@ export class RunLoop {
     this.bash = bash;
     this.llm = config.llm;
     this.config = config;
-    this.budget = new BudgetManager(config.budget ?? {});
+    this.budget = new BudgetManager(
+      config.budget ?? (Object.create(null) as BudgetConfig),
+    );
     this.tools = config.tools ?? this.getDefaultTools();
     this.readOnlyTools = new Set(config.readOnlyTools ?? []);
     this.healerEnabled = config.healer?.enabled !== false;

@@ -64,7 +64,7 @@ export const catCommand: Command = {
       // A3: surface typed source observations for failed reads.
       ...(readResult.observations
         ? { observations: readResult.observations }
-        : {}),
+        : null),
       // @banned-pattern-ignore: spread into static result keys, no user-controlled properties
       ...(isReadingFiles ? { stdoutEncoding: "binary" as const } : {}),
     };

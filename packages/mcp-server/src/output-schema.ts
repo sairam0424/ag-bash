@@ -100,7 +100,7 @@ function nodeFromZod(schema: z.ZodTypeAny): JsonSchemaNode {
 
 /** Convert a Zod object schema into an object-typed JSON Schema node. */
 function objectNodeFromZod(schema: z.ZodTypeAny): JsonSchemaNode {
-  const shape: Record<string, z.ZodTypeAny> =
+  const shape =
     (schema as unknown as { shape: Record<string, z.ZodTypeAny> }).shape ??
     (Object.create(null) as Record<string, z.ZodTypeAny>);
 

@@ -588,6 +588,13 @@ async function executePython(
     current: null,
   };
 
+  // Captured so the result reconciliation can tell a request that actually ran a
+  // worker (and may have finished in a cold-start deadline race) apart from one
+  // that timed out WHILE STILL QUEUED (canceled, no worker ever spawned). The
+  // latter is always a genuine timeout and must surface as such — and must not
+  // wait on the bridge's full deadline.
+  const queueEntryRef: { current: QueuedExecution | null } = { current: null };
+
   const workerPromise = new Promise<WorkerOutput>((resolve) => {
     const queueEntry: QueuedExecution = {
       input: workerInput,
@@ -596,6 +603,7 @@ async function executePython(
       requireDefenseContext: ctx.requireDefenseContext,
       sessionManager: ctx.bash?.services?.sessionManager,
     };
+    queueEntryRef.current = queueEntry;
 
     const onTimeout = bindDefenseContextCallback(
       ctx.requireDefenseContext,
@@ -640,6 +648,14 @@ async function executePython(
   let bridgeOutput: ExecResult;
   let workerResult: { success: boolean; error?: string };
 
+  // The bridge is the source of truth for what the Python program actually did:
+  // it observes the synchronous EXIT op (with the real exit code) before the
+  // worker's parent-port success message can even be delivered, and it appends
+  // its own "execution timeout exceeded" marker (exitCode 124) when ITS deadline
+  // trips mid-execution. We keep a handle so the worker_fail path can consult the
+  // bridge's *settled* state instead of a half-filled snapshot.
+  const bridgePromise = bridgeHandler.run(timeoutMs);
+
   try {
     type RaceResult =
       | {
@@ -650,9 +666,11 @@ async function executePython(
       | { type: "worker_fail"; error: unknown };
 
     const result = (await Promise.race([
-      Promise.all([bridgeHandler.run(timeoutMs), workerPromise]).then(
-        ([bridge, worker]) => ({ type: "both" as const, bridge, worker }),
-      ),
+      Promise.all([bridgePromise, workerPromise]).then(([bridge, worker]) => ({
+        type: "both" as const,
+        bridge,
+        worker,
+      })),
 
       workerPromise
         .then((w) => {
@@ -668,16 +686,52 @@ async function executePython(
       bridgeOutput = result.bridge;
       workerResult = result.worker;
     } else {
-      bridgeOutput = bridgeHandler.getOutput();
-      if (bridgeOutput.exitCode === 0) bridgeOutput.exitCode = 1;
-      workerResult = {
-        success: false,
-        error: sanitizeHostErrorMessage(
-          result.error instanceof Error
-            ? result.error.message
-            : String(result.error),
-        ),
-      };
+      // The worker promise settled as a failure. Distinguish the two causes:
+      //  - a per-exec DEADLINE firing (the host timeout callback resolves with
+      //    "Execution timeout: exceeded …"), which — because the deadline is
+      //    armed at queue-push — also spans the one-time CPython WASM compile and
+      //    can fire in the same tick a program actually finished (benign cold-
+      //    start race); vs
+      //  - a genuine worker crash / error, which should surface promptly.
+      // Only for a deadline failure do we consult the bridge's *settled* state:
+      // getOutput() here would be premature (the bridge may not have appended its
+      // own timeout marker yet). The bridge always settles by its own deadline,
+      // so awaiting it cannot hang; and on a deadline the bridge is already at
+      // that same deadline, so there is no extra wait. Crashes keep the original
+      // fast path so a dead worker does not block until the full deadline.
+      const errStr =
+        result.error instanceof Error
+          ? result.error.message
+          : String(result.error);
+      // A request canceled while still queued (no worker ever spawned) is always
+      // a genuine timeout — never a benign completion race — so do not await the
+      // bridge's full deadline for it.
+      const ranWorker = !queueEntryRef.current?.canceled;
+      const isDeadlineFailure =
+        ranWorker && errStr.includes("Execution timeout: exceeded");
+
+      bridgeOutput = isDeadlineFailure
+        ? await bridgePromise
+        : bridgeHandler.getOutput();
+
+      // A clean bridge EXIT (exitCode 0, no bridge-level "execution timeout
+      // exceeded" marker) means the program ran to completion: the deadline
+      // failure is spurious warmup/teardown overrun, so honor the bridge result.
+      // Genuine mid-exec timeouts leave exitCode 124 + the marker (the worker is
+      // killed before sending a clean EXIT), so real timeout behavior — including
+      // the 5ms tests in python3.queue-desync.runtime.test.ts — is preserved.
+      const bridgeCompletedCleanly =
+        bridgeOutput.exitCode === 0 &&
+        !bridgeOutput.stderr.includes("execution timeout exceeded");
+      if (bridgeCompletedCleanly && isDeadlineFailure) {
+        workerResult = { success: true };
+      } else {
+        if (bridgeOutput.exitCode === 0) bridgeOutput.exitCode = 1;
+        workerResult = {
+          success: false,
+          error: sanitizeHostErrorMessage(errStr),
+        };
+      }
     }
   } catch (e) {
     bridgeOutput = { stdout: "", stderr: "", exitCode: 1 };
@@ -708,7 +762,23 @@ async function executePython(
     }
   }
 
-  if (!workerResult.success && workerResult.error) {
+  // Same benign cold-start race guard as the worker_fail branch, applied here so
+  // the "both" path (bridge + worker both settled) is covered too: a per-exec
+  // DEADLINE failure that races with a program that actually finished must not
+  // pollute stderr. We only suppress when (a) the failure is a deadline overrun
+  // and (b) the bridge recorded a clean program EXIT (exitCode 0, no bridge-level
+  // timeout marker). Genuine mid-exec timeouts never produce a clean bridge EXIT,
+  // and genuine crashes are not deadline failures, so neither is masked.
+  const isDeadlineFailure =
+    !queueEntryRef.current?.canceled &&
+    !!workerResult.error &&
+    workerResult.error.includes("Execution timeout: exceeded");
+  const bridgeCompletedCleanly =
+    bridgeOutput.exitCode === 0 &&
+    !bridgeOutput.stderr.includes("execution timeout exceeded");
+  const isSpuriousDeadline = isDeadlineFailure && bridgeCompletedCleanly;
+
+  if (!workerResult.success && workerResult.error && !isSpuriousDeadline) {
     const workerError = sanitizeHostErrorMessage(workerResult.error);
     return {
       stdout: bridgeOutput.stdout,

@@ -182,7 +182,7 @@ export const obs: {
       confidence: 1,
       message: `Command '${command}' not found.`,
       command,
-      ...(suggestions && suggestions.length > 0 ? { suggestions } : {}),
+      ...(suggestions && suggestions.length > 0 ? { suggestions } : null),
     });
   },
 
@@ -198,7 +198,7 @@ export const obs: {
       confidence: 1,
       message: `File '${path}' not found.`,
       path,
-      ...(command ? { command } : {}),
+      ...(command ? { command } : null),
     });
   },
 
@@ -214,7 +214,7 @@ export const obs: {
       confidence: 1,
       message: `Directory '${path}' not found.`,
       path,
-      ...(command ? { command } : {}),
+      ...(command ? { command } : null),
     });
   },
 
@@ -230,7 +230,7 @@ export const obs: {
       confidence: 1,
       message: `'${path}' is a directory, not a file.`,
       path,
-      ...(command ? { command } : {}),
+      ...(command ? { command } : null),
     });
   },
 
@@ -246,7 +246,7 @@ export const obs: {
       confidence: 1,
       message: `'${path}' is not a directory.`,
       path,
-      ...(command ? { command } : {}),
+      ...(command ? { command } : null),
     });
   },
 
@@ -262,7 +262,7 @@ export const obs: {
       confidence: 1,
       message: `Permission denied for '${path}'.`,
       path,
-      ...(command ? { command } : {}),
+      ...(command ? { command } : null),
     });
   },
 });

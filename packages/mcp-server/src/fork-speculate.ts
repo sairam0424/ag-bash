@@ -60,7 +60,10 @@ export async function runForkSpeculate(
   parent: Bash,
   args: unknown,
 ): Promise<McpToolResult> {
-  const a = (args ?? {}) as { branches?: unknown; keepWinner?: unknown };
+  const a = (args ?? Object.create(null)) as {
+    branches?: unknown;
+    keepWinner?: unknown;
+  };
 
   const rawBranches = Array.isArray(a.branches) ? a.branches : [];
   if (rawBranches.length === 0) {

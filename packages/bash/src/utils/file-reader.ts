@@ -191,7 +191,7 @@ export async function readAndConcat(
         stderr: result.stderr,
         exitCode: result.exitCode,
         // A3: propagate typed source observations.
-        ...(result.observations ? { observations: result.observations } : {}),
+        ...(result.observations ? { observations: result.observations } : null),
       },
     };
   }
