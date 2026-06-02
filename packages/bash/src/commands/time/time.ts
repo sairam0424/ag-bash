@@ -113,12 +113,17 @@ export const timeCommand: Command = {
           exitCode: 1,
         };
       }
-      result = await ctx.exec(shellJoinArgs([commandArgs[0]]), {
+      // Compose the full wrapped command as a single shell-quoted line. Each
+      // argv token (including the command name) is single-quoted, so the
+      // wrapped command and its arguments are forwarded literally — no glob,
+      // word-splitting, or re-expansion of metacharacters. This preserves the
+      // command-injection invariant and works across exec engines, unlike the
+      // engine-specific `{ args }` injection path (mirrors `timeout`).
+      result = await ctx.exec(shellJoinArgs(commandArgs), {
         env: mapToRecord(ctx.env),
         cwd: ctx.cwd,
         stdin: ctx.stdin,
         signal: ctx.signal,
-        args: commandArgs.slice(1),
       });
     } catch (error) {
       const message = sanitizeErrorMessage((error as Error).message);

@@ -63,13 +63,24 @@ describe("nested exec command injection resistance", () => {
   it("rg --pre passes quoted filenames as literal arguments", async () => {
     const bash = new Bash();
 
+    // The hostile filename embeds shell metacharacters (a closing double quote,
+    // `;`, a redirection, and a trailing `#` comment) so that, IF rg built a
+    // shell string from the filename, the `echo ... > rg-pre-injection-marker`
+    // payload would fire. The name deliberately contains NO `/` separators:
+    // a `/` would be interpreted as a path component by both a real filesystem
+    // and the sandbox VFS (the directory ".../a" ;...> /tmp" does not exist),
+    // so a slash-laden name is uncreatable in EITHER and never reaches rg. We
+    // `cd` into the dir first so the payload's bare marker target is well-formed
+    // were it ever reparsed. rg must pass the filename to the preprocessor as a
+    // literal argv argument (execvp-style, no shell), leaving the marker absent.
     const result = await bash.exec(`
-      rm -f /tmp/rg-pre-injection-marker /tmp/rg-pre.out
+      rm -f /tmp/rg-pre-injection/rg-pre-injection-marker /tmp/rg-pre.out
       mkdir -p /tmp/rg-pre-injection
-      printf "needle\\n" > '/tmp/rg-pre-injection/a" ; echo RG_PRE_INJECTED > /tmp/rg-pre-injection-marker ; #.txt'
+      cd /tmp/rg-pre-injection
+      printf "needle\\n" > 'a" ; echo RG_PRE_INJECTED > rg-pre-injection-marker ; #.txt'
       rg --pre cat needle /tmp/rg-pre-injection > /tmp/rg-pre.out
       echo "RG_EXIT=$?"
-      if [ -f /tmp/rg-pre-injection-marker ]; then
+      if [ -f /tmp/rg-pre-injection/rg-pre-injection-marker ]; then
         echo MARKER_PRESENT
       else
         echo MARKER_ABSENT

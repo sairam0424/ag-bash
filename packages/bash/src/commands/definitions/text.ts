@@ -126,6 +126,10 @@ export const textLoaders: LazyCommandDef<CommandName>[] = [
     load: async () => (await import("../timeout/timeout.js")).timeoutCommand,
   },
   {
+    name: "time" as CommandName,
+    load: async () => (await import("../time/time.js")).timeCommand,
+  },
+  {
     name: "seq" as CommandName,
     load: async () => (await import("../seq/seq.js")).seqCommand,
   },
