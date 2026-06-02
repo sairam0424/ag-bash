@@ -44,26 +44,20 @@ export default defineConfig({
       // invariant (no escape / marker absent) holds, but ag-bash diverges from
       // bash on exit codes / argv forwarding. Do NOT "fix" them by editing the
       // test to expect ag-bash's wrong output; fix the underlying bug:
-      //  - js-exec child_process.spawnSync drops args ('hi 0' -> ' 0') [#49]
-      //  - `timeout` returns 0 instead of 124 on a timed-out command; and
-      //    `timeout echo X` drops its argv — both real bugs the tests caught
+      //  - FIXED #49: js-exec child_process.spawnSync dropped args — the bridge
+      //    forwarded the orphaned `options.args` injection path the pipeline
+      //    engine never reads; now it shell-joins the full argv. js-exec.exec
+      //    + js-exec.node-compat re-included below.
       //  - `env <cmd-looking-arg>` exit code diverges from bash (0 vs 127)
-      //  - js-exec recursion guard: nested cases now stop via dropped-args
-      //    rather than the explicit guard (accidental defense, coupled to #49)
       //  - error-forwarding runtime-leak probe; browser-bundle composition drift
-      // See follow-up tasks #49-52. Re-include each file as its bug is fixed.
+      // See follow-up tasks #50-52. Re-include each file as its bug is fixed.
       // (find-exec-quoting-injection was a GENUINE stale test — ag-bash's
       // behavior is bash-correct there — so it was realigned + re-included.)
-      "src/commands/js-exec/js-exec.node-compat.test.ts",
       "src/security/attacks/js-exec-host-runtime-breakout-probes.test.ts",
       "src/security/attacks/js-exec-recursion-guard-bypass.test.ts",
       "src/security/attacks/nested-exec-command-injection.test.ts",
       "src/security/attacks/timeout-stdin-forwarding.test.ts",
       "src/security/sandbox/error-forwarding-runtime-leak-probe.test.ts",
-      // js-exec exec semantics + browser-bundle composition drift (the bundle
-      // now includes sqlite3 the test expected stripped) — also pre-existing,
-      // also surfaced by the glob correction. Fail in isolation, not pollution.
-      "src/commands/js-exec/js-exec.exec.test.ts",
       "src/browser.bundle.test.ts",
     ],
     pool: "forks",

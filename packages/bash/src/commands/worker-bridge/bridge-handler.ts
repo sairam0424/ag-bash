@@ -698,10 +698,16 @@ export class BridgeHandler {
         if (parsed.stdin) {
           options.stdin = parsed.stdin;
         }
-        // Structured args: pass directly via args option (no shell escaping needed)
+        // Structured args (spawnSync): compose the command name + every arg into
+        // a single shell-quoted line. Each token (including the command name) is
+        // single-quoted, so args are forwarded as literal argv tokens — no glob,
+        // word-splitting, or metacharacter reparsing — preserving spawnSync
+        // semantics. This works regardless of the underlying exec engine, unlike
+        // the `options.args` injection path which only the (now-removed) monolith
+        // engine honored — the pipeline engine silently drops it (#49).
         if (parsed.args && Array.isArray(parsed.args)) {
-          options.args = parsed.args.map((a: unknown) => String(a));
-          command = shellJoinArgs([command]);
+          const argv = [command, ...parsed.args.map((a: unknown) => String(a))];
+          command = shellJoinArgs(argv);
         }
       }
 
