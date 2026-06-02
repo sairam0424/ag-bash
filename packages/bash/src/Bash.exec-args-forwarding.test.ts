@@ -12,6 +12,16 @@ describe("Bash exec args forwarding", () => {
     expect(result.exitCode).toBe(0);
   });
 
+  it("supplies all argv when the command has no inline args", async () => {
+    const bash = new Bash();
+
+    const result = await bash.exec("echo", { args: ["hi", "there"] });
+
+    expect(result.stdout).toBe("hi there\n");
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+  });
+
   it("does not append args to subsequent commands", async () => {
     const bash = new Bash();
 
