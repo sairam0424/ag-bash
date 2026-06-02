@@ -1,4 +1,5 @@
 import { NounsetError } from "../interpreter/errors.js";
+import { SHELL_BUILTINS } from "../interpreter/helpers/shell-constants.js";
 import type {
   InterpreterContext,
   InterpreterState,
@@ -165,9 +166,6 @@ export class AgenticHealer {
         }
 
         // Fallback: check SHELL_BUILTINS list as well (some might not be registered but are known)
-        const { SHELL_BUILTINS } = await import(
-          "../interpreter/helpers/shell-constants.js"
-        );
         const closestBuiltin = Array.from(SHELL_BUILTINS)
           .map((c) => ({ name: c, dist: levenshtein(cmdName, c) }))
           .filter((res) => res.dist <= 2)
