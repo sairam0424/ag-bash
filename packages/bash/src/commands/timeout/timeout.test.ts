@@ -37,6 +37,46 @@ describe("timeout command", () => {
     });
   });
 
+  // Reference cases verified against real coreutils `timeout` (the oracle).
+  // Each assertion below was confirmed to match `bash -c "<script>"` exactly.
+  // Regression guard for two bugs:
+  //   B) the wrapped command's argv was dropped (echo produced empty output)
+  //      because timeout forwarded args via the exec `args` option, which the
+  //      pipeline exec engine ignores. Now the full argv is shell-quoted into a
+  //      single command line so every engine forwards it literally.
+  //   A) a timed-out command must exit 124. Previously `bash -c '...'` ran with
+  //      no argv (same dropped-args mechanism), so it exited 0 instantly instead
+  //      of sleeping and timing out.
+  describe("bash-parity reference cases", () => {
+    it("`timeout 1 echo ok` -> stdout 'ok\\n', exit 0", async () => {
+      const result = await new Bash().exec("timeout 1 echo ok");
+      expect(result.stdout).toBe("ok\n");
+      expect(result.stderr).toBe("");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("`timeout 1 echo 'hello world'` -> stdout 'hello world\\n', exit 0", async () => {
+      const result = await new Bash().exec("timeout 1 echo 'hello world'");
+      expect(result.stdout).toBe("hello world\n");
+      expect(result.stderr).toBe("");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("`timeout 0.01 bash -c 'sleep 0.05'` -> exit 124, empty stdout", async () => {
+      const result = await new Bash().exec("timeout 0.01 bash -c 'sleep 0.05'");
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("");
+      expect(result.exitCode).toBe(124);
+    });
+
+    it("`timeout 1 sleep 0.01` -> exit 0 (completes in time)", async () => {
+      const result = await new Bash().exec("timeout 1 sleep 0.01");
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("");
+      expect(result.exitCode).toBe(0);
+    });
+  });
+
   describe("duration parsing", () => {
     it("should handle seconds (default)", async () => {
       const env = new Bash({

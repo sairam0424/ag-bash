@@ -58,8 +58,6 @@ export default defineConfig({
       "src/security/attacks/js-exec-host-runtime-breakout-probes.test.ts",
       "src/security/attacks/js-exec-recursion-guard-bypass.test.ts",
       "src/security/attacks/nested-exec-command-injection.test.ts",
-      "src/security/attacks/timeout-post-timeout-side-effect.test.ts",
-      "src/security/attacks/timeout-signal-propagation-gaps.test.ts",
       "src/security/attacks/timeout-stdin-forwarding.test.ts",
       "src/security/sandbox/error-forwarding-runtime-leak-probe.test.ts",
       // js-exec exec semantics + browser-bundle composition drift (the bundle
