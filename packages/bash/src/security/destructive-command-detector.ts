@@ -62,6 +62,7 @@ interface DetectionRule {
  * Used for SQL keywords that may appear in any casing.
  */
 function caseInsensitive(source: string): (cmd: string) => boolean {
+  // biome-ignore lint/style/noRestrictedGlobals: internal controlled detection pattern (not user input); native RegExp is the documented choice for these
   const re = new RegExp(source, "i");
   return (cmd) => re.test(cmd);
 }
@@ -70,6 +71,7 @@ function caseInsensitive(source: string): (cmd: string) => boolean {
  * Build a case-sensitive tester from a RegExp source string.
  */
 function caseSensitive(source: string): (cmd: string) => boolean {
+  // biome-ignore lint/style/noRestrictedGlobals: internal controlled detection pattern (not user input); native RegExp is the documented choice for these
   const re = new RegExp(source);
   return (cmd) => re.test(cmd);
 }

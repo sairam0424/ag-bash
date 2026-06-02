@@ -9,7 +9,7 @@ export class LSPConnection extends EventEmitter {
   private idCounter = 0;
   private pendingRequests = new Map<
     number,
-    { resolve: Function; reject: Function }
+    { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }
   >();
   private buffer = Buffer.alloc(0);
 

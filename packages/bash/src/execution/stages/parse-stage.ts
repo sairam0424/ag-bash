@@ -72,7 +72,7 @@ export class ParseStage implements PipelineStage {
     let ast: ScriptNode;
     if (this.parserEngine === "tree-sitter" && this.treeSitterConfig) {
       const tree = TreeSitterParser.parse(normalizedScript);
-      const converter = new TreeSitterToAst(normalizedScript);
+      const converter = new TreeSitterToAst();
       ast = converter.convert(tree);
     } else {
       ast = parse(normalizedScript, {

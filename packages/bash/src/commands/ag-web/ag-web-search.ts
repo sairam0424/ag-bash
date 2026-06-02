@@ -31,8 +31,6 @@ export const WebSearchTool: ToolboxTool = {
     bash: Bash,
     {
       query,
-      allowed_domains,
-      blocked_domains,
     }: {
       query: string;
       allowed_domains?: string[];

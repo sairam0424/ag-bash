@@ -6,12 +6,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  type BusCallback,
-  type BusErrorHandler,
-  type BusEvent,
-  SharedStateBus,
-} from "./SharedStateBus.js";
+import { type BusEvent, SharedStateBus } from "./SharedStateBus.js";
 
 /* ================================================================== */
 /*  SharedStateBus                                                     */

@@ -5,7 +5,7 @@
  * expiration, dedup, serialization, and dispose lifecycle.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { CronScheduler, matchesCron } from "./CronScheduler.js";
 import { type BusEvent, SharedStateBus } from "./SharedStateBus.js";
 

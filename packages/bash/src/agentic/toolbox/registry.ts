@@ -223,6 +223,7 @@ export class BashToolbox {
                 /[.*+?^${}()|[\]\\]/g,
                 "\\$&",
               );
+              // biome-ignore lint/style/noRestrictedGlobals: target is fully regex-escaped above (literal match, no ReDoS); native RegExp needed for String.matchAll
               const regex = new RegExp(escapedTarget, "g");
               const matches = [...normalizedContent.matchAll(regex)];
 

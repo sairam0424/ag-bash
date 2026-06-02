@@ -208,7 +208,7 @@ export async function dispatchBuiltin(
   _useDefaultPath: boolean,
   stdinSourceFd: number,
 ): Promise<ExecResult | null> {
-  const { ctx, runCommand } = dispatchCtx;
+  const { ctx } = dispatchCtx;
 
   // Coverage tracking for builtins (lightweight: only fires when coverage is enabled)
   if (ctx.coverage && SHELL_BUILTINS.has(commandName)) {

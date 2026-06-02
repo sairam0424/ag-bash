@@ -118,8 +118,8 @@ describe("ASTCache", () => {
     });
 
     it("should differentiate inputs that differ by one character", () => {
-      const input1 = "a".repeat(64) + "x";
-      const input2 = "a".repeat(64) + "y";
+      const input1 = `${"a".repeat(64)}x`;
+      const input2 = `${"a".repeat(64)}y`;
       const ast1 = makeAST(1);
       const ast2 = makeAST(2);
       cache.set(input1, ast1);

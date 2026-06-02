@@ -8,7 +8,7 @@
  * and delegates execution to the Interpreter.
  */
 
-import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
+import type { FunctionDefNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
 import { EventEmitter } from "node:events";
@@ -926,14 +926,6 @@ export class Bash extends EventEmitter {
       executionStartTime: Date.now(),
       sessionId: options?.sessionId ?? this.state.sessionId,
     };
-
-    // Normalize indented multi-line scripts (unless rawScript is true)
-    // This allows writing indented bash scripts in template literals
-    // BUT we must preserve whitespace inside heredoc content
-    let normalized = normalizedCommandLine;
-    if (!options?.rawScript) {
-      normalized = normalizeScript(normalizedCommandLine);
-    }
 
     // Branch on execution engine. The instance-coupled prologue above
     // (command-count guard, empty short-circuit, heredoc normalization,

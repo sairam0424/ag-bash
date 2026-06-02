@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Token } from "./lexer.js";
-import { Lexer, LexerError, TokenType } from "./lexer.js";
+import { Lexer, TokenType } from "./lexer.js";
 
 /**
  * Unit tests for the Bash lexer/tokenizer.
@@ -13,10 +13,6 @@ function tokenize(input: string): Token[] {
 
 function tokenTypes(input: string): TokenType[] {
   return tokenize(input).map((t) => t.type);
-}
-
-function tokenValues(input: string): string[] {
-  return tokenize(input).map((t) => t.value);
 }
 
 describe("lexer", () => {

@@ -509,7 +509,7 @@ export class CowFs implements IFileSystem {
     return this.parent.realpath(path);
   }
 
-  async utimes(path: string, atime: Date, mtime: Date): Promise<void> {
+  async utimes(path: string, _atime: Date, mtime: Date): Promise<void> {
     const normalized = normalizePath(path);
 
     if (this.deleted.has(normalized)) {

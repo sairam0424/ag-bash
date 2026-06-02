@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ArithExpr, ArithmeticExpressionNode } from "../ast/types.js";
-import {
-  parseArithExpr,
-  parseArithmeticExpression,
-} from "./arithmetic-parser.js";
+import { parseArithmeticExpression } from "./arithmetic-parser.js";
 import { Parser } from "./parser.js";
 
 /**

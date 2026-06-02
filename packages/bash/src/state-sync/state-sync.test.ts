@@ -5,7 +5,7 @@
  * generation, filesystem diffing, and round-trip consistency.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { BashSnapshot } from "../Bash.js";
 import type { FileSystemSnapshot } from "../fs/interface.js";
 import type { InterpreterState } from "../interpreter/types.js";
@@ -14,7 +14,6 @@ import {
   type BashDelta,
   diffFs,
   diffState,
-  type FsDelta,
 } from "./index.js";
 
 /* ================================================================== */
@@ -300,11 +299,11 @@ describe("diffState", () => {
         currentEnv[`VAR_${i}`] = `value_${i}`;
       }
       // Change one
-      currentEnv["VAR_50"] = "changed";
+      currentEnv.VAR_50 = "changed";
       // Add one
-      currentEnv["NEW_VAR"] = "new";
+      currentEnv.NEW_VAR = "new";
       // Remove one (don't include VAR_99)
-      delete currentEnv["VAR_99"];
+      delete currentEnv.VAR_99;
 
       const base = createSnapshot({ env: baseEnv });
       const current = createSnapshot({ env: currentEnv });
