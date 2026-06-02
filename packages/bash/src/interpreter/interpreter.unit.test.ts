@@ -771,7 +771,10 @@ cat <<'EOF'
 hello $NAME
 EOF
       `);
-      expect(result.stdout).toBe("hello user\n");
+      // A quoted delimiter (<<'EOF') makes the body fully literal — bash does
+      // NOT expand $NAME. (Previously this asserted "hello user\n", encoding a
+      // bug where quoted heredocs were expanded like unquoted ones.)
+      expect(result.stdout).toBe("hello $NAME\n");
     });
   });
 });

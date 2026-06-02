@@ -77,12 +77,18 @@ export class NormalizeStage implements PipelineStage {
       return { continue: false, result: emptyResult };
     }
 
-    // Heredoc normalization (ensure delimiters are trimmed if not in raw mode)
+    // Heredoc delimiter normalization (unless raw mode): collapse only the
+    // optional whitespace between the operator and the delimiter (`<< EOF` ->
+    // `<<EOF`). CRITICAL: preserve the `<<-` dash (tab-stripping) AND the
+    // surrounding quotes (`<<'EOF'` / `<<"EOF"`) — a quoted delimiter means the
+    // body is literal (no expansion), so stripping the quotes here silently
+    // turned every quoted heredoc into an expanding one.
     let commandLine = options?.rawScript
       ? rawScript
       : rawScript.replace(
-          /<<-?\s*["']?(\w+)["']?/g,
-          (_match, delimiter) => `<<${delimiter}`,
+          /<<(-?)\s*(["']?)(\w+)\2/g,
+          (_match, dash, quote, delimiter) =>
+            `<<${dash}${quote}${delimiter}${quote}`,
         );
 
     // Log command execution if logger is available

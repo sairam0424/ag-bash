@@ -27,6 +27,7 @@ import { matchPattern } from "./conditionals.js";
 import { BreakError, ContinueError, GlobError } from "./errors.js";
 import {
   escapeGlobChars,
+  expandHereDocContent,
   expandWord,
   expandWordWithGlob,
   isWordFullyQuoted,
@@ -273,13 +274,7 @@ export async function executeWhile(
       redir.target.type === "HereDoc"
     ) {
       const hereDoc = redir.target as HereDocNode;
-      let content = await expandWord(ctx, hereDoc.content);
-      if (hereDoc.stripTabs) {
-        content = content
-          .split("\n")
-          .map((line) => line.replace(/^\t+/, ""))
-          .join("\n");
-      }
+      const content = await expandHereDocContent(ctx, hereDoc);
       effectiveStdin = content;
     } else if (redir.operator === "<<<" && redir.target.type === "Word") {
       effectiveStdin = `${await expandWord(ctx, redir.target as WordNode)}\n`;

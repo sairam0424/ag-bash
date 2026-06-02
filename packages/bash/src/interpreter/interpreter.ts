@@ -82,7 +82,11 @@ import {
   PosixFatalError,
   ReturnError,
 } from "./errors.js";
-import { expandWord, expandWordWithGlob } from "./expansion.js";
+import {
+  expandHereDocContent,
+  expandWord,
+  expandWordWithGlob,
+} from "./expansion.js";
 import { executeFunctionDef } from "./functions.js";
 import { OutputBuffer } from "./helpers/output-buffer.js";
 import {
@@ -976,14 +980,7 @@ export class Interpreter {
         redir.target.type === "HereDoc"
       ) {
         const hereDoc = redir.target as HereDocNode;
-        let content = await expandWord(this.ctx, hereDoc.content);
-        // <<- strips leading tabs from each line
-        if (hereDoc.stripTabs) {
-          content = content
-            .split("\n")
-            .map((line) => line.replace(/^\t+/, ""))
-            .join("\n");
-        }
+        const content = await expandHereDocContent(this.ctx, hereDoc);
         // If this is a non-standard fd (not 0), store in fileDescriptors for -u option
         const fd = redir.fd ?? 0;
         if (fd !== 0) {

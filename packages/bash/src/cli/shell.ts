@@ -229,10 +229,11 @@ class VirtualShell {
   }
 
   async run(): Promise<void> {
-    // Perform initial discovery scan
-    this.projectBrief = await this.discovery.scan();
-
     if (this.isInteractive) {
+      // Interactive mode: a TTY never bulk-drains stdin, so it is safe to scan
+      // first and then start the prompt loop.
+      this.projectBrief = await this.discovery.scan();
+
       this.printWelcome();
       if (this.projectBrief) {
         console.log(
@@ -241,24 +242,41 @@ class VirtualShell {
         );
       }
       this.prompt();
-    } else {
-      // Non-interactive mode: read and execute line by line sequentially
-      const lines: string[] = [];
+      return;
+    }
 
-      // Collect all lines first
-      this.rl.on("line", (line) => {
-        lines.push(line);
+    // Non-interactive mode: attach the `line`/`close` listeners BEFORE awaiting
+    // the discovery scan. A piped (non-TTY) stream enters flowing mode as soon
+    // as readline has a consumer, so any line emitted during the scan's await
+    // would be lost if we registered the listener afterward (the original bug).
+    // We buffer every line up front, then drain the buffer in arrival order
+    // once the scan resolves, preserving command ordering.
+    const lines: string[] = [];
+    let inputClosed = false;
+
+    this.rl.on("line", (line) => {
+      lines.push(line);
+    });
+
+    const closePromise = new Promise<void>((resolve) => {
+      this.rl.on("close", () => {
+        inputClosed = true;
+        resolve();
       });
+    });
 
-      // Wait for all input to be read
-      await new Promise<void>((resolve) => {
-        this.rl.on("close", resolve);
-      });
+    // Perform initial discovery scan while stdin buffers in the background.
+    this.projectBrief = await this.discovery.scan();
 
-      // Execute commands sequentially
-      for (const line of lines) {
-        await this.executeCommand(line);
-      }
+    // Wait for all input to be read before executing, so the full buffered
+    // command list is available and ordering is deterministic.
+    if (!inputClosed) {
+      await closePromise;
+    }
+
+    // Execute commands sequentially in arrival order.
+    for (const line of lines) {
+      await this.executeCommand(line);
     }
   }
 }
