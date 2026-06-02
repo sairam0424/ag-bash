@@ -10,6 +10,8 @@ concurrency:
   group: bench-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   # Perf-regression gate (C2): runs the package benchmarks and fails the build
   # if any benchmark's mean time regresses >15% vs the committed
@@ -22,13 +24,11 @@ jobs:
   # dedicated runner and do NOT run it alongside other jobs in one process.
   bench:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm --filter @ag-bash/bash bench:check

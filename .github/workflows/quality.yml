@@ -10,17 +10,18 @@ concurrency:
   group: quality-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default: jobs that need more must opt in explicitly.
+permissions: {}
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
       # Supply-chain gate (E3): audit MUST fail the build on high/critical
       # advisories. Do NOT add continue-on-error here — that silently masks
       # vulnerable transitive dependencies. Pin patched versions via the
