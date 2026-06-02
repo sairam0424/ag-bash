@@ -50,13 +50,17 @@ export default defineConfig({
       //    + js-exec.node-compat re-included below.
       //  - `env <cmd-looking-arg>` exit code diverges from bash (0 vs 127)
       //  - error-forwarding runtime-leak probe; browser-bundle composition drift
-      // See follow-up tasks #50-52. Re-include each file as its bug is fixed.
+      // See follow-up tasks. Re-include each file as its bug is fixed.
       // (find-exec-quoting-injection was a GENUINE stale test — ag-bash's
-      // behavior is bash-correct there — so it was realigned + re-included.)
-      "src/security/attacks/js-exec-host-runtime-breakout-probes.test.ts",
-      "src/security/attacks/js-exec-recursion-guard-bypass.test.ts",
+      // behavior is bash-correct there — so it was realigned + re-included.
+      // The R-G live-extraArgs wiring (c996b84) freed js-exec-host-runtime-
+      // breakout, js-exec-recursion-guard, and timeout-stdin-forwarding —
+      // re-included. These 3 remain, each a distinct non-argv root cause:)
+      //  - nested-exec: `time` (/usr/bin/time not registered in sandbox) and
+      //    `rg --pre` (VFS cannot create the pathological injection filename)
+      //  - error-forwarding: ln/python3/sqlite3 directory-error messages
+      //  - browser.bundle: sqlite3/yq/xan/tar wrongly bundled into browser build
       "src/security/attacks/nested-exec-command-injection.test.ts",
-      "src/security/attacks/timeout-stdin-forwarding.test.ts",
       "src/security/sandbox/error-forwarding-runtime-leak-probe.test.ts",
       "src/browser.bundle.test.ts",
     ],
