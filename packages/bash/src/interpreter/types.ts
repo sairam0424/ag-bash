@@ -515,6 +515,4 @@ export interface InterpreterContext {
   __exitTrapFired?: boolean;
   /** True while the RETURN trap handler is executing (prevents recursion) */
   __executingReturnTrap?: boolean;
-  /** True while the DEBUG trap handler is executing (prevents recursion) */
-  __executingDebugTrap?: boolean;
 }
