@@ -6,6 +6,7 @@ import type {
   StatementNode,
   WordNode,
 } from "../../ast/types.js";
+import type { IFileSystem } from "../../fs/interface.js";
 import { serializeWord } from "../serialize.js";
 import type {
   TransformContext,
@@ -45,6 +46,18 @@ export class TeePlugin implements TransformPlugin<TeePluginMetadata> {
     const timestamp = this.options.timestamp ?? new Date();
     const ast = this.transformScript(context.ast, teeFiles, timestamp);
     return { ast, metadata: { teeFiles } };
+  }
+
+  /**
+   * Ensure the capture-output directory exists before the transformed
+   * script runs. The emitted `tee <outputDir>/<file>` commands write into
+   * `outputDir`; in real bash that directory must already exist or `tee`
+   * fails with "No such file or directory" (stdout still passes through).
+   * This mirrors the `mkdir -p` a user would run first. Idempotent —
+   * recursive mkdir is a no-op when the directory already exists.
+   */
+  async prepare(fs: IFileSystem): Promise<void> {
+    await fs.mkdir(this.options.outputDir, { recursive: true });
   }
 
   private formatTimestamp(date: Date): string {

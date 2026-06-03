@@ -36,6 +36,17 @@ export class TransformStage implements PipelineStage {
       }
     }
 
+    // Run optional async prepare hooks AFTER transform, BEFORE interpret, so
+    // a plugin can set up VFS state its emitted commands depend on (e.g. the
+    // TeePlugin creates its capture-output directory, mirroring the `mkdir -p`
+    // a user would run before piping into `tee /dir/file`). Operates on the
+    // live execution VFS the transformed script runs against.
+    for (const plugin of this.plugins) {
+      if (plugin.prepare) {
+        await plugin.prepare(context.bash.fs);
+      }
+    }
+
     context.ast = ast;
     context.metadata = meta;
     return { continue: true, context };

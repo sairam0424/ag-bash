@@ -358,9 +358,20 @@ export async function executePipeline(
       };
     } else {
       // Optimization D: Empty stdin short-circuit — when upstream produced
-      // nothing and the command reads from stdin, skip execution.
+      // nothing and the command is a pure stdin-reading filter, skip execution
+      // (an empty-input filter yields empty output and exit 0).
+      //
+      // Restricted to SimpleCommand: compound commands (Subshell, Group, and
+      // control structures) run their body regardless of stdin, so their exit
+      // code and output are NOT determined by empty input. Short-circuiting
+      // them would fabricate exit 0 — e.g. `true | (false)` or the PIPESTATUS
+      // restore `(exit 0) | (exit 1)` would wrongly report 0, dropping the
+      // last stage's real exit code from $? and PIPESTATUS.
       const emptyStdinShortCircuit =
-        !isFirst && stdin === "" && !isStdinIndependent(command);
+        !isFirst &&
+        stdin === "" &&
+        command.type === "SimpleCommand" &&
+        !isStdinIndependent(command);
 
       if (emptyStdinShortCircuit) {
         result = {

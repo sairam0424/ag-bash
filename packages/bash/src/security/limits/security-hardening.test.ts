@@ -562,11 +562,14 @@ describe("Security Hardening", () => {
       DefenseInDepthBox.resetInstance();
     });
 
-    it("should report disabled when not configured", () => {
+    it("should report enabled when not configured (fail-closed default)", () => {
       DefenseInDepthBox.resetInstance();
       const box = DefenseInDepthBox.getInstance();
-      // Default config has enabled: false
-      expect(box.isEnabled()).toBe(false);
+      // Fail-closed: getInstance() with no config defaults to enabled: true.
+      // See commit 727a1e8 "harden MCP server and sandbox defaults for v5.0.0"
+      // (BREAKING CHANGE: DefenseInDepthBox defaults to enabled when no config provided).
+      // In a Node.js test environment AsyncLocalStorage is available, so isEnabled() is true.
+      expect(box.isEnabled()).toBe(true);
       DefenseInDepthBox.resetInstance();
     });
   });
