@@ -199,7 +199,7 @@ jobs:
       - name: Verify all test jobs succeeded
         shell: bash
         run: |
-          results='${{ join(needs.*.result, ",") }}'
+          results='${{ join(needs.*.result, ',') }}'
           echo "job results: $results"
           case "$results" in
             *failure*|*cancelled*)
