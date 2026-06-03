@@ -1,0 +1,52 @@
+name: 🐛 Bug report
+description: A reproducible defect in @ag-bash/bash, the MCP server, or the agent bridge.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        ⚠️ **Not for security vulnerabilities.** Sandbox-escape or other security
+        issues must be reported privately — see SECURITY.md, not this form.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      options:
+        - "@ag-bash/bash"
+        - "@ag-bash/mcp-server"
+        - "@ag-bash/agent-bridge"
+        - not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "Package version (e.g. 6.0.2) and Node version (`node -v`)."
+      placeholder: "ag-bash 6.0.2, Node 22.x"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >-
+        The smallest script / steps that reproduce it. A bash snippet run via
+        `ag-bash -c '...'` or a code sample is ideal.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      description: What you expected to happen, and what actually happened. Include real bash behavior if comparing.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Logs, stack traces (sanitized), OS, or anything else relevant.
+    validations:
+      required: false

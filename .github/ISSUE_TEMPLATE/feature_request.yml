@@ -1,0 +1,38 @@
+name: ✨ Feature request
+description: Propose a new capability, builtin, or API for Ag-Bash.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do that Ag-Bash can't do today? Focus on the use case, not a pre-decided solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Ag-Bash do? If it's a new bash builtin/command, note how real bash behaves (parity is a core goal).
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Which package
+      options:
+        - "@ag-bash/bash"
+        - "@ag-bash/mcp-server"
+        - "@ag-bash/agent-bridge"
+        - new package / unsure
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security considerations
+      description: >-
+        Does this expand the sandbox surface (new globals, FS access, network,
+        a new runtime)? If so, how should it stay within the trust boundary?
+    validations:
+      required: false

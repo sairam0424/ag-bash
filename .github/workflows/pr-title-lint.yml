@@ -1,0 +1,57 @@
+# PR Title Lint — enforces conventional-commit PR titles.
+#
+# Why: this repo squash-merges PRs, so the PR title becomes the squash commit
+# subject. Enforcing the `type(scope): description` convention here keeps the
+# main-branch history clean and changelog-ready. The `types` list below is the
+# SAME set used by the repo's git-workflow rule and the existing commit history
+# (feat, fix, refactor, perf, test, docs, style, chore, ci, release).
+#
+# Scopes are an open set in this repo (pkg names, area tags, ad-hoc), so
+# `requireScope: false` — we validate the type, not an enumerated scope list.
+#
+# SECURITY — pull_request_target safety:
+# This workflow uses `pull_request_target` because the action must read the PR
+# title via the GitHub API with a token that works for fork PRs. It is SAFE:
+#   * It NEVER checks out PR head code (no actions/checkout) and never runs any
+#     PR-authored script.
+#   * There is NO `run:` step — no `github.event.*` field (PR title/body/branch)
+#     is ever interpolated into a shell. The untrusted title is consumed only
+#     inside the pinned action via the API, not echoed into bash.
+# Combined with `permissions: pull-requests: read`, the blast radius is reading
+# the PR title; it cannot write to the repo or expose secrets to fork code.
+name: "PR Title Lint"
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize]
+
+# Least-privilege default: the single job opts into exactly what it needs.
+permissions: {}
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            refactor
+            perf
+            test
+            docs
+            style
+            chore
+            ci
+            release
+          requireScope: false

@@ -2,6 +2,10 @@
 
 [![NPM Version](https://img.shields.io/npm/v/@ag-bash/bash.svg)](https://www.npmjs.com/package/@ag-bash/bash)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/sairam0424/ag-bash/blob/main/LICENSE)
+[![Quality](https://github.com/sairam0424/ag-bash/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/sairam0424/ag-bash/actions/workflows/quality.yml)
+[![Tests](https://github.com/sairam0424/ag-bash/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/sairam0424/ag-bash/actions/workflows/tests.yml)
+[![CodeQL](https://github.com/sairam0424/ag-bash/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/sairam0424/ag-bash/actions/workflows/codeql.yml)
+[![Bench](https://github.com/sairam0424/ag-bash/actions/workflows/bench.yml/badge.svg?branch=main)](https://github.com/sairam0424/ag-bash/actions/workflows/bench.yml)
 
 Ag-Bash is a production-grade, sandboxed Bash environment designed specifically for AI agents. It provides a virtualized Unix-like experience entirely in-process, featuring an in-memory filesystem, integrated runtimes for Python and JavaScript, and full support for modern agentic protocols.
 

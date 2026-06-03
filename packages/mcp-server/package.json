@@ -23,6 +23,11 @@
     "agentic",
     "bash"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sairam0424/ag-bash.git",
+    "directory": "packages/mcp-server"
+  },
   "author": "Ag-Bash",
   "license": "Apache-2.0",
   "dependencies": {

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/sairam0424/ag-bash/security/policy
+    about: >-
+      Do NOT open a public issue for security vulnerabilities. Ag-Bash is a
+      sandbox; sandbox-escape and similar reports must be disclosed privately.
+      See SECURITY.md for the responsible-disclosure process.
+  - name: 💬 Questions & discussion
+    url: https://github.com/sairam0424/ag-bash/discussions
+    about: For usage questions and open-ended discussion, please use Discussions.

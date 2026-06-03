@@ -14,6 +14,14 @@ export default defineConfig({
     // load-induced spurious failure. Match the repo-wide 120s.
     testTimeout: 120000,
     hookTimeout: 120000,
+    // WASM-ONLY retry. The cold-start / shared-worker-pool flakiness documented
+    // above is infrastructural, not a correctness signal, so retry once. This is
+    // SAFE here because this config targets WASM-runtime + sandbox suites whose
+    // assertions are deterministic once the runtime is up — a retry masks a slow
+    // cold start, never a wrong result. NEVER add `retry` to the unit/fuzz/
+    // comparison configs: there, a test that only passes on retry IS a failure
+    // (especially a security assertion). Keep retry confined to this file.
+    retry: 1,
     include: [
       // WASM-runtime command suites. Paths updated to the post-refactor
       // locations under src/commands/ (the old src/python3.*.test.ts globs

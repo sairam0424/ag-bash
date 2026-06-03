@@ -1,0 +1,59 @@
+# Dependabot keeps the SHA-pinned GitHub Actions and the npm dependency tree
+# current. Updates land as weekly, grouped PRs (one per ecosystem/scope) to keep
+# review load low. Action-version bumps are NEVER auto-merged — a SHA pin is a
+# trust decision and must be reviewed. setup-vendor.js (the npm postinstall) is
+# fully offline/deterministic, so npm update PRs build cleanly in CI.
+version: 2
+updates:
+  # --- GitHub Actions used by all workflows + the composite action ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+
+  # --- npm: root workspace tooling (biome, typescript, vitest, esbuild) ---
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      root-dev-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore"
+
+  # --- npm: per-package dependencies (workspace-aware) ---
+  - package-ecosystem: "npm"
+    directory: "/packages/bash"
+    schedule:
+      interval: "weekly"
+    groups:
+      bash-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(bash)"
+
+  - package-ecosystem: "npm"
+    directory: "/packages/mcp-server"
+    schedule:
+      interval: "weekly"
+    groups:
+      mcp-server-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(mcp)"
+
+  - package-ecosystem: "npm"
+    directory: "/packages/agent-bridge"
+    schedule:
+      interval: "weekly"
+    groups:
+      agent-bridge-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(agent-bridge)"

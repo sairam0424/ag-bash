@@ -1,0 +1,35 @@
+# Labeler — auto-labels PRs by changed path.
+#
+# Why: surfaces the blast radius of a PR at a glance from its labels, so the
+# high-risk surfaces (`area:security`, `area:wasm`) are obvious before review.
+# Label-to-path rules live in .github/labeler.yml (read by the action by
+# default; no checkout is needed — it reads the changed files via the API).
+#
+# SECURITY — pull_request_target safety:
+# Uses `pull_request_target` so the job has a write token that works for PRs
+# from forks (a plain `pull_request` token is read-only on forks and cannot
+# apply labels). It is SAFE: there is no `actions/checkout` and no `run:` step,
+# so no PR head code is ever fetched or executed and no `github.event.*` field
+# is interpolated into a shell. The label rules are read from the trusted base
+# branch's .github/labeler.yml, never from PR-authored content.
+name: "Labeler"
+
+on:
+  pull_request_target:
+
+# Least-privilege default: the single job opts into exactly what it needs.
+permissions: {}
+
+concurrency:
+  group: labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@f27b608878404679385c85cfa523b85ccb86e213 # v6.1.0

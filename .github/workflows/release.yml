@@ -1,0 +1,98 @@
+# Release — the single automated publish path (Changesets + npm Trusted Publishing).
+#
+# Flow: on push to main, changesets/action opens/updates a "Version Packages" PR
+# that consumes the pending changesets, bumps the three packages to one
+# synchronized version (fixed mode), and writes the changelog. Merging THAT PR
+# re-runs this workflow, which runs `pnpm release` (build + `changeset publish`).
+# `changeset publish` rewrites each `@ag-bash/bash: workspace:*` to the concrete
+# version — the mechanical fix for the v6.0.0 uninstallable-package incident.
+#
+# Auth: npm Trusted Publishing (OIDC). The job mints a short-lived id-token; no
+# long-lived NPM_TOKEN is required once a Trusted Publisher is configured per
+# package on npmjs.com. Until that handshake is verified by a dry-run, an
+# NPM_TOKEN secret (if present) is passed through as a fallback so releases never
+# brick; delete the secret only after a green OIDC dry-run (see CONTRIBUTING.md).
+#
+# This supersedes publish.yml as the automated path; publish.yml is demoted to a
+# manual workflow_dispatch-only emergency fallback to avoid double-publish.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Build + changeset publish --dry-run (proves OIDC mint; no upload)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm-publish
+    permissions:
+      contents: write # changesets opens the Version Packages PR + pushes tags
+      pull-requests: write # changesets manages the release PR
+      id-token: write # OIDC: npm Trusted Publishing + provenance
+      attestations: write # actions/attest-build-provenance
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # NOTE: intentionally NOT using the composite setup action here — the
+      # publish path needs registry-url wired and must NOT cache the pnpm store
+      # on a credentialed job (cache-poisoning surface).
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+      # Trusted Publishing requires npm >= 11.5.1; Node 22's bundled npm is older.
+      # Upgrading in-place keeps us on the supported Node 22 LTS line (no forced
+      # Node 24 migration).
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high
+      # Guard: all three packages share one version (Changesets fixed mode).
+      - run: pnpm check:version-sync
+      # Static packaging pre-filter before any publish.
+      - run: pnpm check:pack-contents
+
+      # On a normal push to main: open/update the Version Packages PR, and if a
+      # version PR was just merged (no pending changesets), run `pnpm release`
+      # to build + publish. On workflow_dispatch dry-run: prove the OIDC path.
+      - name: Changesets release
+        if: ${{ github.event_name == 'push' }}
+        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
+        with:
+          version: pnpm version-packages
+          publish: pnpm release
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Fallback only — remove once OIDC Trusted Publishing is verified and
+          # the NPM_TOKEN secret is deleted. With OIDC active and no token, npm
+          # uses the minted id-token and provenance is automatic.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Dry-run path: prove `changeset publish` mints OIDC (or would publish)
+      # WITHOUT uploading, before the maintainer deletes NPM_TOKEN.
+      - name: OIDC publish dry-run
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+        run: pnpm build && pnpm changeset publish --dry-run
+
+      # GitHub-native build provenance attestation over the packed tarballs,
+      # layered on top of npm's own --provenance. Only on a real push release.
+      - name: Attest build provenance
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        continue-on-error: true
+        with:
+          subject-path: "packages/*/*.tgz"
