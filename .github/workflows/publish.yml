@@ -1,7 +1,12 @@
-name: Publish
+name: Publish (manual fallback)
+# DEMOTED: release.yml (Changesets + OIDC) is the sole AUTOMATED publish path.
+# This workflow is retained as a manual emergency fallback ONLY — the
+# `release: published` trigger was removed so the two paths can never
+# double-publish the same version (409 / OIDC-mint race). It still uses the
+# long-lived NPM_TOKEN; prefer release.yml. Once OIDC is fully verified and
+# NPM_TOKEN is deleted, this fallback's token auth will no longer function and
+# it should be removed.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       dry-run:
