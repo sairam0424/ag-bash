@@ -43,10 +43,13 @@ function initCommonDirectories(
   fs.mkdirSync("/bin", { recursive: true });
   fs.mkdirSync("/usr/bin", { recursive: true });
 
-  // Create additional directories only for default layout
+  // /tmp is a standard, always-present directory on every real Unix system,
+  // so create it unconditionally (matches `bash` where /tmp is always writable).
+  fs.mkdirSync("/tmp", { recursive: true });
+
+  // Create layout-specific directories only for the default layout
   if (useDefaultLayout) {
     fs.mkdirSync("/home/user", { recursive: true });
-    fs.mkdirSync("/tmp", { recursive: true });
   }
 }
 

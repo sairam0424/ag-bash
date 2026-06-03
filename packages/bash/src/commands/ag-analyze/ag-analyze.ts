@@ -54,10 +54,30 @@ export const agAnalyzeCommand: Command = {
       if (f.endsWith(".py")) return "python";
       if (f.endsWith(".js") || f.endsWith(".ts")) return "javascript";
       if (f.endsWith(".json")) return "json";
-      return "bash";
+      if (
+        f.endsWith(".sh") ||
+        f.endsWith(".bash") ||
+        content.startsWith("#!/bin/bash") ||
+        content.startsWith("#!/bin/sh")
+      ) {
+        return "bash";
+      }
+      return "unknown";
     };
 
     const language = getLanguage(file);
+
+    if (language === "unknown") {
+      return {
+        stdout:
+          `File: ${file}\n` +
+          `Lines: ${lines.length}\n` +
+          `Size: ${content.length} bytes\n` +
+          `(Deep semantic analysis currently only supported for Bash scripts)\n`,
+        stderr: "",
+        exitCode: 0,
+      };
+    }
 
     try {
       const engine = ctx.bash?.semanticEngine ?? new SemanticEngine();

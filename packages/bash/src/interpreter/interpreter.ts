@@ -1128,6 +1128,16 @@ export class Interpreter {
       this.ctx.state.extraArgs = undefined;
     }
 
+    // Generate xtrace output (set -x) BEFORE running the command, matching
+    // bash which prints the trace line just before executing. The command's
+    // own xtrace plus any assignment-prefix xtrace are emitted to stderr.
+    const xtraceCommandOutput = await traceSimpleCommand(
+      this.ctx,
+      commandName,
+      args,
+    );
+    const xtracePrefix = xtraceAssignmentOutput + xtraceCommandOutput;
+
     // Built-in commands are registered with CommandRegistry.
     // External commands are handled by the shell path lookup.
     let execResult: ExecResult;
@@ -1173,11 +1183,16 @@ export class Interpreter {
     }
 
     // Apply redirections if command succeeded (or even if it failed, bash applies them)
-    const finalResult = await applyRedirections(
+    const redirectedResult = await applyRedirections(
       this.ctx,
       execResult,
       node.redirections,
     );
+
+    // Prepend xtrace (set -x) trace lines to stderr. Bash writes the trace to
+    // the shell's stderr (fd 2), which is NOT affected by the command's own
+    // redirections, so this is applied AFTER applyRedirections.
+    const finalResult = prependStderr(redirectedResult, xtracePrefix);
 
     // Ag-Trace: Analyze failure if exitCode exists and is non-zero.
     // Source-emitted observations (already on finalResult) are the primary
