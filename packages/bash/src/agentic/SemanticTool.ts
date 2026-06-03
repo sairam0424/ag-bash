@@ -27,6 +27,7 @@ export const HoverTool: ToolboxTool = buildTool({
         env: bash.env,
         stdin: "",
         bash,
+        // biome-ignore lint/suspicious/noExplicitAny: Internal command context shim — Bash's private `agentic` field blocks structural assignment to CommandContext.bash (BashHost), and bash.env is a Record vs the Map the context expects.
       } as any,
     );
 
@@ -59,6 +60,7 @@ export const FindSymbolTool: ToolboxTool = buildTool({
       env: bash.env,
       stdin: "",
       bash,
+      // biome-ignore lint/suspicious/noExplicitAny: Internal command context shim — Bash's private `agentic` field blocks structural assignment to CommandContext.bash (BashHost), and bash.env is a Record vs the Map the context expects.
     } as any);
 
     return result.stdout || result.stderr || "No symbols found.";
@@ -83,6 +85,7 @@ export const ExplainTool: ToolboxTool = buildTool({
       env: bash.env,
       stdin: "",
       bash,
+      // biome-ignore lint/suspicious/noExplicitAny: Internal command context shim — Bash's private `agentic` field blocks structural assignment to CommandContext.bash (BashHost), and bash.env is a Record vs the Map the context expects.
     } as any);
 
     return result.stdout || result.stderr;

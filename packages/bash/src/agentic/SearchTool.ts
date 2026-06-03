@@ -35,6 +35,7 @@ export const GrepTool: ToolboxTool = buildTool({
       env: bash.env,
       stdin: "",
       bash,
+      // biome-ignore lint/suspicious/noExplicitAny: Internal command context shim — Bash's private `agentic` field blocks structural assignment to CommandContext.bash (BashHost), and bash.env is a Record vs the Map the context expects.
     } as any);
 
     return result.stdout || result.stderr || "No matches found.";
@@ -67,6 +68,7 @@ export const FindFilesTool: ToolboxTool = buildTool({
       env: bash.env,
       stdin: "",
       bash,
+      // biome-ignore lint/suspicious/noExplicitAny: Internal command context shim — Bash's private `agentic` field blocks structural assignment to CommandContext.bash (BashHost), and bash.env is a Record vs the Map the context expects.
     } as any);
 
     return result.stdout || result.stderr || "No matching files found.";
