@@ -1,0 +1,67 @@
+# actions/labeler config (v5+/v6 match-object format).
+#
+# Auto-applies path-scoped labels to PRs so reviewers can see the blast radius
+# at a glance — especially `area:security` and `area:wasm`, the two highest-risk
+# surfaces in this sandboxed-interpreter monorepo. Consumed by the Labeler
+# workflow (.github/workflows/labeler.yml).
+#
+# Schema: each label maps to a list of match objects. Here we use
+#   - changed-files:
+#       - any-glob-to-any-file: [<globs>]
+# meaning the label is applied when ANY listed glob matches ANY changed file.
+
+"pkg:bash":
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/bash/**
+
+"pkg:mcp-server":
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/mcp-server/**
+
+"pkg:agent-bridge":
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/agent-bridge/**
+
+"area:security":
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/bash/src/security/**
+          - SECURITY.md
+          - THREAT_MODEL.md
+
+"area:wasm":
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/bash/src/commands/python3/**
+          - packages/bash/src/commands/sqlite3/**
+          - packages/bash/src/commands/js-exec/**
+          - packages/bash/src/parser/vendor/**
+
+"area:browser-bundle":
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/bash/src/browser*
+          - packages/bash/.size-limit.json
+
+"ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/actions/**
+          - .github/dependabot.yml
+          - .changeset/**
+          - scripts/**
+
+"docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - docs/**
+
+"examples":
+  - changed-files:
+      - any-glob-to-any-file:
+          - examples/**
