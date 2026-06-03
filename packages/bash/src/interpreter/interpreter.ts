@@ -101,6 +101,7 @@ import {
   isWordLiteralMatch,
   parseRwFdContent,
 } from "./helpers/word-matching.js";
+import { traceSimpleCommand } from "./helpers/xtrace.js";
 import { executePipeline as executePipelineHelper } from "./pipeline-execution.js";
 import {
   applyRedirections,
