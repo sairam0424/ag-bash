@@ -6,7 +6,7 @@
  */
 
 import * as path from "node:path";
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, tool, jsonSchema } from "ai";
 import { Bash, OverlayFs, createBashTool } from "@ag-bash/bash";
 
 const colors = {
@@ -32,6 +32,26 @@ export interface CommandResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+}
+
+/**
+ * The result shape that @ag-bash/bash's `onAfterBashCall` hook passes in.
+ * It is either a successful command result or an error outcome — mirrors the
+ * toolkit's internal `ToolResult` union (not re-exported from the package root).
+ */
+type ToolExecutionOutcome =
+  | { stdout: string; stderr: string; exitCode: number }
+  | { error: string; exitCode: number };
+
+/**
+ * Normalizes a toolkit execution outcome into the example's CommandResult,
+ * surfacing the error arm via stderr so downstream display stays unchanged.
+ */
+function toCommandResult(outcome: ToolExecutionOutcome): CommandResult {
+  if ("error" in outcome) {
+    return { stdout: "", stderr: outcome.error, exitCode: outcome.exitCode };
+  }
+  return outcome;
 }
 
 export interface CreateAgentOptions {
@@ -96,14 +116,36 @@ Use bash commands to explore:
 - head, tail, wc, sort, uniq for data analysis
 
 Help the user explore, search, and understand the contents.`,
-    onBeforeBashCall: (input: { command: string; }) => {
+    onBeforeBashCall: (input: { command: string }) => {
       options.onToolCall?.(input.command);
-      return undefined;
     },
-    onAfterBashCall: (input: { result: CommandResult; }) => {
-      options.onToolResult?.(input.result);
-      return undefined;
+    onAfterBashCall: (input: {
+      command: string;
+      result: ToolExecutionOutcome;
+    }) => {
+      options.onToolResult?.(toCommandResult(input.result));
     },
+  });
+
+  // Adapt the toolkit's bash tool to the ai@6 Tool shape: ai@6 expects
+  // `inputSchema` to be a FlexibleSchema, so describe the `command` input as a
+  // JSON Schema via `jsonSchema()`. The schema mirrors the toolkit's own
+  // input schema; execution still delegates to the toolkit's `execute`.
+  const bashTool = toolkit.tools.bash;
+  const aiBashTool = tool({
+    description: bashTool.description,
+    inputSchema: jsonSchema<{ command: string }>({
+      type: "object",
+      properties: {
+        command: {
+          type: "string",
+          description:
+            "The bash command to run (e.g. 'ls -R', 'cat README.md', 'grep -r \"pattern\" .')",
+        },
+      },
+      required: ["command"],
+    }),
+    execute: (args) => bashTool.execute(args),
   });
 
   const history: Array<{ role: "user" | "assistant"; content: string }> = [];
@@ -116,7 +158,7 @@ Help the user explore, search, and understand the contents.`,
 
       const result = streamText({
         model: "anthropic:claude-3-5-sonnet-latest",
-        tools: { bash: toolkit.tools.bash },
+        tools: { bash: aiBashTool },
         stopWhen: stepCountIs(50),
         messages: history,
       });
