@@ -2,8 +2,10 @@ name: Tests
 on:
   push:
     branches: [main, develop]
+    paths-ignore: ["**/*.md", "docs/**", "LICENSE"]
   pull_request:
     branches: [main, develop]
+    paths-ignore: ["**/*.md", "docs/**", "LICENSE"]
   workflow_dispatch:
 
 concurrency:
@@ -13,24 +15,9 @@ concurrency:
 permissions: {}
 
 jobs:
-  unit:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        node-version: [20, 22, 24]
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: ./.github/actions/setup
-        with:
-          node-version: ${{ matrix.node-version }}
-      - run: pnpm build
-      - run: pnpm --filter @ag-bash/bash test:unit
-      - run: pnpm --filter @ag-bash/bash test:dist
-
-  wasm:
+  # Build once, fan out. The full build previously re-ran in ~8 runners; now a
+  # single job builds and uploads packages/*/dist, and the test jobs download it.
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -39,9 +26,138 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - run: pnpm --filter @ag-bash/bash test:wasm
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: packages/*/dist
+          retention-days: 1
+          include-hidden-files: true
+
+  unit:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux across the full Node support line every run; Windows + macOS
+        # (Node 22) only on push/nightly to bound CI minutes — a bash
+        # interpreter + WASM workers diverge most on those platforms, but per-PR
+        # cross-OS is overkill. The push-only legs are added via `include`.
+        os: [ubuntu-latest]
+        node-version: [20, 22, 24]
+        include:
+          - os: windows-latest
+            node-version: 22
+            cross-os: true
+          - os: macos-latest
+            node-version: 22
+            cross-os: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # Skip the costly Windows/macOS legs on pull_request; run them on
+      # push(main/develop) and manual dispatch. The leg still appears but no-ops.
+      - id: gate
+        shell: bash
+        run: |
+          if [ "${{ matrix.cross-os }}" = "true" ] && [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.gate.outputs.skip != 'true'
+        uses: ./.github/actions/setup
+        with:
+          node-version: ${{ matrix.node-version }}
+      - if: steps.gate.outputs.skip != 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: packages
+      - if: steps.gate.outputs.skip != 'true'
+        run: pnpm --filter @ag-bash/bash test:unit --reporter=github-actions --reporter=junit --outputFile=junit-unit.xml
+        shell: bash
+      - if: steps.gate.outputs.skip != 'true'
+        run: pnpm --filter @ag-bash/bash test:dist
+        shell: bash
+      - if: ${{ failure() && steps.gate.outputs.skip != 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: junit-unit-${{ matrix.os }}-${{ matrix.node-version }}
+          path: packages/bash/junit-unit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  coverage:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC (tokenless upload)
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: packages
+      # Report-only: surface coverage trends without gating (no fail_ci_if_error,
+      # no patch threshold) until the team agrees on a target. The shared vitest
+      # config emits text/html/json-summary; add lcov here for Codecov ingest
+      # without touching the shared config.
+      - run: pnpm --filter @ag-bash/bash test:coverage:unit --coverage.reporter=lcov --coverage.reporter=json-summary
+      - uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        with:
+          use_oidc: true
+          directory: packages/bash/coverage
+          fail_ci_if_error: false
+
+  wasm:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        include:
+          - os: windows-latest
+            cross-os: true
+          - os: macos-latest
+            cross-os: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - id: gate
+        shell: bash
+        run: |
+          if [ "${{ matrix.cross-os }}" = "true" ] && [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.gate.outputs.skip != 'true'
+        uses: ./.github/actions/setup
+      - if: steps.gate.outputs.skip != 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: packages
+      - if: steps.gate.outputs.skip != 'true'
+        run: pnpm --filter @ag-bash/bash test:wasm
+        shell: bash
+      # check:worker-sync rides here: the wasm job already has the built dist,
+      # and a stale worker artifact is a WASM-surface defect.
+      - if: steps.gate.outputs.skip != 'true'
+        run: pnpm --filter @ag-bash/bash check:worker-sync
+        shell: bash
 
   comparison:
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -49,10 +165,14 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: ./.github/actions/setup
-      - run: pnpm build
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: packages
       - run: pnpm --filter @ag-bash/bash test:comparison
 
   mcp:
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -60,5 +180,29 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: ./.github/actions/setup
-      - run: pnpm build
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: packages
       - run: pnpm --filter @ag-bash/mcp-server test
+
+  # Single always-run aggregator. Mark THIS as the required status check in the
+  # branch ruleset (not the individual matrix legs, whose names change and whose
+  # paths-ignore skips would otherwise wedge a "pending" required check forever).
+  gate:
+    if: always()
+    needs: [build, unit, coverage, wasm, comparison, mcp]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Verify all test jobs succeeded
+        shell: bash
+        run: |
+          results='${{ join(needs.*.result, ",") }}'
+          echo "job results: $results"
+          case "$results" in
+            *failure*|*cancelled*)
+              echo "::error::one or more test jobs failed"; exit 1 ;;
+            *) echo "all test jobs passed" ;;
+          esac
