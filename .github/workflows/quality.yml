@@ -32,3 +32,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm --filter @ag-bash/bash check:worker-sync
+      # Packaging guards (release-integrity): versions stay synchronized and the
+      # packed tarballs carry their load-bearing artifacts with no workspace:
+      # leak. Cheap; catches the v6.0.0/v6.0.2 packaging-defect classes on PRs.
+      - run: pnpm check:version-sync
+      - run: pnpm check:pack-contents
