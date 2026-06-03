@@ -60,6 +60,9 @@ export interface BashEventMap {
 
 export interface TypedEventEmitter<T extends Record<string, unknown>> {
   on<K extends keyof T & string>(event: K, handler: (data: T[K]) => void): this;
-  off<K extends keyof T & string>(event: K, handler: (data: T[K]) => void): this;
+  off<K extends keyof T & string>(
+    event: K,
+    handler: (data: T[K]) => void,
+  ): this;
   emit<K extends keyof T & string>(event: K, data: T[K]): boolean;
 }

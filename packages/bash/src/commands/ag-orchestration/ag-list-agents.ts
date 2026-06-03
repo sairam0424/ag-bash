@@ -13,7 +13,11 @@ export const agListAgents: Command = {
     ctx: CommandContext,
   ): Promise<ExecResult> => {
     if (!ctx.bash) {
-      return { stdout: "", stderr: "ag-list-agents: no bash host available\n", exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: "ag-list-agents: no bash host available\n",
+        exitCode: 1,
+      };
     }
     const manager = ctx.bash.services.agentManager;
     const agents = manager.listAgents();

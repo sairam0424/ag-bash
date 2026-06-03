@@ -5,7 +5,7 @@
  * expiration, dedup, serialization, and dispose lifecycle.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { CronScheduler, matchesCron } from "./CronScheduler.js";
 import { type BusEvent, SharedStateBus } from "./SharedStateBus.js";
 
@@ -90,9 +90,9 @@ describe("CronScheduler", () => {
     });
 
     it("rejects cron with wrong field count", () => {
-      expect(() =>
-        cs.createJob({ cron: "* * *", prompt: "nope" }),
-      ).toThrow("Expected 5 fields");
+      expect(() => cs.createJob({ cron: "* * *", prompt: "nope" })).toThrow(
+        "Expected 5 fields",
+      );
     });
 
     it("rejects cron with 6 fields", () => {
@@ -429,7 +429,12 @@ describe("CronScheduler", () => {
       cs2.loadFromJSON(json);
 
       expect(cs2.listJobs()).toHaveLength(2);
-      expect(cs2.listJobs().map((j) => j.prompt).sort()).toEqual(["noon", "saved"]);
+      expect(
+        cs2
+          .listJobs()
+          .map((j) => j.prompt)
+          .sort(),
+      ).toEqual(["noon", "saved"]);
     });
 
     it("preserves fireCount and lastFiredAt after load", () => {

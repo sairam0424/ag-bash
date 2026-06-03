@@ -13,13 +13,13 @@ import {
   isValidName,
   isWordBoundary,
   LexerError,
+  type LexerOptions,
   RESERVED_WORDS,
   SINGLE_CHAR_OPS,
   THREE_CHAR_OPS,
-  TWO_CHAR_OPS,
-  type LexerOptions,
   type Token,
   TokenType,
+  TWO_CHAR_OPS,
 } from "./token-definitions.js";
 
 /**

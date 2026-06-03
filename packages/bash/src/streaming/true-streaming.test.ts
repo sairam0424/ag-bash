@@ -79,9 +79,7 @@ describe("StreamingExecutor — true incremental streaming", () => {
       );
 
       // Expected interleaving in source order.
-      expect(
-        dataChunks.map((c) => ({ type: c.type, data: c.data })),
-      ).toEqual([
+      expect(dataChunks.map((c) => ({ type: c.type, data: c.data }))).toEqual([
         { type: "stdout", data: "out\n" },
         { type: "stderr", data: "err\n" },
         { type: "stdout", data: "out2\n" },

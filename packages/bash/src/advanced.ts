@@ -11,28 +11,12 @@
 // AST types (for plugin authors)
 export type { SearchResult } from "./agentic/ToolSearchEngine.js";
 export { ToolSearchEngine } from "./agentic/ToolSearchEngine.js";
-
-// Typed Events
-export type {
-  BashEventMap,
-  ExecEndEvent,
-  ExecStartEvent,
-  ToolEndEvent,
-  ToolProgressEvent,
-  ToolStartEvent,
-  TypedEventEmitter,
-} from "./events.js";
-
-// Version
-export { VERSION } from "./version.js";
-
-// Command helpers
-export { fail, output, success } from "./commands/result-helpers.js";
-export type { ParseArgsOptions, ParsedArgs } from "./commands/parse-args.js";
-export { parseArgs } from "./commands/parse-args.js";
-
-// AI Tool integration (multi-framework adapters)
-export { type CreateBashToolOptions, createBashTool } from "./ai.js";
+export {
+  toAnthropic,
+  toLangChain,
+  toOpenAI,
+  toVercel,
+} from "./ai/adapters/index.js";
 export type {
   AnthropicToolSet,
   BashToolBuilder,
@@ -43,8 +27,8 @@ export type {
   ToolResult,
   VercelToolSet,
 } from "./ai/index.js";
-export { toAnthropic, toLangChain, toOpenAI, toVercel } from "./ai/adapters/index.js";
-
+// AI Tool integration (multi-framework adapters)
+export { type CreateBashToolOptions, createBashTool } from "./ai.js";
 export type {
   CommandNode,
   PipelineNode,
@@ -53,7 +37,6 @@ export type {
   StatementNode,
   WordNode,
 } from "./ast/types.js";
-
 export type {
   BashLogger,
   BashOptions,
@@ -61,7 +44,8 @@ export type {
   JavaScriptConfig,
 } from "./Bash.js";
 export { Bash } from "./Bash.js";
-
+export type { ParseArgsOptions, ParsedArgs } from "./commands/parse-args.js";
+export { parseArgs } from "./commands/parse-args.js";
 export type {
   AllCommandName,
   CommandName,
@@ -75,11 +59,21 @@ export {
   getNetworkCommandNames,
   getPythonCommandNames,
 } from "./commands/registry.js";
-
+// Command helpers
+export { fail, output, success } from "./commands/result-helpers.js";
 // Custom commands API
 export type { CustomCommand, LazyCommand } from "./custom-commands.js";
 export { defineCommand } from "./custom-commands.js";
-
+// Typed Events
+export type {
+  BashEventMap,
+  ExecEndEvent,
+  ExecStartEvent,
+  ToolEndEvent,
+  ToolProgressEvent,
+  ToolStartEvent,
+  TypedEventEmitter,
+} from "./events.js";
 export { InMemoryFs } from "./fs/in-memory-fs/index.js";
 export type {
   BufferEncoding,
@@ -108,7 +102,6 @@ export {
   ReadWriteFs,
   type ReadWriteFsOptions,
 } from "./fs/read-write-fs/index.js";
-
 export { DebuggerBridge } from "./interpreter/index.js";
 export type {
   CallStackState,
@@ -124,9 +117,7 @@ export type {
   ShoptOptions,
   VariableAttributeState,
 } from "./interpreter/types.js";
-
 export { SemanticEngine } from "./lsp/semantic-engine.js";
-
 export type {
   AllowedUrl,
   AllowedUrlEntry,
@@ -139,14 +130,11 @@ export {
   RedirectNotAllowedError,
   TooManyRedirectsError,
 } from "./network/index.js";
-
 export type { CacheEntry } from "./network/WebCache.js";
 // Phase 4 modules
 export { WebCache } from "./network/WebCache.js";
-
 // Parser
 export { parse } from "./parser/parser.js";
-
 export type {
   CommandFinished as SandboxCommandFinished,
   OutputMessage,
@@ -155,10 +143,8 @@ export type {
 } from "./sandbox/index.js";
 // AG Sandbox API compatible exports
 export { Command as SandboxCommand, Sandbox } from "./sandbox/index.js";
-
 export type { DestructiveWarning } from "./security/destructive-command-detector.js";
 export { detectDestructiveCommand } from "./security/destructive-command-detector.js";
-
 // Security module - defense-in-depth
 export type {
   DefenseInDepthConfig,
@@ -173,7 +159,6 @@ export {
   SecurityViolationError,
   SecurityViolationLogger,
 } from "./security/index.js";
-
 export type { MemoryEntry, MemoryScope } from "./services/AgentMemory.js";
 export { AgentMemory } from "./services/AgentMemory.js";
 export {
@@ -181,27 +166,23 @@ export {
   saveMemoryToFs,
   syncAgentMemory,
 } from "./services/AgentMemorySync.js";
-
 export type { CronJob } from "./services/CronScheduler.js";
 export { CronScheduler } from "./services/CronScheduler.js";
-
 export type { GitOperation } from "./services/GitTracker.js";
 export { GitTracker } from "./services/GitTracker.js";
-
 // Service container (v3.0 dependency injection)
 export type { ServiceContainer } from "./services/ServiceContainer.js";
 export { createDefaultServices } from "./services/ServiceContainer.js";
-
 export type { Task, TaskStatus } from "./services/TaskManager.js";
 // Phase 1 services (v3.0 superpower tools)
 export { TaskManager } from "./services/TaskManager.js";
-
 export type { AgentMessage, Team } from "./services/TeamManager.js";
 export { TeamManager } from "./services/TeamManager.js";
-
 export type { Worktree } from "./services/WorktreeManager.js";
 export { WorktreeManager } from "./services/WorktreeManager.js";
-
+export { StreamingExecutor } from "./streaming/StreamingExecutor.js";
+// Streaming execution API
+export type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
 // Transform API
 export { BashTransformPipeline } from "./transform/pipeline.js";
 export type { CommandCollectorMetadata } from "./transform/plugins/command-collector.js";
@@ -219,7 +200,6 @@ export type {
   TransformPlugin,
   TransformResult,
 } from "./transform/types.js";
-
 export type {
   BashExecResult,
   Command,
@@ -228,7 +208,5 @@ export type {
   IFileSystem,
   Observation,
 } from "./types.js";
-
-// Streaming execution API
-export type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
-export { StreamingExecutor } from "./streaming/StreamingExecutor.js";
+// Version
+export { VERSION } from "./version.js";

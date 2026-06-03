@@ -5,11 +5,16 @@
  * generation, filesystem diffing, and round-trip consistency.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
-import { applyStateDelta, diffFs, diffState, type BashDelta, type FsDelta } from "./index.js";
-import type { InterpreterState } from "../interpreter/types.js";
+import { describe, expect, it } from "vitest";
 import type { BashSnapshot } from "../Bash.js";
 import type { FileSystemSnapshot } from "../fs/interface.js";
+import type { InterpreterState } from "../interpreter/types.js";
+import {
+  applyStateDelta,
+  type BashDelta,
+  diffFs,
+  diffState,
+} from "./index.js";
 
 /* ================================================================== */
 /*  Helpers                                                            */
@@ -24,7 +29,9 @@ function createSnapshot(opts: {
   functions?: Record<string, unknown>;
 }): BashSnapshot {
   const env = new Map<string, string>(Object.entries(opts.env ?? {}));
-  const functions = new Map<string, unknown>(Object.entries(opts.functions ?? {}));
+  const functions = new Map<string, unknown>(
+    Object.entries(opts.functions ?? {}),
+  );
 
   return {
     state: {
@@ -45,7 +52,9 @@ function createState(opts: {
   functions?: Record<string, unknown>;
 }): InterpreterState {
   const env = new Map<string, string>(Object.entries(opts.env ?? {}));
-  const functions = new Map<string, unknown>(Object.entries(opts.functions ?? {}));
+  const functions = new Map<string, unknown>(
+    Object.entries(opts.functions ?? {}),
+  );
 
   return {
     env,
@@ -100,7 +109,9 @@ describe("diffState", () => {
 
     it("detects changed env vars", () => {
       const base = createSnapshot({ env: { PATH: "/usr/bin" } });
-      const current = createSnapshot({ env: { PATH: "/usr/local/bin:/usr/bin" } });
+      const current = createSnapshot({
+        env: { PATH: "/usr/local/bin:/usr/bin" },
+      });
 
       const delta = diffState(base, current);
 
@@ -218,7 +229,10 @@ describe("diffState", () => {
 
       // Manually set the same reference
       (base.state.functions as Map<string, unknown>).set("shared", sharedNode);
-      (current.state.functions as Map<string, unknown>).set("shared", sharedNode);
+      (current.state.functions as Map<string, unknown>).set(
+        "shared",
+        sharedNode,
+      );
 
       const delta = diffState(base, current);
 
@@ -285,11 +299,11 @@ describe("diffState", () => {
         currentEnv[`VAR_${i}`] = `value_${i}`;
       }
       // Change one
-      currentEnv["VAR_50"] = "changed";
+      currentEnv.VAR_50 = "changed";
       // Add one
-      currentEnv["NEW_VAR"] = "new";
+      currentEnv.NEW_VAR = "new";
       // Remove one (don't include VAR_99)
-      delete currentEnv["VAR_99"];
+      delete currentEnv.VAR_99;
 
       const base = createSnapshot({ env: baseEnv });
       const current = createSnapshot({ env: currentEnv });
@@ -491,9 +505,9 @@ describe("applyStateDelta", () => {
       });
       const delta: BashDelta = {
         envDelta: {
-          A: "changed",   // modify
-          B: null,        // remove
-          D: "added",     // add
+          A: "changed", // modify
+          B: null, // remove
+          D: "added", // add
         },
       };
 

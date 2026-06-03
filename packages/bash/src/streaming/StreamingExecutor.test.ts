@@ -7,8 +7,8 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
-import type { OutputChunk } from "./types.js";
 import { StreamingExecutor } from "./StreamingExecutor.js";
+import type { OutputChunk } from "./types.js";
 
 describe("StreamingExecutor", () => {
   let bash: Bash;

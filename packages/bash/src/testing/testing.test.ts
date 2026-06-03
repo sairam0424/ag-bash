@@ -112,7 +112,9 @@ describe("Testing Utilities", () => {
     it("checks stderr matches regex when provided", async () => {
       const bash = createTestBash();
       const result = await bash.exec("cat /no/such/file");
-      await expect(assertFails(result, /No such file/)).resolves.toBeUndefined();
+      await expect(
+        assertFails(result, /No such file/),
+      ).resolves.toBeUndefined();
       await expect(assertFails(result, /wrong pattern/)).rejects.toThrow(
         "Expected stderr to match",
       );

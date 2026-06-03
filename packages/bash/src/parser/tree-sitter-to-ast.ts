@@ -22,8 +22,6 @@ import {
  * Handles node mapping, source location tracking, and bash-specific syntax quirks.
  */
 export class TreeSitterToAst {
-  constructor(_source: string) {}
-
   /**
    * Convert a complete Tree-sitter tree to a ScriptNode.
    */
@@ -523,7 +521,10 @@ export class TreeSitterToAst {
         let terminator: ";;" | ";&" | ";;&" = ";;";
         for (let i = 0; i < child.childCount; i++) {
           const tok = child.child(i)!;
-          if (!tok.isNamed && (tok.type === ";;&" || tok.type === ";&" || tok.type === ";;")) {
+          if (
+            !tok.isNamed &&
+            (tok.type === ";;&" || tok.type === ";&" || tok.type === ";;")
+          ) {
             terminator = tok.type as ";;" | ";&" | ";;&";
           }
         }

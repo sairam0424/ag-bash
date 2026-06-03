@@ -402,7 +402,10 @@ export async function executePipeline(
               exitCode: error.exitCode,
               observations: error.observations,
             };
-          } else if (error instanceof ErrexitError && node.commands.length > 1) {
+          } else if (
+            error instanceof ErrexitError &&
+            node.commands.length > 1
+          ) {
             // Errexit inside a pipeline segment should only fail that segment
             // The pipeline's exit code comes from the last command (or pipefail)
             result = {

@@ -1,0 +1,44 @@
+# Dependency Review — PR-boundary supply-chain gate.
+#
+# This blocks any PR that introduces a dependency carrying a HIGH+ severity
+# advisory, BEFORE it can merge. It complements (does not replace) the
+# `pnpm audit --audit-level=high` step in quality.yml, which only runs after
+# the dependency lands on a tracked branch (post-merge). The fail-on-severity
+# threshold is intentionally set to `high` to match that existing gate — keep
+# the two thresholds in sync so the pre- and post-merge checks agree.
+#
+# Prerequisite (maintainer one-time setup): GitHub Dependency Graph must be
+# enabled in repo Settings → Code security and analysis. The
+# dependency-review-action reads the graph diff for the PR and cannot run
+# without it.
+#
+# This action only works on pull_request events (it diffs base vs head).
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: dep-review-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege default: jobs that need more must opt in explicitly.
+permissions: {}
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Status-check-only gate: `contents: read` is sufficient to read the
+    # dependency graph diff. We deliberately do NOT grant `pull-requests: write`
+    # — the action posts no PR comment (comment-summary-in-pr: never), so the
+    # extra privilege would be unnecessary attack surface.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never

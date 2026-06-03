@@ -126,7 +126,11 @@ export const agNotebookCommand: Command = {
           };
       }
     } catch (e: any) {
-      return { stdout: "", stderr: `Error: ${sanitizeErrorMessage(e.message)}\n`, exitCode: 1 };
+      return {
+        stdout: "",
+        stderr: `Error: ${sanitizeErrorMessage(e.message)}\n`,
+        exitCode: 1,
+      };
     }
   },
 };

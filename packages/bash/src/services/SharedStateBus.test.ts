@@ -6,7 +6,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { type BusCallback, type BusEvent, type BusErrorHandler, SharedStateBus } from "./SharedStateBus.js";
+import { type BusEvent, SharedStateBus } from "./SharedStateBus.js";
 
 /* ================================================================== */
 /*  SharedStateBus                                                     */
@@ -312,9 +312,7 @@ describe("SharedStateBus", () => {
         throw new Error("subscriber exploded");
       });
 
-      expect(() =>
-        bus.publish("dangerous", "src", "data"),
-      ).not.toThrow();
+      expect(() => bus.publish("dangerous", "src", "data")).not.toThrow();
     });
 
     it("continues delivering to other subscribers after one throws", () => {
@@ -365,7 +363,9 @@ describe("SharedStateBus", () => {
       const handler = vi.fn();
       bus.setErrorHandler(handler);
 
-      bus.subscribe("clean", () => { /* no-op */ });
+      bus.subscribe("clean", () => {
+        /* no-op */
+      });
       bus.publish("clean", "src", "data");
 
       expect(handler).not.toHaveBeenCalled();

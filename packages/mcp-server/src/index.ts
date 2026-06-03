@@ -46,6 +46,15 @@ const MAX_REQUEST_SIZE = 16 * 1024 * 1024;
 const MAX_BASE64_LENGTH = 22_000_000;
 
 /**
+ * Server version reported in the MCP `serverInfo`.
+ * Kept in sync with this package's `package.json` version. A literal is used
+ * (rather than a JSON import) because the published `dist/` layout places
+ * `package.json` outside the bundled module, making a runtime relative import
+ * fragile.
+ */
+const SERVER_VERSION = "6.0.2";
+
+/**
  * Ag-Bash MCP Server (Dependency-Free Implementation)
  *
  * Implements the Model Context Protocol (v2024-11-05) JSON-RPC 2.0 over Stdio.
@@ -294,7 +303,7 @@ class AgBashServer {
               },
               serverInfo: {
                 name: "ag-bash",
-                version: "5.0.0",
+                version: SERVER_VERSION,
               },
             },
           });

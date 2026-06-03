@@ -6,6 +6,9 @@
  * via the updated re-export in the parent lexer.ts file.
  */
 
+export { Lexer } from "./lexer-state-machine.js";
+
+export type { LexerOptions, Token } from "./token-definitions.js";
 export {
   DEFAULT_MAX_HEREDOC_SIZE,
   findAssignmentEq,
@@ -16,10 +19,6 @@ export {
   RESERVED_WORDS,
   SINGLE_CHAR_OPS,
   THREE_CHAR_OPS,
-  TWO_CHAR_OPS,
   TokenType,
+  TWO_CHAR_OPS,
 } from "./token-definitions.js";
-
-export type { LexerOptions, Token } from "./token-definitions.js";
-
-export { Lexer } from "./lexer-state-machine.js";

@@ -103,11 +103,7 @@ describe("AgenticHealer - Active Self-Healing", () => {
 
       const execFn = vi.fn().mockResolvedValue(successResult);
 
-      const healed = await healer.heal(
-        "ech hello world",
-        failedResult,
-        execFn,
-      );
+      const healed = await healer.heal("ech hello world", failedResult, execFn);
       expect(healed).not.toBeNull();
       expect(healed?.stdout).toBe("hello world");
       expect(execFn).toHaveBeenCalledWith("echo hello world");
@@ -253,7 +249,10 @@ describe("AgenticHealer - Active Self-Healing", () => {
     });
 
     it("classifies 'no such file'", () => {
-      const result = makeResult(1, "cat: /tmp/missing.txt: No such file or directory");
+      const result = makeResult(
+        1,
+        "cat: /tmp/missing.txt: No such file or directory",
+      );
       expect(healer.classifyFailure(result)).toBe("file_not_found");
     });
 
@@ -339,9 +338,9 @@ describe("AgenticHealer - Active Self-Healing", () => {
         1,
         "cat: /tmp//missing.txt: No such file or directory",
       );
-      expect(
-        healer.suggestCorrection("cat /tmp//missing.txt", result),
-      ).toBe("cat /tmp/missing.txt");
+      expect(healer.suggestCorrection("cat /tmp//missing.txt", result)).toBe(
+        "cat /tmp/missing.txt",
+      );
     });
 
     it("returns null for file_not_found without double slashes", () => {

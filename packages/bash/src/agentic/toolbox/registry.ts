@@ -7,13 +7,13 @@
  */
 
 import { z } from "zod";
-import type { Bash } from "../../Bash.js";
 import type { ScriptNode } from "../../ast/types.js";
+import type { Bash } from "../../Bash.js";
 import { WebFetchTool } from "../../commands/ag-web/ag-web-fetch.js";
 import { WebSearchTool } from "../../commands/ag-web/ag-web-search.js";
 import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
-import { SemanticEngine } from "../../lsp/semantic-engine.js";
 import { LspTool } from "../../lsp/LspTool.js";
+import { SemanticEngine } from "../../lsp/semantic-engine.js";
 import { detectDestructiveCommand } from "../../security/destructive-command-detector.js";
 import type { MemoryScope } from "../../services/AgentMemory.js";
 import type { TaskStatus } from "../../services/TaskManager.js";
@@ -28,10 +28,10 @@ import { ToolSearchEngine } from "../ToolSearchEngine.js";
 import type { PermissionResult, ValidationResult } from "../types.js";
 import { executeTool } from "./executor.js";
 import {
-  jsonSchemaToZod,
-  zodToJsonSchema,
   type JsonSchema,
   type JsonSchemaOutput,
+  jsonSchemaToZod,
+  zodToJsonSchema,
 } from "./schema-conversion.js";
 
 /**
@@ -113,7 +113,8 @@ export class BashToolbox {
             bash.updateFileState(path, { content });
             return content;
           } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+              error instanceof Error ? error.message : String(error);
             return `Error reading file: ${sanitizeErrorMessage(message)}`;
           }
         },
@@ -141,7 +142,8 @@ export class BashToolbox {
             await bash.lsp.notifyDidChange(path, content);
             return `Successfully wrote to ${path}.`;
           } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+              error instanceof Error ? error.message : String(error);
             return `Error writing file ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
@@ -161,7 +163,8 @@ export class BashToolbox {
             const files = await bash.listDirDirect(path);
             return files.join("\n");
           } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+              error instanceof Error ? error.message : String(error);
             return `Error listing directory ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
@@ -220,6 +223,7 @@ export class BashToolbox {
                 /[.*+?^${}()|[\]\\]/g,
                 "\\$&",
               );
+              // biome-ignore lint/style/noRestrictedGlobals: target is fully regex-escaped above (literal match, no ReDoS); native RegExp needed for String.matchAll
               const regex = new RegExp(escapedTarget, "g");
               const matches = [...normalizedContent.matchAll(regex)];
 
@@ -248,7 +252,8 @@ export class BashToolbox {
             await bash.saveIndex();
             return `Successfully edited ${path}.`;
           } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+              error instanceof Error ? error.message : String(error);
             return `Error editing file ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
@@ -274,7 +279,8 @@ export class BashToolbox {
               symbols: engine.getAllSymbols(),
             };
           } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+              error instanceof Error ? error.message : String(error);
             return `Error analyzing file ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
@@ -376,7 +382,8 @@ export class BashToolbox {
             const result = await bash.exec(`grep -r "${query}" ${path}`);
             return result.stdout || result.stderr || "No matches found.";
           } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+              error instanceof Error ? error.message : String(error);
             return `Error searching in ${path}: ${sanitizeErrorMessage(message)}`;
           }
         },
@@ -400,7 +407,8 @@ export class BashToolbox {
             await bash.saveIndex();
             return "Successfully indexed the workspace.";
           } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+              error instanceof Error ? error.message : String(error);
             return `Error indexing workspace: ${sanitizeErrorMessage(message)}`;
           }
         },
@@ -779,7 +787,9 @@ export class BashToolbox {
           await bash.fs.mkdir("/.ag-bash", { recursive: true });
           let todos: TodoItem[] = [];
           if (await bash.fs.exists(todosPath)) {
-            todos = JSON.parse(await bash.readFileDirect(todosPath)) as TodoItem[];
+            todos = JSON.parse(
+              await bash.readFileDirect(todosPath),
+            ) as TodoItem[];
           }
           const newTodo = {
             id: (todos.length + 1).toString(),
@@ -824,7 +834,9 @@ export class BashToolbox {
           if (!(await bash.fs.exists(todosPath))) {
             return { error: "Todo not found." };
           }
-          const todos = JSON.parse(await bash.readFileDirect(todosPath)) as TodoItem[];
+          const todos = JSON.parse(
+            await bash.readFileDirect(todosPath),
+          ) as TodoItem[];
           const todo = todos.find((t: TodoItem) => t.id === id);
           if (!todo) return { error: "Todo not found." };
           todo.status = status;
@@ -1516,7 +1528,8 @@ export class BashToolbox {
         inputSchema: zodToJsonSchema(tool.parameters),
         effort: tool.effort,
         composeHooks: tool.composeHooks,
-        execute: (args: Record<string, unknown>) => this.callTool(bash, tool.name, args),
+        execute: (args: Record<string, unknown>) =>
+          this.callTool(bash, tool.name, args),
       };
     }
     return result;
@@ -1530,7 +1543,11 @@ export class BashToolbox {
    * Orchestrates the tool execution lifecycle:
    * validation -> permissions -> execution.
    */
-  public async callTool(bash: Bash, toolName: string, args: Record<string, unknown>): Promise<unknown> {
+  public async callTool(
+    bash: Bash,
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown> {
     return executeTool(bash, toolName, args, this.tools);
   }
 }

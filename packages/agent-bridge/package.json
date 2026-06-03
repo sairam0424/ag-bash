@@ -28,6 +28,11 @@
     "terminal",
     "bridge"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sairam0424/ag-bash.git",
+    "directory": "packages/agent-bridge"
+  },
   "author": "Ag-Bash",
   "license": "Apache-2.0",
   "dependencies": {

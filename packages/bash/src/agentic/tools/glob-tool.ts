@@ -21,10 +21,7 @@ export const GlobTool: ToolboxTool = buildTool({
     pattern: z
       .string()
       .describe('Glob pattern (e.g., "**/*.ts", "src/**/*.{ts,tsx}").'),
-    path: z
-      .string()
-      .optional()
-      .describe("Root directory (default: cwd)."),
+    path: z.string().optional().describe("Root directory (default: cwd)."),
     sort: z.string().optional().describe('"alpha" (default) or "mtime".'),
     limit: z.number().optional().describe("Max results (default: 1000)."),
   }),

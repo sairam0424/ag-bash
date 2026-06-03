@@ -124,7 +124,10 @@ export class LexerError extends Error {
  * Reserved words in bash
  * Using Map to prevent prototype pollution (e.g., "constructor", "__proto__")
  */
-export const RESERVED_WORDS: Map<string, TokenType> = new Map<string, TokenType>([
+export const RESERVED_WORDS: Map<string, TokenType> = new Map<
+  string,
+  TokenType
+>([
   ["if", TokenType.IF],
   ["then", TokenType.THEN],
   ["else", TokenType.ELSE],
@@ -238,7 +241,10 @@ export const TWO_CHAR_OPS: Array<[string, string, TokenType]> = [
  * Single-character operators (simple ones without special handling)
  * Note: {, }, ! have special handling, not included here
  */
-export const SINGLE_CHAR_OPS: Map<string, TokenType> = new Map<string, TokenType>([
+export const SINGLE_CHAR_OPS: Map<string, TokenType> = new Map<
+  string,
+  TokenType
+>([
   ["|", TokenType.PIPE],
   ["&", TokenType.AMP],
   [";", TokenType.SEMICOLON],

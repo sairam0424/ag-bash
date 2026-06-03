@@ -89,9 +89,10 @@ function isPrivateUrl(url: string): boolean {
   }
 
   // Strip brackets for IPv6
-  const bare = hostname.startsWith("[") && hostname.endsWith("]")
-    ? hostname.slice(1, -1)
-    : hostname;
+  const bare =
+    hostname.startsWith("[") && hostname.endsWith("]")
+      ? hostname.slice(1, -1)
+      : hostname;
 
   // IPv6 private: fc00::/7 covers fc and fd prefixes
   if (bare.startsWith("fc") || bare.startsWith("fd")) {
@@ -148,7 +149,8 @@ class HttpTransport implements McpTransport {
     private url: string,
     securityConfig?: HttpTransportSecurityConfig,
   ) {
-    this.securityConfig = securityConfig ?? Object.create(null) as HttpTransportSecurityConfig;
+    this.securityConfig =
+      securityConfig ?? (Object.create(null) as HttpTransportSecurityConfig);
   }
 
   async init(): Promise<void> {}
@@ -386,7 +388,9 @@ export class McpClient {
     })) as JsonRpcResponse;
 
     if (response.error) {
-      throw new Error(sanitizeErrorMessage(response.error.message || "Unknown MCP error"));
+      throw new Error(
+        sanitizeErrorMessage(response.error.message || "Unknown MCP error"),
+      );
     }
 
     return response.result;

@@ -8,7 +8,11 @@
 
 import type { Bash } from "../Bash.js";
 import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
-import type { ToolDefinition, ToolExecutionError, ToolResult } from "./types.js";
+import type {
+  ToolDefinition,
+  ToolExecutionError,
+  ToolResult,
+} from "./types.js";
 
 /**
  * Options for creating a bash tool (shared across all adapters).
@@ -71,15 +75,18 @@ export function buildToolDefinitions(
   // Convert agentic tools into ToolDefinition format
   for (const [name, tool] of Object.entries(agenticTools)) {
     if (name === "bash") continue; // We handle bash separately below
-    const schema: ToolDefinition["inputSchema"] = (tool.inputSchema as unknown as ToolDefinition["inputSchema"]) ?? {
-      type: "object",
-      properties: Object.create(null),
-    };
+    const schema: ToolDefinition["inputSchema"] =
+      (tool.inputSchema as unknown as ToolDefinition["inputSchema"]) ?? {
+        type: "object",
+        properties: Object.create(null),
+      };
     definitions.push({
       name,
       description: tool.description ?? "",
       inputSchema: schema,
-      execute: tool.execute as (args: Record<string, unknown>) => Promise<ToolResult>,
+      execute: tool.execute as (
+        args: Record<string, unknown>,
+      ) => Promise<ToolResult>,
     });
   }
 
@@ -115,8 +122,7 @@ export function buildToolDefinitions(
 
         return toolResult;
       } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         const errorResult: ToolExecutionError = {
           error: sanitizeErrorMessage(message),
           exitCode: 1,

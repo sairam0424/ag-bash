@@ -5,7 +5,12 @@
  * chat completions API `tools` parameter (type: "function" with parameters).
  */
 
-import type { JSONSchema, OpenAIToolSet, ToolDefinition, ToolResult } from "../types.js";
+import type {
+  JSONSchema,
+  OpenAIToolSet,
+  ToolDefinition,
+  ToolResult,
+} from "../types.js";
 
 /**
  * Transform tool definitions into OpenAI function calling format.
@@ -25,7 +30,10 @@ export function toOpenAI(definitions: ToolDefinition[]): OpenAIToolSet {
     };
   });
 
-  const handleToolCall = async (name: string, args: string): Promise<string> => {
+  const handleToolCall = async (
+    name: string,
+    args: string,
+  ): Promise<string> => {
     const def = toolLookup.get(name);
     if (!def) {
       return JSON.stringify({ error: `Unknown tool: ${name}`, exitCode: 1 });
@@ -35,7 +43,10 @@ export function toOpenAI(definitions: ToolDefinition[]): OpenAIToolSet {
     try {
       parsed = Object.assign(Object.create(null), JSON.parse(args));
     } catch {
-      return JSON.stringify({ error: `Invalid JSON arguments for tool: ${name}`, exitCode: 1 });
+      return JSON.stringify({
+        error: `Invalid JSON arguments for tool: ${name}`,
+        exitCode: 1,
+      });
     }
     const result: ToolResult = await def.execute(parsed);
     return JSON.stringify(result);

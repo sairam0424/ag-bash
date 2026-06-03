@@ -32,9 +32,7 @@ export class SharedStateBus {
     if (payload !== null && typeof payload === "object") {
       const serialized = JSON.stringify(payload);
       if (serialized.length > MAX_PAYLOAD_BYTES) {
-        throw new Error(
-          "SharedStateBus: payload exceeds maximum size limit",
-        );
+        throw new Error("SharedStateBus: payload exceeds maximum size limit");
       }
     }
 

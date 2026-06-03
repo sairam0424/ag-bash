@@ -35,19 +35,17 @@ export function assertSuccess(result: ExecResult): string {
  */
 export async function assertFails(
   result: ExecResult | Promise<ExecResult>,
+  // biome-ignore lint/style/noRestrictedGlobals: public test-helper API — callers pass native /regex/ literals, not user-pattern strings
   expected?: number | RegExp,
 ): Promise<void> {
   const r = await result;
   if (r.exitCode === 0) {
-    throw new Error(
-      `Expected failure but got success. stdout: ${r.stdout}`,
-    );
+    throw new Error(`Expected failure but got success. stdout: ${r.stdout}`);
   }
   if (typeof expected === "number" && r.exitCode !== expected) {
-    throw new Error(
-      `Expected exit code ${expected} but got ${r.exitCode}`,
-    );
+    throw new Error(`Expected exit code ${expected} but got ${r.exitCode}`);
   }
+  // biome-ignore lint/style/noRestrictedGlobals: runtime guard for the native RegExp passed by callers (see param type above)
   if (expected instanceof RegExp && !expected.test(r.stderr)) {
     throw new Error(
       `Expected stderr to match ${expected} but got: ${r.stderr}`,

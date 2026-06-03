@@ -7,8 +7,10 @@ export interface PermissionHandler {
 
 export interface PermissionRule {
   /** Pattern for tool names (e.g., "read_file", "write:*") */
+  // biome-ignore lint/style/noRestrictedGlobals: public rule-config API — callers supply native RegExp instances
   toolPattern: string | RegExp;
   /** Pattern for file paths (if applicable) */
+  // biome-ignore lint/style/noRestrictedGlobals: public rule-config API — callers supply native RegExp instances
   pathPattern?: string | RegExp;
   /** The behavior for this rule */
   behavior: "allow" | "deny" | "ask";
@@ -180,7 +182,9 @@ export class PermissionManager {
     return { behavior: "allow" };
   }
 
+  // biome-ignore lint/style/noRestrictedGlobals: pattern is a caller-supplied native RegExp from PermissionRule (see interface above)
   private matches(value: string, pattern: string | RegExp): boolean {
+    // biome-ignore lint/style/noRestrictedGlobals: runtime guard for the caller-supplied native RegExp
     if (pattern instanceof RegExp) {
       return pattern.test(value);
     }

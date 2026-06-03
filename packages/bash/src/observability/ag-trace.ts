@@ -10,7 +10,7 @@ import type { ExecResult, Observation } from "../types.js";
  *
  * Provides rich metadata and suggestions for command failures.
  */
-export class AgTrace {
+export const AgTrace = {
   /**
    * Analyze a command execution failure and generate observations.
    *
@@ -21,7 +21,7 @@ export class AgTrace {
    * a duplicate for the same failure. Scraped observations are lower
    * confidence (0.5) than source-emitted ones (1.0).
    */
-  static async analyze(
+  async analyze(
     ctx: InterpreterContext,
     command: string,
     args: string[],
@@ -148,7 +148,7 @@ export class AgTrace {
     }
 
     return observations;
-  }
+  },
 
   /**
    * Combine source-emitted observations with AgTrace's fresh (fallback)
@@ -165,7 +165,7 @@ export class AgTrace {
    * @param existing - Source-emitted (high-confidence) observations.
    * @param fresh - AgTrace fallback observations from {@link AgTrace.analyze}.
    */
-  static combineObservations(
+  combineObservations(
     existing: readonly Observation[],
     fresh: readonly Observation[],
   ): Observation[] {
@@ -194,12 +194,12 @@ export class AgTrace {
     }
 
     return [...merged, ...toAppend];
-  }
+  },
 
   /**
    * Analyze a caught error during execution.
    */
-  static analyzeError(error: Error): Observation {
+  analyzeError(error: Error): Observation {
     const errorName =
       error.name || (error.constructor ? error.constructor.name : "");
 
@@ -259,7 +259,7 @@ export class AgTrace {
       type: "unknown",
       message: error instanceof Error ? error.message : String(error),
     };
-  }
+  },
 
   /**
    * Get a command typo suggestion using Levenshtein distance.
@@ -272,7 +272,7 @@ export class AgTrace {
    * @param candidates - Candidate command names to match against.
    * @returns The closest match within the typo threshold, or null.
    */
-  static suggestCommand(
+  suggestCommand(
     command: string,
     candidates: readonly string[],
   ): string | null {
@@ -304,12 +304,12 @@ export class AgTrace {
     // Heuristic: threshold depends on length
     const threshold = command.length <= 4 ? 1 : 2;
     return minDistance <= threshold ? bestMatch : null;
-  }
+  },
 
   /**
    * Get a command typo suggestion from the interpreter's registered commands.
    */
-  private static getCommandSuggestion(
+  getCommandSuggestion(
     ctx: InterpreterContext,
     command: string,
   ): string | null {
@@ -317,12 +317,12 @@ export class AgTrace {
       ? ctx.getRegisteredCommands()
       : [];
     return AgTrace.suggestCommand(command, commands);
-  }
+  },
 
   /**
    * Investigates why a path failed (e.g. parent doesn't exist).
    */
-  private static async analyzePathFailure(
+  async analyzePathFailure(
     ctx: InterpreterContext,
     path: string,
   ): Promise<Observation | null> {
@@ -394,12 +394,12 @@ export class AgTrace {
     } catch {
       return null;
     }
-  }
+  },
 
   /**
    * Damerau-Levenshtein distance (simple version)
    */
-  private static levenshtein(s1: string, s2: string): number {
+  levenshtein(s1: string, s2: string): number {
     const len1 = s1.length;
     const len2 = s2.length;
     const matrix: number[][] = [];
@@ -418,5 +418,5 @@ export class AgTrace {
       }
     }
     return matrix[len1][len2];
-  }
-}
+  },
+};

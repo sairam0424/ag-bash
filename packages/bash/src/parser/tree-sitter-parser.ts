@@ -5,6 +5,12 @@ import * as TreeSitter from "./vendor/web-tree-sitter.js";
  * TreeSitterParser handles WASM initialization and parser instantiation
  * for the v2.9 AST-based transition.
  */
+// Converting this to a const-object (to satisfy noStaticOnlyClass) surfaces the
+// private static fields into the public type, which trips TS9013
+// (--isolatedDeclarations) on the inferred `Map<string, any>` initializer. The
+// static class keeps that state private and is the clearer model for a
+// one-time-initialized parser singleton.
+// biome-ignore lint/complexity/noStaticOnlyClass: stateful WASM-singleton holder; see note above.
 export class TreeSitterParser {
   private static parser: any = null;
   private static languages: Map<string, any> = new Map();

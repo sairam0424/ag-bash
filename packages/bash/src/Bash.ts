@@ -8,7 +8,7 @@
  * and delegates execution to the Interpreter.
  */
 
-import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
+import type { FunctionDefNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
 import { EventEmitter } from "node:events";
@@ -27,6 +27,7 @@ import {
   createLazyCustomCommand,
   isLazyCommand,
 } from "./custom-commands.js";
+import type { DestructivePolicy } from "./execution/index.js";
 import {
   DestructiveStage,
   ExecutionPipeline,
@@ -37,7 +38,6 @@ import {
   SandboxStage,
   TransformStage,
 } from "./execution/index.js";
-import type { DestructivePolicy } from "./execution/index.js";
 import { InMemoryFs } from "./fs/in-memory-fs/in-memory-fs.js";
 import { initFilesystem } from "./fs/init.js";
 import type {
@@ -56,10 +56,7 @@ import {
   buildBashopts,
   buildShellopts,
 } from "./interpreter/helpers/shellopts.js";
-import {
-  type DebuggerBridge,
-  type InterpreterState,
-} from "./interpreter/index.js";
+import type { DebuggerBridge, InterpreterState } from "./interpreter/index.js";
 import { type ExecutionLimits, resolveLimits } from "./limits.js";
 import type { LSPManager } from "./lsp/LSPManager.js";
 import { SemanticEngine } from "./lsp/semantic-engine.js";
@@ -930,14 +927,6 @@ export class Bash extends EventEmitter {
       sessionId: options?.sessionId ?? this.state.sessionId,
     };
 
-    // Normalize indented multi-line scripts (unless rawScript is true)
-    // This allows writing indented bash scripts in template literals
-    // BUT we must preserve whitespace inside heredoc content
-    let normalized = normalizedCommandLine;
-    if (!options?.rawScript) {
-      normalized = normalizeScript(normalizedCommandLine);
-    }
-
     // Branch on execution engine. The instance-coupled prologue above
     // (command-count guard, empty short-circuit, heredoc normalization,
     // exec logging, PWD/realpath/cwd derivation, execEnv + execState build,
@@ -959,14 +948,20 @@ export class Bash extends EventEmitter {
             execState,
           );
           span.setAttribute("ag-bash.exitCode", result.exitCode);
-          span.setAttribute("ag-bash.durationMs", performance.now() - spanStart);
+          span.setAttribute(
+            "ag-bash.durationMs",
+            performance.now() - spanStart,
+          );
           span.end();
           return result;
         } catch (spanError: unknown) {
           // Record the exception event BEFORE setting error status so the span
           // carries both the typed exception and the error code.
           span.recordException(spanError);
-          span.setAttribute("ag-bash.durationMs", performance.now() - spanStart);
+          span.setAttribute(
+            "ag-bash.durationMs",
+            performance.now() - spanStart,
+          );
           span.setStatus({ code: 2, message: "exec failed" });
           span.end();
           throw spanError;

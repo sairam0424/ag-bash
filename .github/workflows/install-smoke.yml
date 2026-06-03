@@ -1,0 +1,41 @@
+# Install-smoke — the published-artifact gate.
+#
+# In-repo tests run against the pnpm workspace, which ALWAYS resolves, so they
+# structurally cannot catch packaging defects. ag-bash has shipped broken
+# tarballs twice for exactly this reason (v6.0.0/6.0.1 leaked workspace:*,
+# v6.0.2 omitted tree-sitter-bash.wasm). This job packs the three packages and
+# installs them into a throwaway project OUTSIDE the monorepo with plain npm —
+# reproducing a real consumer — then exercises every export subpath, both bins,
+# and the MCP stdio handshake. A fast static pack-contents check runs first as a
+# cheap pre-filter. Runs on pull_request only (no secrets, fork-safe).
+name: Install Smoke
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: install-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      # Fast (<5s) structural pre-filter: required files present, no leaked
+      # workspace: range in the packed manifest.
+      - run: pnpm check:pack-contents
+      # Heavyweight gate: pack -> clean npm install -> resolve all 8 subpaths,
+      # run ag-bash + ag-bash-mcp bins + MCP initialize handshake.
+      - run: node scripts/install-smoke.mjs

@@ -45,7 +45,9 @@ export type { CreateBashToolOptions };
  * // Pass `tools` to your Vercel AI SDK agent
  * ```
  */
-export function createBashTool(options: LegacyCreateBashToolOptions): VercelToolSet {
+export function createBashTool(
+  options: LegacyCreateBashToolOptions,
+): VercelToolSet {
   // `destination` is ignored — kept only for backwards compat
   const { destination: _destination, ...coreOptions } = options;
   return _createBashTool(coreOptions).forVercel();

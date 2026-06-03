@@ -12,6 +12,7 @@
  * - The set of modified paths is available for conflict detection
  */
 
+import { fromBuffer, getEncoding, toBuffer } from "./encoding.js";
 import type {
   BufferEncoding,
   CpOptions,
@@ -26,7 +27,6 @@ import type {
   WriteFileOptions,
 } from "./interface.js";
 import { normalizePath, resolvePath } from "./path-utils.js";
-import { fromBuffer, getEncoding, toBuffer } from "./encoding.js";
 
 interface CowFileEntry {
   type: "file";
@@ -253,7 +253,10 @@ export class CowFs implements IFileSystem {
     const normalized = normalizePath(path);
 
     const localEntry = this.local.get(normalized);
-    if (localEntry || (!this.deleted.has(normalized) && await this.parent.exists(path))) {
+    if (
+      localEntry ||
+      (!this.deleted.has(normalized) && (await this.parent.exists(path)))
+    ) {
       if (!options?.recursive) {
         throw new Error(`EEXIST: file already exists, mkdir '${path}'`);
       }
@@ -286,9 +289,8 @@ export class CowFs implements IFileSystem {
     try {
       const parentEntries = await this.parent.readdir(path);
       for (const entry of parentEntries) {
-        const childPath = normalized === "/"
-          ? `/${entry}`
-          : `${normalized}/${entry}`;
+        const childPath =
+          normalized === "/" ? `/${entry}` : `${normalized}/${entry}`;
         if (!this.deleted.has(childPath)) {
           entries.add(entry);
         }
@@ -318,9 +320,8 @@ export class CowFs implements IFileSystem {
 
     const results: DirentEntry[] = [];
     for (const name of names) {
-      const childPath = normalized === "/"
-        ? `/${name}`
-        : `${normalized}/${name}`;
+      const childPath =
+        normalized === "/" ? `/${name}` : `${normalized}/${name}`;
       try {
         const st = await this.lstat(childPath);
         results.push({
@@ -351,9 +352,8 @@ export class CowFs implements IFileSystem {
       try {
         const children = await this.readdir(path);
         for (const child of children) {
-          const childPath = normalized === "/"
-            ? `/${child}`
-            : `${normalized}/${child}`;
+          const childPath =
+            normalized === "/" ? `/${child}` : `${normalized}/${child}`;
           await this.rm(childPath, options);
         }
       } catch {
@@ -382,7 +382,8 @@ export class CowFs implements IFileSystem {
       const destNorm = normalizePath(dest);
       for (const child of children) {
         const srcChild = srcNorm === "/" ? `/${child}` : `${srcNorm}/${child}`;
-        const destChild = destNorm === "/" ? `/${child}` : `${destNorm}/${child}`;
+        const destChild =
+          destNorm === "/" ? `/${child}` : `${destNorm}/${child}`;
         await this.cp(srcChild, destChild, options);
       }
     }
@@ -508,7 +509,7 @@ export class CowFs implements IFileSystem {
     return this.parent.realpath(path);
   }
 
-  async utimes(path: string, atime: Date, mtime: Date): Promise<void> {
+  async utimes(path: string, _atime: Date, mtime: Date): Promise<void> {
     const normalized = normalizePath(path);
 
     if (this.deleted.has(normalized)) {

@@ -16,12 +16,10 @@ import {
   PosixFatalError,
 } from "../../interpreter/errors.js";
 import type { InterpreterState } from "../../interpreter/types.js";
+import { AgTrace } from "../../observability/ag-trace.js";
 import { LexerError } from "../../parser/lexer.js";
 import type { ParseException } from "../../parser/parser.js";
-import { AgTrace } from "../../observability/ag-trace.js";
-import {
-  SecurityViolationError,
-} from "../../security/defense-in-depth-box.js";
+import { SecurityViolationError } from "../../security/defense-in-depth-box.js";
 import type { BashExecResult } from "../../types.js";
 
 /**
@@ -36,7 +34,10 @@ export function categorizeError(
   const env = mapToRecordWithExtras(state.env, optionsEnv);
 
   // ExitError propagates from 'exit' builtin (including via eval/source)
-  if (error instanceof ExitError || (error instanceof Error && error.name === "ExitError")) {
+  if (
+    error instanceof ExitError ||
+    (error instanceof Error && error.name === "ExitError")
+  ) {
     const exitErr = error as ExitError;
     return {
       stdout: exitErr.stdout,

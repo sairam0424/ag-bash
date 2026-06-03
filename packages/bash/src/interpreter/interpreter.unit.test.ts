@@ -5,7 +5,7 @@
  * Tests cover all major AST node types and execution paths.
  */
 
-import { describe, expect, it, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
 
 describe("Interpreter Core", () => {
@@ -378,7 +378,7 @@ describe("Interpreter Core", () => {
 
   describe("variable operations", () => {
     it("should assign and read a variable", async () => {
-      const result = await bash.exec('FOO=bar; echo $FOO');
+      const result = await bash.exec("FOO=bar; echo $FOO");
       expect(result.stdout).toBe("bar\n");
     });
 
@@ -398,17 +398,17 @@ describe("Interpreter Core", () => {
     });
 
     it("should handle assignment with command substitution", async () => {
-      const result = await bash.exec('X=$(echo hello); echo $X');
+      const result = await bash.exec("X=$(echo hello); echo $X");
       expect(result.stdout).toBe("hello\n");
     });
 
     it("should support default value expansion", async () => {
-      const result = await bash.exec('echo ${UNSET:-default}');
+      const result = await bash.exec("echo ${UNSET:-default}");
       expect(result.stdout).toBe("default\n");
     });
 
     it("should support string length with ${#var}", async () => {
-      const result = await bash.exec('X=hello; echo ${#X}');
+      const result = await bash.exec("X=hello; echo ${#X}");
       expect(result.stdout).toBe("5\n");
     });
 
@@ -668,12 +668,12 @@ describe("Interpreter Core", () => {
     });
 
     it("should chain && and || correctly", async () => {
-      const result = await bash.exec('true && echo yes || echo no');
+      const result = await bash.exec("true && echo yes || echo no");
       expect(result.stdout).toBe("yes\n");
     });
 
     it("should chain || then && correctly", async () => {
-      const result = await bash.exec('false || echo fallback && echo also');
+      const result = await bash.exec("false || echo fallback && echo also");
       expect(result.stdout).toBe("fallback\nalso\n");
     });
   });

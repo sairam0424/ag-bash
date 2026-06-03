@@ -5,7 +5,12 @@
  * Messages API `tools` parameter (name, description, input_schema).
  */
 
-import type { AnthropicToolSet, JSONSchema, ToolDefinition, ToolResult } from "../types.js";
+import type {
+  AnthropicToolSet,
+  JSONSchema,
+  ToolDefinition,
+  ToolResult,
+} from "../types.js";
 
 /**
  * Transform tool definitions into Anthropic tool_use format.
@@ -28,7 +33,12 @@ export function toAnthropic(definitions: ToolDefinition[]): AnthropicToolSet {
   ): Promise<{ content: string }> => {
     const def = toolLookup.get(name);
     if (!def) {
-      return { content: JSON.stringify({ error: `Unknown tool: ${name}`, exitCode: 1 }) };
+      return {
+        content: JSON.stringify({
+          error: `Unknown tool: ${name}`,
+          exitCode: 1,
+        }),
+      };
     }
 
     const result: ToolResult = await def.execute(input);

@@ -1,4 +1,5 @@
 import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
+import { mapToNullProtoObject } from "../../helpers/env.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 
@@ -53,12 +54,8 @@ export const agSnapshotCommand: Command = {
             id: snapshotId,
             timestamp: Date.now(),
             cwd: ctx.cwd,
-            env: Object.assign(Object.create(null), Object.fromEntries(ictx.state.env)),
-            functions: Object.assign(Object.create(null), Object.fromEntries(
-              Array.from(
-                ictx.state.functions.entries() as [string, any][],
-              ).map(([name, node]) => [name, node]),
-            )),
+            env: mapToNullProtoObject(ictx.state.env),
+            functions: mapToNullProtoObject(ictx.state.functions),
             fs: fsSnapshot,
           };
 

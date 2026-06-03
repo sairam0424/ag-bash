@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Bash } from "../Bash.js";
+import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import type { ToolboxTool } from "./Tool.js";
 
 /**
@@ -108,8 +109,9 @@ export const MultiReplaceTool: ToolboxTool = {
       await bash.lsp.notifyDidChange(path, newContent);
 
       return `Successfully applied ${appliedChunks.length} replacements to ${path}.`;
-    } catch (error: any) {
-      return `Error in ag_multi_edit for ${path}: ${error.message}`;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return `Error in ag_multi_edit for ${path}: ${sanitizeErrorMessage(message)}`;
     }
   },
 };
