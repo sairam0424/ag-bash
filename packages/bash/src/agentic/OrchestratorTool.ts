@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Bash } from "../Bash.js";
+import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import type { ToolboxTool } from "./Tool.js";
 
 /**
@@ -38,8 +39,9 @@ export const SpawnTool: ToolboxTool = {
         status: "spawned",
         initialResult: result.stdout || result.stderr || "No output",
       };
-    } catch (error: any) {
-      return `Spawn failed: ${error.message}`;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return `Spawn failed: ${sanitizeErrorMessage(message)}`;
     }
   },
 };

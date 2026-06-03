@@ -32,7 +32,11 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@ag-bash/bash": "workspace:*",
+    "@mongodb-js/zstd": "^7.0.0",
+    "node-liblzma": "^2.0.3",
+    "quickjs-emscripten": "^0.32.0",
     "seek-bzip": "^2.0.0",
+    "sql.js": "^1.13.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
