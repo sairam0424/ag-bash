@@ -42,8 +42,11 @@ test_output.txt
 # Example Lockfiles (Dynamic/Untracked)
 examples/*/pnpm-lock.yaml
 
-# Perf-bench CI artifact (the committed baseline is bench-baseline.json)
+# Perf-bench CI artifacts (the committed baseline is bench-baseline.json).
+# bench:ci writes bench-results.json; bench:ci:multi writes the numbered
+# best-of-N reports (bench-results.1.json, …) that bench-check compares.
 packages/bash/bench-results.json
+packages/bash/bench-results.*.json
 
 # Private working notes (daily logs) — never commit
 scratch-pad/
