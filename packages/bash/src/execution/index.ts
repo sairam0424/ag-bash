@@ -9,7 +9,6 @@ export type { ResultFinalizer } from "./ExecutionPipeline.js";
 export { ExecutionPipeline } from "./ExecutionPipeline.js";
 export type { DestructivePolicy } from "./stages/destructive-stage.js";
 export { DestructiveStage } from "./stages/destructive-stage.js";
-export { categorizeError } from "./stages/error-stage.js";
 export type { InterpretStageConfig } from "./stages/interpret-stage.js";
 export { InterpretStage } from "./stages/interpret-stage.js";
 export { NormalizeStage } from "./stages/normalize-stage.js";

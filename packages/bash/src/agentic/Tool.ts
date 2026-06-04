@@ -39,60 +39,6 @@ export interface ToolboxTool<TArgs = unknown, TResult = unknown>
 }
 
 /**
- * Abstract base class for tools providing common functionality.
- */
-export abstract class Tool<TArgs = unknown, TResult = unknown>
-  implements ToolboxTool<TArgs, TResult>
-{
-  abstract name: string;
-  abstract description: string;
-  abstract parameters: z.ZodType<TArgs>;
-
-  isReadOnly: ((args: TArgs) => boolean) | boolean = false;
-  isDestructive: ((args: TArgs) => boolean) | boolean = false;
-  isConcurrencySafe: ((args: TArgs) => boolean) | boolean = false;
-  searchHint?: string;
-  aliases?: string[];
-
-  async checkPermissions(
-    bash: Bash,
-    _args: TArgs,
-  ): Promise<PermissionResult<TArgs>> {
-    // Default: allow but respect bash mode
-    if (this.isDestructive && bash.getMode() === "plan") {
-      return {
-        behavior: "deny",
-        message: `Cannot execute destructive tool '${this.name}' in plan mode.`,
-      };
-    }
-    return { behavior: "allow" };
-  }
-
-  async validateInput(args: unknown): Promise<ValidationResult> {
-    const result = this.parameters.safeParse(args);
-    if (!result.success) {
-      return {
-        result: false,
-        message: `Invalid parameters for '${this.name}': ${result.error.message}`,
-      };
-    }
-    return { result: true };
-  }
-
-  abstract execute(bash: Bash, args: TArgs): Promise<TResult>;
-
-  /**
-   * Helper to truncate long results for token efficiency.
-   */
-  protected truncateResult(result: string, maxLength = 50000): string {
-    if (result.length > maxLength) {
-      return `${result.substring(0, maxLength)}\n... [Result truncated]`;
-    }
-    return result;
-  }
-}
-
-/**
  * Factory function to build a tool from a plain object.
  * Breaks circular dependencies by living in the base Tool file.
  */

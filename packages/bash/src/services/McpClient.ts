@@ -62,7 +62,10 @@ export interface HttpTransportSecurityConfig {
   allowPrivateNetworks?: boolean;
 }
 
-/** Error thrown when an SSRF-blocked URL is detected. */
+/**
+ * Error thrown when an SSRF-blocked URL is detected.
+ * @public
+ */
 export class McpTransportSecurityError extends Error {
   constructor(message: string) {
     super(message);

@@ -6,15 +6,10 @@
  * to work via the updated re-export in the parent BashToolbox.ts file.
  */
 
-export { executeTool } from "./executor.js";
 export { BashToolbox } from "./registry.js";
 export type {
   JsonSchema,
   JsonSchemaOutput,
   JsonSchemaProperty,
   JsonSchemaPropertyOutput,
-} from "./schema-conversion.js";
-export {
-  jsonSchemaToZod,
-  zodToJsonSchema,
 } from "./schema-conversion.js";
