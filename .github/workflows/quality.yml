@@ -53,8 +53,13 @@ jobs:
       - run: pnpm audit --audit-level=high
       - run: pnpm lint
       - run: pnpm --filter @ag-bash/bash knip
-      - run: pnpm typecheck
+      # Build BEFORE typecheck: @ag-bash/agent-bridge depends on @ag-bash/bash
+      # via workspace:* + NodeNext resolution, so it resolves bash's types from
+      # dist/ — which must exist first. (Typecheck-before-build was a latent
+      # ordering bug; it only surfaced once bash's emitted .d.cts tightened
+      # cross-package resolution.)
       - run: pnpm build
+      - run: pnpm typecheck
       - run: pnpm --filter @ag-bash/bash check:worker-sync
       # Packaging guards (release-integrity): versions stay synchronized and the
       # packed tarballs carry their load-bearing artifacts with no workspace:
