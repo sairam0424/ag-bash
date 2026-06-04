@@ -61,7 +61,7 @@ export interface AgenticHealerConfig {
 /**
  * Result from a tool execution.
  */
-export interface ToolResult<T = any> {
+export interface ToolResult<T = unknown> {
   data: T;
   /**
    * Optional message to display to the user/model alongside the data.
@@ -83,18 +83,18 @@ export type ValidationResult =
 /**
  * Permission result for tool execution.
  */
-export type PermissionResult =
-  | { behavior: "allow"; updatedInput?: any }
+export type PermissionResult<TArgs = unknown> =
+  | { behavior: "allow"; updatedInput?: TArgs }
   | { behavior: "deny"; message: string }
   | { behavior: "ask"; message: string };
 
 /**
  * ToolboxTool definition with advanced lifecycle hooks and metadata.
  */
-export interface ToolboxTool {
+export interface ToolboxTool<TArgs = unknown, TResult = unknown> {
   name: string;
   description: string;
-  parameters: import("zod").ZodObject<any>;
+  parameters: import("zod").ZodType<TArgs>;
 
   /**
    * Optional aliases for backwards compatibility.
@@ -114,30 +114,33 @@ export interface ToolboxTool {
   /**
    * Implementation of the tool logic.
    */
-  execute: (bash: any, args: any) => Promise<any>;
+  execute: (bash: import("../Bash.js").Bash, args: TArgs) => Promise<TResult>;
 
   /**
    * Optional hook to validate input before execution.
    */
-  validateInput: (args: any) => Promise<ValidationResult>;
+  validateInput: (args: unknown) => Promise<ValidationResult>;
 
   /**
    * Optional hook to check permissions before execution.
    */
-  checkPermissions: (bash: any, args: any) => Promise<PermissionResult>;
+  checkPermissions: (
+    bash: import("../Bash.js").Bash,
+    args: TArgs,
+  ) => Promise<PermissionResult<TArgs>>;
 
   /**
    * Indicates if the tool is read-only (doesn't modify state).
    */
-  isReadOnly?: ((args: any) => boolean) | boolean;
+  isReadOnly?: ((args: TArgs) => boolean) | boolean;
 
   /**
    * Indicates if the tool is destructive (e.g., delete, overwrite).
    */
-  isDestructive?: ((args: any) => boolean) | boolean;
+  isDestructive?: ((args: TArgs) => boolean) | boolean;
 
   /**
    * Indicates if the tool is safe to run in parallel.
    */
-  isConcurrencySafe?: ((args: any) => boolean) | boolean;
+  isConcurrencySafe?: ((args: TArgs) => boolean) | boolean;
 }

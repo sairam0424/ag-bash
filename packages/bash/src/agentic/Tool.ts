@@ -5,13 +5,13 @@ import type { PermissionResult, ValidationResult } from "./types.js";
 /**
  * Metadata for a tool.
  */
-export interface ToolMetadata {
+export interface ToolMetadata<TArgs = unknown> {
   name: string;
   description: string;
-  parameters: z.ZodType<any>;
-  isReadOnly?: ((args: any) => boolean) | boolean;
-  isDestructive?: ((args: any) => boolean) | boolean;
-  isConcurrencySafe?: ((args: any) => boolean) | boolean;
+  parameters: z.ZodType<TArgs>;
+  isReadOnly?: ((args: TArgs) => boolean) | boolean;
+  isDestructive?: ((args: TArgs) => boolean) | boolean;
+  isConcurrencySafe?: ((args: TArgs) => boolean) | boolean;
   searchHint?: string;
   aliases?: string[];
   maxResultSizeChars?: number;
@@ -22,33 +22,42 @@ export interface ToolMetadata {
   /** If true, only name + description are loaded initially; full schema is loaded on first use */
   deferred?: boolean;
   /** Callback to load the full Zod schema on demand (used with deferred: true) */
-  loadSchema?: () => Promise<z.ZodType<any>>;
+  loadSchema?: () => Promise<z.ZodType<TArgs>>;
 }
 
 /**
  * Base interface for all agentic tools.
  */
-export interface ToolboxTool extends ToolMetadata {
-  checkPermissions: (bash: Bash, args: any) => Promise<PermissionResult>;
-  validateInput: (args: any) => Promise<ValidationResult>;
-  execute: (bash: Bash, args: any) => Promise<any>;
+export interface ToolboxTool<TArgs = unknown, TResult = unknown>
+  extends ToolMetadata<TArgs> {
+  checkPermissions: (
+    bash: Bash,
+    args: TArgs,
+  ) => Promise<PermissionResult<TArgs>>;
+  validateInput: (args: unknown) => Promise<ValidationResult>;
+  execute: (bash: Bash, args: TArgs) => Promise<TResult>;
 }
 
 /**
  * Abstract base class for tools providing common functionality.
  */
-export abstract class Tool implements ToolboxTool {
+export abstract class Tool<TArgs = unknown, TResult = unknown>
+  implements ToolboxTool<TArgs, TResult>
+{
   abstract name: string;
   abstract description: string;
-  abstract parameters: z.ZodObject<any>;
+  abstract parameters: z.ZodType<TArgs>;
 
-  isReadOnly: ((args: any) => boolean) | boolean = false;
-  isDestructive: ((args: any) => boolean) | boolean = false;
-  isConcurrencySafe: ((args: any) => boolean) | boolean = false;
+  isReadOnly: ((args: TArgs) => boolean) | boolean = false;
+  isDestructive: ((args: TArgs) => boolean) | boolean = false;
+  isConcurrencySafe: ((args: TArgs) => boolean) | boolean = false;
   searchHint?: string;
   aliases?: string[];
 
-  async checkPermissions(bash: Bash, _args: any): Promise<PermissionResult> {
+  async checkPermissions(
+    bash: Bash,
+    _args: TArgs,
+  ): Promise<PermissionResult<TArgs>> {
     // Default: allow but respect bash mode
     if (this.isDestructive && bash.getMode() === "plan") {
       return {
@@ -59,7 +68,7 @@ export abstract class Tool implements ToolboxTool {
     return { behavior: "allow" };
   }
 
-  async validateInput(args: any): Promise<ValidationResult> {
+  async validateInput(args: unknown): Promise<ValidationResult> {
     const result = this.parameters.safeParse(args);
     if (!result.success) {
       return {
@@ -70,7 +79,7 @@ export abstract class Tool implements ToolboxTool {
     return { result: true };
   }
 
-  abstract execute(bash: Bash, args: any): Promise<any>;
+  abstract execute(bash: Bash, args: TArgs): Promise<TResult>;
 
   /**
    * Helper to truncate long results for token efficiency.
@@ -87,10 +96,13 @@ export abstract class Tool implements ToolboxTool {
  * Factory function to build a tool from a plain object.
  * Breaks circular dependencies by living in the base Tool file.
  */
-export function buildTool(
-  tool: Partial<ToolboxTool> &
-    Pick<ToolboxTool, "name" | "description" | "parameters" | "execute">,
-): ToolboxTool {
+export function buildTool<TArgs = unknown, TResult = unknown>(
+  tool: Partial<ToolboxTool<TArgs, TResult>> &
+    Pick<
+      ToolboxTool<TArgs, TResult>,
+      "name" | "description" | "parameters" | "execute"
+    >,
+): ToolboxTool<TArgs, TResult> {
   const isDestructive =
     typeof tool.isDestructive === "function"
       ? tool.isDestructive
@@ -103,7 +115,7 @@ export function buildTool(
     ...tool,
     checkPermissions:
       tool.checkPermissions ||
-      (async (bash: Bash, args: any) => {
+      (async (bash: Bash, args: TArgs) => {
         if (isDestructive(args) && bash.getMode() === "plan") {
           return {
             behavior: "deny",
@@ -114,7 +126,7 @@ export function buildTool(
       }),
     validateInput:
       tool.validateInput ||
-      (async (args: any) => {
+      (async (args: unknown) => {
         const result = tool.parameters.safeParse(args);
         if (!result.success) {
           return {
@@ -124,5 +136,5 @@ export function buildTool(
         }
         return { result: true };
       }),
-  } as ToolboxTool;
+  } as ToolboxTool<TArgs, TResult>;
 }

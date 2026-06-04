@@ -3,54 +3,64 @@ import type { Bash } from "../Bash.js";
 import { agConvertCommand } from "../commands/ag-convert/ag-convert.js";
 import { buildTool, type ToolboxTool } from "./Tool.js";
 
+interface ConvertArgs {
+  filePath: string;
+  engine?: "auto" | "docling" | "markitdown";
+  highFidelity?: boolean;
+  describeImages?: boolean;
+  visionMode?: "default" | "ocr" | "diagram" | "chart" | "screenshot" | "document" | "technical";
+  visionPrompt?: string;
+  llmProvider?: "openai" | "anthropic" | "google" | "local" | "azure";
+  llmModel?: string;
+}
+
+const convertParameters: z.ZodType<ConvertArgs> = z.object({
+  filePath: z.string().describe("Path to the file to convert."),
+  engine: z
+    .enum(["auto", "docling", "markitdown"])
+    .optional()
+    .describe("Engine override (default: auto)."),
+  highFidelity: z
+    .boolean()
+    .optional()
+    .describe("Favor precision over speed (default: false)."),
+  describeImages: z
+    .boolean()
+    .optional()
+    .describe("Use AI to describe images (default: false)."),
+  visionMode: z
+    .enum([
+      "default",
+      "ocr",
+      "diagram",
+      "chart",
+      "screenshot",
+      "document",
+      "technical",
+    ])
+    .optional()
+    .describe("Prompt template for image analysis."),
+  visionPrompt: z
+    .string()
+    .optional()
+    .describe("Custom vision prompt (overrides visionMode)."),
+  llmProvider: z
+    .enum(["openai", "anthropic", "google", "local", "azure"])
+    .optional()
+    .describe("LLM provider for vision tasks."),
+  llmModel: z.string().optional().describe("Specific model for vision tasks."),
+});
+
 /**
  * ag_convert - Agentic tool for high-precision document and image conversion.
  */
-export const ConvertTool: ToolboxTool = buildTool({
+export const ConvertTool: ToolboxTool<ConvertArgs, string> = buildTool({
   name: "ag_convert",
   description:
     "Convert documents (PDF, Docx, Xlsx) and images to Markdown with AI-powered visual intelligence and OCR.",
-  parameters: z.object({
-    filePath: z.string().describe("Path to the file to convert."),
-    engine: z
-      .enum(["auto", "docling", "markitdown"])
-      .optional()
-      .describe("Engine override (default: auto)."),
-    highFidelity: z
-      .boolean()
-      .optional()
-      .describe("Favor precision over speed (default: false)."),
-    describeImages: z
-      .boolean()
-      .optional()
-      .describe("Use AI to describe images (default: false)."),
-    visionMode: z
-      .enum([
-        "default",
-        "ocr",
-        "diagram",
-        "chart",
-        "screenshot",
-        "document",
-        "technical",
-      ])
-      .optional()
-      .describe("Prompt template for image analysis."),
-    visionPrompt: z
-      .string()
-      .optional()
-      .describe("Custom vision prompt (overrides visionMode)."),
-    llmProvider: z
-      .enum(["openai", "anthropic", "google", "local", "azure"])
-      .optional()
-      .describe("LLM provider for vision tasks."),
-    llmModel: z
-      .string()
-      .optional()
-      .describe("Specific model for vision tasks."),
-  }),
+  parameters: convertParameters,
   effort: "high",
-  execute: async (bash: Bash, args: any) => {
+  execute: async (bash: Bash, args: ConvertArgs) => {
     const cmdArgs = [args.filePath];
     if (args.engine) cmdArgs.push("--engine", args.engine);
     if (args.highFidelity) cmdArgs.push("--high-fidelity");

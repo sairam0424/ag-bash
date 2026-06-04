@@ -20,7 +20,8 @@ export async function executeTool(
   bash: Bash,
   toolName: string,
   args: Record<string, unknown>,
-  tools: Map<string, ToolboxTool>,
+  // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool registry — the Map holds tools with differing TArgs/TResult; the existential <any, any> is the documented dispatch boundary (zod safeParse narrows at runtime in validateInput before execute is called).
+  tools: Map<string, ToolboxTool<any, any>>,
 ): Promise<unknown> {
   const tool = tools.get(toolName);
   if (!tool) {
