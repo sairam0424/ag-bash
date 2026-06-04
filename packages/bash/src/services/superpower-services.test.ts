@@ -1139,8 +1139,10 @@ describe("WorktreeManager", () => {
     wm.createWorktree({ name: "safe", originalCwd: "/" });
     wm.enterWorktree("safe");
 
-    const active1 = wm.getActive()!;
-    const active2 = wm.getActive()!;
+    const active1 = wm.getActive();
+    const active2 = wm.getActive();
+    expect(active1).toBeDefined();
+    expect(active2).toBeDefined();
     expect(active1).not.toBe(active2); // different object references
     expect(active1).toEqual(active2); // same values
   });

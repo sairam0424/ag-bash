@@ -580,7 +580,7 @@ describe("arithmetic-parser", () => {
       expect(expr.type).toBe("ArithArrayElement");
       if (expr.type === "ArithArrayElement") {
         expect(expr.array).toBe("arr");
-        expect(expr.index!.type).toBe("ArithBinary");
+        expect(expr.index?.type).toBe("ArithBinary");
       }
     });
   });

@@ -429,14 +429,14 @@ describe("lexer", () => {
       const tokens = tokenize("cat <<EOF\nhello world\nEOF");
       const content = tokens.find((t) => t.type === TokenType.HEREDOC_CONTENT);
       expect(content).toBeDefined();
-      expect(content!.value).toContain("hello world");
+      expect(content?.value).toContain("hello world");
     });
 
     it("should handle heredoc with quoted delimiter (no expansion)", () => {
       const tokens = tokenize("cat <<'EOF'\n$HOME\nEOF");
       const content = tokens.find((t) => t.type === TokenType.HEREDOC_CONTENT);
       expect(content).toBeDefined();
-      expect(content!.value).toContain("$HOME");
+      expect(content?.value).toContain("$HOME");
     });
 
     it("should handle heredoc with double-quoted delimiter", () => {

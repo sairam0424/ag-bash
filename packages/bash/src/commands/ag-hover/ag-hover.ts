@@ -50,8 +50,8 @@ export const agHoverCommand: Command = {
       // Simple word detection at position
       const symbolPattern = /[\w$!]+/g;
       let symbolName: string | undefined;
-      let match;
-      while ((match = symbolPattern.exec(lineText)) !== null) {
+      let match: RegExpExecArray | null = symbolPattern.exec(lineText);
+      while (match !== null) {
         if (
           char - 1 >= match.index &&
           char - 1 < match.index + match[0].length
@@ -59,6 +59,7 @@ export const agHoverCommand: Command = {
           symbolName = match[0];
           break;
         }
+        match = symbolPattern.exec(lineText);
       }
 
       if (!symbolName) {

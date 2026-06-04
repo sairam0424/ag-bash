@@ -1,4 +1,8 @@
-import { SemanticEngine, SymbolType } from "../../lsp/semantic-engine.js";
+import {
+  SemanticEngine,
+  type SemanticSymbol,
+  SymbolType,
+} from "../../lsp/semantic-engine.js";
 import { TreeSitterParser } from "../../parser/tree-sitter-parser.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
@@ -105,20 +109,26 @@ export const agAnalyzeCommand: Command = {
       summary += `Lines: ${lines.length}\n`;
       summary += `Size: ${content.length} bytes\n`;
 
-      const funcs = symbols.filter((s: any) => s.type === SymbolType.Function);
-      const classes = symbols.filter((s: any) => s.type === SymbolType.Class);
-      const vars = symbols.filter((s: any) => s.type === SymbolType.Variable);
+      const funcs = symbols.filter(
+        (s: SemanticSymbol) => s.type === SymbolType.Function,
+      );
+      const classes = symbols.filter(
+        (s: SemanticSymbol) => s.type === SymbolType.Class,
+      );
+      const vars = symbols.filter(
+        (s: SemanticSymbol) => s.type === SymbolType.Variable,
+      );
 
       if (classes.length > 0) {
         summary += `\nClasses (${classes.length}):\n`;
-        classes.forEach((c: any) => {
+        classes.forEach((c: SemanticSymbol) => {
           summary += `  - class ${c.name} (line ${c.line})\n`;
         });
       }
 
       if (funcs.length > 0) {
         summary += `\nFunctions (${funcs.length}):\n`;
-        funcs.forEach((f: any) => {
+        funcs.forEach((f: SemanticSymbol) => {
           summary += `  - ${f.name} (line ${f.line})\n`;
         });
       } else if (classes.length === 0) {
@@ -127,16 +137,19 @@ export const agAnalyzeCommand: Command = {
 
       if (vars.length > 0) {
         summary += `\nVariables (${vars.length} unique):\n`;
-        const uniqueVars = Array.from(new Set(vars.map((v: any) => v.name)));
+        const uniqueVars = Array.from(
+          new Set(vars.map((v: SemanticSymbol) => v.name)),
+        );
         summary += `  ${uniqueVars.slice(0, 10).join(", ")}${uniqueVars.length > 10 ? "..." : ""}\n`;
       }
 
       summary += `-----------------------------------\n`;
 
       return { stdout: summary, stderr: "", exitCode: 0 };
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
       return {
-        stdout: `File: ${file}\nLines: ${lines.length}\n(Error during analysis: ${e.message})\n`,
+        stdout: `File: ${file}\nLines: ${lines.length}\n(Error during analysis: ${message})\n`,
         stderr: "",
         exitCode: 1,
       };

@@ -136,7 +136,7 @@ describe("ToolSearchEngine", () => {
 
     expect(grepSingle).toBeDefined();
     expect(grepMulti).toBeDefined();
-    expect(grepMulti!.score).toBeLessThan(grepSingle!.score);
+    expect(grepMulti?.score).toBeLessThan(grepSingle?.score ?? Number.NaN);
   });
 
   // -----------------------------------------------------------------------

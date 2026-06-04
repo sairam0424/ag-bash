@@ -250,7 +250,11 @@ export async function saveMemoryToFs(
 
   for (const [, entries] of groups) {
     // All entries in a group share the same scope and agentType.
-    const { scope, agentType } = entries[0]!;
+    // groupEntries only creates a group once it has at least one entry,
+    // so entries[0] is always present here.
+    const first = entries[0];
+    if (!first) continue;
+    const { scope, agentType } = first;
 
     await ensureScopeDir(fs, scope);
 
