@@ -5,6 +5,11 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      record-baseline:
+        description: "Record a fresh bench-baseline.json on THIS runner (uploaded as an artifact to commit). Use to fix dev-vs-CI hardware baseline drift."
+        type: boolean
+        default: false
 
 concurrency:
   group: bench-${{ github.ref }}
@@ -23,6 +28,8 @@ jobs:
   # timings are comparable run-to-run. To keep that stable we give this its own
   # dedicated runner and do NOT run it alongside other jobs in one process.
   bench:
+    # Skip the gate when this dispatch run is recording a fresh baseline.
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.record-baseline) }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -32,3 +39,25 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm --filter @ag-bash/bash bench:check
+
+  # Record bench-baseline.json ON the CI runner (ubuntu-latest), not a dev
+  # machine, so the committed baseline matches the hardware the gate runs on.
+  # Manual-only (workflow_dispatch + record-baseline=true). It does NOT commit —
+  # it uploads the fresh baseline as an artifact; download it and commit the file
+  # to packages/bash/bench-baseline.json via a normal PR. Fixes dev-vs-CI drift.
+  record-baseline:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.record-baseline }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - run: pnpm --filter @ag-bash/bash bench:update
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bench-baseline
+          path: packages/bash/bench-baseline.json
+          if-no-files-found: error
