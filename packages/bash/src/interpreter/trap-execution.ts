@@ -24,7 +24,7 @@ import type { InterpreterContext } from "./types.js";
  * @param signal - The signal name (EXIT, ERR, DEBUG, RETURN)
  * @returns The execution result, or null if no handler registered
  */
-export async function executeTrap(
+async function executeTrap(
   ctx: InterpreterContext,
   signal: string,
 ): Promise<ExecResult | null> {
@@ -115,27 +115,5 @@ export async function executeReturnTrap(
     return await executeTrap(ctx, "RETURN");
   } finally {
     ctx.__executingReturnTrap = false;
-  }
-}
-
-/**
- * Execute the DEBUG trap.
- * Fires before each simple command execution.
- *
- * @param ctx - The interpreter context
- * @returns The trap execution result, or null if no handler registered
- */
-export async function executeDebugTrap(
-  ctx: InterpreterContext,
-): Promise<ExecResult | null> {
-  // Prevent recursion: DEBUG trap executing commands should not re-trigger DEBUG
-  const trapState = ctx.__executingDebugTrap;
-  if (trapState) return null;
-
-  ctx.__executingDebugTrap = true;
-  try {
-    return await executeTrap(ctx, "DEBUG");
-  } finally {
-    ctx.__executingDebugTrap = false;
   }
 }

@@ -9,16 +9,4 @@
 export { Lexer } from "./lexer-state-machine.js";
 
 export type { LexerOptions, Token } from "./token-definitions.js";
-export {
-  DEFAULT_MAX_HEREDOC_SIZE,
-  findAssignmentEq,
-  isValidAssignmentLHS,
-  isValidName,
-  isWordBoundary,
-  LexerError,
-  RESERVED_WORDS,
-  SINGLE_CHAR_OPS,
-  THREE_CHAR_OPS,
-  TokenType,
-  TWO_CHAR_OPS,
-} from "./token-definitions.js";
+export { LexerError, TokenType } from "./token-definitions.js";

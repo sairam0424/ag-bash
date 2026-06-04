@@ -31,6 +31,9 @@
  */
 
 // Browser secondary defense (opt-in intrinsic freeze; AsyncLocalStorage-free)
+// Consumed via the "@ag-bash/bash/browser" entry (src/browser.ts); re-exported
+// here as part of the security public surface.
+/** @public */
 export {
   type BrowserHardeningOptions,
   type BrowserHardeningResult,
