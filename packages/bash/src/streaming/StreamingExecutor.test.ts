@@ -63,7 +63,7 @@ describe("StreamingExecutor", () => {
 
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
-      expect(exitChunk!.data).toBe("0");
+      expect(exitChunk?.data).toBe("0");
     });
 
     it("should yield exit chunk with non-zero code for failed commands", async () => {
@@ -71,7 +71,7 @@ describe("StreamingExecutor", () => {
 
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
-      expect(exitChunk!.data).not.toBe("0");
+      expect(exitChunk?.data).not.toBe("0");
     });
   });
 
@@ -136,7 +136,7 @@ describe("StreamingExecutor", () => {
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
       // Exit code should indicate cancellation (not 0)
-      expect(exitChunk!.data).not.toBe("0");
+      expect(exitChunk?.data).not.toBe("0");
     });
 
     it("should abort mid-execution when signal fires", async () => {
@@ -190,7 +190,7 @@ describe("StreamingExecutor", () => {
       // Should produce stderr and exit chunk
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
-      expect(exitChunk!.data).not.toBe("0");
+      expect(exitChunk?.data).not.toBe("0");
     });
 
     it("should produce exit chunk with code 1 on runtime errors", async () => {
@@ -198,7 +198,7 @@ describe("StreamingExecutor", () => {
 
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
-      expect(exitChunk!.data).toBe("1");
+      expect(exitChunk?.data).toBe("1");
     });
 
     it("should handle division by zero error in stream", async () => {
@@ -206,7 +206,7 @@ describe("StreamingExecutor", () => {
 
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
-      expect(exitChunk!.data).not.toBe("0");
+      expect(exitChunk?.data).not.toBe("0");
 
       const stderrChunks = chunks.filter((c) => c.type === "stderr");
       expect(stderrChunks.length).toBeGreaterThanOrEqual(1);
@@ -220,7 +220,7 @@ describe("StreamingExecutor", () => {
       // May or may not have stdout chunks, but must have exit
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
-      expect(exitChunk!.data).toBe("0");
+      expect(exitChunk?.data).toBe("0");
 
       // No stdout for 'true' command
       const stdoutChunks = chunks.filter((c) => c.type === "stdout");
@@ -233,7 +233,7 @@ describe("StreamingExecutor", () => {
 
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
-      expect(exitChunk!.data).toBe("0");
+      expect(exitChunk?.data).toBe("0");
     });
 
     it("should handle whitespace-only script", async () => {
@@ -241,7 +241,7 @@ describe("StreamingExecutor", () => {
 
       const exitChunk = chunks.find((c) => c.type === "exit");
       expect(exitChunk).toBeDefined();
-      expect(exitChunk!.data).toBe("0");
+      expect(exitChunk?.data).toBe("0");
     });
   });
 

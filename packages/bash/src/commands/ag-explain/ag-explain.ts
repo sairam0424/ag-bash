@@ -63,15 +63,15 @@ export const agExplainCommand: Command = {
           switch (node.type) {
             case "Script":
               if (node.statements)
-                node.statements.forEach(
-                  (s: any) => (text += explainNode(s, indent)),
-                );
+                node.statements.forEach((s: any) => {
+                  text += explainNode(s, indent);
+                });
               break;
             case "Statement":
               if (node.pipelines)
-                node.pipelines.forEach(
-                  (p: any) => (text += explainNode(p, indent)),
-                );
+                node.pipelines.forEach((p: any) => {
+                  text += explainNode(p, indent);
+                });
               break;
             case "Pipeline":
               if (node.commands && node.commands.length > 1) {

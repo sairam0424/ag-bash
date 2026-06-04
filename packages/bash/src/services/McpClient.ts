@@ -207,8 +207,8 @@ class StdioTransport implements McpTransport {
     let buffer = "";
     this.process.stdout?.on("data", (data: Buffer) => {
       buffer += data.toString();
-      let newlineIndex;
-      while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+      let newlineIndex: number = buffer.indexOf("\n");
+      while (newlineIndex !== -1) {
         const line = buffer.slice(0, newlineIndex);
         buffer = buffer.slice(newlineIndex + 1);
         try {
@@ -228,6 +228,7 @@ class StdioTransport implements McpTransport {
         } catch (_e) {
           // Silently swallow malformed JSON-RPC response
         }
+        newlineIndex = buffer.indexOf("\n");
       }
     });
   }

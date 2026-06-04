@@ -8,7 +8,14 @@ interface ConvertArgs {
   engine?: "auto" | "docling" | "markitdown";
   highFidelity?: boolean;
   describeImages?: boolean;
-  visionMode?: "default" | "ocr" | "diagram" | "chart" | "screenshot" | "document" | "technical";
+  visionMode?:
+    | "default"
+    | "ocr"
+    | "diagram"
+    | "chart"
+    | "screenshot"
+    | "document"
+    | "technical";
   visionPrompt?: string;
   llmProvider?: "openai" | "anthropic" | "google" | "local" | "azure";
   llmModel?: string;

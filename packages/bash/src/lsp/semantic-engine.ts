@@ -110,19 +110,21 @@ export class SemanticEngine {
 
     switch (node.type) {
       case "Script":
-        (node as ScriptNode).statements.forEach((s) =>
-          this.traverse(s, currentScope, path),
-        );
+        (node as ScriptNode).statements.forEach((s) => {
+          this.traverse(s, currentScope, path);
+        });
         break;
       case "Statement":
-        (node as StatementNode).pipelines.forEach((p) =>
-          p.commands.forEach((c) => this.traverse(c, currentScope, path)),
-        );
+        (node as StatementNode).pipelines.forEach((p) => {
+          p.commands.forEach((c) => {
+            this.traverse(c, currentScope, path);
+          });
+        });
         break;
       case "Pipeline":
-        (node as any).commands.forEach((c: any) =>
-          this.traverse(c, currentScope, path),
-        );
+        (node as any).commands.forEach((c: any) => {
+          this.traverse(c, currentScope, path);
+        });
         break;
       case "FunctionDef": {
         const fnNode = node as FunctionDefNode;
@@ -159,9 +161,9 @@ export class SemanticEngine {
       }
       case "SimpleCommand": {
         const cmdNode = node as SimpleCommandNode;
-        cmdNode.assignments.forEach((a) =>
-          this.traverse(a, currentScope, path),
-        );
+        cmdNode.assignments.forEach((a) => {
+          this.traverse(a, currentScope, path);
+        });
 
         // Track function calls as references
         if (
@@ -181,7 +183,9 @@ export class SemanticEngine {
           });
         }
 
-        cmdNode.args.forEach((arg) => this.traverse(arg, currentScope, path));
+        cmdNode.args.forEach((arg) => {
+          this.traverse(arg, currentScope, path);
+        });
         break;
       }
       case "Assignment": {
@@ -222,7 +226,9 @@ export class SemanticEngine {
       }
       case "Word": {
         const wordNode = node as WordNode;
-        wordNode.parts.forEach((p) => this.traverse(p, currentScope, path));
+        wordNode.parts.forEach((p) => {
+          this.traverse(p, currentScope, path);
+        });
         break;
       }
       case "ParameterExpansion": {
@@ -239,40 +245,44 @@ export class SemanticEngine {
         break;
       }
       case "DoubleQuoted": {
-        (node as any).parts.forEach((p: any) =>
-          this.traverse(p, currentScope, path),
-        );
+        (node as any).parts.forEach((p: any) => {
+          this.traverse(p, currentScope, path);
+        });
         break;
       }
       case "Group":
-        (node as any).body.forEach((s: any) =>
-          this.traverse(s, currentScope, path),
-        );
+        (node as any).body.forEach((s: any) => {
+          this.traverse(s, currentScope, path);
+        });
         break;
       case "Subshell":
-        (node as any).body.forEach((s: any) =>
-          this.traverse(s, currentScope, path),
-        );
+        (node as any).body.forEach((s: any) => {
+          this.traverse(s, currentScope, path);
+        });
         break;
       case "If":
         (node as any).clauses.forEach((c: any) => {
-          c.condition.forEach((s: any) => this.traverse(s, currentScope, path));
-          c.body.forEach((s: any) => this.traverse(s, currentScope, path));
+          c.condition.forEach((s: any) => {
+            this.traverse(s, currentScope, path);
+          });
+          c.body.forEach((s: any) => {
+            this.traverse(s, currentScope, path);
+          });
         });
         if ((node as any).elseBody) {
-          (node as any).elseBody.forEach((s: any) =>
-            this.traverse(s, currentScope, path),
-          );
+          (node as any).elseBody.forEach((s: any) => {
+            this.traverse(s, currentScope, path);
+          });
         }
         break;
       case "While":
       case "Until":
-        (node as any).condition.forEach((s: any) =>
-          this.traverse(s, currentScope, path),
-        );
-        (node as any).body.forEach((s: any) =>
-          this.traverse(s, currentScope, path),
-        );
+        (node as any).condition.forEach((s: any) => {
+          this.traverse(s, currentScope, path);
+        });
+        (node as any).body.forEach((s: any) => {
+          this.traverse(s, currentScope, path);
+        });
         break;
       case "For": {
         const forNode = node as any;
@@ -287,11 +297,13 @@ export class SemanticEngine {
           path,
         });
         if (forNode.words) {
-          forNode.words.forEach((w: any) =>
-            this.traverse(w, currentScope, path),
-          );
+          forNode.words.forEach((w: any) => {
+            this.traverse(w, currentScope, path);
+          });
         }
-        forNode.body.forEach((s: any) => this.traverse(s, currentScope, path));
+        forNode.body.forEach((s: any) => {
+          this.traverse(s, currentScope, path);
+        });
         break;
       }
     }

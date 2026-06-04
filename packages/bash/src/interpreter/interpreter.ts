@@ -139,7 +139,8 @@ function withLazyEnv(
   let cachedEnv: Record<string, string> | undefined;
   return Object.defineProperty(result as ExecResult, "env", {
     get() {
-      return (cachedEnv ??= mapToRecord(snapshot));
+      cachedEnv ??= mapToRecord(snapshot);
+      return cachedEnv;
     },
     enumerable: true,
     configurable: true,

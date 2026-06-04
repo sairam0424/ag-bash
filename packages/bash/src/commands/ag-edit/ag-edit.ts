@@ -89,40 +89,40 @@ export const agEditCommand: Command = {
     let summary = "";
 
     switch (action) {
-      case "insert-before":
-        lines.splice(startIdx!, 0, ...newLines);
+      case "insert-before": {
+        if (startIdx === undefined) return error("missing or invalid --line");
+        lines.splice(startIdx, 0, ...newLines);
         summary = `Inserted ${newLines.length} line(s) before line ${flags.line}`;
         break;
-      case "insert-after":
-        lines.splice(startIdx! + 1, 0, ...newLines);
+      }
+      case "insert-after": {
+        if (startIdx === undefined) return error("missing or invalid --line");
+        lines.splice(startIdx + 1, 0, ...newLines);
         summary = `Inserted ${newLines.length} line(s) after line ${flags.line}`;
         break;
-      case "replace":
-        if (
-          endIdx === undefined ||
-          Number.isNaN(endIdx) ||
-          endIdx < startIdx!
-        ) {
+      }
+      case "replace": {
+        if (startIdx === undefined) return error("missing or invalid --line");
+        if (endIdx === undefined || Number.isNaN(endIdx) || endIdx < startIdx) {
           return error("invalid range for replace");
         }
         if (endIdx >= originalLineCount)
           return error(`range end ${flags.to} out of range`);
-        lines.splice(startIdx!, endIdx! - startIdx! + 1, ...newLines);
+        lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
         summary = `Replaced lines ${flags.line}-${flags.to || flags.line} with ${newLines.length} line(s)`;
         break;
-      case "delete":
-        if (
-          endIdx === undefined ||
-          Number.isNaN(endIdx) ||
-          endIdx < startIdx!
-        ) {
+      }
+      case "delete": {
+        if (startIdx === undefined) return error("missing or invalid --line");
+        if (endIdx === undefined || Number.isNaN(endIdx) || endIdx < startIdx) {
           return error("invalid range for delete");
         }
         if (endIdx >= originalLineCount)
           return error(`range end ${flags.to} out of range`);
-        lines.splice(startIdx!, endIdx! - startIdx! + 1);
+        lines.splice(startIdx, endIdx - startIdx + 1);
         summary = `Deleted lines ${flags.line}-${flags.to || flags.line}`;
         break;
+      }
       case "append":
         lines.push(...newLines);
         summary = `Appended ${newLines.length} line(s)`;

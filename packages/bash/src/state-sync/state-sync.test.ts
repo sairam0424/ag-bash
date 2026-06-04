@@ -9,12 +9,7 @@ import { describe, expect, it } from "vitest";
 import type { BashSnapshot } from "../Bash.js";
 import type { FileSystemSnapshot } from "../fs/interface.js";
 import type { InterpreterState } from "../interpreter/types.js";
-import {
-  applyStateDelta,
-  type BashDelta,
-  diffFs,
-  diffState,
-} from "./index.js";
+import { applyStateDelta, type BashDelta, diffFs, diffState } from "./index.js";
 
 /* ================================================================== */
 /*  Helpers                                                            */

@@ -231,7 +231,7 @@ export class BashToolbox {
               newContent = currentContent;
               let offset = 0;
               for (const match of matches) {
-                const start = match.index! + offset;
+                const start = match.index + offset;
                 const end = start + normalizedTarget.length;
                 newContent =
                   newContent.substring(0, start) +
@@ -460,8 +460,8 @@ export class BashToolbox {
             const lines = content.split("\n");
             const lineText = lines[line - 1] || "";
             const symbolPattern = /[\w$!]+/g;
-            let match;
-            while ((match = symbolPattern.exec(lineText)) !== null) {
+            let match: RegExpExecArray | null = symbolPattern.exec(lineText);
+            while (match !== null) {
               if (
                 character - 1 >= match.index &&
                 character - 1 < match.index + match[0].length
@@ -469,6 +469,7 @@ export class BashToolbox {
                 symbolName = match[0];
                 break;
               }
+              match = symbolPattern.exec(lineText);
             }
           }
 
@@ -515,9 +516,9 @@ export class BashToolbox {
           const lines = content.split("\n");
           const lineText = lines[line - 1] || "";
           const symbolPattern = /[\w$!]+/g;
-          let symbolName;
-          let match;
-          while ((match = symbolPattern.exec(lineText)) !== null) {
+          let symbolName: string | undefined;
+          let match: RegExpExecArray | null = symbolPattern.exec(lineText);
+          while (match !== null) {
             if (
               character - 1 >= match.index &&
               character - 1 < match.index + match[0].length
@@ -525,6 +526,7 @@ export class BashToolbox {
               symbolName = match[0];
               break;
             }
+            match = symbolPattern.exec(lineText);
           }
 
           if (!symbolName) return "No symbol found at position.";

@@ -257,7 +257,7 @@ function setupDependencies(): ExecResult {
     }
   }
 
-  let result;
+  let result: ReturnType<typeof spawnSync> | undefined;
   if (foundUv) {
     // Using uv at resolved path
     result = spawnSync(

@@ -175,7 +175,9 @@ export class TreeSitterToAst {
       case "subscript":
         return null;
       case "redirected_statement": {
-        const inner = this.convertCommand(node.namedChild(0)!);
+        const innerNode = node.namedChild(0);
+        if (!innerNode) return null;
+        const inner = this.convertCommand(innerNode);
         if (inner) {
           const redirects = this.convertRedirections(node);
           inner.redirections.push(...redirects);
@@ -291,8 +293,11 @@ export class TreeSitterToAst {
   }
 
   private convertHeredoc(node: Node): any {
-    const startNode = node.namedChild(0)!; // heredoc_start
-    const bodyNode = node.namedChild(1)!; // heredoc_body
+    const startNode = node.namedChild(0); // heredoc_start
+    const bodyNode = node.namedChild(1); // heredoc_body
+    if (!startNode || !bodyNode) {
+      throw new Error("Malformed heredoc node: missing start or body child");
+    }
 
     const delimiter = startNode.text.replace(/^[<-]+/, "").trim();
     const quoted = startNode.text.includes("'") || startNode.text.includes('"');
@@ -435,14 +440,14 @@ export class TreeSitterToAst {
 
     for (const child of node.namedChildren) {
       if (child.type === "elif_clause") {
-        const elifCond = child.childForFieldName("condition")!;
-        const elifConseq = child.childForFieldName("consequent")!;
+        const elifCond = child.childForFieldName("condition");
+        const elifConseq = child.childForFieldName("consequent");
         clauses.push({
           condition: this.convertList(elifCond),
           body: this.convertList(elifConseq),
         });
       } else if (child.type === "else_clause") {
-        const elseBodyNode = child.namedChild(0)!; // Usually body
+        const elseBodyNode = child.namedChild(0); // Usually body
         elseBody = this.convertList(elseBodyNode);
       }
     }
@@ -460,7 +465,7 @@ export class TreeSitterToAst {
     const variable = node.childForFieldName("variable")?.text;
     if (!variable) return null;
     const valueNode = node.childForFieldName("value");
-    const bodyNode = node.childForFieldName("body")!;
+    const bodyNode = node.childForFieldName("body");
 
     let words: WordNode[] | null = null;
     if (valueNode) {
@@ -484,8 +489,8 @@ export class TreeSitterToAst {
     node: Node,
     type: "While" | "Until",
   ): CommandNode | null {
-    const conditionNode = node.childForFieldName("condition")!;
-    const bodyNode = node.childForFieldName("body")!;
+    const conditionNode = node.childForFieldName("condition");
+    const bodyNode = node.childForFieldName("body");
 
     return {
       type,
@@ -497,13 +502,13 @@ export class TreeSitterToAst {
   }
 
   private convertCaseStatement(node: Node): CommandNode | null {
-    const valueNode = node.childForFieldName("value")!;
+    const valueNode = node.childForFieldName("value");
+    if (!valueNode) return null;
     const items: CaseItemNode[] = [];
 
     for (const child of node.namedChildren) {
       if (child.type === "case_item") {
-        const _patternNode = child.childForFieldName("value")!; // TS matches multiple patterns in one word or separate?
-        const bodyNode = child.childForFieldName("body")!;
+        const bodyNode = child.childForFieldName("body");
 
         const patterns: WordNode[] = [];
         // Handle multiple patterns separated by |
@@ -520,7 +525,8 @@ export class TreeSitterToAst {
 
         let terminator: ";;" | ";&" | ";;&" = ";;";
         for (let i = 0; i < child.childCount; i++) {
-          const tok = child.child(i)!;
+          const tok = child.child(i);
+          if (!tok) continue;
           if (
             !tok.isNamed &&
             (tok.type === ";;&" || tok.type === ";&" || tok.type === ";;")
@@ -549,8 +555,9 @@ export class TreeSitterToAst {
   }
 
   private convertFunctionDefinition(node: Node): CommandNode | null {
-    const nameNode = node.childForFieldName("name")!;
-    const bodyNode = node.childForFieldName("body")!;
+    const nameNode = node.childForFieldName("name");
+    const bodyNode = node.childForFieldName("body");
+    if (!nameNode || !bodyNode) return null;
 
     return {
       type: "FunctionDef",
@@ -562,7 +569,7 @@ export class TreeSitterToAst {
   }
 
   private convertSubshell(node: Node): CommandNode | null {
-    const bodyNode = node.namedChild(0)!;
+    const bodyNode = node.namedChild(0);
     return {
       type: "Subshell",
       body: this.convertList(bodyNode),
@@ -572,7 +579,7 @@ export class TreeSitterToAst {
   }
 
   private convertGroup(node: Node): CommandNode | null {
-    const bodyNode = node.namedChild(0)!;
+    const bodyNode = node.namedChild(0);
     return {
       type: "Group",
       body: this.convertList(bodyNode),

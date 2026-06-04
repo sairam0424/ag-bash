@@ -94,7 +94,7 @@ describe("Task Management Tools", () => {
     expect(result.length).toBeGreaterThanOrEqual(1);
     const found = result.find((t: ToolResult) => t.id === created.id);
     expect(found).toBeDefined();
-    expect(found!.subject).toBe("List test task");
+    expect(found?.subject).toBe("List test task");
   });
 
   it("task_update - should update task status to in_progress", async () => {
@@ -334,7 +334,7 @@ describe("Automation Tools", () => {
     expect(result.length).toBeGreaterThanOrEqual(1);
     const found = result.find((j: ToolResult) => j.id === created.id);
     expect(found).toBeDefined();
-    expect(found!.prompt).toBe("Hourly check");
+    expect(found?.prompt).toBe("Hourly check");
   });
 
   it("cron_delete - should delete the job and return success", async () => {
