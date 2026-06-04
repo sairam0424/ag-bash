@@ -4,47 +4,63 @@ import { agEditCommand } from "../commands/ag-edit/ag-edit.js";
 import { hashFile } from "../utils/crypto.js";
 import { buildTool, type ToolboxTool } from "./Tool.js";
 
+interface EditArgs {
+  filePath: string;
+  edits: Array<{
+    action:
+      | "insert-before"
+      | "insert-after"
+      | "replace"
+      | "delete"
+      | "append"
+      | "prepend";
+    line?: number;
+    to?: number;
+    text?: string;
+  }>;
+  expectedHash?: string;
+}
+
+const editParameters: z.ZodType<EditArgs> = z.object({
+  filePath: z.string().describe("Absolute path to the file to edit."),
+  edits: z
+    .array(
+      z.object({
+        action: z.enum([
+          "insert-before",
+          "insert-after",
+          "replace",
+          "delete",
+          "append",
+          "prepend",
+        ]),
+        line: z.number().optional().describe("Line number for the action."),
+        to: z
+          .number()
+          .optional()
+          .describe("End line number for 'replace' and 'delete'."),
+        text: z.string().optional().describe("Text to insert or replace with."),
+      }),
+    )
+    .describe("List of edits to apply sequentially."),
+  expectedHash: z
+    .string()
+    .optional()
+    .describe(
+      "The expected SHA-256 hash of the file content before applying edits. If it doesn't match, the edit will fail.",
+    ),
+});
+
 /**
  * ag_edit - Agentic file editor with multi-chunk support and staleness protection.
  */
-export const EditTool: ToolboxTool = buildTool({
+export const EditTool: ToolboxTool<EditArgs, string> = buildTool({
   name: "ag_edit",
   description:
     "Advanced line-based file editor. Supports multiple non-contiguous edits in a single call and protects against stale writes using content hashes.",
-  parameters: z.object({
-    filePath: z.string().describe("Absolute path to the file to edit."),
-    edits: z
-      .array(
-        z.object({
-          action: z.enum([
-            "insert-before",
-            "insert-after",
-            "replace",
-            "delete",
-            "append",
-            "prepend",
-          ]),
-          line: z.number().optional().describe("Line number for the action."),
-          to: z
-            .number()
-            .optional()
-            .describe("End line number for 'replace' and 'delete'."),
-          text: z
-            .string()
-            .optional()
-            .describe("Text to insert or replace with."),
-        }),
-      )
-      .describe("List of edits to apply sequentially."),
-    expectedHash: z
-      .string()
-      .optional()
-      .describe(
-        "The expected SHA-256 hash of the file content before applying edits. If it doesn't match, the edit will fail.",
-      ),
-  }),
+  parameters: editParameters,
   isDestructive: true,
-  execute: async (bash: Bash, args: any) => {
+  execute: async (bash: Bash, args: EditArgs) => {
     const path = bash.fs.resolvePath(bash.cwd, args.filePath);
 
     if (!(await bash.fs.exists(path))) {

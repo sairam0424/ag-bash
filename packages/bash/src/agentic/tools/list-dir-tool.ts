@@ -2,21 +2,27 @@ import { z } from "zod";
 import type { Bash } from "../../Bash.js";
 import { buildTool, type ToolboxTool } from "../Tool.js";
 
+interface ListDirArgs {
+  path: string;
+}
+
+const listDirParameters: z.ZodType<ListDirArgs> = z.object({
+  path: z.string().describe("Absolute path to the directory to list."),
+});
+
 /**
  * list_dir - List contents of a directory.
  *
  * Returns a newline-separated list of file and directory names
  * within the specified path.
  */
-export const ListDirTool: ToolboxTool = buildTool({
+export const ListDirTool: ToolboxTool<ListDirArgs, string> = buildTool({
   name: "list_dir",
   description: "List contents of a directory.",
-  parameters: z.object({
-    path: z.string().describe("Absolute path to the directory to list."),
-  }),
+  parameters: listDirParameters,
   isReadOnly: true,
   isConcurrencySafe: true,
-  execute: async (bash: Bash, { path }: { path: string }) => {
+  execute: async (bash: Bash, { path }: ListDirArgs) => {
     try {
       const files = await bash.listDirDirect(path);
       return files.join("\n");

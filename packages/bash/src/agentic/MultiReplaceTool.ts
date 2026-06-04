@@ -3,41 +3,52 @@ import type { Bash } from "../Bash.js";
 import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import type { ToolboxTool } from "./Tool.js";
 
+interface MultiReplaceArgs {
+  path: string;
+  chunks: Array<{ target: string; replacement: string }>;
+}
+
+const multiReplaceParameters: z.ZodType<MultiReplaceArgs> = z.object({
+  path: z.string().describe("Absolute path to the file to edit."),
+  chunks: z
+    .array(
+      z.object({
+        target: z.string().describe("The exact text block to be replaced."),
+        replacement: z.string().describe("The new text to insert."),
+      }),
+    )
+    .describe("List of replacement chunks."),
+});
+type MultiReplaceResult =
+  | string
+  | {
+      error: string;
+      applied: string[];
+      failed: { target: string; reason: string }[];
+    };
+
 /**
  * MultiReplaceTool - Robust multi-chunk file editing tool.
  *
  * Supports replacing multiple non-contiguous blocks of text in a single operation.
  * Automatically handles quote normalization and provides detailed error reporting.
  */
-export const MultiReplaceTool: ToolboxTool = {
+export const MultiReplaceTool: ToolboxTool<
+  MultiReplaceArgs,
+  MultiReplaceResult
+> = {
   name: "ag_multi_edit",
   description:
     "Apply multiple non-contiguous text replacements to a file in a single operation.",
-  parameters: z.object({
-    path: z.string().describe("Absolute path to the file to edit."),
-    chunks: z
-      .array(
-        z.object({
-          target: z.string().describe("The exact text block to be replaced."),
-          replacement: z.string().describe("The new text to insert."),
-        }),
-      )
-      .describe("List of replacement chunks."),
-  }),
+  parameters: multiReplaceParameters,
   isDestructive: true,
   checkPermissions: async (_bash: Bash) => {
     return { behavior: "allow" }; // In a real system, we'd check write permissions here
   },
-  validateInput: async (_args: any) => {
+  validateInput: async (_args: unknown) => {
     return { result: true };
   },
-  execute: async (
-    bash: Bash,
-    {
-      path,
-      chunks,
-    }: { path: string; chunks: { target: string; replacement: string }[] },
-  ) => {
+  execute: async (bash: Bash, { path, chunks }: MultiReplaceArgs) => {
     try {
       const state = bash.getFileState(path);
       const currentContent = await bash.readFileDirect(path);

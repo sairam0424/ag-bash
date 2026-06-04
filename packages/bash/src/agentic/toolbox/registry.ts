@@ -92,7 +92,8 @@ function normalizeQuotes(text: string): string {
  * Enforces schema validation and provides metadata for AI SDKs.
  */
 export class BashToolbox {
-  private tools: Map<string, ToolboxTool> = new Map();
+  // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool registry — tools have differing TArgs/TResult; storing the existential <any, any> is the single documented boundary that lets one Map hold all tool shapes. Type safety is restored at call sites via zod validateInput.
+  private tools: Map<string, ToolboxTool<any, any>> = new Map();
 
   constructor() {
     this.registerCoreTools();
@@ -1478,8 +1479,14 @@ export class BashToolbox {
 
   // ─── Public API ───────────────────────────────────────────────────────────────
 
-  public registerTool(tool: ToolboxTool): void {
-    this.tools.set(tool.name, tool);
+  public registerTool<TArgs = unknown, TResult = unknown>(
+    tool: ToolboxTool<TArgs, TResult>,
+  ): void {
+    // Store as the heterogeneous-registry existential. Concrete TArgs/TResult
+    // are erased here so one Map can hold all tool shapes; runtime safety is
+    // restored by zod validateInput at the dispatch boundary (see executor.ts).
+    // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool registry existential — see the `tools` field declaration above.
+    this.tools.set(tool.name, tool as ToolboxTool<any, any>);
   }
 
   public getTools(): ToolboxTool[] {

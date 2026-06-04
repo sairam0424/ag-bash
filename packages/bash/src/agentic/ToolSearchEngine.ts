@@ -1,10 +1,24 @@
 import type { ToolboxTool } from "./Tool.js";
 
 /**
+ * Read-only, heterogeneous view of any tool regardless of its concrete arg
+ * type. The search engine only reads covariant metadata (name, description,
+ * aliases, searchHint) and never calls `execute`. A registry holds tools with
+ * many different `TArgs`, and because `TArgs` sits in `execute`'s (contravariant)
+ * parameter position, TypeScript has no single non-`any` supertype that accepts
+ * every `ToolboxTool<Xi>` — this is the standard existential-type limitation.
+ * `<any, any>` is the documented existential boundary (the same one the registry
+ * uses for storage); it is confined to this read-only alias and never leaks a
+ * real `any` into call sites, since every method only touches metadata fields.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: existential boundary for a heterogeneous read-only tool collection — see the doc comment above; TArgs is contravariant so no non-any supertype exists.
+type AnyTool = ToolboxTool<any, any>;
+
+/**
  * A single search result with its relevance score and match source.
  */
 export interface SearchResult {
-  tool: ToolboxTool;
+  tool: AnyTool;
   /** Relevance score where lower is better (0 = exact name match). */
   score: number;
   /** Which field produced the best match for this tool. */
@@ -60,7 +74,7 @@ export class ToolSearchEngine {
    * @returns Results sorted by relevance (best first, lowest score).
    */
   search(
-    tools: ToolboxTool[],
+    tools: AnyTool[],
     query: string,
     limit: number = DEFAULT_LIMIT,
   ): SearchResult[] {
@@ -94,7 +108,7 @@ export class ToolSearchEngine {
    * @param names - Comma-separated tool names, optionally prefixed with `select:`.
    * @returns Matched tools in the order they were requested (missing names are skipped).
    */
-  selectByName(tools: ToolboxTool[], names: string): ToolboxTool[] {
+  selectByName(tools: AnyTool[], names: string): AnyTool[] {
     // Strip the "select:" prefix if the caller passed it through.
     const raw = names.startsWith("select:") ? names.slice(7) : names;
 
@@ -108,12 +122,12 @@ export class ToolSearchEngine {
     }
 
     // Build a case-insensitive lookup map for O(1) access.
-    const toolMap = new Map<string, ToolboxTool>();
+    const toolMap = new Map<string, AnyTool>();
     for (const tool of tools) {
       toolMap.set(tool.name.toLowerCase(), tool);
     }
 
-    const matched: ToolboxTool[] = [];
+    const matched: AnyTool[] = [];
     for (const name of requested) {
       const tool = toolMap.get(name);
       if (tool) {
@@ -146,7 +160,7 @@ export class ToolSearchEngine {
    * meaning the tool should be excluded from results entirely.
    */
   private scoreTool(
-    tool: ToolboxTool,
+    tool: AnyTool,
     keywords: string[],
     rawQuery: string,
   ): SearchResult | null {

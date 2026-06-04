@@ -1,6 +1,25 @@
 import { z } from "zod";
 import type { ToolboxTool } from "../../agentic/Tool.js";
 import type { Bash } from "../../Bash.js";
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
+
+interface WebSearchArgs {
+  query: string;
+  allowed_domains?: string[];
+  blocked_domains?: string[];
+}
+
+const webSearchParameters: z.ZodType<WebSearchArgs> = z.object({
+  query: z.string().describe("The search query to execute."),
+  allowed_domains: z
+    .array(z.string())
+    .optional()
+    .describe("Restrict results to these domains."),
+  blocked_domains: z
+    .array(z.string())
+    .optional()
+    .describe("Exclude results from these domains."),
+});
 
 /**
  * ag-web-search: Search the web for information.
@@ -8,35 +27,18 @@ import type { Bash } from "../../Bash.js";
  * Note: This implementation is a shell that delegates to the underlying fetch
  * or an external search API if configured.
  */
-export const WebSearchTool: ToolboxTool = {
+export const WebSearchTool: ToolboxTool<WebSearchArgs, string> = {
   name: "ag_web_search",
   description:
     "Search the web for current information, documentation, and answers.",
-  parameters: z.object({
-    query: z.string().describe("The search query to execute."),
-    allowed_domains: z
-      .array(z.string())
-      .optional()
-      .describe("Restrict results to these domains."),
-    blocked_domains: z
-      .array(z.string())
-      .optional()
-      .describe("Exclude results from these domains."),
-  }),
+  parameters: webSearchParameters,
   isReadOnly: true,
   isDestructive: false,
-  checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
-  validateInput: async (_args: any) => ({ result: true }),
-  execute: async (
-    bash: Bash,
-    {
-      query,
-    }: {
-      query: string;
-      allowed_domains?: string[];
-      blocked_domains?: string[];
-    },
-  ) => {
+  checkPermissions: async (_bash: Bash, _args: WebSearchArgs) => ({
+    behavior: "allow",
+  }),
+  validateInput: async (_args: unknown) => ({ result: true }),
+  execute: async (bash: Bash, { query }: WebSearchArgs) => {
     const env = bash.env;
     const serperKey = env.SERPER_API_KEY;
     const tavilyKey = env.TAVILY_API_KEY;
@@ -47,8 +49,9 @@ export const WebSearchTool: ToolboxTool = {
           `curl -H "X-API-KEY: ${serperKey}" -H "Content-Type: application/json" -d '{"q": "${query}"}' https://google.serper.dev/search`,
         );
         return response.stdout;
-      } catch (e: any) {
-        return `Serper search failed: ${e.message}`;
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return `Serper search failed: ${sanitizeErrorMessage(message)}`;
       }
     }
 
@@ -58,8 +61,9 @@ export const WebSearchTool: ToolboxTool = {
           `curl -H "Content-Type: application/json" -d '{"api_key": "${tavilyKey}", "query": "${query}"}' https://api.tavily.com/search`,
         );
         return response.stdout;
-      } catch (e: any) {
-        return `Tavily search failed: ${e.message}`;
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return `Tavily search failed: ${sanitizeErrorMessage(message)}`;
       }
     }
 
