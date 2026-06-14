@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "ag-bash",
+  "owner": {
+    "name": "Ag-Bash",
+    "email": "uggesairam0000@gmail.com"
+  },
+  "description": "Ag-Bash for Claude Code — a sandboxed, AI-native bash environment exposing 70 agentic tools (run_bash, semantic code edit/diff/analyze, WASM Python/JS, task & worktree management) via the Model Context Protocol.",
+  "plugins": [
+    {
+      "name": "ag-bash",
+      "source": "./plugins/ag-bash",
+      "description": "Sandboxed AI-native bash for Claude Code: 70 MCP tools backed by the @ag-bash/bash engine — run_bash with a full unix toolkit, surgical code edit/diff, WASM Python/JavaScript, semantic search, and agent task/worktree management.",
+      "version": "6.0.2",
+      "category": "mcp",
+      "keywords": [
+        "bash",
+        "shell",
+        "mcp",
+        "sandbox",
+        "agentic",
+        "ai-agents",
+        "code-execution"
+      ]
+    }
+  ]
+}

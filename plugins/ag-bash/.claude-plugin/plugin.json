@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "ag-bash",
+  "displayName": "Ag-Bash",
+  "version": "6.0.2",
+  "description": "Sandboxed AI-native bash for Claude Code: 70 MCP tools backed by the @ag-bash/bash engine — run_bash with a full unix toolkit (grep/sed/awk/jq), surgical code edit/diff/analyze, WASM Python & JavaScript, semantic search, and agent task/worktree management. Defense-in-depth sandbox on by default.",
+  "author": {
+    "name": "Ag-Bash",
+    "email": "uggesairam0000@gmail.com"
+  },
+  "homepage": "https://github.com/sairam0424/ag-bash#readme",
+  "repository": "https://github.com/sairam0424/ag-bash",
+  "license": "Apache-2.0",
+  "keywords": [
+    "bash",
+    "shell",
+    "mcp",
+    "model-context-protocol",
+    "sandbox",
+    "agentic",
+    "ai-agents",
+    "code-execution",
+    "wasm",
+    "typescript"
+  ]
+}
