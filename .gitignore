@@ -1,36 +1,58 @@
-node_modules
+# Dependencies
+**/node_modules
+**/.node_modules
+**/.pnpm-store
+**/.npm-cache
 package-lock.json
+# Ignore example/nested lockfiles but keep root
+examples/**/pnpm-lock.yaml
+packages/**/pnpm-lock.yaml
+
+# Build Artifacts
+**/dist
+**/coverage
+!packages/bash/src/security/fuzzing/coverage
+**/*.parsed.json
+packages/bash/src/commands/python3/worker.js
+packages/bash/src/commands/js-exec/worker.js
+
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+.npmrc
+
+# Editor and System
 .DS_Store
 .vscode
 .idea
+.claude/settings.local.json
 .env
 .env.*
-dist
-/coverage
+
 # Coverage is emitted per-package (e.g. packages/bash/coverage) by the CI
 # coverage job and local runs — ignore it everywhere, not just at the root.
+dist
+/coverage
 coverage/
 packages/*/coverage
 # Package tarballs produced by `pnpm pack` (install-smoke / pack-contents checks)
 *.tgz
+
+# Temporary and Logs
+tmp-tap/
+publish-tmp/
+scratch/
 debug-*.ts
-test-*.ts
-profile-*.mjs
+# Don't ignore .test.sh or .test.ts unless they start with debug/test prefix
+test-output/
+fuzz-*.log
 *.cpuprofile
+profile-*.mjs
 bench-*.mjs
 todo/
-*.parsed.json
-.pnpm-store
 .docs-test-tmp/
-packages/*/dist
-packages/*/node_modules
-scratch/
-.npm-cache/
-packages/bash/src/commands/python3/worker.js
-packages/bash/src/commands/js-exec/worker.js
-fuzz-*.log
-.claude/settings.local.json
-.npmrc
+
 tsconfig.tsbuildinfo
 
 # Ag-Bash Vendor & Artifacts
