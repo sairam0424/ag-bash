@@ -61,6 +61,12 @@ jobs:
       - run: pnpm audit --audit-level=high
       # Guard: all three packages share one version (Changesets fixed mode).
       - run: pnpm check:version-sync
+      # Build before the pack-contents check: it runs `pnpm pack` and asserts the
+      # tarballs carry the load-bearing dist/ artifacts (bundles, WASM, workers,
+      # .d.cts). Those only exist after a build — and the Changesets step's own build
+      # runs later, so without this the check sees an empty dist/ and fails with
+      # "MISSING required file in tarball".
+      - run: pnpm build
       # Static packaging pre-filter before any publish.
       - run: pnpm check:pack-contents
 
