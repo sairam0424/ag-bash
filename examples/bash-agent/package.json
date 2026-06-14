@@ -8,8 +8,8 @@
     "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
-    "ai": "^6.0.66",
-    "glob": "^11.0.0",
+    "ai": "^6.0.205",
+    "glob": "^13.0.6",
     "@ag-bash/bash": "workspace:*"
   }
 }
