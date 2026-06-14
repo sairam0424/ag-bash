@@ -338,7 +338,7 @@ describe("Sandbox Escape Prevention", () => {
 
     it("should allow custom processInfo override", async () => {
       const customBash = new Bash({
-        processInfo: { pid: 42, ppid: 10, uid: 500, gid: 500 },
+        security: { processInfo: { pid: 42, ppid: 10, uid: 500, gid: 500 } },
       });
       const result = await customBash.exec("echo $$ $PPID $UID $EUID $BASHPID");
       expect(result.stdout.trim()).toBe("42 10 500 500 42");
@@ -346,7 +346,7 @@ describe("Sandbox Escape Prevention", () => {
 
     it("should use custom processInfo in /proc/self/status", async () => {
       const customBash = new Bash({
-        processInfo: { pid: 42, ppid: 10, uid: 500, gid: 500 },
+        security: { processInfo: { pid: 42, ppid: 10, uid: 500, gid: 500 } },
       });
       const result = await customBash.exec("cat /proc/self/status");
       expect(result.stdout).toContain("Pid:\t42");

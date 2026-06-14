@@ -2,17 +2,57 @@
  * Tests for curl URL allow-list enforcement
  */
 
-import { describe, expect, it } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { Bash } from "../../../Bash.js";
 
+// Mock fetch so allow-list enforcement is tested deterministically without
+// touching the real network. Allowed URLs reach this mock (200); blocked URLs
+// are rejected before fetch is ever called. Hostnames here are synthetic, so a
+// deterministic public DNS resolver is injected per-Bash to keep the v6.0.0
+// denyPrivateRanges default from performing a real (slow) DNS lookup.
+const originalFetch = global.fetch;
+const mockFetch = vi.fn(
+  async () =>
+    new Response("ok", {
+      status: 200,
+      headers: { "content-type": "text/plain" },
+    }),
+);
+
+beforeAll(() => {
+  global.fetch = mockFetch as typeof fetch;
+});
+
+afterAll(() => {
+  global.fetch = originalFetch;
+});
+
+const publicDns = () =>
+  Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
+
 describe("curl URL allow-list", () => {
+  beforeEach(() => {
+    mockFetch.mockClear();
+  });
+
   describe("basic enforcement", () => {
     it("allows URLs in allow-list", async () => {
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          allowedUrlPrefixes: ["https://api.example.com"],
+          _dnsResolve: publicDns,
+        },
       });
       const result = await env.exec("curl https://api.example.com/test");
-      // May fail due to actual network, but should not be "access denied"
+      // Allowed URL reaches the mock; must not be "access denied".
       expect(result.stderr).not.toContain("Network access denied");
     });
 
@@ -29,7 +69,10 @@ describe("curl URL allow-list", () => {
   describe("path prefix restrictions", () => {
     it("allows URLs matching prefix", async () => {
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com/v1/"] },
+        network: {
+          allowedUrlPrefixes: ["https://api.example.com/v1/"],
+          _dnsResolve: publicDns,
+        },
       });
       const result = await env.exec("curl https://api.example.com/v1/users");
       expect(result.stderr).not.toContain("Network access denied");
@@ -52,6 +95,7 @@ describe("curl URL allow-list", () => {
             "https://api1.example.com",
             "https://api2.example.com",
           ],
+          _dnsResolve: publicDns,
         },
       });
 
@@ -79,7 +123,10 @@ describe("curl URL allow-list", () => {
   describe("dangerouslyAllowFullInternetAccess", () => {
     it("allows any URL with dangerous flag", async () => {
       const env = new Bash({
-        network: { dangerouslyAllowFullInternetAccess: true },
+        network: {
+          dangerouslyAllowFullInternetAccess: true,
+          _dnsResolve: publicDns,
+        },
       });
       const result = await env.exec("curl https://any-domain.com/test");
       expect(result.stderr).not.toContain("Network access denied");

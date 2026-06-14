@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Bash } from "@ag-bash/bash/browser";
-import type { InitialFiles } from "@ag-bash/bash";
+
+type InitialFiles = Record<string, string | Uint8Array>;
 import { getTerminalData } from "./TerminalData";
 import {
   createStaticCommands,

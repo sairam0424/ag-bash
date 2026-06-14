@@ -1,22 +1,129 @@
 // Command registry with modular category definitions
 import type { Command } from "../types.js";
-import { createLazyCommand, clearCommandCache, getLoadedCommandCount } from "./lib.js";
-import { coreLoaders } from "./definitions/core.js";
-import { textLoaders } from "./definitions/text.js";
 import { agenticLoaders } from "./definitions/agentic.js";
-import { runtimeLoaders, networkLoaders } from "./definitions/runtimes.js";
+import { coreLoaders } from "./definitions/core.js";
+import { networkLoaders, runtimeLoaders } from "./definitions/runtimes.js";
+import { textLoaders } from "./definitions/text.js";
+import {
+  clearCommandCache,
+  createLazyCommand,
+  getLoadedCommandCount,
+} from "./lib.js";
 
 /** All available built-in command names */
 export type CommandName =
-  | "echo" | "cat" | "printf" | "ls" | "mkdir" | "rmdir" | "touch" | "rm" | "cp" | "mv" | "ln" | "chmod"
-  | "pwd" | "readlink" | "head" | "tail" | "wc" | "stat" | "grep" | "fgrep" | "egrep" | "rg" | "sed" | "awk"
-  | "sort" | "uniq" | "comm" | "cut" | "paste" | "tr" | "rev" | "nl" | "fold" | "expand" | "unexpand"
-  | "strings" | "split" | "column" | "join" | "tee" | "find" | "basename" | "dirname" | "tree" | "du"
-  | "env" | "printenv" | "alias" | "unalias" | "history" | "xargs" | "true" | "false" | "clear" | "bash"
-  | "sh" | "jq" | "base64" | "diff" | "date" | "sleep" | "timeout" | "seq" | "expr" | "md5sum" | "sha1sum"
-  | "sha256sum" | "file" | "html-to-markdown" | "help" | "which" | "tac" | "hostname" | "od" | "gzip"
-  | "gunzip" | "zcat" | "tar" | "yq" | "xan" | "sqlite3" | "time" | "hello" | "whoami" | "git"
-  | "ag-edit" | "ag-diff" | "ag-snapshot" | "ag-analyze";
+  | "echo"
+  | "cat"
+  | "printf"
+  | "ls"
+  | "mkdir"
+  | "rmdir"
+  | "touch"
+  | "rm"
+  | "cp"
+  | "mv"
+  | "ln"
+  | "chmod"
+  | "pwd"
+  | "readlink"
+  | "head"
+  | "tail"
+  | "wc"
+  | "stat"
+  | "grep"
+  | "fgrep"
+  | "egrep"
+  | "rg"
+  | "sed"
+  | "awk"
+  | "sort"
+  | "uniq"
+  | "comm"
+  | "cut"
+  | "paste"
+  | "tr"
+  | "rev"
+  | "nl"
+  | "fold"
+  | "expand"
+  | "unexpand"
+  | "strings"
+  | "split"
+  | "column"
+  | "join"
+  | "tee"
+  | "find"
+  | "basename"
+  | "dirname"
+  | "tree"
+  | "du"
+  | "env"
+  | "printenv"
+  | "alias"
+  | "unalias"
+  | "history"
+  | "xargs"
+  | "true"
+  | "false"
+  | "clear"
+  | "bash"
+  | "sh"
+  | "jq"
+  | "base64"
+  | "diff"
+  | "date"
+  | "sleep"
+  | "timeout"
+  | "seq"
+  | "expr"
+  | "md5sum"
+  | "sha1sum"
+  | "sha256sum"
+  | "file"
+  | "html-to-markdown"
+  | "help"
+  | "which"
+  | "tac"
+  | "hostname"
+  | "od"
+  | "gzip"
+  | "gunzip"
+  | "zcat"
+  | "tar"
+  | "yq"
+  | "xan"
+  | "sqlite3"
+  | "time"
+  | "hello"
+  | "whoami"
+  | "git"
+  | "ag-edit"
+  | "ag-diff"
+  | "ag-snapshot"
+  | "ag-analyze"
+  | "ag-find-symbol"
+  | "ag-references"
+  | "ag-mcp"
+  | "ag-spawn"
+  | "ag-wait"
+  | "ag-list-agents"
+  | "ag-hover"
+  | "ag-explain"
+  | "ag-todo"
+  | "ag-convert"
+  | "ag-plan"
+  | "ag-notebook"
+  | "ag-grep"
+  | "ag-find-files"
+  | "ag-task"
+  | "ag-team"
+  | "ag-message"
+  | "ag-glob"
+  | "ag-cron"
+  | "ag-worktree"
+  | "commands"
+  | "about"
+  | "doctor";
 
 export type NetworkCommandName = "curl";
 export type PythonCommandName = "python3" | "python";
@@ -29,11 +136,7 @@ export type AllCommandName =
   | JavaScriptCommandName;
 
 // Aggregated loaders
-const commandLoaders = [
-  ...coreLoaders,
-  ...textLoaders,
-  ...agenticLoaders,
-];
+const commandLoaders = [...coreLoaders, ...textLoaders, ...agenticLoaders];
 
 /**
  * Gets all available command names (excludes network commands)
@@ -71,7 +174,7 @@ export function createNetworkCommands(): Command[] {
  */
 export function getPythonCommandNames(): string[] {
   return runtimeLoaders
-    .filter(l => l.name === "python" || l.name === "python3")
+    .filter((l) => l.name === "python" || l.name === "python3")
     .map((def) => def.name as string);
 }
 
@@ -80,7 +183,7 @@ export function getPythonCommandNames(): string[] {
  */
 export function createPythonCommands(): Command[] {
   return runtimeLoaders
-    .filter(l => l.name === "python" || l.name === "python3")
+    .filter((l) => l.name === "python" || l.name === "python3")
     .map(createLazyCommand);
 }
 
@@ -89,7 +192,7 @@ export function createPythonCommands(): Command[] {
  */
 export function getJavaScriptCommandNames(): string[] {
   return runtimeLoaders
-    .filter(l => l.name === "js-exec" || l.name === "node")
+    .filter((l) => l.name === "js-exec" || l.name === "node")
     .map((def) => def.name as string);
 }
 
@@ -98,7 +201,7 @@ export function getJavaScriptCommandNames(): string[] {
  */
 export function createJavaScriptCommands(): Command[] {
   return runtimeLoaders
-    .filter(l => l.name === "js-exec" || l.name === "node")
+    .filter((l) => l.name === "js-exec" || l.name === "node")
     .map(createLazyCommand);
 }
 

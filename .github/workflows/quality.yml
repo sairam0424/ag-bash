@@ -1,0 +1,73 @@
+name: Quality
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege default: jobs that need more must opt in explicitly.
+permissions: {}
+
+jobs:
+  # Validate every workflow against GitHub's own Actions schema. `yaml.safe_load`
+  # only checks YAML syntax — it accepts files GitHub then rejects at startup
+  # (e.g. `with:` as a scalar, double-quoted strings inside ${{ }} expressions).
+  # actionlint embeds that schema, so this catches "Invalid workflow file" before
+  # a push instead of after. Pinned to a release tag + verified via checksum.
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Run actionlint
+        env:
+          ACTIONLINT_VERSION: "1.7.7"
+          # Installer pinned to the v1.7.7 commit SHA (not the moveable tag),
+          # matching this repo's SHA-pin-everything supply-chain stance.
+          ACTIONLINT_SHA: "03d0035246f3e81f36aed592ffb4bebf33a03106"
+        run: |
+          installer="$(mktemp)"
+          curl -fsSL "https://raw.githubusercontent.com/rhysd/actionlint/${ACTIONLINT_SHA}/scripts/download-actionlint.bash" -o "$installer"
+          bash "$installer" "${ACTIONLINT_VERSION}"
+          ./actionlint -color
+
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      # Supply-chain gate (E3): audit MUST fail the build on high/critical
+      # advisories. Do NOT add continue-on-error here — that silently masks
+      # vulnerable transitive dependencies. Pin patched versions via the
+      # pnpm.overrides block in the root package.json when an advisory lands.
+      - run: pnpm audit --audit-level=high
+      # Lint the publishable packages only (Biome + banned-pattern gate). The
+      # examples/website app is a Next.js consumer with its own ESLint config and is
+      # not part of the package quality gate; `pnpm -r lint` would sweep it in.
+      - run: pnpm --filter './packages/*' lint
+      - run: pnpm --filter @ag-bash/bash knip
+      # Build BEFORE typecheck: @ag-bash/agent-bridge (and other consumers) import
+      # @ag-bash/bash, whose types come from dist/index.d.ts — produced by the build.
+      # Typechecking first yields TS2307 "Cannot find module '@ag-bash/bash'".
+      - run: pnpm build
+      # Typecheck the publishable packages only. The example consumers are owned by
+      # the dedicated "Examples & Exports" workflow (examples.yml), which builds first
+      # and is the canonical gate for them; sweeping them in here via `pnpm -r` is
+      # redundant and surfaces example-specific CJS/ESM noise (e.g. cjs-consumer TS1479).
+      - run: pnpm --filter './packages/*' typecheck
+      - run: pnpm --filter @ag-bash/bash check:worker-sync
+      # Packaging guards (release-integrity): versions stay synchronized and the
+      # packed tarballs carry their load-bearing artifacts with no workspace:
+      # leak. Cheap; catches the v6.0.0/v6.0.2 packaging-defect classes on PRs.
+      - run: pnpm check:version-sync
+      - run: pnpm check:pack-contents

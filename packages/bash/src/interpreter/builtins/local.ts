@@ -403,6 +403,7 @@ export async function handleLocal(
       if (ctx.state.options.allexport) {
         ctx.state.exportedVars = ctx.state.exportedVars || new Set();
         ctx.state.exportedVars.add(name);
+        ctx.state.exportedEnvDirty = true;
       }
     } else {
       // `local v` without assignment: bash behavior is:

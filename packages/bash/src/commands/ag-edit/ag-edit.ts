@@ -1,11 +1,12 @@
+import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 
 /**
  * ag-edit - Agentic line-based file editor
- * 
+ *
  * Usage: ag-edit <file> <action> [options]
- * 
+ *
  * Actions:
  *   insert-before --line <N> --text <TEXT>
  *   insert-after  --line <N> --text <TEXT>
@@ -42,7 +43,8 @@ export const agEditCommand: Command = {
     if (!action || !file) {
       return {
         stdout: "",
-        stderr: "usage: ag-edit <action> <file> [-n line] [-t to] [-x text] [--dry-run]\n",
+        stderr:
+          "usage: ag-edit <action> <file> [-n line] [-t to] [-x text] [--dry-run]\n",
         exitCode: 1,
       };
     }
@@ -69,40 +71,58 @@ export const agEditCommand: Command = {
     const endIdx = flags.to !== undefined ? flags.to - 1 : startIdx;
 
     // Validation
-    if (["insert-before", "insert-after", "replace", "delete"].includes(action)) {
-      if (startIdx === undefined || isNaN(startIdx)) return error("missing or invalid --line");
-      if (startIdx < 0 || (action !== "insert-after" && startIdx >= originalLineCount)) {
-         return error(`line ${flags.line} out of range (1-${originalLineCount})`);
+    if (
+      ["insert-before", "insert-after", "replace", "delete"].includes(action)
+    ) {
+      if (startIdx === undefined || Number.isNaN(startIdx))
+        return error("missing or invalid --line");
+      if (
+        startIdx < 0 ||
+        (action !== "insert-after" && startIdx >= originalLineCount)
+      ) {
+        return error(
+          `line ${flags.line} out of range (1-${originalLineCount})`,
+        );
       }
     }
 
     let summary = "";
 
     switch (action) {
-      case "insert-before":
-        lines.splice(startIdx!, 0, ...newLines);
+      case "insert-before": {
+        if (startIdx === undefined) return error("missing or invalid --line");
+        lines.splice(startIdx, 0, ...newLines);
         summary = `Inserted ${newLines.length} line(s) before line ${flags.line}`;
         break;
-      case "insert-after":
-        lines.splice(startIdx! + 1, 0, ...newLines);
+      }
+      case "insert-after": {
+        if (startIdx === undefined) return error("missing or invalid --line");
+        lines.splice(startIdx + 1, 0, ...newLines);
         summary = `Inserted ${newLines.length} line(s) after line ${flags.line}`;
         break;
-      case "replace":
-        if (endIdx === undefined || isNaN(endIdx) || endIdx < startIdx!) {
+      }
+      case "replace": {
+        if (startIdx === undefined) return error("missing or invalid --line");
+        if (endIdx === undefined || Number.isNaN(endIdx) || endIdx < startIdx) {
           return error("invalid range for replace");
         }
-        if (endIdx >= originalLineCount) return error(`range end ${flags.to} out of range`);
-        lines.splice(startIdx!, endIdx! - startIdx! + 1, ...newLines);
+        if (endIdx >= originalLineCount)
+          return error(`range end ${flags.to} out of range`);
+        lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
         summary = `Replaced lines ${flags.line}-${flags.to || flags.line} with ${newLines.length} line(s)`;
         break;
-      case "delete":
-        if (endIdx === undefined || isNaN(endIdx) || endIdx < startIdx!) {
+      }
+      case "delete": {
+        if (startIdx === undefined) return error("missing or invalid --line");
+        if (endIdx === undefined || Number.isNaN(endIdx) || endIdx < startIdx) {
           return error("invalid range for delete");
         }
-        if (endIdx >= originalLineCount) return error(`range end ${flags.to} out of range`);
-        lines.splice(startIdx!, endIdx! - startIdx! + 1);
+        if (endIdx >= originalLineCount)
+          return error(`range end ${flags.to} out of range`);
+        lines.splice(startIdx, endIdx - startIdx + 1);
         summary = `Deleted lines ${flags.line}-${flags.to || flags.line}`;
         break;
+      }
       case "append":
         lines.push(...newLines);
         summary = `Appended ${newLines.length} line(s)`;
@@ -131,6 +151,12 @@ export const agEditCommand: Command = {
 
     try {
       await ctx.fs.writeFile(filePath, newContent);
+
+      // Notify LSP of changes if running within a Bash instance
+      if (ctx.bash?.lsp) {
+        ctx.bash.lsp.notifyDidChange(filePath, newContent);
+      }
+
       return {
         stdout: `Successfully updated ${file}: ${summary}\n`,
         stderr: "",
@@ -139,7 +165,7 @@ export const agEditCommand: Command = {
     } catch (e: any) {
       return {
         stdout: "",
-        stderr: `ag-edit: failed to write ${file}: ${e.message}\n`,
+        stderr: `ag-edit: failed to write ${file}: ${sanitizeErrorMessage(e.message)}\n`,
         exitCode: 1,
       };
     }
@@ -153,4 +179,3 @@ export const agEditCommand: Command = {
     }
   },
 };
-

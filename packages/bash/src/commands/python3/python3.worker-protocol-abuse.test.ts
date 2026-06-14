@@ -11,6 +11,10 @@ type WorkerScript = (worker: {
 const mockState = vi.hoisted(() => ({
   script: null as WorkerScript | null,
   bridgeRunError: null as Error | null,
+  // F1 leak detection: count terminate() calls on non-persistent workers and
+  // track whether the last created worker was ever terminated.
+  terminateCount: 0,
+  lastWorkerTerminated: false,
 }));
 
 // Pre-capture SharedArrayBuffer before defense-in-depth patches it
@@ -53,6 +57,8 @@ vi.mock("node:worker_threads", () => {
     }
 
     terminate(): Promise<number> {
+      mockState.terminateCount += 1;
+      mockState.lastWorkerTerminated = true;
       this.emit("exit", 0);
       return Promise.resolve(0);
     }
@@ -110,6 +116,8 @@ describe("python3 worker protocol abuse", { retry: 2 }, () => {
   beforeEach(async () => {
     mockState.script = null;
     mockState.bridgeRunError = null;
+    mockState.terminateCount = 0;
+    mockState.lastWorkerTerminated = false;
     _resetExecutionQueue();
     // Allow any in-flight workers from previous tests to settle
     await new Promise((r) => setTimeout(r, 10));
@@ -225,5 +233,44 @@ describe("python3 worker protocol abuse", { retry: 2 }, () => {
       "python3: Malformed worker response: invalid protocol token\n",
     );
     expect(result.exitCode).toBe(1);
+  });
+
+  // --- F1: no leaked worker ---------------------------------------------
+
+  it("terminates the non-persistent worker on the happy path", async () => {
+    mockState.script = (worker) => {
+      worker.emitAuthenticated("message", { success: true });
+    };
+
+    const result = await python3Command.execute(
+      ["-c", "print('ignored')"],
+      createContext(),
+    );
+
+    expect(result.exitCode).toBe(0);
+    // Worker must be terminated (onMessage and/or the finally guard).
+    expect(mockState.lastWorkerTerminated).toBe(true);
+    expect(mockState.terminateCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("terminates the worker even when the bridge throws and the worker stays silent", async () => {
+    // Worker never sends a message — it is effectively blocked mid-Atomics.wait.
+    // The bridge run() throws. Before the F1 finally guard this left the worker
+    // alive (leaked); now the finally must terminate it.
+    mockState.script = () => {
+      /* silent worker: no message, no error, no exit */
+    };
+    mockState.bridgeRunError = new Error("bridge crashed mid-flight");
+
+    const result = await python3Command.execute(
+      ["-c", "print('ignored')"],
+      createContext(),
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("bridge error");
+    // The finally guard must have terminated the otherwise-leaked worker.
+    expect(mockState.lastWorkerTerminated).toBe(true);
+    expect(mockState.terminateCount).toBeGreaterThanOrEqual(1);
   });
 });

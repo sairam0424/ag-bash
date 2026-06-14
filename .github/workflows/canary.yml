@@ -1,0 +1,55 @@
+name: Nightly Canary
+on:
+  schedule:
+    # Nightly at 03:17 UTC (off-the-hour to dodge cron congestion).
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+# A running nightly should finish, not be cancelled by the next trigger.
+concurrency:
+  group: canary
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - run: pnpm --filter @ag-bash/bash test:fuzz:long
+      - run: pnpm --filter @ag-bash/bash fuzz:diff
+      - name: Upload divergence report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-divergences
+          path: packages/bash/fuzz-divergences.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  slow-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - run: pnpm --filter @ag-bash/bash test:slow
+
+  audit-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      - run: pnpm audit --audit-level=high

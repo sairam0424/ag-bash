@@ -1,18 +1,22 @@
 {
   "name": "@ag-bash/mcp-server",
-  "version": "1.5.0",
-  "description": "Standalone Model Context Protocol server for Ag-Bash",
+  "version": "6.0.2",
+  "description": "Standalone Model Context Protocol (MCP) server for Ag-Bash — a sandboxed bash environment with 70 agentic tools (run_bash, semantic code edit/diff/analyze, WASM Python/JS, task & worktree management) over stdio JSON-RPC.",
+  "mcpName": "io.github.sairam0424/ag-bash",
   "type": "module",
   "files": [
     "dist/",
     "README.md"
   ],
   "bin": {
-    "ag-bash-mcp": "./dist/bundle.js"
+    "ag-bash-mcp": "./dist/index.js"
   },
   "scripts": {
     "build": "rm -rf dist && tsc --noEmit && pnpm build:bundle && chmod +x dist/index.js",
-    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --minify --outfile=dist/index.js --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip"
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --minify --outfile=dist/index.js --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "mcp",
@@ -20,14 +24,37 @@
     "agentic",
     "bash"
   ],
+  "homepage": "https://github.com/sairam0424/ag-bash/tree/main/packages/mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/sairam0424/ag-bash/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sairam0424/ag-bash.git",
+    "directory": "packages/mcp-server"
+  },
   "author": "Ag-Bash",
   "license": "Apache-2.0",
   "dependencies": {
     "@ag-bash/bash": "workspace:*",
-    "seek-bzip": "^2.0.0"
+    "quickjs-emscripten": "^0.32.0",
+    "seek-bzip": "^2.0.0",
+    "sql.js": "^1.13.0",
+    "zod": "^4.3.6"
+  },
+  "optionalDependencies": {
+    "@mongodb-js/zstd": "^7.0.0",
+    "node-liblzma": "^2.0.3"
   },
   "devDependencies": {
     "esbuild": "^0.27.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

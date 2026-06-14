@@ -27,7 +27,7 @@
   - use `--real-bash` to also get comparison output from the system bash
   - use `--print-ast` to also print the AST of the program as parsed by our parser.ts
 
-## Agentic Commands (v1.5.0)
+## Agentic Commands (v2.0.0)
 
 When working as an agent or implementing tools for agents, utilize these specialized commands for maximum efficiency and reliability:
 
@@ -35,6 +35,10 @@ When working as an agent or implementing tools for agents, utilize these special
 - **`ag-diff`**: Use to verify changes or compare files. Returns a summary optimized for LLM context windows.
 - **`ag-snapshot`**: Use to save complex shell state (including FS, env, and functions) that needs to persist across disconnected sessions.
 - **`ag-analyze`**: Use to understand the structure of complex Bash scripts before editing them.
+- **`ag-hover`**: Retrieve metadata and documentation for a symbol.
+- **`ag-explain`**: Parse and explain the structure of complex shell commands.
+- **`ag-find-symbol`**: Workspace-wide search for symbol definitions and references.
+- **`ag-todo`**: Persistent local task management for agent tracking.
 
 ## Commands
 

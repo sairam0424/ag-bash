@@ -1029,7 +1029,11 @@ export function parseWordParts(
     }
 
     // Handle glob patterns
-    if (char === "*" || char === "?" || char === "[") {
+    // (but NOT in heredocs: bash performs no pathname expansion on heredoc
+    // bodies, so glob metacharacters stay literal. Critically, skipping the
+    // glob parser here also stops it from consuming the quote characters inside
+    // a bracket token like d['key'] as glob syntax — which had stripped them.)
+    if ((char === "*" || char === "?" || char === "[") && !hereDoc) {
       flushLiteral();
       const { pattern, endIndex } = WordParser.parseGlobPattern(p, value, i);
       parts.push({ type: "Glob", pattern });

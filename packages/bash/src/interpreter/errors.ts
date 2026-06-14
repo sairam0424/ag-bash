@@ -12,6 +12,8 @@
  * as they propagate through the execution stack.
  */
 
+import type { Observation } from "../types.js";
+
 /**
  * Base class for all control flow errors.
  * Carries stdout/stderr to preserve output during propagation.
@@ -21,7 +23,7 @@ abstract class ControlFlowError extends Error {
     message: string,
     public stdout: string = "",
     public stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(message);
   }
@@ -90,9 +92,14 @@ export class ErrexitError extends ControlFlowError {
     public readonly exitCode: number,
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
-    super(`errexit: command exited with status ${exitCode}`, stdout, stderr, observations);
+    super(
+      `errexit: command exited with status ${exitCode}`,
+      stdout,
+      stderr,
+      observations,
+    );
   }
 }
 
@@ -124,7 +131,7 @@ export class ExitError extends ControlFlowError {
     public readonly exitCode: number,
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(`exit`, stdout, stderr, observations);
   }
@@ -148,7 +155,7 @@ export class ArithmeticError extends ControlFlowError {
     stdout: string = "",
     stderr: string = "",
     fatal = false,
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}\n`;
@@ -163,7 +170,12 @@ export class ArithmeticError extends ControlFlowError {
 export class BadSubstitutionError extends ControlFlowError {
   readonly name = "BadSubstitutionError";
 
-  constructor(message: string, stdout: string = "", stderr: string = "", public observations?: any[]) {
+  constructor(
+    message: string,
+    stdout: string = "",
+    stderr: string = "",
+    public observations?: Observation[],
+  ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}: bad substitution\n`;
   }
@@ -176,7 +188,12 @@ export class BadSubstitutionError extends ControlFlowError {
 export class GlobError extends ControlFlowError {
   readonly name = "GlobError";
 
-  constructor(pattern: string, stdout: string = "", stderr: string = "", public observations?: any[]) {
+  constructor(
+    pattern: string,
+    stdout: string = "",
+    stderr: string = "",
+    public observations?: Observation[],
+  ) {
     super(`no match: ${pattern}`, stdout, stderr, observations);
     this.stderr = stderr || `bash: no match: ${pattern}\n`;
   }
@@ -189,7 +206,12 @@ export class GlobError extends ControlFlowError {
 export class BraceExpansionError extends ControlFlowError {
   readonly name = "BraceExpansionError";
 
-  constructor(message: string, stdout: string = "", stderr: string = "", public observations?: any[]) {
+  constructor(
+    message: string,
+    stdout: string = "",
+    stderr: string = "",
+    public observations?: Observation[],
+  ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}\n`;
   }
@@ -216,10 +238,12 @@ export class ExecutionLimitError extends ControlFlowError {
       | "output_size"
       | "file_descriptors"
       | "memory"
-      | "cpu_time",
+      | "cpu_time"
+      | "network_traffic"
+      | "sub_agents",
     stdout: string = "",
     stderr: string = "",
-    public observations?: any[],
+    public observations?: Observation[],
   ) {
     super(message, stdout, stderr, observations);
     this.stderr = stderr || `bash: ${message}\n`;

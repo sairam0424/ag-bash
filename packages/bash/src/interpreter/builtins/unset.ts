@@ -404,6 +404,7 @@ export async function handleUnset(
       }
       // Clear the export attribute - when variable is unset, it loses its export status
       ctx.state.exportedVars?.delete(targetName);
+      ctx.state.exportedEnvDirty = true;
       continue;
     }
 
@@ -560,6 +561,7 @@ export async function handleUnset(
     }
     // Clear the export attribute - when variable is unset, it loses its export status
     ctx.state.exportedVars?.delete(targetName);
+    ctx.state.exportedEnvDirty = true;
     ctx.state.functions.delete(arg);
   }
   return result("", stderr, exitCode);

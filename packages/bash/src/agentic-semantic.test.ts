@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Bash } from "./Bash.js";
 
 describe("Agentic Healer - Semantic Integration", () => {
   it("should suggest similar function names for command not found", async () => {
     const bash = new Bash({
-      agentic: true,
-      parserEngine: "legacy",
+      agentic: { enabled: true },
+      parser: { engine: "legacy" },
     });
 
     const script = `
@@ -22,8 +22,8 @@ describe("Agentic Healer - Semantic Integration", () => {
 
   it("should suggest similar variable names for nounset error", async () => {
     const bash = new Bash({
-      agentic: true,
-      parserEngine: "legacy",
+      agentic: { enabled: true },
+      parser: { engine: "legacy" },
     });
 
     const script = `
@@ -38,9 +38,9 @@ describe("Agentic Healer - Semantic Integration", () => {
   });
 
   it("should suggest builtin commands for typos", async () => {
-     const bash = new Bash({
-      agentic: true,
-      parserEngine: "legacy",
+    const bash = new Bash({
+      agentic: { enabled: true },
+      parser: { engine: "legacy" },
     });
 
     const result = await bash.exec("echho hello");

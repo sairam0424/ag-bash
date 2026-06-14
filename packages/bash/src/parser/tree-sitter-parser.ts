@@ -1,91 +1,153 @@
-// @ts-ignore - Importing from vendored file
-import * as TreeSitter from './vendor/web-tree-sitter.js';
+// @ts-expect-error - Importing from vendored file
+import * as TreeSitter from "./vendor/web-tree-sitter.js";
 
 /**
  * TreeSitterParser handles WASM initialization and parser instantiation
  * for the v2.9 AST-based transition.
  */
+// Converting this to a const-object (to satisfy noStaticOnlyClass) surfaces the
+// private static fields into the public type, which trips TS9013
+// (--isolatedDeclarations) on the inferred `Map<string, any>` initializer. The
+// static class keeps that state private and is the clearer model for a
+// one-time-initialized parser singleton.
+// biome-ignore lint/complexity/noStaticOnlyClass: stateful WASM-singleton holder; see note above.
 export class TreeSitterParser {
   private static parser: any = null;
-  private static language: any = null;
-  private static isInitializing = false;
+  private static languages: Map<string, any> = new Map();
+  private static initPromise: Promise<void> | null = null;
 
   static async init(options: {
     webTreeSitterWasm: string | Uint8Array;
-    bashGrammarWasm: string | Uint8Array;
+    grammars?: Record<string, string | Uint8Array>;
   }): Promise<void> {
-    if (this.parser && this.language) return;
-    
-    if (this.isInitializing) {
-      while (this.isInitializing) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+    if (
+      TreeSitterParser.parser &&
+      (!options.grammars ||
+        Object.keys(options.grammars).every((lang) =>
+          TreeSitterParser.languages.has(lang),
+        ))
+    )
       return;
+
+    if (TreeSitterParser.initPromise) {
+      return TreeSitterParser.initPromise;
     }
 
-    this.isInitializing = true;
+    TreeSitterParser.initPromise = TreeSitterParser.doInit(options);
+    return TreeSitterParser.initPromise;
+  }
+
+  private static async doInit(options: {
+    webTreeSitterWasm: string | Uint8Array;
+    grammars?: Record<string, string | Uint8Array>;
+  }): Promise<void> {
     try {
-      console.log("[TreeSitterParser] Initializing with vendored library...");
       const { Parser, Language } = TreeSitter as any;
-      
-      if (!Parser) {
-        throw new Error("Parser class not found in vendored web-tree-sitter module.");
+
+      if (!TreeSitterParser.parser) {
+        // Initializing core with vendored library
+        if (!Parser) {
+          throw new Error(
+            "Parser class not found in vendored web-tree-sitter module.",
+          );
+        }
+
+        const initOptions: any = Object.create(null);
+        if (
+          options.webTreeSitterWasm instanceof Uint8Array ||
+          Buffer.isBuffer(options.webTreeSitterWasm)
+        ) {
+          initOptions.wasmBinary = options.webTreeSitterWasm;
+        } else {
+          initOptions.locateFile = (scriptName: string) => {
+            if (scriptName === "web-tree-sitter.wasm") {
+              return options.webTreeSitterWasm as string;
+            }
+            return scriptName;
+          };
+        }
+
+        await Parser.init(initOptions);
+        TreeSitterParser.parser = new Parser();
       }
 
-      const initOptions: any = {};
-      if (options.webTreeSitterWasm instanceof Uint8Array || Buffer.isBuffer(options.webTreeSitterWasm)) {
-        initOptions.wasmBinary = options.webTreeSitterWasm;
-      } else {
-        initOptions.locateFile = (scriptName: string) => {
-          if (scriptName === 'web-tree-sitter.wasm') {
-            return options.webTreeSitterWasm as string;
-          }
-          return scriptName;
-        };
+      if (options.grammars) {
+        for (const [name, grammar] of Object.entries(options.grammars)) {
+          if (TreeSitterParser.languages.has(name)) continue;
+
+          // Loading grammar silently
+          const grammarWasm =
+            grammar instanceof Uint8Array
+              ? grammar
+              : typeof grammar === "string"
+                ? grammar
+                : new Uint8Array(grammar as any);
+
+          const language = await Language.load(grammarWasm);
+          TreeSitterParser.languages.set(name, language);
+        }
       }
 
-      await Parser.init(initOptions);
-
-      this.parser = new Parser();
-      
-      if (!Language) {
-        throw new Error("Language class not found in vendored web-tree-sitter module.");
+      // Default to bash if available and nothing set
+      if (
+        !TreeSitterParser.parser.language &&
+        TreeSitterParser.languages.has("bash")
+      ) {
+        TreeSitterParser.parser.setLanguage(
+          TreeSitterParser.languages.get("bash"),
+        );
       }
-
-      // Ensure we pass a Uint8Array to Language.load to avoid path-vs-binary confusion
-      const grammarWasm = options.bashGrammarWasm instanceof Uint8Array 
-        ? options.bashGrammarWasm 
-        : (typeof options.bashGrammarWasm === 'string' ? options.bashGrammarWasm : new Uint8Array(options.bashGrammarWasm as any));
-
-      this.language = await Language.load(grammarWasm);
-      this.parser.setLanguage(this.language);
     } catch (e) {
-      this.isInitializing = false;
+      TreeSitterParser.initPromise = null;
       const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error("[TreeSitterParser] Initialization FAILED:", errorMsg);
-      if (e instanceof Error && e.stack) {
-        console.error(e.stack);
-      }
       throw new Error(`Failed to initialize TreeSitterParser: ${errorMsg}`);
-    } finally {
-      this.isInitializing = false;
     }
   }
 
-  static parse(code: string): any {
-    if (!this.parser) {
+  static async loadLanguage(
+    name: string,
+    grammarWasm: string | Uint8Array,
+  ): Promise<void> {
+    if (TreeSitterParser.languages.has(name)) return;
+    const { Language } = TreeSitter as any;
+    const wasm =
+      grammarWasm instanceof Uint8Array
+        ? grammarWasm
+        : typeof grammarWasm === "string"
+          ? grammarWasm
+          : new Uint8Array(grammarWasm as any);
+    const language = await Language.load(wasm);
+    TreeSitterParser.languages.set(name, language);
+  }
+
+  static setLanguage(name: string): void {
+    const lang = TreeSitterParser.languages.get(name);
+    if (!lang) {
+      throw new Error(
+        `Language '${name}' not loaded. Call loadLanguage() or init() first.`,
+      );
+    }
+    TreeSitterParser.parser.setLanguage(lang);
+  }
+
+  static parse(code: string, language?: string): any {
+    if (!TreeSitterParser.parser) {
       throw new Error("TreeSitterParser not initialized. Call init() first.");
     }
-    return this.parser.parse(code);
+    if (language) {
+      TreeSitterParser.setLanguage(language);
+    }
+    return TreeSitterParser.parser.parse(code);
   }
 
-  static getLanguage(): any {
-    return this.language;
+  static getLanguage(name?: string): any {
+    if (name) return TreeSitterParser.languages.get(name);
+    return TreeSitterParser.parser?.language;
   }
 
   static resetForTest(): void {
-    this.parser = null;
-    this.language = null;
-    this.isInitializing = false;
+    TreeSitterParser.parser = null;
+    TreeSitterParser.languages.clear();
+    TreeSitterParser.initPromise = null;
   }
 }

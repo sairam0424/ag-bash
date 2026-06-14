@@ -14,20 +14,32 @@
  *
  * // Enable defense-in-depth (recommended for production)
  * const bash = new Bash({
- *   defenseInDepth: true,
+ *   security: { defenseInDepth: true },
  * });
  *
  * // Or with custom configuration
  * const bash = new Bash({
- *   defenseInDepth: {
- *     enabled: true,
- *     auditMode: false,
- *     onViolation: (v) => console.warn('Violation:', v),
+ *   security: {
+ *     defenseInDepth: {
+ *       enabled: true,
+ *       auditMode: false,
+ *       onViolation: (v) => console.warn('Violation:', v),
+ *     },
  *   },
  * });
  * ```
  */
 
+// Browser secondary defense (opt-in intrinsic freeze; AsyncLocalStorage-free)
+// Consumed via the "@ag-bash/bash/browser" entry (src/browser.ts); re-exported
+// here as part of the security public surface.
+/** @public */
+export {
+  type BrowserHardeningOptions,
+  type BrowserHardeningResult,
+  hardenBrowserGlobals,
+  isBrowserHardened,
+} from "./browser-hardening.js";
 // Main class (for main thread with AsyncLocalStorage context tracking)
 export {
   DefenseInDepthBox,

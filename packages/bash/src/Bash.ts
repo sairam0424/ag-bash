@@ -8,9 +8,13 @@
  * and delegates execution to the Interpreter.
  */
 
-import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
+import type { FunctionDefNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
+import { EventEmitter } from "node:events";
+import { AgenticHealer } from "./agentic/agentic-healer.js";
+import { BashToolbox } from "./agentic/BashToolbox.js";
+import type { AgenticHealerConfig } from "./agentic/types.js";
 import {
   type CommandName,
   createJavaScriptCommands,
@@ -23,61 +27,62 @@ import {
   createLazyCustomCommand,
   isLazyCommand,
 } from "./custom-commands.js";
+import type { DestructivePolicy } from "./execution/index.js";
+import {
+  DestructiveStage,
+  ExecutionPipeline,
+  InterpretStage,
+  NormalizeStage,
+  ParseStage,
+  PersistStage,
+  SandboxStage,
+  TransformStage,
+} from "./execution/index.js";
 import { InMemoryFs } from "./fs/in-memory-fs/in-memory-fs.js";
 import { initFilesystem } from "./fs/init.js";
-import type { IFileSystem, InitialFiles } from "./fs/interface.js";
-import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
+import type {
+  FileSystemSnapshot,
+  IFileSystem,
+  InitialFiles,
+} from "./fs/interface.js";
+import { MountableFs } from "./fs/mountable-fs/index.js";
 import {
   mapToRecord,
   mapToRecordWithExtras,
   mergeToNullPrototype,
 } from "./helpers/env.js";
-import {
-  ArithmeticError,
-  ExecutionAbortedError,
-  ExecutionLimitError,
-  ExitError,
-  PosixFatalError,
-} from "./interpreter/errors.js";
+import { ExecutionLimitError } from "./interpreter/errors.js";
 import {
   buildBashopts,
   buildShellopts,
 } from "./interpreter/helpers/shellopts.js";
-import {
-  Interpreter,
-  type InterpreterOptions,
-  type InterpreterState,
-  DebuggerBridge,
-} from "./interpreter/index.js";
-import { SemanticEngine } from "./lsp/semantic-engine.js";
-import { AgenticHealer } from "./agentic/agentic-healer.js";
-import type { AgenticHealerConfig } from "./agentic/types.js";
-import {
-  diffState,
-  diffFs,
-  applyStateDelta,
-  type BashDelta,
-} from "./state-sync/index.js";
+import type { DebuggerBridge, InterpreterState } from "./interpreter/index.js";
 import { type ExecutionLimits, resolveLimits } from "./limits.js";
+import type { LSPManager } from "./lsp/LSPManager.js";
+import { SemanticEngine } from "./lsp/semantic-engine.js";
+import { WorkspaceIndexer } from "./lsp/WorkspaceIndexer.js";
 import {
   createSecureFetch,
   type NetworkConfig,
   type SecureFetch,
 } from "./network/index.js";
-import { LexerError } from "./parser/lexer.js";
-import { type ParseException, parse } from "./parser/parser.js";
-import { ASTCache } from "./parser/ASTCache.js";
-import { SharedStateBus } from "./services/SharedStateBus.js";
-
-import { MountableFs, type MountConfig } from "./fs/mountable-fs/index.js";
-import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
-import { TreeSitterToAst } from "./parser/tree-sitter-to-ast.js";
-import {
-  DefenseInDepthBox,
-  SecurityViolationError,
-} from "./security/defense-in-depth-box.js";
 import { AgTrace } from "./observability/ag-trace.js";
+import { AgBashTracer } from "./observability/otel.js";
+import type { OtelConfig } from "./observability/otel-types.js";
+import { parse } from "./parser/parser.js";
+import { DefenseInDepthBox } from "./security/defense-in-depth-box.js";
 import type { DefenseInDepthConfig } from "./security/types.js";
+import { PermissionManager } from "./services/PermissionManager.js";
+import type { ServiceContainer } from "./services/ServiceContainer.js";
+import { createDefaultServices } from "./services/ServiceContainer.js";
+import {
+  applyStateDelta,
+  type BashDelta,
+  diffFs,
+  diffState,
+} from "./state-sync/index.js";
+import { StreamingExecutor } from "./streaming/StreamingExecutor.js";
+import type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
 import { serialize } from "./transform/serialize.js";
 import type {
   BashTransformResult,
@@ -89,8 +94,22 @@ import type {
   CommandRegistry,
   ExecResult,
   FeatureCoverageWriter,
+  OutputSink,
   TraceCallback,
 } from "./types.js";
+
+/**
+ * Metadata for tracking file state to detect staleness and provide suggestions.
+ */
+export interface FileState {
+  content: string;
+  timestamp: number;
+  offset?: number;
+  limit?: number;
+  isPartialView?: boolean;
+}
+
+export type BashMode = "execute" | "plan";
 
 export type { ExecutionLimits } from "./limits.js";
 
@@ -110,191 +129,157 @@ export interface JavaScriptConfig {
   bootstrap?: string;
 }
 
+/**
+ * Interface for interactive permission approval.
+ */
+export interface PermissionHandler {
+  /**
+   * Ask the user for permission.
+   * Returns true if granted, false otherwise.
+   */
+  ask(message: string): Promise<boolean>;
+}
+
+/**
+ * Configuration for creating a Bash shell instance.
+ *
+ * @example
+ * ```ts
+ * const bash = new Bash({
+ *   cwd: "/project",
+ *   files: { "/project/hello.sh": "echo hello" },
+ *   executionLimits: { maxOutputSize: 1024 * 1024 },
+ * });
+ * ```
+ */
 export interface BashOptions {
+  /** Initial files to populate the virtual filesystem with. */
   files?: InitialFiles;
+  /** Environment variables available to scripts (merged with defaults). */
   env?: Record<string, string>;
+  /** Initial working directory. Defaults to "/". */
   cwd?: string;
+  /** Custom filesystem implementation. Defaults to an in-memory FS. */
   fs?: IFileSystem;
-  /**
-   * Persistence configuration for the agent workspace.
-   */
-  persistence?: {
-    root: string;
-    mountPoint?: string;
-  };
-  /**
-   * Execution limits to prevent runaway compute.
-   * See ExecutionLimits interface for available options.
-   */
-  executionLimits?: ExecutionLimits;
-  /**
-   * @deprecated Use executionLimits.maxCallDepth instead
-   */
-  maxCallDepth?: number;
-  /**
-   * @deprecated Use executionLimits.maxCommandCount instead
-   */
-  maxCommandCount?: number;
-  /**
-   * @deprecated Use executionLimits.maxLoopIterations instead
-   */
-  maxLoopIterations?: number;
-  /**
-   * Custom secure fetch function. When provided, used instead of creating one
-   * from NetworkConfig. Enables wrapping the fetch layer with custom logic
-   * (e.g., policy evaluation) while keeping built-in curl unmodified.
-   * Network commands (curl, wget) are registered when either `fetch` or `network` is provided.
-   */
-  fetch?: SecureFetch;
-  /**
-   * Network configuration for commands like curl.
-   * Network access is disabled by default - you must explicitly configure allowed URLs.
-   */
-  network?: NetworkConfig;
-  /**
-   * Enable python3/python commands.
-   * Python is disabled by default as it introduces additional security surface
-   * (arbitrary code execution via CPython Emscripten).
-   */
-  python?: boolean;
-  /**
-   * Enable js-exec command for sandboxed JavaScript execution via QuickJS.
-   * Disabled by default. Can be a boolean or a config object with bootstrap code.
-   */
-  javascript?: boolean | JavaScriptConfig;
-  /**
-   * Optional list of command names to register.
-   * If not provided, all built-in commands are available.
-   * Use this to restrict which commands can be executed.
-   */
+  /** Which built-in command sets to register (e.g., "grep", "jq"). */
   commands?: CommandName[];
-  /**
-   * Optional sleep function for the sleep command.
-   * If provided, used instead of real setTimeout.
-   * Useful for testing with mock clocks.
-   */
+  /** User-defined commands added to the shell. */
+  customCommands?: CustomCommand[];
+  /** Resource limits (output size, execution time, recursion depth). */
+  executionLimits?: ExecutionLimits;
+  persistState?: boolean;
   sleep?: (ms: number) => Promise<void>;
-  /**
-   * Optional handler for when a command is not found.
-   * If provided, called with the command name and arguments.
-   * Return null to fall back to the standard "command not found" error.
-   */
   onCommandNotFound?: (
     command: string,
     args: string[],
   ) => Promise<ExecResult | null>;
-  /**
-   * Custom commands to register alongside built-in commands.
-   * These take precedence over built-ins with the same name.
-   *
-   * @example
-   * ```ts
-   * import { defineCommand } from "ag-bash";
-   *
-   * const hello = defineCommand("hello", async (args) => ({
-   *   stdout: `Hello, ${args[0] || "world"}!\n`,
-   *   stderr: "",
-   *   exitCode: 0,
-   * }));
-   *
-   * const bash = new Bash({ customCommands: [hello] });
-   * ```
-   */
-  customCommands?: CustomCommand[];
-  /**
-   * Optional logger for execution tracing.
-   * When provided, logs exec commands (info), stdout (debug), stderr (info), and exit codes (info).
-   * Disabled by default.
-   */
-  logger?: BashLogger;
-  /**
-   * Optional trace callback for performance profiling.
-   * When provided, commands emit timing events for analysis.
-   * Useful for identifying performance bottlenecks.
-   */
-  trace?: TraceCallback;
-  /**
-   * Defense-in-depth configuration.
-   *
-   * When enabled, monkey-patches dangerous JavaScript globals (Function, eval,
-   * setTimeout, process, etc.) during script execution to block potential
-   * escape vectors.
-   *
-   * IMPORTANT: This is a SECONDARY defense layer. It should never be relied
-   * upon as the primary security mechanism. The primary security comes from
-   * proper sandboxing, input validation, and architectural constraints.
-   *
-   * @example
-   * ```ts
-   * // Simple enable
-   * const bash = new Bash({ defenseInDepth: true });
-   *
-   * // With custom configuration
-   * const bash = new Bash({
-   *   defenseInDepth: {
-   *     enabled: true,
-   *     auditMode: false, // Set to true to log but not block
-   *     onViolation: (v) => console.warn('Violation:', v),
-   *   },
-   * });
-   * ```
-   */
-  defenseInDepth?: DefenseInDepthConfig | boolean;
-  /**
-   * Feature coverage writer for fuzzing instrumentation.
-   * When provided, interpreter emits coverage hits for analysis.
-   */
-  coverage?: FeatureCoverageWriter;
-  /**
-   * Virtual process info for sandboxed environment.
-   * Overrides the default virtual PID/UID values exposed via $$, $PPID, $UID, $EUID, $BASHPID,
-   * and /proc/self/status. Real host process info is never exposed.
-   */
-  processInfo?: {
-    pid?: number;
-    ppid?: number;
-    uid?: number;
-    gid?: number;
+
+  // Persistence
+  persistence?: {
+    root: string;
+    mountPoint?: string;
   };
-  /**
-   * If true, commit execution state back to the Bash instance after success by default.
-   * Persists CWD, environment variables, and functions.
-   * Individual exec calls can override this.
-   */
-  persistState?: boolean;
-  /**
-   * Selection of the parser engine to use. 
-   * - 'legacy': The hand-written recursive descent parser (v1.x/v2.x).
-   * - 'tree-sitter': The robust AST-based parser engine (v1.4.0+).
-   * Default: 'tree-sitter'
-   */
-  parserEngine?: 'legacy' | 'tree-sitter';
-  /**
-   * If true, enables agentic behavior for the shell.
-   * This includes automatic AI intervention on command failure if an agent gateway is configured.
-   */
-  agentic?: boolean;
-  /**
-   * Configuration for the agentic healer.
-   */
-  agenticConfig?: AgenticHealerConfig;
-  /**
-   * Configuration for the Tree-sitter parser engine.
-   * Required if parserEngine is set to 'tree-sitter'.
-   */
-  treeSitterConfig?: {
-    webTreeSitterWasm: string | Uint8Array;
-    bashGrammarWasm: string | Uint8Array;
+
+  /** WASM-based language runtimes (Python via CPython, JS via QuickJS). */
+  runtimes?: {
+    python?: boolean;
+    javascript?: boolean | JavaScriptConfig;
   };
+
+  /** Network access control: allowlists, transforms, and fetch overrides. */
+  network?: NetworkConfig;
+  fetch?: SecureFetch;
+
+  /** Sandbox security hardening (defense-in-depth, process identity spoofing). */
+  security?: {
+    defenseInDepth?: DefenseInDepthConfig | boolean;
+    processInfo?: {
+      pid?: number;
+      ppid?: number;
+      uid?: number;
+      gid?: number;
+    };
+  };
+
+  /** AI agent integration: auto-healing, permission prompts, nesting control. */
+  agentic?: {
+    enabled?: boolean;
+    healer?: AgenticHealerConfig;
+    permissionHandler?: PermissionHandler;
+    nestingDepth?: number;
+  };
+
+  // Parser
+  parser?: {
+    engine?: "legacy" | "tree-sitter";
+    treeSitterConfig?: {
+      webTreeSitterWasm: string | Uint8Array;
+      bashGrammarWasm?: string | Uint8Array;
+      grammars?: Record<string, string | Uint8Array>;
+    };
+  };
+
+  // Debug & Observability
+  debug?: {
+    logger?: BashLogger;
+    trace?: TraceCallback;
+    coverage?: FeatureCoverageWriter;
+    debugger?: DebuggerBridge;
+    semanticEngine?: SemanticEngine;
+  };
+
+  /** Override default service implementations (dependency injection). */
+  services?: Partial<ServiceContainer>;
+
   /**
-   * Optional debugger for statement-level control.
+   * Optional OpenTelemetry configuration for exec-level tracing.
+   * When provided, an AgBashTracer is initialized and wraps each exec() call
+   * in a span. If @opentelemetry/api is not installed, the tracer is a no-op
+   * with zero overhead.
    */
-  debugger?: DebuggerBridge;
+  otel?: OtelConfig;
+
   /**
-   * Optional semantic engine for AST analysis.
+   * Default execution engine for exec() calls that do not specify execMode.
+   * - "pipeline" (default, v6.0.0): the composable ExecutionPipeline.
+   * - "monolith": preserved for backward type compatibility but now routes
+   *   through the pipeline (the inline monolith code was removed in v6.0.0).
+   * Defaults to "pipeline". Per-call `ExecOptions.execMode` overrides this.
    */
-  semanticEngine?: SemanticEngine;
+  execMode?: "monolith" | "pipeline";
+
+  /**
+   * Default policy for the AST-based destructive-command gate (E2). The gate is
+   * a pipeline stage that runs after parse / before interpret and analyzes the
+   * parsed AST so obfuscations (command substitution, $IFS, fork bombs,
+   * decode-pipe-to-shell) are caught structurally.
+   * - "warn" (DEFAULT): attach a typed Observation + stderr warning, then STILL
+   *   execute (non-blocking — never breaks commands that ran before).
+   * - "block": short-circuit with a non-zero result WITHOUT interpreting.
+   * - "prompt": no in-process interactive prompt; falls back to block + a note.
+   * - "allow": disable the gate.
+   * Per-call `ExecOptions.destructivePolicy` overrides this.
+   */
+  destructivePolicy?: DestructivePolicy;
 }
+
+// v3.0 Breaking Changes:
+// - options.python -> options.runtimes?.python
+// - options.javascript -> options.runtimes?.javascript
+// - options.logger -> options.debug?.logger
+// - options.trace -> options.debug?.trace
+// - options.coverage -> options.debug?.coverage
+// - options.debugger -> options.debug?.debugger
+// - options.semanticEngine -> options.debug?.semanticEngine
+// - options.defenseInDepth -> options.security?.defenseInDepth
+// - options.processInfo -> options.security?.processInfo
+// - options.parserEngine -> options.parser?.engine
+// - options.treeSitterConfig -> options.parser?.treeSitterConfig
+// - options.agentic (boolean) -> options.agentic?.enabled
+// - options.healer -> options.agentic?.healer
+// - options.agenticConfig -> options.agentic?.healer
+// - options.permissionHandler -> options.agentic?.permissionHandler
+// - options.nestingDepth -> options.agentic?.nestingDepth
 
 export interface ExecOptions {
   /**
@@ -352,15 +337,70 @@ export interface ExecOptions {
    * Optional agentic healer (specific to this call).
    */
   agenticHealer?: AgenticHealer;
+  /**
+   * Optional session ID for stateful REPLs (js-exec, python3).
+   */
+  sessionId?: string;
+  /**
+   * Execution engine to use for this call.
+   * - "pipeline" (default, v6.0.0): the composable ExecutionPipeline.
+   * - "monolith": preserved for backward type compatibility but now routes
+   *   through the pipeline (the inline monolith code was removed in v6.0.0).
+   * Overrides the instance-level `defaultExecMode`.
+   */
+  execMode?: "monolith" | "pipeline";
+  /**
+   * Per-call override for the AST-based destructive-command gate (E2).
+   * - "warn" (default): attach an Observation + stderr warning but STILL execute.
+   * - "block": short-circuit with a non-zero result without interpreting.
+   * - "prompt": no in-process interactive prompt, so falls back to block.
+   * - "allow": disable the gate for this call.
+   * Overrides the instance-level `BashOptions.destructivePolicy`.
+   */
+  destructivePolicy?: DestructivePolicy;
+  /**
+   * Opt-in incremental output sink (true streaming). When provided, the
+   * interpreter invokes it with stdout/stderr fragments as statements produce
+   * them, preserving order. When OMITTED, exec() is byte-identical to the
+   * buffered path with zero measurable overhead — the sink is never created or
+   * invoked. Primarily used by {@link StreamingExecutor} / {@link Bash.execStream}.
+   */
+  onChunk?: OutputSink;
 }
 
-export class Bash {
+/**
+ * A sandboxed bash shell with a virtual filesystem, built-in commands, and
+ * optional WASM runtimes. Safe to run untrusted scripts — all I/O stays in-memory.
+ *
+ * @example
+ * ```ts
+ * import { Bash } from "@ag-bash/bash";
+ *
+ * const bash = new Bash({ cwd: "/app", files: { "/app/data.txt": "hello" } });
+ * const result = await bash.exec("cat /app/data.txt | wc -c");
+ * console.log(result.stdout); // "6\n"
+ * ```
+ */
+export class Bash extends EventEmitter {
   readonly fs: MountableFs;
   private commands: CommandRegistry = new Map();
   private useDefaultLayout: boolean = false;
-  private limits: Required<ExecutionLimits>;
+  public readonly limits: Required<ExecutionLimits>;
   private secureFetch?: SecureFetch;
   private sleepFn?: (ms: number) => Promise<void>;
+
+  /**
+   * Tracks the state of files read or written during the session.
+   * Key is the absolute path to the file.
+   */
+  public readonly fileState: Map<string, FileState> = new Map<
+    string,
+    FileState
+  >();
+
+  /**
+   * Creates a new Bash shell instance.
+   */
   private traceFn?: TraceCallback;
   private logger?: BashLogger;
   private defenseInDepthConfig?: DefenseInDepthConfig | boolean;
@@ -370,20 +410,53 @@ export class Bash {
   // biome-ignore lint/suspicious/noExplicitAny: type-erased plugin storage for untyped API
   private transformPlugins: TransformPlugin<any>[] = [];
   private defaultPersistState: boolean;
-  private parserEngine: 'legacy' | 'tree-sitter';
-  private treeSitterConfig?: BashOptions['treeSitterConfig'];
+  private readonly otelTracer?: AgBashTracer;
+  private readonly defaultExecMode: "monolith" | "pipeline";
+  /**
+   * Instance-level default policy for the AST destructive-command gate (E2).
+   * Defaults to "warn" (non-blocking). Per-call `ExecOptions.destructivePolicy`
+   * overrides this inside the DestructiveStage.
+   */
+  private readonly defaultDestructivePolicy: DestructivePolicy;
+  /** Lazily-built pipeline for the "pipeline" execMode (cached per instance). */
+  private executionPipeline?: ExecutionPipeline;
+  /** Lazily-built streaming executor for execStream() (cached per instance). */
+  private streamingExecutor?: StreamingExecutor;
+  private parserEngine: "legacy" | "tree-sitter";
+  private treeSitterConfig?: NonNullable<
+    BashOptions["parser"]
+  >["treeSitterConfig"];
   private agentic: boolean;
   private debugger?: DebuggerBridge;
-  private semanticEngine?: SemanticEngine;
+  public semanticEngine: SemanticEngine;
+  public indexer: WorkspaceIndexer;
   private agenticHealer?: AgenticHealer;
+  public toolbox: BashToolbox;
+  public permissionManager: PermissionManager;
+  public readonly nestingDepth: number;
+  public readonly services: ServiceContainer;
 
   // Interpreter state (shared with interpreter instances)
   private state: InterpreterState;
+  private snapshots: Map<string, BashSnapshot> = new Map();
+  public readonly options: BashOptions;
 
   constructor(options: BashOptions = {}) {
-    this.fs = options.fs instanceof MountableFs 
-      ? options.fs 
-      : new MountableFs({ base: options.fs ?? new InMemoryFs(options.files) });
+    super();
+    this.options = options;
+    this.nestingDepth = options.agentic?.nestingDepth ?? 0;
+    this.services = createDefaultServices(options.services, () => this.fs);
+    this.permissionManager = new PermissionManager(
+      options.agentic?.permissionHandler,
+    );
+    this.toolbox = new BashToolbox();
+    this.initLsp();
+    this.fs =
+      options.fs instanceof MountableFs
+        ? options.fs
+        : new MountableFs({
+            base: options.fs ?? new InMemoryFs(options.files),
+          });
 
     const fs = this.fs;
 
@@ -391,7 +464,7 @@ export class Bash {
     if (options.persistence) {
       this.usePersistence(
         options.persistence.root,
-        options.persistence.mountPoint || "/home/user"
+        options.persistence.mountPoint || "/home/user",
       );
     }
 
@@ -413,48 +486,44 @@ export class Bash {
       ...Object.entries(options.env ?? {}),
     ]);
 
-    // Resolve limits: new executionLimits takes precedence, then deprecated individual options
-    this.limits = resolveLimits({
-      ...options.executionLimits,
-      // Support deprecated individual options (they override executionLimits if set)
-      ...(options.maxCallDepth !== undefined && {
-        maxCallDepth: options.maxCallDepth,
-      }),
-      ...(options.maxCommandCount !== undefined && {
-        maxCommandCount: options.maxCommandCount,
-      }),
-      ...(options.maxLoopIterations !== undefined && {
-        maxLoopIterations: options.maxLoopIterations,
-      }),
+    this.limits = resolveLimits(options.executionLimits);
+
+    this.services.astCache.configure({
+      maxEntries: this.limits.astCacheSize,
     });
 
     // Create secure fetch: prefer explicit fetch, fall back to network config
     if (options.fetch) {
       this.secureFetch = options.fetch;
     } else if (options.network) {
-      this.secureFetch = createSecureFetch(options.network);
+      this.secureFetch = createSecureFetch({
+        ...options.network,
+        onTraffic: (bytes) => {
+          this.state.networkTrafficBytes += bytes;
+        },
+      });
     }
 
     // Store sleep function if provided (for mock clocks in testing)
     this.sleepFn = options.sleep;
 
     // Store trace callback if provided (for performance profiling)
-    this.traceFn = options.trace;
+    this.traceFn = options.debug?.trace;
 
     // Store logger if provided
-    this.logger = options.logger;
+    this.logger = options.debug?.logger;
 
     // Store onCommandNotFound hook if provided
     this.onCommandNotFound = options.onCommandNotFound;
 
     // Defense-in-depth defaults to enabled
-    this.defenseInDepthConfig = options.defenseInDepth ?? true;
+    this.defenseInDepthConfig = options.security?.defenseInDepth ?? true;
 
     // Agentic behavior defaults to false
-    this.agentic = options.agentic ?? false;
+    this.agentic = options.agentic?.enabled ?? false;
 
     // Store coverage writer if provided (for fuzzing instrumentation)
-    this.coverageWriter = options.coverage;
+    this.coverageWriter = options.debug?.coverage;
 
     // Initialize interpreter state
     this.state = {
@@ -469,13 +538,16 @@ export class Bash {
       lastExitCode: 0,
       lastArg: "", // $_ is initially empty (or could be shell name)
       startTime: Date.now(),
+      executionStartTime: Date.now(),
+      networkTrafficBytes: 0,
+      mcpToolCallCount: 0,
       lastBackgroundPid: 0,
-      virtualPid: options.processInfo?.pid ?? 1,
-      virtualPpid: options.processInfo?.ppid ?? 0,
-      virtualUid: options.processInfo?.uid ?? 1000,
-      virtualGid: options.processInfo?.gid ?? 1000,
-      bashPid: options.processInfo?.pid ?? 1, // BASHPID starts as virtual PID
-      nextVirtualPid: (options.processInfo?.pid ?? 1) + 1, // Counter for unique subshell PIDs
+      virtualPid: options.security?.processInfo?.pid ?? 1,
+      virtualPpid: options.security?.processInfo?.ppid ?? 0,
+      virtualUid: options.security?.processInfo?.uid ?? 1000,
+      virtualGid: options.security?.processInfo?.gid ?? 1000,
+      bashPid: options.security?.processInfo?.pid ?? 1, // BASHPID starts as virtual PID
+      nextVirtualPid: (options.security?.processInfo?.pid ?? 1) + 1, // Counter for unique subshell PIDs
       currentLine: 1, // $LINENO starts at 1
       options: {
         errexit: false,
@@ -520,6 +592,7 @@ export class Bash {
       readonlyVars: new Set(["SHELLOPTS", "BASHOPTS"]),
       // Hash table for PATH command lookup caching
       hashTable: new Map(),
+      mode: "execute",
     };
 
     // Initialize SHELLOPTS to reflect current shell options (initially empty string since all are false)
@@ -557,21 +630,21 @@ export class Bash {
 
     // Register python commands only when explicitly enabled
     // Python introduces additional security surface (arbitrary code execution)
-    if (options.python) {
+    if (options.runtimes?.python) {
       for (const cmd of createPythonCommands()) {
         this.registerCommand(cmd);
       }
     }
 
     // Register javascript commands only when explicitly enabled
-    if (options.javascript) {
+    if (options.runtimes?.javascript) {
       for (const cmd of createJavaScriptCommands()) {
         this.registerCommand(cmd);
       }
       // Store bootstrap code in private field (threaded via context chain, not env)
       const jsConfig =
-        typeof options.javascript === "object"
-          ? options.javascript
+        typeof options.runtimes.javascript === "object"
+          ? options.runtimes.javascript
           : Object.create(null);
       if (jsConfig.bootstrap) {
         this.jsBootstrapCode = jsConfig.bootstrap;
@@ -593,14 +666,109 @@ export class Bash {
     }
 
     this.defaultPersistState = options.persistState ?? false;
-    this.parserEngine = options.parserEngine ?? 'tree-sitter';
-    this.treeSitterConfig = options.treeSitterConfig;
-    this.debugger = options.debugger;
-    this.semanticEngine = options.semanticEngine;
-    this.agentic = options.agentic ?? false;
+    // Execution engine (v6.0.0): the composable ExecutionPipeline is now the
+    // default live path — proven byte-equivalent to the legacy monolith across
+    // the full test suite (identical results, with one nested-cancellation case
+    // the pipeline handles correctly). The monolith remains available as an
+    // opt-in fallback via execMode:"monolith" (or AG_BASH_EXEC_MODE=monolith)
+    // and will be removed in a later release.
+    const envExecMode =
+      typeof process !== "undefined" &&
+      (process.env?.AG_BASH_EXEC_MODE === "monolith" ||
+        process.env?.AG_BASH_EXEC_MODE === "pipeline")
+        ? (process.env.AG_BASH_EXEC_MODE as "monolith" | "pipeline")
+        : undefined;
+    this.defaultExecMode = options.execMode ?? envExecMode ?? "pipeline";
+    this.defaultDestructivePolicy = options.destructivePolicy ?? "warn";
+    this.parserEngine = options.parser?.engine ?? "legacy";
+    this.treeSitterConfig = options.parser?.treeSitterConfig;
+    this.debugger = options.debug?.debugger;
+    this.semanticEngine = options.debug?.semanticEngine ?? new SemanticEngine();
+    this.indexer = new WorkspaceIndexer(this, this.semanticEngine);
+    this.agentic = options.agentic?.enabled ?? false;
     if (this.agentic) {
-      this.agenticHealer = new AgenticHealer(options.agenticConfig || { enableHeuristics: true });
+      this.agenticHealer = new AgenticHealer(
+        this.toolbox,
+        options.agentic?.healer || { enableHeuristics: true },
+      );
     }
+
+    // Initialize OTel tracer if config is provided (no-op when @opentelemetry/api absent)
+    if (options.otel) {
+      this.otelTracer = new AgBashTracer(options.otel);
+      // Fire-and-forget initialization — safe because the tracer is a no-op until init completes
+      void this.otelTracer.initialize();
+    }
+  }
+
+  /**
+   * Close a persistent session and terminate its worker.
+   */
+  public async closeSession(sessionId: string): Promise<void> {
+    await this.services.sessionManager.terminateSession(sessionId);
+    if (this.state.sessionId === sessionId) {
+      this.state.sessionId = undefined;
+    }
+  }
+
+  /**
+   * Sets the current mode of the shell (execute or plan).
+   */
+  public setMode(mode: BashMode): void {
+    this.state.mode = mode;
+    this.logger?.info("mode_change", { mode });
+  }
+
+  /**
+   * Gets the current mode of the shell.
+   */
+  public getMode(): BashMode {
+    return this.state.mode;
+  }
+
+  public get cwd(): string {
+    return this.state.cwd;
+  }
+
+  public get env(): Record<string, string> {
+    const res: Record<string, string> = Object.create(null);
+    for (const [k, v] of this.state.env) {
+      res[k] = v;
+    }
+    return res;
+  }
+
+  public get lsp(): LSPManager {
+    return this.services.lspManager;
+  }
+
+  private async initLsp(): Promise<void> {
+    const lsp = this.services.lspManager;
+    // Initialize TS server if available
+    await lsp.initServer("ts", "typescript-language-server", ["--stdio"]);
+    await lsp.initServer("js", "typescript-language-server", ["--stdio"]);
+  }
+
+  /**
+   * Updates the tracked state for a file.
+   */
+  public updateFileState(path: string, state: Partial<FileState>): void {
+    const existing = this.fileState.get(path) || {
+      content: "",
+      timestamp: Date.now(),
+    };
+    this.fileState.set(path, {
+      ...existing,
+      ...state,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Gets the tracked state for a file.
+   */
+  public getFileState(path: string): FileState | undefined {
+    return this.fileState.get(path);
   }
 
   registerCommand(command: Command): void {
@@ -682,8 +850,16 @@ export class Bash {
       };
     }
 
+    // Heredoc normalization (ensure delimiters are trimmed if not in raw mode)
+    const normalizedCommandLine = options?.rawScript
+      ? commandLine
+      : commandLine.replace(
+          /<<-?\s*["']?(\w+)["']?/g,
+          (_match, delimiter) => `<<${delimiter}`,
+        );
+
     // Log command execution
-    this.logger?.info("exec", { command: commandLine });
+    this.logger?.info("exec", { command: normalizedCommandLine });
 
     // Each exec call gets an isolated state copy - like starting a new shell
     // This ensures exec calls never interfere with each other
@@ -747,220 +923,198 @@ export class Bash {
       signal: options?.signal,
       // Extra arguments injected directly into first command's arg list
       extraArgs: options?.args,
+      executionStartTime: Date.now(),
+      sessionId: options?.sessionId ?? this.state.sessionId,
     };
 
-    // Normalize indented multi-line scripts (unless rawScript is true)
-    // This allows writing indented bash scripts in template literals
-    // BUT we must preserve whitespace inside heredoc content
-    let normalized = commandLine;
-    if (!options?.rawScript) {
-      normalized = normalizeScript(commandLine);
+    // Branch on execution engine. The instance-coupled prologue above
+    // (command-count guard, empty short-circuit, heredoc normalization,
+    // exec logging, PWD/realpath/cwd derivation, execEnv + execState build,
+    // whitespace normalization) is SHARED by both engines and stays here so
+    // that recursive execs (via the exec.bind hook) re-enter the same guard.
+    const execMode = options?.execMode ?? this.defaultExecMode;
+    if (execMode === "pipeline") {
+      // Wrap in OTEL span when tracer is configured (zero-cost no-op otherwise)
+      if (this.otelTracer) {
+        const span = this.otelTracer.startExecSpan(commandLine);
+        // Monotonic start mark for span duration. performance.now() is a
+        // monotonic clock (immune to wall-clock jumps) and is NOT one of the
+        // banned nondeterministic primitives (Date.now / new Date / Math.random).
+        const spanStart = performance.now();
+        try {
+          const result = await this.execViaPipeline(
+            commandLine,
+            options,
+            execState,
+          );
+          span.setAttribute("ag-bash.exitCode", result.exitCode);
+          span.setAttribute(
+            "ag-bash.durationMs",
+            performance.now() - spanStart,
+          );
+          span.end();
+          return result;
+        } catch (spanError: unknown) {
+          // Record the exception event BEFORE setting error status so the span
+          // carries both the typed exception and the error code.
+          span.recordException(spanError);
+          span.setAttribute(
+            "ag-bash.durationMs",
+            performance.now() - spanStart,
+          );
+          span.setStatus({ code: 2, message: "exec failed" });
+          span.end();
+          throw spanError;
+        }
+      }
+      return this.execViaPipeline(commandLine, options, execState);
     }
 
-    // Activate defense-in-depth box if configured
-    // This wraps execution in AsyncLocalStorage context for context-aware blocking
-    const defenseBox = this.defenseInDepthConfig
-      ? DefenseInDepthBox.getInstance(this.defenseInDepthConfig)
-      : null;
+    // v6.0.0: The monolith code path has been removed. The ExecutionPipeline
+    // is now the sole execution engine. If execMode is "monolith" (for backward
+    // compat at the type level), it transparently falls through to the pipeline.
+    return this.execViaPipeline(commandLine, options, execState);
+  }
 
-    // Pre-initialize Tree-sitter outside of the defense-in-depth sandbox
-    // because its WASM/JS glue code uses dynamic imports (e.g., 'module', 'fs') 
-    // that are blocked during sandboxed script execution.
-    if (this.parserEngine === 'tree-sitter' && this.treeSitterConfig) {
-      await TreeSitterParser.init({
-        webTreeSitterWasm: this.treeSitterConfig.webTreeSitterWasm,
-        bashGrammarWasm: this.treeSitterConfig.bashGrammarWasm,
-      });
-    }
+  /**
+   * Build (and cache) the ExecutionPipeline used by the "pipeline" execMode.
+   *
+   * The stages mirror the monolithic Bash.exec() body exactly:
+   *   normalize → parse → transform → sandbox → destructive → interpret → persist
+   * with error categorization + UTF-8 decode/log applied by the pipeline
+   * runner (via the finalize callback and its internal catch).
+   *
+   * Parity-critical wiring:
+   * - requireDefenseContext is computed from the REAL DefenseInDepthBox's
+   *   isEnabled() (NOT inferred from the handle), matching Bash.ts monolith.
+   * - The finalize callback is this.logResult (decode binary→UTF-8 + log),
+   *   applied to every result leaving the pipeline (success AND error).
+   * - The persist callback performs the exact 7-field commit-back the monolith
+   *   does (cwd/env/functions/hashTable by reference; shoptOptions/options via
+   *   spread; lastExitCode), gated on exit 0 inside PersistStage.
+   * - execFn = this.exec.bind(this) so recursive execs re-enter exec() and hit
+   *   the command-count guard (which lives in exec(), before this branch).
+   * - this.services is passed so astCache + sharedBus are SHARED, matching
+   *   the monolith's this.services usage.
+   */
+  private buildExecutionPipeline(): ExecutionPipeline {
+    const requireDefenseContext = this.defenseInDepthConfig
+      ? DefenseInDepthBox.getInstance(this.defenseInDepthConfig).isEnabled() ===
+        true
+      : false;
 
-    const defenseHandle = defenseBox?.activate();
-
-    try {
-      // Run execution inside defense-in-depth context if enabled
-      const executeScript = async (): Promise<BashExecResult> => {
-        let ast: ScriptNode;
-
-        const astCache = ASTCache.getInstance();
-        const cachedAst = astCache.get(normalized);
-        if (cachedAst) {
-          ast = cachedAst;
-        } else {
-          if (this.parserEngine === 'tree-sitter') {
-            if (!this.treeSitterConfig) {
-              throw new Error("Tree-sitter parser engine selected but treeSitterConfig was not provided in Bash options.");
-            }
-            
-            const tree = TreeSitterParser.parse(normalized);
-            const converter = new TreeSitterToAst(normalized);
-            ast = converter.convert(tree);
-          } else {
-            ast = parse(normalized, {
-              maxHeredocSize: this.limits.maxHeredocSize,
-            }) as ScriptNode;
-          }
-          astCache.set(normalized, ast);
-        }
-
-
-        // Apply transform plugins if any are registered.
-        // Keep metadata null-prototype even when plugins contribute dynamic keys.
-        let metadata: ReturnType<typeof mergeToNullPrototype> | undefined;
-        if (this.transformPlugins.length > 0) {
-          let meta: Record<string, unknown> = Object.create(null);
-          for (const plugin of this.transformPlugins) {
-            const pluginResult = plugin.transform({ ast, metadata: meta });
-            ast = pluginResult.ast;
-            if (pluginResult.metadata) {
-              meta = mergeToNullPrototype(meta, pluginResult.metadata);
-            }
-          }
-          metadata = meta;
-        }
-
-        // Create interpreter with appropriate state
-        const interpreterOptions: InterpreterOptions = {
-          fs: this.fs,
-          commands: this.commands,
-          limits: this.limits,
-          exec: this.exec.bind(this),
-          fetch: this.secureFetch,
-          sleep: this.sleepFn,
-          trace: this.traceFn,
-          coverage: this.coverageWriter,
-          requireDefenseContext: defenseBox?.isEnabled() === true,
-          jsBootstrapCode: this.jsBootstrapCode,
-          onCommandNotFound: this.onCommandNotFound,
-          agentic: this.agentic,
-          getRegisteredCommands: () => Array.from(this.commands.keys()),
-          debugger: options?.debugger ?? this.debugger,
-          semanticEngine: options?.semanticEngine ?? this.semanticEngine,
-          agenticHealer: options?.agenticHealer ?? this.agenticHealer,
-        };
-
-        const interpreter = new Interpreter(interpreterOptions, execState);
-        const result = await interpreter.executeScript(ast);
-        // Interpreter always sets env, assert it for type safety
-        const execResult = result as BashExecResult;
-        if (metadata) {
-          execResult.metadata = metadata;
-        }
-        return this.logResult(execResult);
-      };
-
-      const execResult = await (defenseHandle
-        ? defenseHandle.run(executeScript)
-        : executeScript());
-
-      // If persistence is enabled, commit the state back to the Bash instance
-      const shouldPersist = options?.persistState ?? this.defaultPersistState;
-      if (shouldPersist && execResult.exitCode === 0) {
+    const pipeline = new ExecutionPipeline((result) => this.logResult(result));
+    pipeline.addStage(new NormalizeStage());
+    pipeline.addStage(
+      new ParseStage({
+        parserEngine: this.parserEngine,
+        treeSitterConfig: this.treeSitterConfig,
+        limits: this.limits,
+      }),
+    );
+    pipeline.addStage(new TransformStage(this.transformPlugins));
+    pipeline.addStage(new SandboxStage(this.defenseInDepthConfig));
+    // E2 destructive-command gate (R1 wiring): runs AFTER parse/transform (it
+    // analyzes the parsed AST) and BEFORE interpret (so BLOCK can short-circuit
+    // without executing, and WARN can stash a typed observation that the
+    // pipeline runner merges onto the interpreter result). The instance default
+    // policy is "warn" (non-blocking); ExecOptions.destructivePolicy overrides
+    // per-call inside the stage.
+    pipeline.addStage(new DestructiveStage(this.defaultDestructivePolicy));
+    pipeline.addStage(
+      new InterpretStage({
+        fs: this.fs,
+        commands: this.commands,
+        limits: this.limits,
+        execFn: this.exec.bind(this),
+        secureFetch: this.secureFetch,
+        sleepFn: this.sleepFn,
+        traceFn: this.traceFn,
+        coverageWriter: this.coverageWriter,
+        jsBootstrapCode: this.jsBootstrapCode,
+        onCommandNotFound: this.onCommandNotFound,
+        agentic: this.agentic,
+        debugger: this.debugger,
+        semanticEngine: this.semanticEngine,
+        agenticHealer: this.agenticHealer,
+        bash: this,
+        requireDefenseContext,
+      }),
+    );
+    pipeline.addStage(
+      new PersistStage(this.defaultPersistState, (execState, exitCode) => {
         this.state.cwd = execState.cwd;
         this.state.env = execState.env;
         this.state.functions = execState.functions;
-        this.state.lastExitCode = execResult.exitCode;
+        this.state.lastExitCode = exitCode;
         this.state.shoptOptions = { ...execState.shoptOptions };
         this.state.options = { ...execState.options };
         this.state.hashTable = execState.hashTable;
-      }
+      }),
+    );
+    return pipeline;
+  }
 
-      return execResult;
-    } catch (error) {
-      // ExitError propagates from 'exit' builtin (including via eval/source)
-      if (error instanceof ExitError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: error.exitCode,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
-        });
-      }
-      // PosixFatalError propagates from special builtins in POSIX mode
-      if (error instanceof PosixFatalError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: error.exitCode,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
-        });
-      }
-      if (error instanceof ArithmeticError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
-        });
-      }
-      // ExecutionAbortedError is thrown when an AbortSignal fires (timeout cancellation)
-      if (error instanceof ExecutionAbortedError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: 124, // Same as timeout exit code
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
-        });
-      }
-      // SecurityViolationError is thrown when defense-in-depth detects a blocked operation
-      const errorName = error instanceof Error ? error.name : "";
-      if (error instanceof SecurityViolationError || errorName === "SecurityViolationError") {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: security violation: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)],
-        });
-      }
-
-      // ExecutionLimitError is thrown when command limits are exceeded during interpreter loop
-      if (error instanceof ExecutionLimitError || errorName === "ExecutionLimitError") {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
-          exitCode: ExecutionLimitError.EXIT_CODE,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)],
-        });
-      }
-
-      if ((error as ParseException).name === "ParseException") {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: syntax error: ${sanitizeErrorMessage((error as Error).message)}\n`,
-          exitCode: 2,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)]
-        });
-      }
-      // LexerError is thrown for lexer-level issues like unterminated quotes
-      if (error instanceof LexerError) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
-          exitCode: 2,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
-        });
-      }
-      // RangeError occurs when JavaScript call stack is exceeded (deep recursion)
-      if (error instanceof RangeError) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)]
-        });
-      }
-      throw error;
-    } finally {
-      // Always deactivate defense-in-depth box when done
-      defenseHandle?.deactivate();
+  /**
+   * Execute a script through the composable ExecutionPipeline.
+   *
+   * The instance-coupled prologue (command-count guard, empty short-circuit,
+   * PWD/cwd derivation, execEnv + execState construction) has ALREADY run in
+   * exec() before this is called; we receive the finished execState and pass
+   * the RAW commandLine so NormalizeStage performs (idempotent) normalization,
+   * keeping the pipeline self-contained for AST-cache keying.
+   *
+   * NOTE on requireDefenseContext caching: the pipeline computes it once at
+   * build time from the singleton DefenseInDepthBox. The box's isEnabled() is a
+   * pure function of its (config.enabled, AsyncLocalStorage availability), which
+   * cannot change for a given Bash instance, so caching is safe and matches the
+   * monolith's per-call recomputation.
+   */
+  private execViaPipeline(
+    commandLine: string,
+    options: ExecOptions | undefined,
+    execState: InterpreterState,
+  ): Promise<BashExecResult> {
+    if (!this.executionPipeline) {
+      this.executionPipeline = this.buildExecutionPipeline();
     }
+    return this.executionPipeline.run(
+      commandLine,
+      options,
+      this,
+      this.services,
+      execState,
+      this.state,
+    );
+  }
+
+  /**
+   * Execute a script and stream its output INCREMENTALLY as commands produce
+   * it, yielding {@link OutputChunk} objects via an AsyncGenerator.
+   *
+   * Unlike {@link exec} (which buffers everything and returns once), this emits
+   * stdout/stderr fragments in production order as each statement runs, then a
+   * final `exit` chunk carrying the exit code. The concatenation of streamed
+   * stdout chunks is byte-identical to `(await exec(script)).stdout`.
+   *
+   * Implemented atop the opt-in {@link ExecOptions.onChunk} sink; buffered
+   * exec() is unaffected when execStream is not used.
+   *
+   * @example
+   * ```ts
+   * for await (const chunk of bash.execStream("echo a; echo b")) {
+   *   if (chunk.type === "stdout") process.stdout.write(chunk.data);
+   * }
+   * ```
+   */
+  execStream(
+    script: string,
+    options?: StreamExecOptions,
+  ): AsyncGenerator<OutputChunk, void, undefined> {
+    if (!this.streamingExecutor) {
+      this.streamingExecutor = new StreamingExecutor(this);
+    }
+    return this.streamingExecutor.execStream(script, options);
   }
 
   /**
@@ -981,10 +1135,7 @@ export class Bash {
   async createDelta(base: BashSnapshot): Promise<BashDelta> {
     const current = await this.snapshot();
     const delta = diffState(base, current);
-    delta.fsDelta = diffFs(
-      base.fs as Map<string, any>,
-      current.fs as Map<string, any>,
-    );
+    delta.fsDelta = diffFs(base.fs, current.fs);
     return delta;
   }
 
@@ -1016,6 +1167,100 @@ export class Bash {
   }
 
   /**
+   * Save a named snapshot of the current state.
+   */
+  async saveSnapshot(name: string): Promise<void> {
+    const snap = await this.snapshot();
+    this.snapshots.set(name, snap);
+  }
+
+  /**
+   * Restore a named snapshot.
+   */
+  async restoreSnapshot(name: string): Promise<void> {
+    const snap = this.snapshots.get(name);
+    if (!snap) {
+      throw new Error(`Snapshot '${name}' not found`);
+    }
+    await this.restore(snap);
+  }
+
+  /**
+   * Fork the sandbox into an independent copy-on-write branch.
+   *
+   * Returns a NEW {@link Bash} instance that, at the moment of the call, is an
+   * exact copy of this one (env, cwd, functions, shell options, and the entire
+   * virtual filesystem) but shares NOTHING mutable with the parent. The child
+   * is independently executable; mutations in the child — environment changes,
+   * `cd`, function (re)definitions, and filesystem writes — are invisible to
+   * the parent, and parent mutations after the fork are invisible to the child.
+   *
+   * This is the core primitive for fork-speculation: an agent forks N branches,
+   * runs candidate command sequences in parallel, then keeps the winner and
+   * discards the rest (discarding is just dropping the child reference).
+   *
+   * Forking is cheap because the underlying snapshot deep-copies state and the
+   * copy-on-write VFS only materializes mutated entries.
+   *
+   * Note: host-backed mounts (e.g. {@link usePersistence} via `ReadWriteFs`)
+   * write through to the real filesystem and are therefore NOT isolated by the
+   * fork — only the in-VFS layers are copy-on-write. Use an in-memory sandbox
+   * for fully isolated speculation.
+   *
+   * @returns A new, fully isolated `Bash` branch.
+   */
+  async fork(): Promise<Bash> {
+    const branch = new Bash(this.options);
+    const snap = await this.snapshot();
+    await branch.restore(snap);
+    return branch;
+  }
+
+  /**
+   * Speculatively run candidate branches in isolated forks and collect their
+   * results, leaving this (parent) instance untouched.
+   *
+   * Each branch receives its own {@link fork} of the current sandbox and runs
+   * concurrently. Results are returned in branch order so the caller can score
+   * them and "keep the winner" (e.g. by re-applying the winning command on the
+   * parent). Discarded branches require no cleanup — their references are simply
+   * dropped.
+   *
+   * @typeParam T - The result type each branch produces.
+   * @param branches - Candidate functions, each given an isolated child `Bash`.
+   * @returns The branch results, in the same order as `branches`.
+   */
+  async speculate<T>(
+    branches: Array<(branch: Bash) => Promise<T>>,
+  ): Promise<T[]> {
+    const forks = await Promise.all(branches.map(() => this.fork()));
+    return Promise.all(branches.map((run, i) => run(forks[i])));
+  }
+
+  /**
+   * Save the workspace symbol index to disk.
+   */
+  public async saveIndex(): Promise<void> {
+    const indexData = this.semanticEngine.serialize();
+    const dir = ".ag-bash";
+    if (!(await this.fs.exists(dir))) {
+      await this.fs.mkdir(dir, { recursive: true });
+    }
+    await this.fs.writeFile(`${dir}/index.json`, indexData);
+  }
+
+  /**
+   * Load the workspace symbol index from disk.
+   */
+  public async loadIndex(): Promise<void> {
+    const indexPath = ".ag-bash/index.json";
+    if (await this.fs.exists(indexPath)) {
+      const data = await this.fs.readFile(indexPath);
+      this.semanticEngine.deserialize(data);
+    }
+  }
+
+  /**
    * Mount a filesystem at the specified virtual path.
    */
   mount(mountPoint: string, filesystem: IFileSystem): void {
@@ -1026,7 +1271,10 @@ export class Bash {
    * Configure persistent storage for a specific path.
    * In Node.js, this mounts a ReadWriteFs directly to the host filesystem.
    */
-  async usePersistence(root: string, mountPoint: string = "/home/user"): Promise<void> {
+  async usePersistence(
+    root: string,
+    mountPoint: string = "/home/user",
+  ): Promise<void> {
     // Dynamic import to stay isomorphic
     const { ReadWriteFs } = await import("./fs/read-write-fs/index.js");
     const persistentFs = new ReadWriteFs({ root });
@@ -1072,6 +1320,44 @@ export class Bash {
     );
   }
 
+  async readFileDirect(path: string): Promise<string> {
+    const content = await this.fs.readFile(path, "utf-8");
+    this.updateFileState(path, { content });
+    return content;
+  }
+
+  async writeFileDirect(path: string, content: string): Promise<void> {
+    await this.fs.writeFile(path, content);
+    this.updateFileState(path, { content });
+
+    // Notify LSP of change
+    this.services.lspManager.sendNotification(path, "textDocument/didChange", {
+      textDocument: { uri: `file://${path}`, version: 1 },
+      contentChanges: [{ text: content }],
+    });
+  }
+
+  async listDirDirect(path: string): Promise<string[]> {
+    return this.fs.readdir(this.fs.resolvePath(this.state.cwd, path));
+  }
+
+  async existsDirect(path: string): Promise<boolean> {
+    return this.fs.exists(this.fs.resolvePath(this.state.cwd, path));
+  }
+
+  async mkdirDirect(path: string, recursive = true): Promise<void> {
+    await this.fs.mkdir(this.fs.resolvePath(this.state.cwd, path), {
+      recursive,
+    });
+  }
+
+  async rmDirect(path: string, recursive = false): Promise<void> {
+    await this.fs.rm(this.fs.resolvePath(this.state.cwd, path), {
+      recursive,
+      force: true,
+    });
+  }
+
   getCwd(): string {
     return this.state.cwd;
   }
@@ -1106,6 +1392,15 @@ export class Bash {
       metadata,
     };
   }
+
+  destroy(): void {
+    this.services.sharedBus.destroy();
+    this.services.astCache.clear();
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.destroy();
+  }
 }
 
 /**
@@ -1113,7 +1408,7 @@ export class Bash {
  */
 export interface BashSnapshot {
   state: InterpreterState;
-  fs: unknown;
+  fs: FileSystemSnapshot;
 }
 
 /**

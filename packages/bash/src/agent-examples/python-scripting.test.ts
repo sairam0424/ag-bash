@@ -19,7 +19,7 @@ function loadFixture(name: string): string {
 describe("Agent Scenario: Python Data Analysis", () => {
   const createDataEnv = () =>
     new Bash({
-      python: true,
+      runtimes: { python: true },
       files: {
         "/data/sales.csv": `date,product,quantity,price
 2024-01-15,Widget A,10,29.99
@@ -79,7 +79,7 @@ describe("Agent Scenario: Python Data Analysis", () => {
 describe("Agent Scenario: Log Analysis with Python", () => {
   const createLogEnv = () =>
     new Bash({
-      python: true,
+      runtimes: { python: true },
       files: {
         "/logs/app.log": `2024-01-15 10:23:45 INFO  Server started on port 8080
 2024-01-15 10:24:01 DEBUG Processing request /api/users
@@ -144,7 +144,7 @@ describe("Agent Scenario: Log Analysis with Python", () => {
 describe("Agent Scenario: Code Generation with Python", () => {
   const createCodeGenEnv = () =>
     new Bash({
-      python: true,
+      runtimes: { python: true },
       files: {
         "/project/schema.json": `{
   "User": {
@@ -199,7 +199,7 @@ describe("Agent Scenario: Code Generation with Python", () => {
 describe("Agent Scenario: File Processing Pipeline", () => {
   const createPipelineEnv = () =>
     new Bash({
-      python: true,
+      runtimes: { python: true },
       files: {
         "/input/data1.txt": `name: John Doe
 age: 30
@@ -246,7 +246,7 @@ occupation: Manager`,
 describe("Agent Scenario: API Response Processing", () => {
   const createApiEnv = () =>
     new Bash({
-      python: true,
+      runtimes: { python: true },
       files: {
         "/api/response.json": `{
   "status": "success",
@@ -298,7 +298,7 @@ describe("Agent Scenario: API Response Processing", () => {
 describe("Agent Scenario: Text Processing and Transformation", () => {
   const createTextEnv = () =>
     new Bash({
-      python: true,
+      runtimes: { python: true },
       files: {
         "/docs/README.md": `# Project Title
 
@@ -389,7 +389,7 @@ MIT License`,
 describe("Agent Scenario: Configuration Management", () => {
   const createConfigEnv = () =>
     new Bash({
-      python: true,
+      runtimes: { python: true },
       files: {
         "/config/base.json": `{
   "app": {
@@ -454,7 +454,7 @@ LOG_LEVEL=info`,
 describe("Agent Scenario: Data Validation and Cleaning", () => {
   const createValidationEnv = () =>
     new Bash({
-      python: true,
+      runtimes: { python: true },
       files: {
         "/data/users.csv": `id,email,phone,created_at
 1,alice@example.com,555-1234,2024-01-15

@@ -3,7 +3,7 @@ import { Bash } from "../../Bash.js";
 
 describe("js-exec module resolution security", () => {
   it("should reject prototype-chain keys in require()", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
     const result = await env.exec(`js-exec -c "
 const names = ['__proto__', 'constructor', 'toString'];
 for (const name of names) {
@@ -29,7 +29,7 @@ for (const name of names) {
   });
 
   it("should reject prototype-chain keys in import()", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
     const result = await env.exec(`js-exec -m -c "
 const names = ['__proto__', 'constructor', 'toString'];
 for (const name of names) {

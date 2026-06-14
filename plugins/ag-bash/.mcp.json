@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ag-bash": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@ag-bash/mcp-server@latest"
+      ]
+    }
+  }
+}

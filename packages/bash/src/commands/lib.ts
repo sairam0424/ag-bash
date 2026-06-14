@@ -1,6 +1,17 @@
 import { DefenseInDepthBox } from "../security/defense-in-depth-box.js";
 import type { Command, CommandContext, ExecResult } from "../types.js";
 
+// Replaced with `true` by esbuild for browser bundles. Using it as a
+// build-time guard (rather than a runtime `globalThis.__BROWSER__` check)
+// lets esbuild fold `if (__BROWSER__ ...)` and drop the dynamic
+// `import("./flag-coverage.js")` below. That dynamic import statically pulls
+// in the fuzz-flags aggregator, which in turn imports every command's flag
+// metadata — including the node-only tar/yq/xan/sqlite3 modules. Because
+// build:browser does not use code-splitting, esbuild inlines reachable dynamic
+// imports into the main bundle, so without this guard those heavy/native
+// command modules leak into browser.js.
+declare const __BROWSER__: boolean | undefined;
+
 export type CommandLoader = () => Promise<Command>;
 
 export interface LazyCommandDef<T extends string = string> {
@@ -25,20 +36,26 @@ export function createLazyCommand(def: LazyCommandDef): Command {
         cache.set(def.name, cmd);
       }
 
-      // Emit flag coverage hits when fuzzing (not available in browser bundles)
-      // Check if we are in browser environment locally to avoid import errors
-      const isBrowser = typeof (globalThis as any).__BROWSER__ !== "undefined" && (globalThis as any).__BROWSER__;
-      
-      if (ctx.coverage && !isBrowser) {
+      // Emit flag coverage hits when fuzzing. The flag-coverage module is
+      // node-only (it pulls in the fuzz-flags aggregator and every command's
+      // metadata), so this whole block is gated behind a build-time __BROWSER__
+      // guard that esbuild folds to `if (false)` for browser bundles, dropping
+      // the dynamic import and its node-only transitive deps. The leading
+      // `typeof === "undefined"` keeps it safe in Node/vitest where __BROWSER__
+      // is never defined.
+      if (
+        (typeof __BROWSER__ === "undefined" || !__BROWSER__) &&
+        ctx.coverage
+      ) {
         try {
           const { emitFlagCoverage } = await import("./flag-coverage.js");
           emitFlagCoverage(ctx.coverage, def.name, args);
-        } catch (e) {
+        } catch (_e) {
           // Ignore coverage errors
         }
       }
 
-      return DefenseInDepthBox.runTrustedAsync(() => cmd!.execute(args, ctx));
+      return DefenseInDepthBox.runTrustedAsync(() => cmd?.execute(args, ctx));
     },
   };
 }

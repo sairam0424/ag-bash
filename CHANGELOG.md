@@ -5,9 +5,357 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.2] — 2026-05-31
+
+Patch release fixing two build-provisioning defects (the application code was
+correct in both cases; the build shipped the wrong artifacts).
+
+### Fixed
+
+- **`ag-bash -c '<command>'` no longer fails with `ENOENT`** — the CLI binary
+  reads `tree-sitter-bash.wasm` from `dist/parser/vendor/`, but the grammar was
+  only provisioned to the root `vendor/` dir, so it never shipped to that path
+  (or into the published tarball). Any real exec — even `echo` — threw
+  `ENOENT` (masked to `'<path>'` by the error sanitizer). The grammar is now
+  copied into `src/parser/vendor/` so the build ships it to `dist/parser/vendor/`
+  and into the published package. Affected the published 6.0.0 and 6.0.1 CLIs.
+- **`check:worker-sync` can pass again** — the gate compared a fresh esbuild
+  bundle of `worker.ts` against a stale, gitignored `src/.../worker.js` that
+  `build:worker` never writes (it emits to `dist/`). Repointed at the `dist/`
+  artifact, so the gate passes on a clean build and fails only on genuine
+  `worker.ts` drift — unblocking the `validate` chain.
+
+## [6.0.1] — 2026-05-31
+
+Patch release. The 6.0.0 publish left `@ag-bash/mcp-server` and
+`@ag-bash/agent-bridge` uninstallable (the `workspace:*` dependency
+protocol leaked to the registry because they were published with
+`npm publish` rather than `pnpm publish`, which rewrites it at pack time).
+This release republishes all three packages with that resolved, and folds
+in several source fixes the 6.0.0 audit surfaced.
+
+### Fixed
+
+- **mcp-server / agent-bridge are installable again** — published via
+  `pnpm publish`, so `@ag-bash/bash` resolves to a real `6.0.1` range
+  instead of the literal `workspace:*` string.
+- **DestructiveStage now runs on the live exec path** — the AST
+  destructive-command gate was implemented and exported in 6.0.0 but never
+  added to the ExecutionPipeline, so it never executed. It now runs between
+  the sandbox and interpret stages (default policy `"warn"`).
+- **Subpath exports resolve** — `./slim`, `./advanced`, `./testing`, and
+  `./ai` pointed at `dist/bundle/*.js` files the build never emits; they now
+  target the emitted `dist/*.js`, fixing `ERR_MODULE_NOT_FOUND`.
+- **Node 24 browser build** — the browser/browser-core esbuild targets now
+  alias `node:module` to the null shim (Node 24 promoted it to an importable
+  builtin), fixing a `Could not resolve "node:module"` build failure.
+
+### Added
+
+- **OTEL span exceptions + duration** — the exec span now calls
+  `recordException` on failure and records an `ag-bash.durationMs` attribute
+  (monotonic `performance.now()`).
+- **CI perf-regression gate** — a `bench` workflow runs the existing
+  `bench:check` (>15% mean-regression threshold) that previously had no CI
+  coverage.
+
+## [6.0.0] — 2026-05-31
+
+### Breaking Changes
+
+- **ExecutionPipeline is now the sole execution engine** — The `execMode: "monolith"` inline code path has been removed. All exec() calls route through the composable 6-stage pipeline (normalize, parse, transform, sandbox, interpret, persist). The `execMode` option type is preserved for backward compatibility but both values now resolve to the pipeline.
+- **Node.js floor raised to >=20.6.0** — Required for stable `--import` hooks and `register()` API. Node.js >=23.5 is recommended for full ESM-hook security hardening.
+- **denyPrivateRanges defaults ON** — SSRF protection blocks requests to RFC-1918, link-local, and loopback addresses by default. Pass `network: { denyPrivateRanges: false }` to opt out.
+- **Observation type gains `code` and `confidence` fields** — All observation producers now emit structured machine-readable codes and confidence scores.
+- **BashHost interface expanded** — Sub-agent spawning now uses immutable constructor-time tool filtering (no `unregisterTool` cast). The `as unknown as Bash` casts are removed; `BashHost` gains typed `fs`, `nestingDepth`, `getCwd()`, `getEnv()` members.
+- **MCP protocol bumped to 2025-06-18** — Back-compat preserved for 2024-11-05 clients. Code Mode slice added for structured output.
+- **destructivePolicy option added** — AST-based destructive-command detection gate runs by default with policy `"warn"` (non-blocking). Set to `"block"` to reject destructive commands.
+- **AgentMemory now persists across sessions** — Memory is written to disk and restored on next instantiation.
+- **RunLoop config extended** — New fields: `mode`, `healer`, `memory` for configuring autonomous agent execution.
+
+### Added
+
+- **OTEL at exec level** — Optional `otel` config in `BashOptions` initializes an `AgBashTracer` that wraps each `exec()` call in an OpenTelemetry span. Zero overhead when `@opentelemetry/api` is not installed.
+- **Fork-speculation** — `bash.fork()` creates an isolated copy-on-write branch; `bash.speculate(branches)` runs N candidates in parallel and collects results.
+- **True streaming** — `bash.execStream()` yields `OutputChunk` objects via AsyncGenerator as statements produce output. Byte-identical to buffered exec.
+- **Destructive detection stage** — `DestructiveStage` analyzes parsed AST for `rm -rf /`, fork bombs, decode-pipe-to-shell, and `$IFS` obfuscation patterns.
+
+### Removed
+
+- **Monolith exec path** — The 200+ line inline execution body in `Bash.exec()` has been deleted. All execution flows through `ExecutionPipeline`.
+
+### Changed
+
+- Synchronized monorepo versions to **v6.0.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Node.js engine constraint updated to `>=20.6.0` in all package.json files.
+- Documentation (README, CLAUDE.md, AGENTS.md, ARCHITECTURE.md) updated to reflect v6.0.0 architecture.
+
+---
+
+## [5.0.0] — 2026-05-28
+
+### Breaking Changes
+
+- **DefenseInDepthBox defaults to enabled** — `resolveConfig(undefined)` now returns `{ enabled: true }` (fail-closed principle). Pass `{ enabled: false }` explicitly to disable.
+- **Lazy ServiceContainer** — Services initialize on first access, not during construction. Only `astCache` and `sharedBus` remain eager.
+- **CommandContext.bash typed as BashHost** — Previously `any`, now a narrow typed interface. Commands accessing undeclared methods will get type errors.
+- **BashSnapshot.fs typed as FileSystemSnapshot** — Previously `unknown`. Update type assertions accordingly.
+- **Browser bundle split** — Full bundle remains at `@ag-bash/bash/browser`. New lightweight `@ag-bash/bash/browser-core` (~400KB) externalizes heavy deps.
+- **MCP server per-session isolation** — Shared mutable Bash instance replaced with session-scoped instances.
+- **ASTCache TTL removed** — Pure LRU eviction; `ttlMs` option no longer accepted.
+
+### Security
+
+- **SSRF prevention** — MCP server now sets `denyPrivateRanges: true`, blocking requests to internal IPs (169.254.x, 10.x, 172.16.x, 192.168.x, 127.x).
+- **Request size limits** — MCP stdin capped at 16MB; base64 payloads validated before decode.
+- **Cryptographic UUIDs** — Replaced `Math.random()` fallback with `crypto.randomBytes(16)`.
+- **Error sanitization** — Worker bridge `handleExecCommand` now sanitizes error messages before propagation.
+- **SharedStateBus limits** — Max 1000 subscriptions, 10K state entries, 1MB payload size enforced.
+- **Fail-closed defaults** — Defense-in-depth enabled by default when config is omitted.
+- **JSON-RPC type validation** — Malformed requests rejected with proper error codes.
+- **Dependency audit** — `pnpm audit --audit-level=high` added to CI pipeline.
+
+### Performance
+
+- **Lazy ServiceContainer** — 14 → 2 eager constructors. Services initialize on first access, reducing `new Bash()` startup time by ~85%.
+- **Deferred env copy** — `ExecResult.env` is now a lazy getter; the Map→Record conversion only runs when accessed.
+- **Hot-path spread elimination** — `prependStderr()` mutates in place instead of creating new objects per command.
+- **Builtin dispatch Map** — O(1) Map lookup replaces 40+ sequential if-checks for builtin resolution.
+- **ASTCache collision fix** — Hash keys now include input length, preventing FNV-1a collision bugs.
+- **Incremental exported env** — `buildExportedEnv()` uses dirty-flag caching instead of rebuilding from scratch.
+- **Browser-core bundle** — New lightweight browser export externalizes `isomorphic-git`, `fast-xml-parser`, `modern-tar`, `papaparse`.
+- **Parallel tool execution** — RunLoop executes read-only tool calls concurrently via `Promise.all`.
+
+### Type Safety
+
+- **InterpreterContext trap fields** — 10 `as any` casts eliminated with proper typed fields.
+- **BashHost interface** — Narrow typed interface for command access to Bash instance.
+- **Disposable + BusAware interfaces** — Service lifecycle now interface-driven.
+- **AsyncDisposable** — `await using bash = new Bash(...)` now supported via `Symbol.asyncDispose`.
+- **FileSystemSnapshot** — Branded opaque type replaces `unknown` for VFS snapshots.
+- **AgentBridge cleanup** — All `as any` eliminated; proper discriminated unions and type guards.
+- **Knip rules enabled** — Dead code detection for files, exports, and dependencies.
+
+### Architecture
+
+- **Lexer split** — `parser/lexer.ts` (2630 lines) decomposed into `token-definitions.ts`, `lexer-state-machine.ts`, and barrel `index.ts`.
+- **BashToolbox split** — `agentic/BashToolbox.ts` (1710 lines) decomposed into `registry.ts`, `executor.ts`, `schema-conversion.ts`.
+
+### Developer Experience
+
+- **Migration guide** — `docs/MIGRATION.md` documents all breaking changes with before/after examples.
+- **RunLoop documentation** — `docs/agent-runtime.md` with full API guide.
+- **Error code reference** — `docs/ERROR_CODES.md` maps exit codes to error types.
+- **assertFails regex** — Test utility now accepts `RegExp` for stderr matching.
+- **Missing exports** — `Observation`, `BashEventMap`, `TypedEventEmitter`, `BashSnapshot`, `FileSystemSnapshot`, `Disposable`, `BusAware`, `BashHost` now exported from main entry.
+- **Dead doc links fixed** — Registry stubs created for `mcp_orchestration.md`, `agentic_tools.md`, `agent_runtime.md`.
+
+### CI/CD
+
+- **Consolidated workflows** — 5 GitHub Actions → 2 (`quality.yml` + `tests.yml`) with concurrency groups.
+- **Frozen lockfile** — All CI uses `--frozen-lockfile` for reproducibility.
+- **Node.js engines** — `"engines": { "node": ">=20.0.0" }` declared on all packages.
+- **Dependency audit** — `pnpm audit --audit-level=high` in quality pipeline.
+
+### Modernization
+
+- **MCP tool annotations** — `readOnlyHint` and `destructiveHint` mapped from BashToolbox metadata.
+- **TreeSitter init fix** — Busy-wait polling replaced with promise-based mutex.
+- **Biome 2.4** — Schema verified current.
+
+### Testing
+
+- **178 new tests** across 4 new test files:
+  - `interpreter.unit.test.ts` (83 tests) — All AST node dispatch paths
+  - `ExecutionPipeline.test.ts` (23 tests) — Pipeline stage contracts
+  - `StreamingExecutor.test.ts` (36 tests) — Async streaming behavior
+  - `contract.test.ts` (36 tests) — MCP tool bridge with real Bash instances
+
+## [4.1.0] - 2026-05-25 — "Runtime"
+
+### Added
+
+- **Trap Handler Invocation**: EXIT, ERR, DEBUG, and RETURN trap handlers now fire during execution (previously stored but never invoked).
+- **Test Utilities** (`@ag-bash/bash/testing`): `createTestBash()` factory, `assertSuccess`/`assertFails`/`assertOutput`/`assertStderr`/`assertFileExists`/`assertFileNotExists` assertion helpers, and `EMPTY_PROJECT`/`NODE_PROJECT`/`GIT_REPO` filesystem fixtures.
+- **Tagged Template API**: `createShell()` and `shellEscape()` for zx-style ergonomic scripting with injection-safe interpolation.
+- **Observation Summarizer**: `ObservationSummarizer` class for recording agent turns and producing structured `TurnSummary` objects with context compaction.
+- **Active Self-Healing**: `AgenticHealer.heal()` method with Levenshtein-based typo correction, exponential backoff retry, and configurable `autoRetry` settings.
+- **Agent RunLoop** (`@ag-bash/bash/agent-runtime`): Autonomous multi-turn LLM execution engine with `BudgetManager` (tokens, turns, wall-clock limits), `LLMProvider` interface, and `AbortSignal` support.
+- **Full MCP Toolbox**: All 40+ agentic tools now exposed via MCP protocol (previously only 6 low-level tools). Includes sliding-window rate limiter (60 req/min).
+- **OpenTelemetry Integration**: Optional `AgBashTracer` with zero-overhead no-op fallback when `@opentelemetry/api` is not installed.
+
+### Fixed
+
+- EXIT trap fires exactly once (idempotency guard prevents double-fire).
+- RETURN trap has recursion guard (prevents stack overflow from self-triggering).
+- Trap handler errors now surface in stderr (no longer silently swallowed).
+- `normalize-stage.ts` TS2352 cast error resolved.
+
+### Security
+
+- RunLoop rejects unknown tool names (prevents command injection via LLM-controlled args).
+- MCP tool bridge sanitizes error messages (strips file paths).
+- ObservationSummarizer caps history at 200 turns (prevents memory exhaustion).
+- BudgetManager enforces soft resource limits on autonomous agent execution.
+
+## [3.0.0] - 2026-05-01
+
+### Breaking Changes
+
+- **BashOptions API Restructured**: Flat configuration fields reorganized into grouped sub-objects:
+  - `python`/`javascript` → `runtimes: { python?, javascript? }`
+  - `defenseInDepth`/`processInfo` → `security: { defenseInDepth?, processInfo? }`
+  - `parserEngine`/`treeSitterConfig` → `parser: { engine?, treeSitterConfig? }`
+  - `logger`/`trace`/`coverage`/`debugger`/`semanticEngine` → `debug: { ... }`
+  - `agentic` (boolean) → `agentic: { enabled?, healer?, nestingDepth?, permissionHandler? }`
+- **Singletons Eliminated**: `AgentManager`, `McpClient`, `SessionManager`, `Orchestrator`, and `LSPManager` are no longer singletons. All services are now owned per-`Bash` instance via `ServiceContainer`.
+- **Deprecated Fields Removed**: `maxCallDepth`, `maxCommandCount`, and `maxLoopIterations` top-level options removed (use `executionLimits` sub-object).
+
+### Added
+
+- **ServiceContainer DI**:
+  - New `createDefaultServices()` factory for constructing the full service graph with optional overrides for testing.
+  - `bash.services` exposes `astCache`, `sharedBus`, `sessionManager`, `agentManager`, `mcpClient`, `orchestrator`, and `lspManager`.
+- **FNV-1a ASTCache**:
+  - Replaced SHA-256 with non-cryptographic FNV-1a hashing for browser compatibility and ~10x faster key generation.
+  - True LRU eviction using JavaScript `Map` insertion-order semantics (delete + re-set for promotion).
+  - Added `configure()`, `stats()` (hit/miss counters), and short-circuit for inputs < 64 chars.
+- **Pipeline Early Termination**:
+  - Static AST analysis detects `head -N` patterns (all flag variants: `-N`, `-n N`, `--lines=N`).
+  - Upstream pipe output truncated to `N+10` lines, avoiding unnecessary data processing.
+- **Type Safety Overhaul**:
+  - Eliminated `any` from `SharedStateBus`, `McpClient`, `SessionManager`, `LSPManager`, interpreter errors, and result helpers.
+  - Added `BusErrorHandler`, `publishTyped<T>()`, `getStateAs<T>()`, `McpBashLike`, `SessionSummary` interfaces.
+- **MCP Server Hardening**:
+  - `sanitizeErrorMessage()` strips file paths and caps error messages at 200 characters.
+  - Implemented proper `restore` handler for snapshot tool.
+  - Version bumped to 3.0.0 with V3 startup banner.
+- **Threat Model v3.0**: Added TB6 (MCP Client), TB7 (Plan Mode), TB8 (ag-convert), TB9 (Agentic Healer) trust boundaries.
+
+### Fixed
+
+- Removed all `console.error`/`console.warn`/`console.log` calls from library code (LSPConnection, WorkspaceIndexer, tree-sitter-parser, ag-convert, McpClient).
+- Fixed dead code after snapshot handler in MCP server.
+
+### Changed
+
+- Synchronized monorepo versions to **v3.0.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- `DefenseInDepthBox` remains a process-wide singleton (intentional — it patches `AsyncLocalStorage` globally).
+
+## [2.6.0] - 2026-04-26
+
+### Added (Project V-Next Upgrade - Enhanced Tooling)
+
+- **Unified Tooling Architecture**:
+  - Standardized `ToolboxTool` interface across all agentic tools for consistent execution and validation.
+  - Decoupled `buildTool` factory to eliminate circular dependencies and improve build stability.
+- **Enhanced Agentic Tools**:
+  - `ag_edit`: New high-performance file editor with multi-chunk support and SHA-256 staleness protection.
+  - `ag_grep`: Optimized recursive search tool with unified `GrepTool` wrapper.
+  - `ag_todo`: Integrated task management with persistent storage for agent memory.
+  - `ag_convert`: Document-to-markdown conversion with smart engine routing.
+  - `ag_lsp`: Unified LSP-driven tool for code navigation, symbol search, and documentation.
+- **Security & Governance**:
+  - **Plan Mode Enforcement**: Destructive tools are now automatically blocked when the shell is in `plan` mode.
+  - **Staleness Protection**: Added hash verification to `ag_edit` to prevent overwriting concurrent changes.
+  - **Permission Manager**: Fine-grained access control for sensitive tool executions.
+
+### Changed
+
+- Synchronized monorepo versions to **v2.6.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Refactored `EditTool` and `SearchTool` to use the unified tooling architecture.
+
+## [2.5.0] - 2026-04-25
+
+### Added (Project V-Next Upgrade - Final)
+
+- **Advanced Tooling & Protocol Support**:
+  - **Real MCP Client**: Implemented a full JSON-RPC 2.0 client for Model Context Protocol servers. Supports high-performance **Stdio** (process spawning) and **HTTP** (fetch) transports.
+  - **Dynamic Tool Discovery**: Automated tool registration from MCP servers with JSON-schema mapping to internal Zod schemas.
+  - **Interactive Permissions**: Centralized `PermissionManager` for managing sensitive tool access with support for `allow`, `deny`, and `ask` behaviors.
+- **New Agentic Command Suite**:
+  - `ag-plan`: Dedicated Planning Mode for multi-step designs with checkpoints and read-only state safety.
+  - `ag-notebook`: Direct manipulation of Jupyter Notebooks (`.ipynb`) with cell-level editing and structural analysis.
+  - `ag-mcp`: Comprehensive management CLI for MCP server lifecycles and tool execution.
+- **Observability & Diagnostics**:
+  - **AgTrace Heuristics**: Added specialized failure analysis for MCP connection issues and Notebook malformations.
+  - **Path Safety**: Standardized path resolution across all new commands to ensure sandbox integrity.
+
+### Changed
+
+- Synchronized monorepo versions to **v2.5.0** across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Refactored `McpClient` to handle asynchronous transport initialization and eliminate race conditions.
+
+## [2.4.1] - 2026-04-25
+
+### Fixed (Stability & Compatibility)
+
+- **Build Pipeline**: Resolved Tree-Sitter WASM resolution issues in browser and Next.js environments by ensuring proper asset propagation to `dist/bundle/`.
+- **Browser Compatibility**: Implemented a functional `EventEmitter` shim for browser bundles, fixing the `Class extends value undefined` runtime error.
+- **Interpreter Refinements**: Fixed an issue with indented heredocs (`<<-EOF`) normalization in `Bash.exec`.
+- **Log Hygiene**: Suppressed `direct-eval` and `empty-import-meta` warnings in the build output for cleaner logs.
+
+## [2.4.0] - 2026-04-24
+
+### Added (Project V-Next Upgrade)
+
+- **Tooling 2.0 & Orchestration**:
+  - **Full Observability**: Integrated `EventEmitter` into `Bash` for real-time tool lifecycle tracking.
+  - **Precision Hooks**: Standardized `tool:start`, `tool:progress`, and `tool:end` events with duration telemetry.
+  - **Telemetry Reports**: Automated generation of high-fidelity tool execution reports for host monitoring.
+- **Agentic Healer 2.0**:
+  - **Context-Aware Healing**: Injected `BashToolbox` into the healer for deeper environment introspection.
+  - **Semantic Discovery**: Automated tool suggestions (e.g., `analyze_code`, `fix_missing_file`) when shell commands fail.
+  - **Smart Scoring**: Multi-keyword semantic scoring engine for reliable tool recovery from complex failure strings.
+- **Resource & Security Hardening**:
+  - **Artifact Spillover**: Automated persistence for large tool outputs (>100kb) to ensure stability and reduce token pressure.
+  - **Gated Permissions**: Enhanced `behavior: 'ask'` support for secure, interactive approval of sensitive operations.
+  - **MCP Namespacing**: Improved tool synchronization and resource isolation across multi-namespace registries.
+
+## [2.1.0] - 2026-04-24
+
+### Added (Project Hyperion Upgrade)
+
+- **High-Fidelity Document Intelligence**:
+  - `ag-convert`: Intelligent document-to-markdown converter powered by **Hyperion** (IBM Docling + Microsoft MarkItDown).
+  - **Smart Routing**: Automated engine selection based on document complexity and structural requirements.
+  - **Visual Intelligence (Phase 4)**: AI-powered image description support with multi-provider LLM integration (OpenAI, Anthropic, Google, Local).
+  - **Vision Modes**: Specialized prompts for OCR, diagram analysis, chart decoding, and UI screenshot breakdown.
+- **Environment Stability**:
+  - Absolute Python path resolution to ensure consistent dependency access across `pyenv` and `conda` environments.
+  - Hardened OverlayFS path translation for seamless host-side tool integration.
+- **Maintenance**:
+  - Silenced redundant LSP `ENOENT` warnings to improve CLI output clarity.
+  - Comprehensive v2.1 test suite for Document Intelligence validation.
+
+## [2.0.0] - 2026-04-23
+
+### Added (Project Nexus Prime Upgrade)
+
+- **Intelligent Semantic Suite**:
+  - `ag-hover`: Contextual metadata and documentation for symbols at a specific location.
+  - `ag-explain`: AST-driven pipeline explanation for complex shell commands.
+  - `ag-find-symbol`: Global workspace indexing and search for symbol definitions and references.
+  - `ag-todo`: Persistent local task management and project tracking for agents.
+- **Hardened Governance**:
+  - `maxNetworkTrafficBytes`: Session-wide network traffic accounting and enforcement (100MB default).
+  - `maxAgentNesting`: Hard limit on agent recursion depth to prevent infinite loops in multi-agent workflows.
+  - Enhanced `ExecutionLimitError` (Exit code 126) for granular resource breach reporting.
+- **Security & Stability**:
+  - Defensive AST traversal in `ag-explain` to handle malformed or partial scripts.
+  - Improved argument parsing to resolve conflicts between shell flags and command-specific options.
+  - Comprehensive v2.0 Smoke Test suite for feature validation and regression testing.
+
+### Changed
+
+- Upgraded the entire monorepo to version 2.0.0.
+- Synchronized versioning across `@ag-bash/bash`, `@ag-bash/mcp-server`, and `@ag-bash/agent-bridge`.
+- Refactored `Interpreter` to enforce Nexus Prime resource limits.
+
 ## [1.5.0] - 2026-04-20
 
 ### Added (Project Nexus Upgrade)
+
 - **Agentic Command Suite**:
   - `ag-edit`: Robust line-based file editor for precise surgical edits.
   - `ag-diff`: High-fidelity diff tool with semantic summaries optimized for LLMs.
@@ -21,24 +369,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configurable `maxMemoryAccountingBytes` and `maxCpuMs` limits.
 
 ### Changed
+
 - Refactored `Interpreter` to support `SharedStateBus` event hooks.
 - Updated `SemanticEngine` to expose `getAllSymbols()` for automated analysis.
 - Hardened prototype pollution defenses in command argument parsing.
 
-## [1.4.0] - Previously Released
+## [1.4.0] - 2026-04-15
 
 ### Added
+
 - Tree-sitter parser integration for improved Bash script understanding.
 - Support for Python and JavaScript runtimes within the shell.
 - Integrated `AgenticHealer` for automated troubleshooting and recovery.
 
 ### Changed
+
 - Migrated default parser engine from `legacy` to `tree-sitter`.
 - Improved monorepo build pipeline and distribution artifacts.
 
-## [1.3.0] - Legacy Release
+## [1.3.0] - 2026-04-10
 
 ### Added
+
 - Initial support for `InMemoryFs` and `OverlayFs`.
 - Basic command registry and lazy loading mechanism.
 - Core shell integration for agentic environments.

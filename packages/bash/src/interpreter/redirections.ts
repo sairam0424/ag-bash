@@ -933,5 +933,6 @@ export async function applyRedirections(
     }
   }
 
-  return makeResult(stdout, stderr, exitCode);
+  // A3: preserve source-emitted observations through redirection application.
+  return makeResult(stdout, stderr, exitCode, result.observations);
 }

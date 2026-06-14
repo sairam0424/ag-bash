@@ -1,0 +1,76 @@
+# Validates the @ag-bash/bash dual ESM/CJS export map via publint + attw
+# (@arethetypeswrong/cli), and typechecks the offline example consumers
+# (cjs-consumer is the require()/.d.cts proof). These catch broken export
+# conditions across the 8 subpaths (.d.ts/.d.cts) that the runtime smoke test
+# cannot see structurally. The website example is excluded (needs network +
+# AI provider keys) and the example `start` scripts are never run (they need
+# AI provider API keys / network) — only `typecheck` runs here.
+name: "Examples & Exports"
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: examples-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege default: jobs that need more must opt in explicitly.
+permissions: {}
+
+jobs:
+  exports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      # publint + attw run NON-BLOCKING (continue-on-error) for now: a baseline
+      # scan (2026-06-03) found pre-existing export-map issues — the /advanced,
+      # /testing, /ai, /agent-runtime subpaths resolve under ESM/bundler but fail
+      # node10 + node16-from-CJS (effectively ESM-only); publint also flags a
+      # missing browser.types and sideEffects. Real ESM consumers are unaffected
+      # (install-smoke proves all 8 subpaths import). Keeping these informational
+      # surfaces NEW regressions in logs without failing CI red against the known
+      # baseline. Flip BOTH to hard gates (remove continue-on-error) once the
+      # export map is fixed. See the cleanup tracking note.
+      # publint: lints the package's publish config (exports map, files, bin).
+      - run: pnpm --filter @ag-bash/bash exec publint
+        continue-on-error: true
+      # attw (@arethetypeswrong/cli): packs the package and checks types resolve
+      # across every export condition (ESM/CJS, all 8 subpaths, .d.ts/.d.cts).
+      - run: pnpm --filter @ag-bash/bash exec attw --pack .
+        continue-on-error: true
+
+  example-typechecks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      # Examples consume the @ag-bash/bash workspace build, so build first.
+      - run: pnpm build
+      # Offline consumer canaries: typecheck only. Never run `start` — those
+      # scripts need AI provider API keys / network. The website example is
+      # intentionally excluded (Next.js app, needs network + provider keys).
+      #
+      # bash-agent + cjs-consumer currently FAIL typecheck on PRE-EXISTING issues
+      # (baseline 2026-06-03): cjs-consumer hits TS1479 (the CJS-require export-map
+      # gap attw also flags), bash-agent hits TS2322 (vercel/ai SDK type drift).
+      # Both run NON-BLOCKING so the canary surfaces NEW regressions without
+      # failing CI red on the known baseline. custom-command is a HARD gate (it
+      # passes today) — proof the harness works. Flip the other two to hard gates
+      # once their underlying issues are fixed.
+      - run: pnpm --filter bash-agent-example typecheck
+        continue-on-error: true
+      - run: pnpm --filter cjs-consumer-example typecheck
+        continue-on-error: true
+      - run: pnpm --filter custom-command-example typecheck

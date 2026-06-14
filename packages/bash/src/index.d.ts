@@ -106,6 +106,8 @@ export type {
   TransformPlugin,
   TransformResult,
 } from "./transform/types.js";
+export type { ServiceContainer } from "./services/ServiceContainer.js";
+export { createDefaultServices } from "./services/ServiceContainer.js";
 export type {
   BashExecResult,
   Command,

@@ -27,6 +27,17 @@ packages/bash/src/commands/js-exec/worker.js
 .vscode
 .idea
 .claude/settings.local.json
+.env
+.env.*
+
+# Coverage is emitted per-package (e.g. packages/bash/coverage) by the CI
+# coverage job and local runs — ignore it everywhere, not just at the root.
+dist
+/coverage
+coverage/
+packages/*/coverage
+# Package tarballs produced by `pnpm pack` (install-smoke / pack-contents checks)
+*.tgz
 
 # Temporary and Logs
 tmp-tap/
@@ -52,3 +63,12 @@ test_output.txt
 
 # Example Lockfiles (Dynamic/Untracked)
 examples/*/pnpm-lock.yaml
+
+# Perf-bench CI artifacts (the committed baseline is bench-baseline.json).
+# bench:ci writes bench-results.json; bench:ci:multi writes the numbered
+# best-of-N reports (bench-results.1.json, …) that bench-check compares.
+packages/bash/bench-results.json
+packages/bash/bench-results.*.json
+
+# Private working notes (daily logs) — never commit
+scratch-pad/

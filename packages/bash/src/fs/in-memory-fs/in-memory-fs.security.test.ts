@@ -139,7 +139,10 @@ describe("InMemoryFs Security - Symlink Handling", () => {
     });
 
     it("should return relative target as stored", async () => {
+      // Real bash: `ln -s ../other/file /dir/link` requires /dir to exist
+      // (symlink(2) returns ENOENT on a missing parent). Mirror `mkdir -p`.
       const fs = new InMemoryFs();
+      await fs.mkdir("/dir", { recursive: true });
       await fs.symlink("../other/file", "/dir/link");
 
       const target = await fs.readlink("/dir/link");

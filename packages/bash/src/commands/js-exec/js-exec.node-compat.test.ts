@@ -5,7 +5,7 @@ describe("js-exec Node.js compatibility", () => {
   describe("node: prefix imports", () => {
     it("should support import from 'node:fs'", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/test.txt": "node-fs-works" },
       });
       const result = await env.exec(
@@ -16,7 +16,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support import from 'node:path'", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import path from 'node:path'; console.log(path.join('/a', 'b', 'c'))"`,
       );
@@ -25,7 +25,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support import from 'node:process'", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import process from 'node:process'; console.log(process.platform)"`,
       );
@@ -37,7 +37,7 @@ describe("js-exec Node.js compatibility", () => {
   describe("fs sync aliases", () => {
     it("should support readFileSync", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/data.txt": "sync-read" },
       });
       const result = await env.exec(
@@ -48,7 +48,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support writeFileSync", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.writeFileSync('/tmp/sync.txt', 'written'); console.log(fs.readFileSync('/tmp/sync.txt'))"`,
       );
@@ -58,7 +58,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should support existsSync", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/file.txt": "x" },
       });
       const result = await env.exec(
@@ -69,7 +69,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support mkdirSync, readdirSync, rmSync", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.mkdirSync('/tmp/sdir'); fs.writeFileSync('/tmp/sdir/a.txt', 'a'); console.log(JSON.stringify(fs.readdirSync('/tmp/sdir'))); fs.rmSync('/tmp/sdir', {recursive: true}); console.log(fs.existsSync('/tmp/sdir'))"`,
       );
@@ -78,7 +78,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support unlinkSync as alias for rm", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.writeFileSync('/tmp/del.txt', 'x'); fs.unlinkSync('/tmp/del.txt'); console.log(fs.existsSync('/tmp/del.txt'))"`,
       );
@@ -90,7 +90,7 @@ describe("js-exec Node.js compatibility", () => {
   describe("fs.promises", () => {
     it("should support fs.promises.readFile", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/p.txt": "promise-read" },
       });
       const result = await env.exec(
@@ -101,7 +101,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support fs.promises.writeFile + readFile", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "await fs.promises.writeFile('/tmp/pw.txt', 'pdata'); const d = await fs.promises.readFile('/tmp/pw.txt'); console.log(d)"`,
       );
@@ -111,7 +111,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should support fs.promises.stat", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/s.txt": "12345" },
       });
       const result = await env.exec(
@@ -123,7 +123,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should support fs.promises.access", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/ok.txt": "x" },
       });
       const result = await env.exec(
@@ -140,7 +140,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should reject on error", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "
           let caught = false;
@@ -157,7 +157,7 @@ describe("js-exec Node.js compatibility", () => {
   describe("callback error detection", () => {
     it("should throw on callback-style fs.readFile", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/f.txt": "x" },
       });
       const result = await env.exec(
@@ -169,7 +169,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should not affect sync aliases", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/f.txt": "sync-ok" },
       });
       const result = await env.exec(
@@ -183,7 +183,7 @@ describe("js-exec Node.js compatibility", () => {
   describe("new fs operations", () => {
     it("should support lstat", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/f.txt": "hello" },
       });
       const result = await env.exec(
@@ -195,7 +195,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should support symlink + readlink", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/target.txt": "linked" },
       });
       const result = await env.exec(
@@ -206,7 +206,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support chmod", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.writeFileSync('/tmp/ch.txt', 'x'); fs.chmodSync('/tmp/ch.txt', 0o755); const s = fs.statSync('/tmp/ch.txt'); console.log(s.mode)"`,
       );
@@ -217,7 +217,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should support realpath", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/real.txt": "real" },
       });
       const result = await env.exec(
@@ -228,7 +228,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support rename", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.writeFileSync('/tmp/old.txt', 'moved'); fs.renameSync('/tmp/old.txt', '/tmp/new.txt'); console.log(fs.readFileSync('/tmp/new.txt')); console.log(fs.existsSync('/tmp/old.txt'))"`,
       );
@@ -237,7 +237,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support copyFile", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "fs.writeFileSync('/tmp/src.txt', 'copied'); fs.copyFileSync('/tmp/src.txt', '/tmp/dst.txt'); console.log(fs.readFileSync('/tmp/dst.txt')); console.log(fs.existsSync('/tmp/src.txt'))"`,
       );
@@ -249,7 +249,7 @@ describe("js-exec Node.js compatibility", () => {
   describe("process enhancements", () => {
     it("should expose process.env matching env global", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         env: { MY_VAR: "hello123" },
       });
       const result = await env.exec(
@@ -260,7 +260,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should expose process.platform", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(process.platform)"`,
       );
@@ -269,14 +269,14 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should expose process.arch", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(`js-exec -c "console.log(process.arch)"`);
       expect(result.stdout).toBe("x64\n");
       expect(result.exitCode).toBe(0);
     });
 
     it("should expose process.versions", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(process.versions.node)"`,
       );
@@ -285,7 +285,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should expose process.version", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(process.version)"`,
       );
@@ -296,7 +296,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("path module", () => {
     it("should support path.join", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import path from 'path'; console.log(path.join('/a', 'b', 'c'))"`,
       );
@@ -305,7 +305,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.dirname", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { dirname } from 'path'; console.log(dirname('/a/b/c.txt'))"`,
       );
@@ -314,7 +314,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.basename with optional ext", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { basename } from 'path'; console.log(basename('/a/b/c.txt')); console.log(basename('/a/b/c.txt', '.txt'))"`,
       );
@@ -323,7 +323,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.extname", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { extname } from 'path'; console.log(extname('file.js')); console.log(extname('file')); console.log(extname('.hidden'))"`,
       );
@@ -332,7 +332,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.resolve", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { resolve } from 'path'; console.log(resolve('/a/b', '../c'))"`,
       );
@@ -341,7 +341,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.normalize", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { normalize } from 'path'; console.log(normalize('/a/b/../c/./d'))"`,
       );
@@ -350,7 +350,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.isAbsolute", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { isAbsolute } from 'path'; console.log(isAbsolute('/a')); console.log(isAbsolute('a'))"`,
       );
@@ -359,7 +359,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.relative", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { relative } from 'path'; console.log(relative('/a/b', '/a/c/d'))"`,
       );
@@ -368,7 +368,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.parse and path.format", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { parse, format } from 'path'; const p = parse('/home/user/file.txt'); console.log(p.dir, p.base, p.ext, p.name); console.log(format(p))"`,
       );
@@ -379,7 +379,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support path.sep and path.delimiter", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { sep, delimiter } from 'path'; console.log(sep, delimiter)"`,
       );
@@ -390,7 +390,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("child_process module", () => {
     it("should support execSync from node:child_process", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { execSync } from 'node:child_process'; const out = execSync('echo hello'); console.log(out.trim())"`,
       );
@@ -399,7 +399,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should throw from execSync on failure", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { execSync } from 'node:child_process'; try { execSync('false'); } catch(e) { console.log('caught:', e.status); }"`,
       );
@@ -408,7 +408,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support spawnSync from node:child_process", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { spawnSync } from 'node:child_process'; const r = spawnSync('echo', ['hi']); console.log(r.stdout.trim(), r.status)"`,
       );
@@ -417,7 +417,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should prevent command injection via spawnSync args", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       // The semicolon and extra command should NOT be interpreted as shell syntax
       const result = await env.exec(
         `js-exec -c "var r = require('child_process').spawnSync('echo', ['hello; echo INJECTED']); console.log(r.stdout.trim())"`,
@@ -427,7 +427,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should handle embedded single quotes in spawnSync args", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var r = require('child_process').spawnSync('echo', [\\"it's\\"]); console.log(r.stdout.trim())"`,
       );
@@ -436,7 +436,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should handle empty args array in spawnSync", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var r = require('child_process').spawnSync('echo', []); console.log(r.stdout.trim())"`,
       );
@@ -448,7 +448,7 @@ describe("js-exec Node.js compatibility", () => {
   describe("error messages with file names and line numbers", () => {
     it("should show file path and line for ReferenceError in script file", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/app.mjs":
             "const x = 1;\nconst y = 2;\nundefinedVar.foo;\n",
@@ -464,7 +464,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should show file path and line for TypeError in script file", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/app.mjs": "const x = null;\nx.foo();\n",
         },
@@ -478,7 +478,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should show -c and column for inline code errors", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "const x = 1; undefinedVar.foo;"`,
       );
@@ -491,7 +491,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should show originating file and function name for imported module errors", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/main.mjs":
             "import { helper } from './utils.mjs';\nhelper();\n",
@@ -509,7 +509,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should show deepest frame for deeply nested import errors", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/main.mjs": "import './a.mjs';\n",
           "/home/user/a.mjs": "import './b.mjs';\n",
@@ -526,7 +526,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should show function name in stack trace for thrown Error", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/app.mjs": "import { run } from './lib.mjs';\nrun();\n",
           "/home/user/lib.mjs":
@@ -543,7 +543,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should show correct line for error late in a long file", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/long.mjs": `${Array.from({ length: 20 }, (_, i) => `const v${i} = ${i};`).join("\n")}\nundefinedVar.crash;\n`,
         },
@@ -558,7 +558,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should show file and line for syntax errors", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/bad.mjs": "function foo() {\n  if (true\n}\n",
         },
@@ -570,7 +570,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should output thrown string values directly", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(`js-exec -c "throw 'bare string error'"`);
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toBe("bare string error\n");
@@ -578,7 +578,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should output thrown number values directly", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(`js-exec -c "throw 42"`);
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toBe("42\n");
@@ -587,7 +587,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should show file path for CJS script errors without <eval> wrapper", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: {
           "/home/user/app.js": "const x = 1;\nundefinedVar.foo;\n",
         },
@@ -601,7 +601,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should show callback error message clearly", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { fs.writeFile('/tmp/x', 'data', function cb() {}); } catch(e) { console.log(e.message); }"`,
       );
@@ -615,7 +615,7 @@ describe("js-exec Node.js compatibility", () => {
   describe("require()", () => {
     it("should support require('fs')", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/data.txt": "cjs-read" },
       });
       const result = await env.exec(
@@ -627,7 +627,7 @@ describe("js-exec Node.js compatibility", () => {
 
     it("should support require('node:fs')", async () => {
       const env = new Bash({
-        javascript: true,
+        runtimes: { javascript: true },
         files: { "/home/user/data.txt": "node-cjs" },
       });
       const result = await env.exec(
@@ -638,7 +638,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support require('path')", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "const path = require('path'); console.log(path.join('/a', 'b'))"`,
       );
@@ -647,7 +647,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support require('child_process')", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "const cp = require('child_process'); console.log(cp.execSync('echo cjs').trim())"`,
       );
@@ -656,7 +656,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support require('process')", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "const p = require('process'); console.log(p.platform)"`,
       );
@@ -665,7 +665,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should throw for unknown modules", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { require('totally_unknown'); } catch(e) { console.log(e.message); }"`,
       );
@@ -676,7 +676,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("os module", () => {
     it("should support require('os').platform()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('os').platform())"`,
       );
@@ -685,7 +685,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support os.homedir() and os.tmpdir()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var os = require('os'); console.log(os.homedir(), os.tmpdir())"`,
       );
@@ -694,7 +694,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support os.EOL", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(JSON.stringify(require('os').EOL))"`,
       );
@@ -703,7 +703,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support os.arch()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('os').arch())"`,
       );
@@ -712,7 +712,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support os.type()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('os').type())"`,
       );
@@ -721,7 +721,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support os.hostname()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('os').hostname())"`,
       );
@@ -730,7 +730,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support os.cpus()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(JSON.stringify(require('os').cpus()))"`,
       );
@@ -739,7 +739,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support os.totalmem() and os.freemem()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var os = require('os'); console.log(os.totalmem(), os.freemem())"`,
       );
@@ -748,7 +748,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support os.endianness()", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('os').endianness())"`,
       );
@@ -757,7 +757,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support ESM import from 'os'", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { platform } from 'os'; console.log(platform())"`,
       );
@@ -768,7 +768,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("url module", () => {
     it("should re-export URL from require('url')", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var u = new (require('url').URL)('https://example.com/path?q=1'); console.log(u.hostname, u.pathname)"`,
       );
@@ -779,7 +779,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("assert module", () => {
     it("should not throw on assert.ok(true)", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "require('assert').ok(true); console.log('passed')"`,
       );
@@ -788,7 +788,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should throw on assert.strictEqual mismatch", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { require('assert').strictEqual(1, 2); } catch(e) { console.log('caught'); }"`,
       );
@@ -797,7 +797,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support assert.deepEqual", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = require('assert'); a.deepEqual({x:1}, {x:1}); console.log('ok')"`,
       );
@@ -806,7 +806,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support assert.throws", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = require('assert'); a.throws(function() { throw new Error('boom'); }); console.log('ok')"`,
       );
@@ -815,7 +815,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support assert.equal and assert.notEqual", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = require('assert'); a.equal(1, '1'); a.notEqual(1, 2); console.log('ok')"`,
       );
@@ -824,7 +824,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support assert.strictEqual and assert.notStrictEqual", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = require('assert'); a.strictEqual(1, 1); a.notStrictEqual(1, '1'); console.log('ok')"`,
       );
@@ -833,7 +833,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support assert.deepStrictEqual", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = require('assert'); a.deepStrictEqual({x:[1,2]}, {x:[1,2]}); console.log('ok')"`,
       );
@@ -842,7 +842,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support assert.notDeepEqual", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = require('assert'); a.notDeepEqual({x:1}, {x:2}); console.log('ok')"`,
       );
@@ -851,7 +851,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support assert.doesNotThrow", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = require('assert'); a.doesNotThrow(function() { return 1; }); console.log('ok')"`,
       );
@@ -860,7 +860,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support assert.fail", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = require('assert'); try { a.fail('nope'); } catch(e) { console.log(e.message); }"`,
       );
@@ -869,7 +869,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support ESM import from 'assert'", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import assert from 'assert'; assert(true); console.log('ok')"`,
       );
@@ -880,7 +880,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("util module", () => {
     it("should support util.format with %s and %d", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('util').format('%s=%d', 'x', 42))"`,
       );
@@ -889,7 +889,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support util.format %i %j %f specifiers", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var f = require('util').format; console.log(f('%i', 3.7)); console.log(f('%j', {a:1})); console.log(f('%f', '3.14'))"`,
       );
@@ -898,7 +898,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support util.format %o/%O object specifiers", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var f = require('util').format; console.log(f('%o', [1,2])); console.log(f('%O', {x:1}))"`,
       );
@@ -907,7 +907,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support util.format with no args", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(JSON.stringify(require('util').format()))"`,
       );
@@ -916,7 +916,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should keep literal specifiers when args insufficient", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('util').format('%s %s %s', 'a'))"`,
       );
@@ -925,7 +925,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should append extra args beyond format specifiers", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('util').format('%s', 'a', 'b', 'c'))"`,
       );
@@ -934,7 +934,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should space-separate all args when no format string", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('util').format(1, 2, 3))"`,
       );
@@ -943,7 +943,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support util.format %% escape", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(require('util').format('100%%'))"`,
       );
@@ -952,7 +952,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support util.inspect", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var u = require('util'); console.log(u.inspect({a:1})); console.log(u.inspect(null)); console.log(u.inspect(undefined))"`,
       );
@@ -961,7 +961,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support util.promisify", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "var u = require('util'); function cbFn(val, cb) { cb(null, val + '!'); } var p = u.promisify(cbFn); var r = await p('hi'); console.log(r)"`,
       );
@@ -970,7 +970,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support util.types.isDate", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var u = require('util'); console.log(u.types.isDate(new Date()), u.types.isDate('nope'))"`,
       );
@@ -981,7 +981,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("events module", () => {
     it("should support EventEmitter", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var EE = require('events').EventEmitter; var e = new EE(); e.on('test', function(v) { console.log(v); }); e.emit('test', 'hello')"`,
       );
@@ -990,7 +990,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support ESM import of EventEmitter", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -m -c "import { EventEmitter } from 'events'; var e = new EventEmitter(); var v = []; e.on('x', function(a) { v.push(a); }); e.emit('x', 1); e.emit('x', 2); console.log(v.join(','))"`,
       );
@@ -1001,7 +1001,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("buffer module", () => {
     it("should support Buffer.from string", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var b = require('buffer').Buffer.from('hello'); console.log(b.toString(), b.length)"`,
       );
@@ -1010,7 +1010,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.alloc and Buffer.isBuffer", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var B = require('buffer').Buffer; var b = B.alloc(4); console.log(B.isBuffer(b), b.length)"`,
       );
@@ -1019,7 +1019,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.concat", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var B = require('buffer').Buffer; var c = B.concat([B.from('ab'), B.from('cd')]); console.log(c.toString(), c.length)"`,
       );
@@ -1028,7 +1028,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should expose global Buffer", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(Buffer.from('test').toString())"`,
       );
@@ -1037,7 +1037,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.slice", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var b = Buffer.from('hello'); console.log(b.slice(1, 3).toString())"`,
       );
@@ -1046,7 +1046,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.copy", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var a = Buffer.from('hello'); var b = Buffer.alloc(3); a.copy(b, 0, 1, 4); console.log(b.toString())"`,
       );
@@ -1055,7 +1055,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.write", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var b = Buffer.alloc(5); b.write('hi'); console.log(b.slice(0, 2).toString())"`,
       );
@@ -1064,7 +1064,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.fill", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var b = Buffer.alloc(3); b.fill(65); console.log(b.toString())"`,
       );
@@ -1073,7 +1073,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.equals", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(Buffer.from('ab').equals(Buffer.from('ab')), Buffer.from('ab').equals(Buffer.from('cd')))"`,
       );
@@ -1082,7 +1082,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer readUInt8/writeUInt8", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var b = Buffer.alloc(2); b.writeUInt8(42, 0); b.writeUInt8(99, 1); console.log(b.readUInt8(0), b.readUInt8(1))"`,
       );
@@ -1091,7 +1091,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.byteLength", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "console.log(Buffer.byteLength('hello'), Buffer.byteLength(''))"`,
       );
@@ -1100,7 +1100,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support Buffer.toJSON", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var j = Buffer.from('AB').toJSON(); console.log(j.type, JSON.stringify(j.data))"`,
       );
@@ -1111,7 +1111,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("stream module", () => {
     it("should expose stream classes", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var s = require('stream'); console.log(typeof s.Readable, typeof s.Writable, typeof s.Transform)"`,
       );
@@ -1122,7 +1122,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("string_decoder module", () => {
     it("should decode buffers to strings", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var SD = require('string_decoder').StringDecoder; var d = new SD(); console.log(d.write(Buffer.from('hi')))"`,
       );
@@ -1131,7 +1131,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support end() with buffer arg", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var SD = require('string_decoder').StringDecoder; var d = new SD(); console.log(d.end(Buffer.from('bye')))"`,
       );
@@ -1140,7 +1140,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should return empty string from end() without arg", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var SD = require('string_decoder').StringDecoder; var d = new SD(); console.log(JSON.stringify(d.end()))"`,
       );
@@ -1151,7 +1151,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("querystring module", () => {
     it("should parse and stringify", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var qs = require('querystring'); var o = qs.parse('a=1&b=2'); console.log(o.a, o.b); console.log(qs.stringify({x:'3',y:'4'}))"`,
       );
@@ -1160,7 +1160,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support escape and unescape", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var qs = require('querystring'); console.log(qs.escape('a b&c')); console.log(qs.unescape('a%20b%26c'))"`,
       );
@@ -1169,7 +1169,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should support custom separators", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "var qs = require('querystring'); var o = qs.parse('a:1;b:2', ';', ':'); console.log(o.a, o.b); console.log(qs.stringify({x:'1',y:'2'}, ';', ':'))"`,
       );
@@ -1180,7 +1180,7 @@ describe("js-exec Node.js compatibility", () => {
 
   describe("unsupported module errors", () => {
     it("should give clear error for require('http') with fetch hint and help pointer", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { require('http'); } catch(e) { console.log(e.message); }"`,
       );
@@ -1191,7 +1191,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should give clear error for require('node:http')", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { require('node:http'); } catch(e) { console.log(e.message); }"`,
       );
@@ -1202,7 +1202,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should give clear error for require('crypto')", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { require('crypto'); } catch(e) { console.log(e.message); }"`,
       );
@@ -1213,7 +1213,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should give clear error for require('net')", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { require('net'); } catch(e) { console.log(e.message); }"`,
       );
@@ -1224,7 +1224,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should give clear error for ESM import of unsupported module", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(`js-exec -m -c "import 'http'"`);
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("not available in the js-exec sandbox");
@@ -1232,7 +1232,7 @@ describe("js-exec Node.js compatibility", () => {
     });
 
     it("should point to --help for truly unknown modules", async () => {
-      const env = new Bash({ javascript: true });
+      const env = new Bash({ runtimes: { javascript: true } });
       const result = await env.exec(
         `js-exec -c "try { require('nonexistent'); } catch(e) { console.log(e.message); }"`,
       );

@@ -27,18 +27,20 @@ async function runAttackWithAndWithoutDefense(options: {
   const script = loadFixture(options.fixture);
 
   const baselineEnv = new Bash({
-    python: options.python,
-    defenseInDepth: false,
+    runtimes: { python: options.python },
+    security: { defenseInDepth: false },
   });
   const baseline = await baselineEnv.exec(script);
 
   DefenseInDepthBox.resetInstance();
   const violations: SecurityViolation[] = [];
   const defenseEnv = new Bash({
-    python: options.python,
-    defenseInDepth: {
-      enabled: true,
-      onViolation: (violation) => violations.push(violation),
+    runtimes: { python: options.python },
+    security: {
+      defenseInDepth: {
+        enabled: true,
+        onViolation: (violation) => violations.push(violation),
+      },
     },
   });
   const withDefense = await defenseEnv.exec(script);

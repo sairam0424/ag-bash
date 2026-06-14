@@ -3,6 +3,7 @@ import type {
   BufferEncoding,
   CpOptions,
   FileContent,
+  FileSystemSnapshot,
   FsStat,
   IFileSystem,
   MkdirOptions,
@@ -75,8 +76,8 @@ export class MountableFs implements IFileSystem {
     }
   }
 
-  async snapshot(): Promise<any> {
-    const mountSnapshots = new Map<string, any>();
+  async snapshot(): Promise<FileSystemSnapshot> {
+    const mountSnapshots = new Map<string, FileSystemSnapshot>();
     for (const [path, entry] of this.mounts) {
       mountSnapshots.set(path, await entry.filesystem.snapshot());
     }
@@ -84,19 +85,23 @@ export class MountableFs implements IFileSystem {
     return {
       base: await this.baseFs.snapshot(),
       mounts: mountSnapshots,
-    };
+    } as unknown as FileSystemSnapshot;
   }
 
-  async restore(state: any): Promise<void> {
-    if (!state || typeof state !== "object") {
+  async restore(state: FileSystemSnapshot): Promise<void> {
+    const s = state as unknown as {
+      base: FileSystemSnapshot;
+      mounts: Map<string, FileSystemSnapshot>;
+    };
+    if (!s || typeof s !== "object") {
       throw new Error("Invalid state for MountableFs.restore()");
     }
 
     // Restore base filesystem
-    await this.baseFs.restore(state.base);
+    await this.baseFs.restore(s.base);
 
     // Restore mounts
-    const stateMounts = state.mounts as Map<string, any>;
+    const stateMounts = s.mounts;
 
     // 1. Remove mounts not in state
     for (const path of this.mounts.keys()) {
@@ -267,6 +272,21 @@ export class MountableFs implements IFileSystem {
   }
 
   /**
+   * Convert a virtual path to a real filesystem path.
+   */
+  public toRealPath(path: string): string | null {
+    try {
+      const { fs, relativePath } = this.routePath(path);
+      if (typeof fs.toRealPath === "function") {
+        return fs.toRealPath(relativePath);
+      }
+    } catch {
+      // Ignore errors in path routing
+    }
+    return null;
+  }
+
+  /**
    * Get mount points that are immediate children of a directory.
    */
   private getChildMountPoints(dirPath: string): string[] {
@@ -309,6 +329,20 @@ export class MountableFs implements IFileSystem {
   ): Promise<void> {
     const { fs, relativePath } = this.routePath(path);
     return fs.writeFile(relativePath, content, options);
+  }
+
+  writeFileSync(
+    path: string,
+    content: FileContent,
+    options?: WriteFileOptions | BufferEncoding,
+  ): void {
+    const { fs, relativePath } = this.routePath(path);
+    const syncFs = fs as any;
+    if (typeof syncFs.writeFileSync === "function") {
+      syncFs.writeFileSync(relativePath, content, options);
+    } else {
+      throw new Error(`writeFileSync not supported on filesystem at '${path}'`);
+    }
   }
 
   async appendFile(
@@ -450,6 +484,33 @@ export class MountableFs implements IFileSystem {
 
     const { fs, relativePath } = this.routePath(path);
     return fs.mkdir(relativePath, options);
+  }
+
+  mkdirSync(path: string, options?: MkdirOptions): void {
+    const normalized = normalizePath(path);
+
+    // Cannot create directory at mount point
+    if (this.mounts.has(normalized)) {
+      if (options?.recursive) {
+        return; // Silently succeed like mkdir -p
+      }
+      throw new Error(`EEXIST: directory already exists, mkdir '${path}'`);
+    }
+
+    // Check if this would be a parent of a mount point
+    const childMounts = this.getChildMountPoints(normalized);
+    if (childMounts.length > 0 && options?.recursive) {
+      // Virtual parent directory of mounts - consider it exists
+      return;
+    }
+
+    const { fs, relativePath } = this.routePath(path);
+    const syncFs = fs as any;
+    if (typeof syncFs.mkdirSync === "function") {
+      syncFs.mkdirSync(relativePath, options);
+    } else {
+      throw new Error(`mkdirSync not supported on filesystem at '${path}'`);
+    }
   }
 
   async readdir(path: string): Promise<string[]> {

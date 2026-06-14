@@ -9,7 +9,7 @@ describe("Security Limits", () => {
   let bash: Bash;
 
   beforeEach(() => {
-    bash = new Bash();
+    bash = new Bash({ parser: { engine: "legacy" } });
   });
 
   describe("maxStringLength limit", () => {
@@ -17,6 +17,7 @@ describe("Security Limits", () => {
       // Create a bash env with a very low string length limit
       const limitedBash = new Bash({
         executionLimits: { maxStringLength: 100 },
+        parser: { engine: "legacy" },
       });
 
       // Generate a string that exceeds the limit
@@ -30,6 +31,7 @@ describe("Security Limits", () => {
     it("should allow strings within the limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxStringLength: 1000 },
+        parser: { engine: "legacy" },
       });
 
       const result = await limitedBash.exec('echo "hello world"');
@@ -42,6 +44,7 @@ describe("Security Limits", () => {
     it("should enforce array element limit on mapfile", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxArrayElements: 5 },
+        parser: { engine: "legacy" },
       });
 
       // Try to read more lines than allowed using a heredoc
@@ -66,6 +69,7 @@ echo "count: \${#arr[@]}"
     it("should allow arrays within the limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxArrayElements: 10 },
+        parser: { engine: "legacy" },
       });
 
       const result = await limitedBash.exec(`
@@ -85,6 +89,7 @@ echo "count: \${#arr[@]}"
     it("should enforce command substitution nesting limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxSubstitutionDepth: 3 },
+        parser: { engine: "legacy" },
       });
 
       // Create deeply nested command substitution
@@ -100,6 +105,7 @@ echo "count: \${#arr[@]}"
     it("should allow substitution within the limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxSubstitutionDepth: 5 },
+        parser: { engine: "legacy" },
       });
 
       const result = await limitedBash.exec("echo $(echo $(echo hello))");
@@ -114,6 +120,7 @@ echo "count: \${#arr[@]}"
       // Use limit of 1 to trigger failure on readdir
       const limitedBash = new Bash({
         executionLimits: { maxGlobOperations: 1 },
+        parser: { engine: "legacy" },
       });
 
       // Create some files to glob
@@ -131,6 +138,7 @@ echo "count: \${#arr[@]}"
     it("should allow glob operations within the limit", async () => {
       const limitedBash = new Bash({
         executionLimits: { maxGlobOperations: 1000 },
+        parser: { engine: "legacy" },
       });
 
       // Create some files to glob
@@ -163,6 +171,77 @@ echo "count: \${#arr[@]}"
     it("should reject paths with null bytes", async () => {
       const result = await bash.exec('cat "/etc\\x00/passwd"');
       expect(result.exitCode).not.toBe(0);
+    });
+  });
+
+  describe("maxCpuMs limit", () => {
+    it("should allow command execution after shell has been open for longer than limit", async () => {
+      // Create bash with a very short limit (100ms)
+      const limitedBash = new Bash({
+        executionLimits: { maxCpuMs: 100 },
+        parser: { engine: "legacy" },
+      });
+
+      // Mock Date.now
+      const realDateNow = Date.now;
+      let currentTime = 1000;
+      Date.now = () => currentTime;
+
+      // First execution should pass
+      let result = await limitedBash.exec("echo hello");
+      expect(result.exitCode).toBe(0);
+
+      // Advance time by 500ms (exceeding the 100ms limit since shell start)
+      currentTime += 500;
+
+      // Second execution should ALSO pass because executionStartTime is reset
+      result = await limitedBash.exec("echo world");
+      Date.now = realDateNow; // Restore quickly
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe("world\n");
+    });
+
+    it("should still enforce limit for a single long-running command sequence", async () => {
+      const limitedBash = new Bash({
+        executionLimits: { maxCpuMs: 100 },
+        parser: { engine: "legacy" },
+      });
+
+      const realDateNow = Date.now;
+      let currentTime = 1000;
+      // Mock Date.now to advance specifically when called
+      Date.now = () => {
+        currentTime += 60; // Advance significantly
+        return currentTime;
+      };
+
+      // Executing multiple statements should eventually trigger the limit
+      const result = await limitedBash.exec("true; true; true; true");
+      Date.now = realDateNow;
+
+      expect(result.exitCode).toBe(126);
+      expect(result.stderr).toContain("CPU time limit exceeded");
+    });
+
+    it("should respect $SECONDS as total session time (start time)", async () => {
+      const realDateNow = Date.now;
+      let currentTime = 10000;
+      Date.now = () => currentTime;
+
+      const limitedBash = new Bash({ parser: { engine: "legacy" } });
+
+      // Execute something to set baseline
+      await limitedBash.exec("true");
+
+      // Advance time by 5 seconds
+      currentTime += 5000;
+
+      // Check $SECONDS
+      const result = await limitedBash.exec("echo $SECONDS");
+      Date.now = realDateNow;
+
+      expect(result.stdout.trim()).toBe("5");
     });
   });
 });

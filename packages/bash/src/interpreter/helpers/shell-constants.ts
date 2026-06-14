@@ -29,13 +29,6 @@ export const POSIX_SPECIAL_BUILTINS: Set<string> = new Set([
 ]);
 
 /**
- * Check if a command name is a POSIX special built-in
- */
-export function isPosixSpecialBuiltin(name: string): boolean {
-  return POSIX_SPECIAL_BUILTINS.has(name);
-}
-
-/**
  * Shell keywords (for type, command -v, etc.)
  */
 export const SHELL_KEYWORDS: Set<string> = new Set([

@@ -69,8 +69,46 @@ export interface ExecutionLimits {
 
   /** Maximum total CPU time in milliseconds (default: 30000) */
   maxCpuMs?: number;
-}
 
+  /** Maximum number of parallel sub-agents (default: 10) */
+  maxSubAgents?: number;
+
+  /** Maximum sub-agent nesting depth (default: 3) */
+  maxAgentNesting?: number;
+
+  /** Maximum network traffic in bytes per execution (default: 50MB) */
+  maxNetworkTrafficBytes?: number;
+
+  /** Maximum number of simultaneous MCP server connections (default: 5) */
+  maxMcpServers?: number;
+
+  /** Maximum total MCP tool calls per execution (default: 50) */
+  maxMcpToolCalls?: number;
+
+  /** Maximum number of tracked tasks (default: 100) */
+  maxTasks?: number;
+
+  /** Maximum number of agent teams (default: 10) */
+  maxTeams?: number;
+
+  /** Maximum inter-agent messages retained (default: 1000) */
+  maxAgentMessages?: number;
+
+  /** Maximum number of cron jobs (default: 20) */
+  maxCronJobs?: number;
+
+  /** Maximum cron fires per hour (default: 60) */
+  maxCronFiresPerHour?: number;
+
+  /** Maximum web searches per minute (default: 10) */
+  maxWebSearchesPerMinute?: number;
+
+  /** Maximum web fetch cache size in bytes (default: 50MB) */
+  maxWebFetchCacheSizeBytes?: number;
+
+  /** Maximum AST cache entries (default: 1000) */
+  astCacheSize?: number;
+}
 
 /**
  * Default execution limits.
@@ -98,8 +136,20 @@ const DEFAULT_LIMITS: Required<ExecutionLimits> = {
   maxSourceDepth: 100,
   maxMemoryAccountingBytes: 52428800, // 50MB
   maxCpuMs: 30000, // 30s
+  maxSubAgents: 10,
+  maxAgentNesting: 3,
+  maxNetworkTrafficBytes: 52428800, // 50MB
+  maxMcpServers: 5,
+  maxMcpToolCalls: 50,
+  maxTasks: 100,
+  maxTeams: 10,
+  maxAgentMessages: 1000,
+  maxCronJobs: 20,
+  maxCronFiresPerHour: 60,
+  maxWebSearchesPerMinute: 10,
+  maxWebFetchCacheSizeBytes: 52428800, // 50MB
+  astCacheSize: 1000,
 };
-
 
 /**
  * Resolve execution limits by merging user-provided limits with defaults.
@@ -147,6 +197,28 @@ export function resolveLimits(
       userLimits.maxMemoryAccountingBytes ??
       DEFAULT_LIMITS.maxMemoryAccountingBytes,
     maxCpuMs: userLimits.maxCpuMs ?? DEFAULT_LIMITS.maxCpuMs,
+    maxSubAgents: userLimits.maxSubAgents ?? DEFAULT_LIMITS.maxSubAgents,
+    maxAgentNesting:
+      userLimits.maxAgentNesting ?? DEFAULT_LIMITS.maxAgentNesting,
+    maxNetworkTrafficBytes:
+      userLimits.maxNetworkTrafficBytes ??
+      DEFAULT_LIMITS.maxNetworkTrafficBytes,
+    maxMcpServers: userLimits.maxMcpServers ?? DEFAULT_LIMITS.maxMcpServers,
+    maxMcpToolCalls:
+      userLimits.maxMcpToolCalls ?? DEFAULT_LIMITS.maxMcpToolCalls,
+    maxTasks: userLimits.maxTasks ?? DEFAULT_LIMITS.maxTasks,
+    maxTeams: userLimits.maxTeams ?? DEFAULT_LIMITS.maxTeams,
+    maxAgentMessages:
+      userLimits.maxAgentMessages ?? DEFAULT_LIMITS.maxAgentMessages,
+    maxCronJobs: userLimits.maxCronJobs ?? DEFAULT_LIMITS.maxCronJobs,
+    maxCronFiresPerHour:
+      userLimits.maxCronFiresPerHour ?? DEFAULT_LIMITS.maxCronFiresPerHour,
+    maxWebSearchesPerMinute:
+      userLimits.maxWebSearchesPerMinute ??
+      DEFAULT_LIMITS.maxWebSearchesPerMinute,
+    maxWebFetchCacheSizeBytes:
+      userLimits.maxWebFetchCacheSizeBytes ??
+      DEFAULT_LIMITS.maxWebFetchCacheSizeBytes,
+    astCacheSize: userLimits.astCacheSize ?? DEFAULT_LIMITS.astCacheSize,
   };
-
 }

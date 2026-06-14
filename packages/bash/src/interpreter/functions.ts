@@ -15,10 +15,11 @@ import type {
 import type { ExecResult } from "../types.js";
 import { clearLocalVarStackForScope } from "./builtins/variable-assignment.js";
 import { ExitError, ReturnError } from "./errors.js";
-import { expandWord } from "./expansion.js";
+import { expandHereDocContent, expandWord } from "./expansion.js";
 import { OK, result, throwExecutionLimit } from "./helpers/result.js";
 import { POSIX_SPECIAL_BUILTINS } from "./helpers/shell-constants.js";
 import { applyRedirections, preExpandRedirectTargets } from "./redirections.js";
+import { executeReturnTrap } from "./trap-execution.js";
 import type { InterpreterContext } from "./types.js";
 
 export function executeFunctionDef(
@@ -57,14 +58,7 @@ async function processInputRedirections(
       redir.target.type === "HereDoc"
     ) {
       const hereDoc = redir.target as HereDocNode;
-      let content = await expandWord(ctx, hereDoc.content);
-      // <<- strips leading tabs from each line
-      if (hereDoc.stripTabs) {
-        content = content
-          .split("\n")
-          .map((line) => line.replace(/^\t+/, ""))
-          .join("\n");
-      }
+      const content = await expandHereDocContent(ctx, hereDoc);
       // Only handle fd 0 (stdin) for now
       const fd = redir.fd ?? 0;
       if (fd === 0) {
@@ -213,7 +207,18 @@ export async function callFunction(
       func.redirections,
     );
     const effectiveStdin = stdin || redirectionStdin;
-    const execResult = await ctx.executeCommand(func.body, effectiveStdin);
+    let execResult = await ctx.executeCommand(func.body, effectiveStdin);
+
+    // Fire RETURN trap after function body completes
+    const returnTrapResult = await executeReturnTrap(ctx);
+    if (returnTrapResult) {
+      execResult = {
+        ...execResult,
+        stdout: execResult.stdout + returnTrapResult.stdout,
+        stderr: execResult.stderr + returnTrapResult.stderr,
+      };
+    }
+
     cleanup();
     // Apply output redirections from the function definition using pre-expanded targets
     // e.g., fun() { echo hi; } 1>&2 should redirect output to stderr when called
@@ -224,10 +229,20 @@ export async function callFunction(
       preExpandedTargets,
     );
   } catch (error) {
+    // Fire RETURN trap even when function exits via return/error
+    const returnTrapResult = await executeReturnTrap(ctx);
+
     cleanup();
     // Handle return statement - convert to normal exit with the specified code
     if (error instanceof ReturnError) {
-      const returnResult = result(error.stdout, error.stderr, error.exitCode);
+      let returnResult = result(error.stdout, error.stderr, error.exitCode);
+      if (returnTrapResult) {
+        returnResult = {
+          ...returnResult,
+          stdout: returnResult.stdout + returnTrapResult.stdout,
+          stderr: returnResult.stderr + returnTrapResult.stderr,
+        };
+      }
       // Apply output redirections even when returning
       return applyRedirections(
         ctx,

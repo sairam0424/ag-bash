@@ -1,29 +1,32 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
-    "src/index.ts!",
     "src/browser.ts!",
     "src/cli/ag-bash.ts!",
-    "src/cli/shell.ts!",
-    "src/vitest-setup.ts",
     "src/comparison-tests/vitest.setup.ts",
-    "src/shims/browser-dns.ts"
+    "src/shims/browser-dns.ts",
+    "src/shims/empty.ts",
+    "src/streaming/index.ts"
   ],
   "project": ["src/**/*.ts"],
   "ignore": [
     "src/spec-tests/**",
     "src/banned-patterns-test.ts",
-    "src/security/fuzzing/**"
+    "src/security/fuzzing/**",
+    "src/**/*.d.ts"
   ],
   "ignoreBinaries": ["tsx"],
+  "ignoreDependencies": ["tree-sitter-bash"],
+  "tags": ["-public"],
   "rules": {
-    "exports": "off",
-    "dependencies": "off",
+    "exports": "warn",
+    "dependencies": "warn",
     "devDependencies": "off",
     "unlisted": "off",
     "unresolved": "off",
     "optionalPeerDependencies": "off",
     "types": "off",
-    "files": "off"
+    "enumMembers": "off",
+    "files": "warn"
   }
 }

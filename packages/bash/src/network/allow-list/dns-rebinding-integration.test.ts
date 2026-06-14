@@ -1,7 +1,7 @@
 /**
  * DNS rebinding integration tests with REAL DNS resolution (no mocks).
  *
- * These tests verify that the DNS resolution path in checkAllowed()
+ * These tests verify that the DNS resolution path in checkAndResolve()
  * actually works end-to-end with real dns.lookup calls.
  * Only fetch is mocked (to avoid real HTTP requests).
  */
@@ -11,13 +11,25 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createBashAdapter, createMockFetch, originalFetch } from "./shared.js";
 
 /**
- * Resolve a hostname with real DNS and return addresses.
+ * Resolve a hostname with real DNS and return addresses. Bounded so that an
+ * offline/sandboxed host resolver (where getaddrinfo can block ~30s before
+ * returning ENOTFOUND) makes this reject promptly — the callers treat any
+ * rejection as "DNS unavailable" and skip gracefully.
  */
 function realLookupAll(
   hostname: string,
 ): Promise<{ address: string; family: number }[]> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("DNS lookup timed out"));
+    }, 3000);
     lookup(hostname, { all: true }, (err, addresses) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       if (err) reject(err);
       else resolve(addresses);
     });

@@ -42,15 +42,29 @@ export const agDiffCommand: Command = {
     let c1: string, c2: string;
 
     try {
-      c1 = f1 === "-" ? ctx.stdin : await ctx.fs.readFile(ctx.fs.resolvePath(ctx.cwd, f1));
+      c1 =
+        f1 === "-"
+          ? ctx.stdin
+          : await ctx.fs.readFile(ctx.fs.resolvePath(ctx.cwd, f1));
     } catch {
-      return { stdout: "", stderr: `ag-diff: ${f1}: No such file or directory\n`, exitCode: 2 };
+      return {
+        stdout: "",
+        stderr: `ag-diff: ${f1}: No such file or directory\n`,
+        exitCode: 2,
+      };
     }
 
     try {
-      c2 = f2 === "-" ? ctx.stdin : await ctx.fs.readFile(ctx.fs.resolvePath(ctx.cwd, f2));
+      c2 =
+        f2 === "-"
+          ? ctx.stdin
+          : await ctx.fs.readFile(ctx.fs.resolvePath(ctx.cwd, f2));
     } catch {
-      return { stdout: "", stderr: `ag-diff: ${f2}: No such file or directory\n`, exitCode: 2 };
+      return {
+        stdout: "",
+        stderr: `ag-diff: ${f2}: No such file or directory\n`,
+        exitCode: 2,
+      };
     }
 
     if (ignoreCase) {
@@ -59,7 +73,7 @@ export const agDiffCommand: Command = {
     }
 
     const diff = Diff.structuredPatch(f1, f2, c1, c2, "", "", { context: 3 });
-    
+
     let added = 0;
     let removed = 0;
     for (const hunk of diff.hunks) {
@@ -77,10 +91,15 @@ export const agDiffCommand: Command = {
       };
     }
 
-    const output = Diff.createTwoFilesPatch(f1, f2, c1, c2, "", "", { context: 3 });
+    const output = Diff.createTwoFilesPatch(f1, f2, c1, c2, "", "", {
+      context: 3,
+    });
     const fullOutput = `--- ag-diff summary ---\n${f1} -> ${f2}\nAdditions: ${added}, Deletions: ${removed}\n-----------------------\n\n${output}\n`;
 
-    return { stdout: fullOutput, stderr: "", exitCode: added + removed > 0 ? 1 : 0 };
+    return {
+      stdout: fullOutput,
+      stderr: "",
+      exitCode: added + removed > 0 ? 1 : 0,
+    };
   },
 };
-

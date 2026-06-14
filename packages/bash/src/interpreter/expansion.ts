@@ -11,6 +11,7 @@
  */
 
 import type {
+  HereDocNode,
   ParameterExpansionPart,
   WordNode,
   WordPart,
@@ -24,6 +25,7 @@ import {
   ExecutionLimitError,
   ExitError,
 } from "./errors.js";
+import { wordToLiteralString } from "./helpers/array.js";
 
 /**
  * Check if a string exceeds the maximum allowed length.
@@ -187,6 +189,31 @@ export async function expandWord(
   word: WordNode,
 ): Promise<string> {
   return expandWordAsync(ctx, word);
+}
+
+/**
+ * Resolve a here-document body to its final string, applying correct bash
+ * semantics in one place (all four interpreter call sites use this):
+ *  - Quoted delimiter (`<< 'EOF'`): the body is fully VERBATIM — no parameter,
+ *    command, or arithmetic expansion. The lexer already captured it as a single
+ *    literal, so we concatenate it without re-scanning for `$`.
+ *  - Unquoted delimiter (`<< EOF`): expand `$var`/`$(...)`/`$((...))` only.
+ *  - `<<-` strips leading tabs from each line, after the above.
+ */
+export async function expandHereDocContent(
+  ctx: InterpreterContext,
+  hereDoc: HereDocNode,
+): Promise<string> {
+  let content = hereDoc.quoted
+    ? wordToLiteralString(hereDoc.content)
+    : await expandWordAsync(ctx, hereDoc.content);
+  if (hereDoc.stripTabs) {
+    content = content
+      .split("\n")
+      .map((line) => line.replace(/^\t+/, ""))
+      .join("\n");
+  }
+  return content;
 }
 
 /**

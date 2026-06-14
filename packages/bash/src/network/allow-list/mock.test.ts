@@ -5,7 +5,7 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Bash } from "../../Bash.js";
-import { createMockFetch, originalFetch } from "./shared.js";
+import { createMockFetch, originalFetch, publicResolver } from "./shared.js";
 
 describe("allow-list mock verification", () => {
   let mockFetch: ReturnType<typeof createMockFetch>;
@@ -24,7 +24,10 @@ describe("allow-list mock verification", () => {
     mockFetch.mockClear();
 
     const env = new Bash({
-      network: { allowedUrlPrefixes: ["https://allowed.com"] },
+      network: {
+        allowedUrlPrefixes: ["https://allowed.com"],
+        _dnsResolve: publicResolver(),
+      },
     });
 
     await env.exec("curl https://blocked.com/data");
@@ -36,7 +39,10 @@ describe("allow-list mock verification", () => {
     mockFetch.mockClear();
 
     const env = new Bash({
-      network: { allowedUrlPrefixes: ["https://api.example.com"] },
+      network: {
+        allowedUrlPrefixes: ["https://api.example.com"],
+        _dnsResolve: publicResolver(),
+      },
     });
 
     await env.exec("curl https://api.example.com/data");
@@ -49,7 +55,10 @@ describe("allow-list mock verification", () => {
     mockFetch.mockClear();
 
     const env = new Bash({
-      network: { allowedUrlPrefixes: ["https://api.example.com"] },
+      network: {
+        allowedUrlPrefixes: ["https://api.example.com"],
+        _dnsResolve: publicResolver(),
+      },
     });
 
     await env.exec("curl https://evil1.com/data");
@@ -63,7 +72,10 @@ describe("allow-list mock verification", () => {
     mockFetch.mockClear();
 
     const env = new Bash({
-      network: { allowedUrlPrefixes: ["https://api.example.com"] },
+      network: {
+        allowedUrlPrefixes: ["https://api.example.com"],
+        _dnsResolve: publicResolver(),
+      },
     });
 
     await env.exec("curl https://api.example.com/data");
@@ -78,7 +90,10 @@ describe("allow-list mock verification", () => {
     mockFetch.mockClear();
 
     const env = new Bash({
-      network: { allowedUrlPrefixes: ["https://api.example.com"] },
+      network: {
+        allowedUrlPrefixes: ["https://api.example.com"],
+        _dnsResolve: publicResolver(),
+      },
     });
 
     await env.exec("curl https://api.example.com/redirect-to-evil");
@@ -93,7 +108,10 @@ describe("allow-list mock verification", () => {
     mockFetch.mockClear();
 
     const env = new Bash({
-      network: { allowedUrlPrefixes: ["https://api.example.com"] },
+      network: {
+        allowedUrlPrefixes: ["https://api.example.com"],
+        _dnsResolve: publicResolver(),
+      },
     });
 
     await env.exec("curl https://api.example.com/redirect-to-allowed");

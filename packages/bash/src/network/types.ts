@@ -116,8 +116,15 @@ export interface NetworkConfig {
   /**
    * Reject URLs with private/loopback IP addresses as hostnames.
    * Performs both lexical hostname checks and DNS resolution to catch
-   * domains that resolve to private IPs (e.g., DNS rebinding attacks).
-   * Useful for mitigating SSRF attacks. Default: false (opt-in).
+   * domains that resolve to private IPs (e.g., DNS rebinding attacks). The
+   * hostname is resolved exactly once and the validated address is pinned for
+   * the connection, closing the TOCTOU window between the check and the fetch.
+   * Cloud metadata endpoints (169.254.169.254, fd00:ec2::254,
+   * metadata.google.internal) are always blocked regardless of this setting.
+   *
+   * **Default: `true`** (changed in v6.0.0; previously defaulted on only when
+   * `NODE_ENV === "production"`). Pass `false` to explicitly opt out and allow
+   * private/loopback ranges (e.g. for local development against localhost).
    *
    * When enabled, the private IP check is enforced even when
    * `dangerouslyAllowFullInternetAccess` is true, ensuring that
@@ -131,6 +138,12 @@ export interface NetworkConfig {
    * denyPrivateRanges DNS rebinding check.
    */
   _dnsResolve?: (hostname: string) => Promise<DnsLookupResult[]>;
+
+  /**
+   * Optional callback to report network traffic in bytes.
+   * When provided, called for both request and response body sizes.
+   */
+  onTraffic?: (bytes: number) => void;
 }
 
 /**

@@ -1,10 +1,10 @@
-# Ag-Bash Security Threat Model (v1.3.0 - LOCKED)
+# Ag-Bash Security Threat Model (v3.0.0)
 
 This document outlines the security architecture and threat mitigations for Ag-Bash.
 
 > [!IMPORTANT]
-> **Status: RELEASE v1.3.0**
-> All core security layers described below (Architecture, FS, Network, Runtime) are implemented and verified for the v1.3.0 release.
+> **Status: v3.0.0-LOCKED**
+> All core security layers described below (Architecture, FS, Network, Runtime) are implemented and verified. TB6–TB9 cover attack surface introduced in the v2.x–v3.0 cycle including MCP client isolation, plan mode enforcement, document processing, and agentic healer governance.
 
 ## Context
 
@@ -15,18 +15,21 @@ This document outlines the security architecture and threat mitigations for Ag-B
 ## 1. Threat Actors
 
 ### 1A. Untrusted Script Author (PRIMARY)
+
 - **Who**: An AI agent or user submitting arbitrary bash scripts for execution
 - **Capability**: Full control over the bash script input. Can craft any valid (or invalid) bash syntax
 - **Goal**: Escape the sandbox, access the host filesystem, exfiltrate secrets, execute arbitrary code, cause denial of service, or escalate privileges
 - **Trust level**: ZERO — the script is completely untrusted
 
 ### 1B. Malicious Data Source
+
 - **Who**: External data consumed by scripts (HTTP responses, file content, stdin)
 - **Capability**: Control over data that flows through expansion, variable assignment, command arguments
 - **Goal**: Exploit the interpreter via crafted data (prototype pollution, injection via IFS, path traversal via filenames)
 - **Trust level**: ZERO — data is untrusted
 
 ### 1C. Compromised Dependency
+
 - **Who**: A supply-chain attacker modifying an npm dependency
 - **Capability**: Arbitrary code execution at import time or via patched APIs
 - **Goal**: Bypass sandbox from within the Node.js process
@@ -41,6 +44,10 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 - **Host-provided `fs`, `fetch`, `customCommands`, and transform plugins**: These are supplied by the embedding application. A compromised or malicious host hook can bypass all sandboxing by design — @ag-bash/bash protects untrusted *scripts*, not untrusted *hosts*.
 - **The Node.js runtime and underlying OS**: @ag-bash/bash assumes the Node.js binary, V8, and OS kernel are not compromised. Exploits targeting V8 internals or kernel vulnerabilities are out of scope.
 - **Dependencies**: Supply-chain attacks via npm dependencies are a deployment-level concern (addressed by lockfiles, audits, etc.), not a runtime defense.
+
+**Partially trusted** (v2.6.0+):
+
+- **External MCP servers**: When `@ag-bash/mcp-server` connects to external MCP servers via `ag-mcp`, those servers are treated as *partially trusted*. Their tool schemas are validated via Zod and their responses pass through strict JSON parsing, but the semantic content of tool results is accepted at face value once structurally validated. A compromised MCP server could return well-formed but malicious tool results — the ag-bash sandbox confines the blast radius, but the *meaning* of tool output is trusted by the orchestrating agent.
 
 ---
 
@@ -66,13 +73,14 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 │  │  ┌──────────────────┬──────────────────┬───────┴──────┐  │  │
 │  │  │ Filesystem       │ Network          │ Commands     │  │  │
 │  │  │ (InMemoryFs/     │ (Allow-list)     │ (Registry)   │  │  │
-│  │  │  OverlayFs)      │ Default: OFF     │ ~79 built-in │  │  │
+│  │  │  OverlayFs)      │ Default: OFF     │ 110+ built-in│  │  │
 │  │  │ Symlinks: DENY   │                  │ No spawn()   │  │  │
 │  │  └──────────────────┴──────────────────┴──────────────┘  │  │
 │  │                                                           │  │
 │  │  ┌───────────────────────────────────────────────────┐    │  │
 │  │  │ Defense-in-Depth (SECONDARY)                      │    │  │
 │  │  │ AsyncLocalStorage context-aware monkey-patching   │    │  │
+│  │  │ PermissionMgr: plan-mode destructive-op blocking  │    │  │
 │  │  │ Blocks: Function, eval, setTimeout, process.*,   │    │  │
 │  │  │   performance, Module._resolveFilename,           │    │  │
 │  │  │   __defineGetter__/__defineSetter__, stdout/stderr │    │  │
@@ -93,6 +101,14 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 
 **TB5 — Data → Variable/Key Space**: User-controlled data becomes JS object keys (env vars, AWK variables, associative array keys). Must use null-prototype objects or Maps to prevent prototype pollution.
 
+**TB6 — MCP Client → External Server** (v2.6.0+): The `@ag-bash/mcp-server` connects to external MCP servers via JSON-RPC 2.0 over stdio and HTTP transports. External servers are untrusted at the transport layer: tool schemas are validated via Zod at registration time, and responses pass through strict JSON parsing before reaching the interpreter. However, a compromised MCP server could return structurally valid but semantically malicious tool results (e.g., a `read_file` tool returning fabricated content). The ag-bash sandbox confines execution, but the orchestrating agent may act on the poisoned data. **Residual risk**: Semantically valid but malicious tool results that pass structural validation.
+
+**TB7 — Plan Mode → Tool Dispatch** (v2.6.0+): The `PermissionManager` (`src/services/PermissionManager.ts`) enforces plan-mode restrictions by blocking destructive operations (file writes, `rm`, `chmod`, network mutations) via regex pattern matching at the tool dispatch level, not at the raw command level. This prevents bypass via shell aliases or indirect execution chains. **Residual risk**: Custom commands registered by the host application via `customCommands` can bypass `PermissionManager` checks because they execute as opaque JS functions, not as dispatchable tool invocations.
+
+**TB8 — ag-convert → Document Processing** (v2.6.0+): The `ag-convert` command processes untrusted documents (PDF, DOCX, HTML) by routing them through Python-based converters (Docling/MarkItDown). Python execution runs inside a CPython Emscripten WASM sandbox with no host filesystem access — the same isolation model described in §4.7. Document content is treated as untrusted data; output is plain text/markdown only. **Residual risk**: A crafted document could trigger WASM memory exhaustion (OOM) within the Emscripten heap. The 30-second `maxPythonTimeoutMs` timeout bounds the blast radius, but repeated invocations could degrade host performance before the timeout fires.
+
+**TB9 — Agentic Healer → Auto-Remediation** (v2.6.0+): The `AgenticHealer` observes script failures and suggests recovery commands. In the default `keyword` mode, suggestions are generated via fixed keyword matching against a scored tool registry — no external model is involved. Suggestions are advisory only (displayed to the user/agent, not auto-executed) unless the host explicitly configures auto-execution. **Residual risk**: If `llm` mode is enabled, the healer delegates suggestion generation to an LLM. An attacker who controls stderr output (e.g., via a crafted script that writes attacker-controlled error messages) could prompt-inject the LLM into suggesting malicious remediation commands. The `keyword` default mode is immune to this vector.
+
 ---
 
 ## 3. Attack Surface Inventory
@@ -100,7 +116,7 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 ### 3.1 Script Input (Parser)
 
 | Vector | Description | Defense | Files |
-|--------|-------------|---------|-------|
+| :--- | :--- | :--- | :--- |
 | Token bomb | Script with pathological tokenization | MAX_TOKENS (100K) | `src/parser/types.ts` |
 | Parser stack overflow | Deeply nested constructs | MAX_PARSER_DEPTH (200), MAX_PARSE_ITERATIONS (1M) | `src/parser/types.ts` |
 | Oversized input | Very large scripts | MAX_INPUT_SIZE (1MB) | `src/parser/types.ts` |
@@ -223,6 +239,24 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 | `__defineGetter__`/`__defineSetter__` | Inject getters/setters on prototypes | Blocked by defense-in-depth (strategy: "throw") | `src/security/blocked-globals.ts` |
 | `__lookupGetter__`/`__lookupSetter__` | Introspect prototype getters/setters | Blocked by defense-in-depth (strategy: "throw") | `src/security/blocked-globals.ts` |
 | JSON/Math mutation | Poison shared utility objects | Frozen by defense-in-depth (strategy: "freeze") | `src/security/blocked-globals.ts` |
+
+### 3.10 Orchestration (Sub-agents)
+
+| Vector | Description | Defense | Files |
+|--------|-------------|---------|-------|
+| Agent bomb | Spawning infinite sub-agents | `maxSubAgents` (10) limit in `AgentManager` | `src/limits.ts`, `src/services/AgentManager.ts` |
+| Nested agents | Agent A spawns B spawns C... | `maxAgentNesting` (3) depth tracking | `src/limits.ts`, `src/services/AgentManager.ts` |
+| State leakage | Sub-agent accessing parent's memory | Isolated `Bash` instances; shared FS is virtual only; environment filtered | `src/services/AgentManager.ts` |
+| Resource monopolization | Sub-agents consuming all host resources | Aggregate resource accounting across sub-agent tree (Residual) | `src/limits.ts` |
+
+### 3.11 MCP Integration
+
+| Vector | Description | Defense | Files |
+|--------|-------------|---------|-------|
+| Malicious tool schema | Server returns oversized or complex schema | Zod validation + parameter depth limits during registration | `src/agentic/BashToolbox.ts` |
+| Tool injection | Overwriting built-in secure tools | `registerTool` rejects overwriting core built-ins | `src/agentic/BashToolbox.ts` |
+| Unauthorized connection | Connecting to internal/private services | `ag-mcp` connection validation + standard Network allow-list | `src/commands/ag-mcp/ag-mcp.ts` |
+| Tool call pollution | Server returns malicious JSON responses | Strict JSON parsing + validation before returning to interpreter | `src/services/McpClient.ts` |
 
 ---
 

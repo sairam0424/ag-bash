@@ -35,7 +35,7 @@ describe("Defense context invariant", () => {
   it("fails closed when defense expects sandbox context but none is active", async () => {
     vi.spyOn(DefenseInDepthBox, "isInSandboxedContext").mockReturnValue(false);
 
-    const bash = new Bash({ defenseInDepth: true });
+    const bash = new Bash({ security: { defenseInDepth: true } });
     const result = await bash.exec("echo should-not-run");
 
     expect(result.stdout).toBe("");
@@ -48,7 +48,7 @@ describe("Defense context invariant", () => {
   it("does not enforce sandbox context invariant when defense is disabled", async () => {
     vi.spyOn(DefenseInDepthBox, "isInSandboxedContext").mockReturnValue(false);
 
-    const bash = new Bash({ defenseInDepth: false });
+    const bash = new Bash({ security: { defenseInDepth: false } });
     const result = await bash.exec("echo ok");
 
     expect(result.stdout).toBe("ok\n");
@@ -61,7 +61,7 @@ describe("Defense context invariant", () => {
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false);
 
-    const bash = new Bash({ defenseInDepth: true });
+    const bash = new Bash({ security: { defenseInDepth: true } });
     const result = await bash.exec("echo should-not-run");
 
     expect(result.stdout).toBe("");
@@ -81,7 +81,7 @@ describe("Defense context invariant", () => {
       .mockReturnValueOnce(true) // pre-await
       .mockReturnValueOnce(false); // post-await
 
-    const bash = new Bash({ defenseInDepth: true });
+    const bash = new Bash({ security: { defenseInDepth: true } });
     const result = await bash.exec("echo should-not-run");
 
     expect(result.stdout).toBe("");

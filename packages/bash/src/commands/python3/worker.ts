@@ -36,6 +36,18 @@ export interface WorkerInput {
   args: string[];
   scriptPath?: string;
   timeoutMs?: number;
+  persistent?: boolean;
+  sessionId?: string;
+  /**
+   * Unguessable, per-execution token. The wrapped script writes this exact line
+   * to stderr as its final action before `sys.exit()`. The worker uses it to
+   * detect the boundary between genuine program stderr and CPython interpreter
+   * finalization noise (a spurious partial `Traceback (most recent call last):`
+   * header emitted by `Py_FinalizeEx` when it re-touches the HOSTFS bridge during
+   * teardown). Everything the runtime writes to fd 2 after this sentinel is
+   * teardown noise and is suppressed; genuine errors are printed before it.
+   */
+  stderrSentinel?: string;
 }
 
 export interface WorkerOutput {
@@ -1317,6 +1329,12 @@ async function runPython(input: WorkerInput): Promise<WorkerOutput> {
   // backend. The bridge handler on the main thread may not be ready yet, and
   // Atomics.wait() would block the worker indefinitely.
   let moduleReady = false;
+  // Set once the wrapped script writes its stderr sentinel as its final action.
+  // After this, anything CPython writes to fd 2 is Py_FinalizeEx teardown noise
+  // (a spurious partial traceback emitted when finalization re-touches the
+  // HOSTFS bridge) and must NOT be forwarded to the host.
+  let stderrFinalized = false;
+  const sentinel = input.stderrSentinel;
   const pendingStdout: string[] = [];
   const pendingStderr: string[] = [];
 
@@ -1349,6 +1367,12 @@ async function runPython(input: WorkerInput): Promise<WorkerOutput> {
       "python3-worker",
       "printErr",
       (text: string) => {
+        // Once the wrapped script's stderr sentinel has been seen, every
+        // further fd-2 write is interpreter-finalization teardown noise.
+        if (stderrFinalized) {
+          return;
+        }
+
         // Filter out harmless Emscripten/LLVM warnings
         if (
           typeof text === "string" &&
@@ -1357,6 +1381,25 @@ async function runPython(input: WorkerInput): Promise<WorkerOutput> {
         ) {
           return;
         }
+
+        // Detect the end-of-program sentinel. The wrapped script prints it as
+        // its final action (after any genuine traceback), so the program's
+        // real stderr is already fully forwarded by this point. Forward only
+        // any genuine prefix on the same line, drop the sentinel itself, and
+        // suppress all subsequent finalization output.
+        if (sentinel && typeof text === "string" && text.includes(sentinel)) {
+          stderrFinalized = true;
+          const prefix = text.slice(0, text.indexOf(sentinel));
+          if (prefix.length > 0) {
+            if (moduleReady) {
+              backend.writeStderr(prefix);
+            } else {
+              pendingStderr.push(prefix);
+            }
+          }
+          return;
+        }
+
         if (moduleReady) {
           backend.writeStderr(`${text}\n`);
         } else {
@@ -1442,7 +1485,33 @@ except Exception as e:
     import traceback
     traceback.print_exc()
     _jb_exit_code = 1
-sys.exit(_jb_exit_code)
+import os as _jb_os
+# Flush genuine program output, then terminate via os._exit to skip CPython's
+# Py_FinalizeEx. Finalization re-touches the HOSTFS bridge during teardown,
+# which fails with EIO and makes the interpreter emit a spurious partial
+# traceback header to stderr on EVERY run -- even a successful one.
+# os._exit() bypasses that teardown entirely, so only genuine program stderr
+# (printed above, before this point) ever reaches the host.
+${
+  input.stderrSentinel
+    ? `# Defense-in-depth: also emit an unguessable end-of-program sentinel so the
+# host worker can drop any teardown noise that still slips through on builds
+# where os._exit is unavailable or intercepted.
+try:
+    print(${JSON.stringify(input.stderrSentinel)}, file=sys.stderr)
+except Exception:
+    pass
+`
+    : ""
+}try:
+    sys.stdout.flush()
+except Exception:
+    pass
+try:
+    sys.stderr.flush()
+except Exception:
+    pass
+_jb_os._exit(_jb_exit_code if isinstance(_jb_exit_code, int) else 1)
 `;
 
   // Write the script to a temp file in MEMFS and execute via callMain
@@ -1545,22 +1614,35 @@ let activeProtocolToken: string | null = null;
 // Handle execution from parent.
 // Each worker runs once with workerData (EXIT_RUNTIME means CPython
 // can only callMain once). Stdlib zip is cached at module scope.
+let initialized = false;
+
 if (parentPort) {
+  parentPort.on("message", async (input: WorkerInput) => {
+    activeProtocolToken = input.protocolToken;
+    try {
+      if (!initialized) {
+        // Initial setup if needed (though runPython handles it)
+        initialized = true;
+      }
+      const result = await runPython(input);
+      result.defenseStats = defense?.getStats();
+      postWorkerMessage(input.protocolToken, result);
+    } catch (e) {
+      const message = sanitizeUnknownError(e);
+      postWorkerMessage(input.protocolToken, {
+        success: false,
+        error: message,
+        defenseStats: defense?.getStats(),
+      });
+    }
+  });
+
+  // Handle initial data if provided via workerData
   if (workerData) {
     const input = workerData as WorkerInput;
-    activeProtocolToken = input.protocolToken;
-    runPython(input)
-      .then((result) => {
-        result.defenseStats = defense?.getStats();
-        postWorkerMessage(input.protocolToken, result);
-      })
-      .catch((e) => {
-        const message = sanitizeUnknownError(e);
-        postWorkerMessage(input.protocolToken, {
-          success: false,
-          error: message,
-          defenseStats: defense?.getStats(),
-        });
-      });
+    if (input.pythonCode || input.sessionId) {
+      // Just trigger the message handler logic
+      parentPort.emit("message", input);
+    }
   }
 }

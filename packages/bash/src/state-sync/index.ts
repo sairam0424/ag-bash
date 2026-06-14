@@ -1,14 +1,14 @@
 /**
  * State-Sync - Context-Diff Bridge
- * 
- * Provides utilities for generating and applying deltas between 
- * Bash snapshots. This is used for efficient synchronization 
+ *
+ * Provides utilities for generating and applying deltas between
+ * Bash snapshots. This is used for efficient synchronization
  * of agentic workspaces.
  */
 
 import type { BashSnapshot } from "../Bash.js";
+import type { FileSystemSnapshot } from "../fs/interface.js";
 import type { InterpreterState } from "../interpreter/types.js";
-import type { FsEntry } from "../fs/interface.js";
 
 export interface BashDelta {
   /** Map of changed environment variables. Null indicates deletion. */
@@ -31,11 +31,14 @@ export interface FsDelta {
 /**
  * Generates a delta between a base snapshot and current state.
  */
-export function diffState(base: BashSnapshot, current: BashSnapshot): BashDelta {
-  const delta: BashDelta = {};
+export function diffState(
+  base: BashSnapshot,
+  current: BashSnapshot,
+): BashDelta {
+  const delta: BashDelta = Object.create(null);
 
   // 1. Diff Environment Variables (Map<string, string>)
-  const envDelta: Record<string, string | null> = {};
+  const envDelta: Record<string, string | null> = Object.create(null);
   let envChanged = false;
 
   const baseEnv = base.state.env;
@@ -60,7 +63,7 @@ export function diffState(base: BashSnapshot, current: BashSnapshot): BashDelta 
   if (envChanged) delta.envDelta = envDelta;
 
   // 2. Diff Functions (Map<string, FunctionDefNode>)
-  const funcDelta: Record<string, string | null> = {};
+  const funcDelta: Record<string, string | null> = Object.create(null);
   let funcChanged = false;
 
   const baseFuncs = base.state.functions;
@@ -84,7 +87,6 @@ export function diffState(base: BashSnapshot, current: BashSnapshot): BashDelta 
   if (funcChanged) delta.funcDelta = funcDelta;
 
   // 3. Diff CWD
-  console.log(`DIFFING CWD: base=${base.state.cwd}, current=${current.state.cwd}`);
   if (base.state.cwd !== current.state.cwd) {
     delta.cwd = current.state.cwd;
   }
@@ -96,15 +98,22 @@ export function diffState(base: BashSnapshot, current: BashSnapshot): BashDelta 
  * Diffs two VFS snapshots. Handles both raw Maps and MountableFs snapshot objects.
  */
 export function diffFs(
-  baseFs: any, 
-  currentFs: any
+  baseFs: FileSystemSnapshot,
+  currentFs: FileSystemSnapshot,
 ): FsDelta {
-  const modified: Record<string, string | Uint8Array> = {};
+  const modified: Record<string, string | Uint8Array> = Object.create(null);
   const deleted: string[] = [];
 
+  // Cast to internal representation for diffing.
+  // FileSystemSnapshot is an opaque branded type; internally it may be a Map
+  // (InMemoryFs) or an object with a `base` Map (MountableFs).
+  const baseRaw = baseFs as unknown as Record<string, unknown>;
+  const currentRaw = currentFs as unknown as Record<string, unknown>;
+
   // Unwrap MountableFs snapshots if necessary
-  const bMap = baseFs && baseFs.base instanceof Map ? baseFs.base : baseFs;
-  const cMap = currentFs && currentFs.base instanceof Map ? currentFs.base : currentFs;
+  const bMap = baseRaw && baseRaw.base instanceof Map ? baseRaw.base : baseRaw;
+  const cMap =
+    currentRaw && currentRaw.base instanceof Map ? currentRaw.base : currentRaw;
 
   if (cMap instanceof Map && bMap instanceof Map) {
     for (const [path, entry] of cMap.entries()) {
@@ -135,7 +144,10 @@ export function diffFs(
 /**
  * Applies a delta to an interpreter state.
  */
-export function applyStateDelta(state: InterpreterState, delta: BashDelta): void {
+export function applyStateDelta(
+  state: InterpreterState,
+  delta: BashDelta,
+): void {
   // 1. Apply Env
   if (delta.envDelta) {
     for (const [key, val] of Object.entries(delta.envDelta)) {

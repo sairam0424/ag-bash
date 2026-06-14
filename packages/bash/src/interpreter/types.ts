@@ -2,6 +2,7 @@
  * Interpreter Types
  */
 
+import type { AgenticHealer } from "../agentic/agentic-healer.js";
 import type {
   CommandNode,
   FunctionDefNode,
@@ -10,16 +11,16 @@ import type {
 } from "../ast/types.js";
 import type { IFileSystem } from "../fs/interface.js";
 import type { ExecutionLimits } from "../limits.js";
+import type { SemanticEngine } from "../lsp/semantic-engine.js";
 import type { SecureFetch } from "../network/index.js";
 import type {
   CommandRegistry,
   ExecResult,
   FeatureCoverageWriter,
+  OutputSink,
   TraceCallback,
 } from "../types.js";
 import type { DebuggerBridge } from "./debugger/debugger.js";
-import type { SemanticEngine } from "../lsp/semantic-engine.js";
-import type { AgenticHealer } from "../agentic/agentic-healer.js";
 
 /**
  * Completion specification for a command, set by the `complete` builtin.
@@ -131,6 +132,12 @@ export interface VariableAttributeState {
   exportedVars?: Set<string>;
   /** Set of temporarily exported variable names (for prefix assignments like FOO=bar cmd) */
   tempExportedVars?: Set<string>;
+  /**
+   * Dirty flag for incremental exported env caching (2.6).
+   * Set to true whenever exportedVars, tempExportedVars, or exported var values change.
+   * The interpreter uses this to avoid rebuilding the exported env record on every call.
+   */
+  exportedEnvDirty?: boolean;
   /**
    * Stack of sets tracking variables exported within each local scope.
    * When a function returns and a local scope is popped, if a variable was
@@ -279,6 +286,12 @@ export interface ProcessState {
   commandCount: number;
   /** Time when shell started (for $SECONDS) */
   startTime: number;
+  /** Time when the current command execution started (for CPU time limits) */
+  executionStartTime: number;
+  /** Cumulative network traffic in bytes (for resource accounting) */
+  networkTrafficBytes: number;
+  /** Cumulative number of MCP tool calls (for resource accounting) */
+  mcpToolCallCount: number;
   /** PID of last background job (for $!) */
   lastBackgroundPid: number;
   /** Current BASHPID (changes in subshells, unlike $$) */
@@ -340,6 +353,8 @@ export interface ExpansionState {
 // The complete interpreter state, composed from the focused interfaces above.
 // This provides backward compatibility while the sub-interfaces provide
 // better organization for understanding and maintaining specific features.
+
+export type BashMode = "execute" | "plan";
 
 /**
  * Complete interpreter state for bash script execution.
@@ -406,6 +421,13 @@ export interface InterpreterState
   signal?: AbortSignal;
   /** Extra arguments injected via exec({ args }), appended to first command's args */
   extraArgs?: string[];
+  /** Current session ID for stateful REPLs (js-exec, python3) */
+  sessionId?: string;
+  /** Current mode of the shell (execute or plan) */
+  mode: BashMode;
+
+  /** Trap handlers: signal/event name -> command string */
+  trapHandlers?: Map<string, string>;
 }
 
 export interface InterpreterContext {
@@ -476,5 +498,23 @@ export interface InterpreterContext {
    * Optional shared state bus for inter-runtime communication.
    */
   sharedBus?: any; // Use any to avoid circular dependency for now, or import type
-}
+  sessionId?: string;
+  /** Reference to the parent Bash instance */
+  bash?: any;
+  /**
+   * Optional opt-in sink that receives stdout/stderr fragments incrementally
+   * as statements produce them (true streaming). When undefined (the default),
+   * execution is byte-identical to the buffered path with zero overhead.
+   */
+  sink?: OutputSink;
 
+  // ---- Trap Execution Guards ----
+  /** True while the ERR trap handler is executing (prevents recursion) */
+  __executingErrTrap?: boolean;
+  /** True once the EXIT trap has fired (ensures idempotent execution) */
+  __exitTrapFired?: boolean;
+  /** True while the RETURN trap handler is executing (prevents recursion) */
+  __executingReturnTrap?: boolean;
+  /** True while the DEBUG trap handler is executing (prevents recursion) */
+  __executingDebugTrap?: boolean;
+}

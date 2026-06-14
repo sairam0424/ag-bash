@@ -750,6 +750,7 @@ export async function handleDeclare(
       if (ctx.state.options.allexport && !removeExport) {
         ctx.state.exportedVars = ctx.state.exportedVars || new Set();
         ctx.state.exportedVars.add(name);
+        ctx.state.exportedEnvDirty = true;
       }
       continue;
     }
@@ -851,6 +852,7 @@ export async function handleDeclare(
       if (ctx.state.options.allexport && !removeExport) {
         ctx.state.exportedVars = ctx.state.exportedVars || new Set();
         ctx.state.exportedVars.add(name);
+        ctx.state.exportedEnvDirty = true;
       }
     } else {
       // Just declare without value

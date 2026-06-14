@@ -1,6 +1,11 @@
 import type { IFileSystem } from "./fs/interface.js";
 import type { ExecutionLimits } from "./limits.js";
+import type {
+  SemanticSymbol,
+  SymbolOccurrence,
+} from "./lsp/semantic-engine.js";
 import type { SecureFetch } from "./network/index.js";
+import type { ServiceContainer } from "./services/ServiceContainer.js";
 
 /**
  * Lightweight interface for feature coverage tracking during fuzzing.
@@ -23,6 +28,7 @@ export interface Observation {
     | "limit_exceeded"
     | "syntax_error"
     | "security_violation"
+    | "destructive"
     | "suggestion"
     | "unknown";
   message: string;
@@ -34,11 +40,39 @@ export interface Observation {
   suggestions?: string[];
   /** Detailed technical context */
   context?: Record<string, unknown>;
+  /**
+   * Stable, machine-readable code for this observation (e.g. "ENOENT",
+   * "CMD_NOT_FOUND", "EACCES"). Unlike `type` (a coarse category) and
+   * `message` (human prose that may change), `code` is a stable identifier
+   * agents can switch on without parsing English. Optional for backward
+   * compatibility with observations produced before A3.
+   */
+  code?: string;
+  /**
+   * Confidence (0..1) that this observation correctly diagnoses the failure.
+   * Source-emitted observations (the interpreter/command KNEW the typed cause)
+   * are high-confidence (1.0). Heuristic/regex-scraped observations from
+   * AgTrace are lower. Optional for backward compatibility.
+   */
+  confidence?: number;
 }
 
+/**
+ * The result of executing a bash command or script.
+ * Check `exitCode` for success (0) or failure (non-zero).
+ *
+ * @example
+ * ```ts
+ * const { stdout, stderr, exitCode, observations } = await bash.exec("ls /tmp");
+ * if (exitCode !== 0) console.error(stderr);
+ * ```
+ */
 export interface ExecResult {
+  /** Standard output produced by the command. */
   stdout: string;
+  /** Standard error produced by the command. */
   stderr: string;
+  /** Process exit code: 0 = success, non-zero = failure. */
   exitCode: number;
   /** The final environment variables after execution (only set by Bash.exec) */
   env?: Record<string, string>;
@@ -49,8 +83,12 @@ export interface ExecResult {
    * When not set, the redirect system uses UTF-8 for non-ASCII text.
    */
   stdoutEncoding?: "binary";
-  /** Structured observations about the execution (Ag-Trace) */
+  /** Structured observations about failures — agents use these for self-correction. */
   observations?: Observation[];
+  /** Reasoning effort level applied as a context modifier for subsequent turns */
+  effort?: "low" | "medium" | "high";
+  /** Advanced composition hooks for the orchestration layer */
+  composeHooks?: { before?: string[]; after?: string[]; parallel?: string[] };
 }
 
 /** Result from Bash.exec() - always includes env */
@@ -58,6 +96,27 @@ export interface BashExecResult extends ExecResult {
   env: Record<string, string>;
   metadata?: Record<string, unknown>;
 }
+
+/**
+ * A single incremental output fragment produced during execution.
+ * Emitted to an {@link OutputSink} as commands write to stdout/stderr,
+ * preserving the order in which the bytes were produced.
+ */
+export interface StreamChunk {
+  /** Which standard stream produced this fragment. */
+  type: "stdout" | "stderr";
+  /** The raw text fragment. The concatenation of all fragments of a given
+   *  type equals the corresponding buffered ExecResult field, byte-for-byte. */
+  data: string;
+}
+
+/**
+ * Opt-in callback that receives output fragments incrementally as a script
+ * executes. When NOT supplied to exec(), execution is byte-identical to the
+ * buffered path with zero measurable overhead (the sink is simply never
+ * invoked). Used by StreamingExecutor to drive true incremental streaming.
+ */
+export type OutputSink = (chunk: StreamChunk) => void;
 
 /** Options for exec calls within commands (internal API) */
 export interface CommandExecOptions {
@@ -127,6 +186,57 @@ export interface TraceEvent {
  * Trace callback function for receiving performance events
  */
 export type TraceCallback = (event: TraceEvent) => void;
+
+/**
+ * Minimal interface exposing Bash instance capabilities to commands.
+ * Replaces raw `any` reference to the Bash class, providing only the
+ * surface area that commands actually need.
+ */
+export interface BashHost {
+  /** Service container for accessing shared services (agents, MCP, etc.) */
+  readonly services: ServiceContainer;
+  /** Execution limits configuration */
+  readonly limits: Required<ExecutionLimits>;
+  /**
+   * The virtual filesystem backing this shell. Sub-agent spawning layers a
+   * CoW overlay on top of this parent filesystem.
+   */
+  readonly fs: IFileSystem;
+  /**
+   * Current agent nesting depth (0 for a root shell). Used to enforce the
+   * `maxAgentNesting` limit when spawning sub-agents.
+   */
+  readonly nestingDepth: number;
+  /** Returns the current working directory. */
+  getCwd(): string;
+  /** Returns a snapshot of the environment variables as a null-prototype record. */
+  getEnv(): Record<string, string>;
+  /** Semantic engine for symbol resolution */
+  readonly semanticEngine: {
+    findDefinition(name: string, scope?: string): SemanticSymbol | undefined;
+    getOccurrences(name: string): SymbolOccurrence[];
+    getAllSymbols(): SemanticSymbol[];
+    indexNode(node: unknown, path?: string, language?: string): void;
+  };
+  /** Workspace indexer for symbol search */
+  readonly indexer: {
+    findSymbols(query?: string): Promise<unknown[]>;
+  };
+  /** LSP manager for language server notifications */
+  readonly lsp: {
+    notifyDidChange(filePath: string, content: string): void;
+  };
+  /** Toolbox for registering MCP tools */
+  readonly toolbox: {
+    registerMcpTools(connectionId: string, tools: unknown[]): void;
+  };
+  /** Whether agentic mode is enabled */
+  readonly agentic?: boolean;
+  /** Set the shell mode (execute or plan) */
+  setMode(mode: "execute" | "plan"): void;
+  /** Get the current shell mode */
+  getMode(): "execute" | "plan";
+}
 
 export interface CommandContext {
   /** Virtual filesystem interface for file operations */
@@ -217,6 +327,10 @@ export interface CommandContext {
    * user access/injection via environment variables.
    */
   jsBootstrapCode?: string;
+  /** Current session ID for stateful REPLs */
+  sessionId?: string;
+  /** Reference to the parent Bash instance (for service access) */
+  bash?: BashHost;
 }
 
 export interface Command {

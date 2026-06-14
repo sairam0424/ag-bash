@@ -6,7 +6,7 @@ describe("js-exec ESM modules", () => {
     timeout: 30000,
   }, async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       env: { MY_VAR: "test123" },
       files: {
         // Named export
@@ -81,7 +81,7 @@ describe("js-exec ESM modules", () => {
 
   it("should resolve relative paths and handle errors", async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       files: {
         // ./relative
         "/home/user/lib/helper.mjs": "export const value = 'from-helper';\n",
@@ -115,7 +115,7 @@ describe("js-exec ESM modules", () => {
 
   it("should support --module flag and auto-detection", async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       files: {
         "/etc/hostname": "myhost\n",
         "/home/user/test.mjs":
@@ -143,7 +143,7 @@ describe("js-exec ESM modules", () => {
 
   it("should handle transitive imports", async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       files: {
         "/home/user/c.mjs": "export const val = 'deep';\n",
         "/home/user/b.mjs":

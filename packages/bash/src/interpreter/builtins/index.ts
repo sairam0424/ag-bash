@@ -20,6 +20,7 @@
  * - source/.: Execute commands from a file in current environment
  */
 
+export { handleAlias, handleUnalias } from "./alias.js";
 export { handleBreak } from "./break.js";
 export { handleCd } from "./cd.js";
 export { handleCompgen } from "./compgen.js";
@@ -47,5 +48,6 @@ export { handleReturn } from "./return.js";
 export { handleSet } from "./set.js";
 export { handleShift } from "./shift.js";
 export { handleSource } from "./source.js";
+export { handleTrap } from "./trap.js";
 export { handleUnset } from "./unset.js";
 export { getLocalVarDepth } from "./variable-assignment.js";

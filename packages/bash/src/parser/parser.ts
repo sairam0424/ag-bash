@@ -1076,7 +1076,10 @@ export class Parser {
 
     const redirections = this.parseOptionalRedirections();
 
-    return AST.functionDef(name, body, redirections);
+    const startLine = this.tokens[this.pos - 1]?.line || this.current().line;
+    const node = AST.functionDef(name, body, redirections);
+    node.line = startLine;
+    return node;
   }
 
   private parseCompoundCommandBody(options?: {

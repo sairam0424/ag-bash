@@ -1,0 +1,44 @@
+# Bundle Size gate (download weight). Budgets are the brotli baseline +10%,
+# measured against the REAL minified browser bundles in dist/bundle/*.js
+# (browser.js / browser-core.js / index.js) — NOT the tiny dist/browser*.js
+# TS shims, which only re-export the bundle. bench.yml gates runtime perf;
+# this gates how many bytes a browser consumer downloads.
+#
+# PR-only on purpose: size-limit-action compares the PR against its base branch
+# and posts the size diff as a PR comment. For same-repo PRs the comment uses
+# the GITHUB_TOKEN write grant below; for fork PRs (read-only token) the
+# comment step degrades gracefully and the size check still gates.
+name: Bundle Size
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+# Least-privilege default: the job opts into exactly what it needs.
+permissions: {}
+
+concurrency:
+  group: bundle-size-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # size-limit-action posts the size diff as a PR comment.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      # Build before measuring: size-limit reads the artifacts under dist/.
+      - run: pnpm build
+      - uses: andresz1/size-limit-action@94bc357df29c36c8f8d50ea497c3e225c3c95d1d # v1.8.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # We already built in the step above; don't let the action rebuild.
+          skip_step: build
+          # Where .size-limit.json and the size-limit dependency live.
+          directory: packages/bash
+          package_manager: pnpm

@@ -1,13 +1,22 @@
 import type { LazyCommandDef } from "../lib.js";
-import type { JavaScriptCommandName, NetworkCommandName, PythonCommandName } from "../registry.js";
+import type {
+  JavaScriptCommandName,
+  NetworkCommandName,
+  PythonCommandName,
+} from "../registry.js";
 
-// __BROWSER__ is defined by esbuild at build time for browser bundles
+// __BROWSER__ is defined by esbuild at build time for browser bundles.
+// The guard is written inline (not via an intermediate `isBrowser` const) so
+// esbuild folds it to `if (false)` and tree-shakes the node-only runtime
+// loaders out of browser bundles. The leading `typeof === "undefined"` keeps
+// it safe at runtime in Node/vitest where `__BROWSER__` is never defined.
 declare const __BROWSER__: boolean | undefined;
-const isBrowser = typeof __BROWSER__ !== "undefined" && __BROWSER__;
 
-export const runtimeLoaders: LazyCommandDef<PythonCommandName | JavaScriptCommandName>[] = [];
+export const runtimeLoaders: LazyCommandDef<
+  PythonCommandName | JavaScriptCommandName
+>[] = [];
 
-if (!isBrowser) {
+if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
   // Python commands
   runtimeLoaders.push({
     name: "python3",

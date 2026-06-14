@@ -24,9 +24,7 @@ export interface SandboxOptions {
    * Mutually exclusive with `fs`.
    */
   overlayRoot?: string;
-  maxCallDepth?: number;
-  maxCommandCount?: number;
-  maxLoopIterations?: number;
+  executionLimits?: import("../limits.js").ExecutionLimits;
   /**
    * Network configuration for commands like curl.
    * Network access is disabled by default - you must explicitly configure allowed URLs.
@@ -83,11 +81,12 @@ export class Sandbox {
       cwd: opts?.cwd,
       // Bash-specific extensions
       fs,
-      maxCallDepth: opts?.maxCallDepth,
-      maxCommandCount: opts?.maxCommandCount,
-      maxLoopIterations: opts?.maxLoopIterations,
+      executionLimits: opts?.executionLimits,
       network: opts?.network,
-      defenseInDepth: opts?.defenseInDepth,
+      security:
+        opts?.defenseInDepth != null
+          ? { defenseInDepth: opts.defenseInDepth }
+          : undefined,
     });
     return new Sandbox(bashEnv, opts?.timeoutMs);
   }

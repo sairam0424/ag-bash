@@ -10,6 +10,7 @@ interface ThemeStats {
   filesystems: number;
   python: string;
   javascript: string;
+  agentic: string;
   security: string;
   benchmarks: string;
   coverage: string;
@@ -252,6 +253,7 @@ export const Theme: {
       filesystems = 2,
       python = "Available",
       javascript = "Available",
+      agentic = "Disabled",
       security = "Defense-in-Depth",
       benchmarks = "Verified",
       coverage = "Equivalence",
@@ -266,6 +268,7 @@ export const Theme: {
       ["FILESYSTEMS", filesystems.toString(), "OverlayFS & InMemoryFS layers"],
       ["PYTHON", python, "CPython Emscripten integration"],
       ["JAVASCRIPT", javascript, "QuickJS virtualization engine"],
+      ["AGENTIC", agentic, "Hardened tool execution layer"],
       ["SECURITY", security, "Global global monkey-patching"],
       ["VALIDATION", coverage, "Feature equivalence test suite"],
       ["PERFORMANCE", benchmarks, "Low-overhead execution profiling"],

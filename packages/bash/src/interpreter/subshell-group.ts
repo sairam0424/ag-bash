@@ -25,7 +25,7 @@ import {
   ReturnError,
   SubshellExitError,
 } from "./errors.js";
-import { expandWord } from "./expansion.js";
+import { expandHereDocContent, expandWord } from "./expansion.js";
 import { getErrorMessage } from "./helpers/errors.js";
 import { checkFdLimit, failure, result } from "./helpers/result.js";
 import {
@@ -240,13 +240,7 @@ export async function executeGroup(
       redir.target.type === "HereDoc"
     ) {
       const hereDoc = redir.target as HereDocNode;
-      let content = await expandWord(ctx, hereDoc.content);
-      if (hereDoc.stripTabs) {
-        content = content
-          .split("\n")
-          .map((line) => line.replace(/^\t+/, ""))
-          .join("\n");
-      }
+      const content = await expandHereDocContent(ctx, hereDoc);
       // If this is a non-standard fd (not 0), store in fileDescriptors for -u option
       const fd = redir.fd ?? 0;
       if (fd !== 0) {

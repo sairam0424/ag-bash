@@ -2,8 +2,111 @@ import type { LazyCommandDef } from "../lib.js";
 import type { CommandName } from "../registry.js";
 
 export const agenticLoaders: LazyCommandDef<CommandName>[] = [
-  { name: "ag-edit" as CommandName, load: async () => (await import("../ag-edit/ag-edit.js")).agEditCommand },
-  { name: "ag-diff" as CommandName, load: async () => (await import("../ag-diff/ag-diff.js")).agDiffCommand },
-  { name: "ag-snapshot" as CommandName, load: async () => (await import("../ag-snapshot/ag-snapshot.js")).agSnapshotCommand },
-  { name: "ag-analyze" as CommandName, load: async () => (await import("../ag-analyze/ag-analyze.js")).agAnalyzeCommand },
+  {
+    name: "ag-edit" as CommandName,
+    load: async () => (await import("../ag-edit/ag-edit.js")).agEditCommand,
+  },
+  {
+    name: "ag-diff" as CommandName,
+    load: async () => (await import("../ag-diff/ag-diff.js")).agDiffCommand,
+  },
+  {
+    name: "ag-snapshot" as CommandName,
+    load: async () =>
+      (await import("../ag-snapshot/ag-snapshot.js")).agSnapshotCommand,
+  },
+  {
+    name: "ag-analyze" as CommandName,
+    load: async () =>
+      (await import("../ag-analyze/ag-analyze.js")).agAnalyzeCommand,
+  },
+  {
+    name: "ag-find-symbol" as CommandName,
+    load: async () =>
+      (await import("../ag-find-symbol/ag-find-symbol.js")).agFindSymbolCommand,
+  },
+  {
+    name: "ag-references" as CommandName,
+    load: async () =>
+      (await import("../ag-references/ag-references.js")).agReferencesCommand,
+  },
+  {
+    name: "ag-mcp" as CommandName,
+    load: async () => (await import("../ag-mcp/ag-mcp.js")).agMcp,
+  },
+  {
+    name: "ag-spawn" as CommandName,
+    load: async () => (await import("../ag-orchestration/ag-spawn.js")).agSpawn,
+  },
+  {
+    name: "ag-wait" as CommandName,
+    load: async () => (await import("../ag-orchestration/ag-wait.js")).agWait,
+  },
+  {
+    name: "ag-list-agents" as CommandName,
+    load: async () =>
+      (await import("../ag-orchestration/ag-list-agents.js")).agListAgents,
+  },
+  {
+    name: "ag-hover" as CommandName,
+    load: async () => (await import("../ag-hover/ag-hover.js")).agHoverCommand,
+  },
+  {
+    name: "ag-explain" as CommandName,
+    load: async () =>
+      (await import("../ag-explain/ag-explain.js")).agExplainCommand,
+  },
+  {
+    name: "ag-todo" as CommandName,
+    load: async () => (await import("../ag-todo/ag-todo.js")).agTodoCommand,
+  },
+  {
+    name: "ag-convert" as CommandName,
+    load: async () =>
+      (await import("../ag-convert/ag-convert.js")).agConvertCommand,
+  },
+  {
+    name: "ag-plan" as CommandName,
+    load: async () => (await import("../ag-plan/ag-plan.js")).agPlanCommand,
+  },
+  {
+    name: "ag-notebook" as CommandName,
+    load: async () =>
+      (await import("../ag-notebook/ag-notebook.js")).agNotebookCommand,
+  },
+  {
+    name: "ag-grep" as CommandName,
+    load: async () => (await import("../ag-grep/ag-grep.js")).agGrepCommand,
+  },
+  {
+    name: "ag-find-files" as CommandName,
+    load: async () =>
+      (await import("../ag-find-files/ag-find-files.js")).agFindFilesCommand,
+  },
+  {
+    name: "ag-task" as CommandName,
+    load: async () => (await import("../ag-task/ag-task.js")).agTaskCommand,
+  },
+  {
+    name: "ag-team" as CommandName,
+    load: async () => (await import("../ag-team/ag-team.js")).agTeamCommand,
+  },
+  {
+    name: "ag-message" as CommandName,
+    load: async () =>
+      (await import("../ag-message/ag-message.js")).agMessageCommand,
+  },
+  {
+    name: "ag-glob" as CommandName,
+    load: async () => (await import("../ag-glob/ag-glob.js")).agGlobCommand,
+  },
+  {
+    name: "ag-cron" as CommandName,
+    load: async () => (await import("../ag-cron/ag-cron.js")).agCronCommand,
+  },
+  {
+    name: "ag-worktree" as CommandName,
+    load: async () =>
+      (await import("../ag-worktree/ag-worktree.js")).agWorktreeCommand,
+  },
 ];

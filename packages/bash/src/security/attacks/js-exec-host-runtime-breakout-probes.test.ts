@@ -7,7 +7,7 @@ const nodeMajor = Number(process.versions.node.split(".")[0]);
 
 describe.skipIf(nodeMajor < 22)("js-exec host runtime breakout probes", () => {
   it("keeps Function-constructor blocked on host-bridged function objects", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
 
     const result = await env.exec(`js-exec -c "
 const cp = require('child_process');
@@ -42,7 +42,7 @@ for (const [name, fn] of checks) {
 
   it("blocks nested js-exec when invoked through Symbol.for('jb:exec') bridge", async () => {
     const env = new Bash({
-      javascript: true,
+      runtimes: { javascript: true },
       files: {
         "/tmp/symbol-nested.js": `
 require('fs').writeFileSync('/tmp/jb_symbol_bridge_marker','1')
@@ -74,7 +74,7 @@ console.log('SYMBOL_MARKER=' + String(fs.existsSync(marker)));
   });
 
   it("does not allow child_process.spawnSync('node', ...) to execute host Node.js", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
 
     const result = await env.exec(`js-exec -c "
 const cp = require('child_process');
@@ -101,7 +101,7 @@ console.log('NODE_MARKER=' + String(fs.existsSync(marker)));
   });
 
   it("does not allow path-qualified or wrapper-based host runtime execution from js-exec", async () => {
-    const env = new Bash({ javascript: true });
+    const env = new Bash({ runtimes: { javascript: true } });
 
     const result = await env.exec(`js-exec -c "
 const cp = require('child_process');

@@ -1,11 +1,15 @@
 {
   "name": "@ag-bash/agent-bridge",
-  "version": "1.5.0",
-  "description": "Terminal bridge for Ag-Bash AI Agent communication",
+  "version": "6.0.2",
+  "description": "Terminal UI bridge for Ag-Bash — streams AI-agent output and tool calls to xterm.js-compatible terminals via pluggable adapters (SSE/HTTP fetch, custom WebSocket).",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "README.md"
+  ],
   "exports": {
     ".": {
       "import": {
@@ -24,6 +28,15 @@
     "terminal",
     "bridge"
   ],
+  "homepage": "https://github.com/sairam0424/ag-bash/tree/main/packages/agent-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/sairam0424/ag-bash/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sairam0424/ag-bash.git",
+    "directory": "packages/agent-bridge"
+  },
   "author": "Ag-Bash",
   "license": "Apache-2.0",
   "dependencies": {
@@ -31,5 +44,11 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

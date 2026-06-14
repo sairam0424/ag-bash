@@ -45,6 +45,36 @@ export interface ExecutionLimits {
   maxFileDescriptors?: number;
   /** Maximum source/. nesting depth (default: 100) */
   maxSourceDepth?: number;
+  /** Maximum estimated memory usage in bytes (default: 50MB) */
+  maxMemoryAccountingBytes?: number;
+  /** Maximum total CPU time in milliseconds (default: 30000) */
+  maxCpuMs?: number;
+  /** Maximum number of parallel sub-agents (default: 10) */
+  maxSubAgents?: number;
+  /** Maximum sub-agent nesting depth (default: 3) */
+  maxAgentNesting?: number;
+  /** Maximum network traffic in bytes per execution (default: 50MB) */
+  maxNetworkTrafficBytes?: number;
+  /** Maximum number of simultaneous MCP server connections (default: 5) */
+  maxMcpServers?: number;
+  /** Maximum total MCP tool calls per execution (default: 50) */
+  maxMcpToolCalls?: number;
+  /** Maximum number of tracked tasks (default: 100) */
+  maxTasks?: number;
+  /** Maximum number of agent teams (default: 10) */
+  maxTeams?: number;
+  /** Maximum inter-agent messages retained (default: 1000) */
+  maxAgentMessages?: number;
+  /** Maximum number of cron jobs (default: 20) */
+  maxCronJobs?: number;
+  /** Maximum cron fires per hour (default: 60) */
+  maxCronFiresPerHour?: number;
+  /** Maximum web searches per minute (default: 10) */
+  maxWebSearchesPerMinute?: number;
+  /** Maximum web fetch cache size in bytes (default: 50MB) */
+  maxWebFetchCacheSizeBytes?: number;
+  /** Maximum AST cache entries (default: 1000) */
+  astCacheSize?: number;
 }
 /**
  * Resolve execution limits by merging user-provided limits with defaults.

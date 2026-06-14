@@ -6,8 +6,18 @@
  */
 
 import * as path from "node:path";
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, tool, jsonSchema } from "ai";
 import { Bash, OverlayFs, createBashTool } from "@ag-bash/bash";
+
+const colors = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+};
 
 export interface AgentRunner {
   chat(
@@ -22,6 +32,26 @@ export interface CommandResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+}
+
+/**
+ * The result shape that @ag-bash/bash's `onAfterBashCall` hook passes in.
+ * It is either a successful command result or an error outcome — mirrors the
+ * toolkit's internal `ToolResult` union (not re-exported from the package root).
+ */
+type ToolExecutionOutcome =
+  | { stdout: string; stderr: string; exitCode: number }
+  | { error: string; exitCode: number };
+
+/**
+ * Normalizes a toolkit execution outcome into the example's CommandResult,
+ * surfacing the error arm via stderr so downstream display stays unchanged.
+ */
+function toCommandResult(outcome: ToolExecutionOutcome): CommandResult {
+  if ("error" in outcome) {
+    return { stdout: "", stderr: outcome.error, exitCode: outcome.exitCode };
+  }
+  return outcome;
 }
 
 export interface CreateAgentOptions {
@@ -55,6 +85,25 @@ export async function createAgent(
     cwd: "/workspace",
   });
 
+  // [NEW in v2.4.0] High-fidelity tool observability
+  bash.on("tool:start", (data: any) => {
+    console.log(`\n${colors.dim}[Tool] Starting: ${colors.reset}${colors.yellow}${data.name}${colors.reset}`);
+  });
+
+  bash.on("tool:progress", (data: any) => {
+    // Optional: Log progress for long-running tools
+    const message = typeof data.progress === "string" ? data.progress : data.progress?.message;
+    if (message) {
+      console.log(`${colors.dim}[Tool] Progress: ${message}${colors.reset}`);
+    }
+  });
+
+  bash.on("tool:end", (data: any) => {
+    const duration = data.duration ? `${data.duration}ms` : "unknown";
+    const status = data.result?.error ? colors.yellow : colors.green;
+    console.log(`${colors.dim}[Tool] Completed: ${colors.reset}${status}${data.name}${colors.reset} ${colors.dim}(${duration})${colors.reset}\n`);
+  });
+
   const toolkit = createBashTool({
     sandbox: bash,
     destination: "/workspace",
@@ -67,14 +116,36 @@ Use bash commands to explore:
 - head, tail, wc, sort, uniq for data analysis
 
 Help the user explore, search, and understand the contents.`,
-    onBeforeBashCall: (input: { command: string; }) => {
+    onBeforeBashCall: (input: { command: string }) => {
       options.onToolCall?.(input.command);
-      return undefined;
     },
-    onAfterBashCall: (input: { result: CommandResult; }) => {
-      options.onToolResult?.(input.result);
-      return undefined;
+    onAfterBashCall: (input: {
+      command: string;
+      result: ToolExecutionOutcome;
+    }) => {
+      options.onToolResult?.(toCommandResult(input.result));
     },
+  });
+
+  // Adapt the toolkit's bash tool to the ai@6 Tool shape: ai@6 expects
+  // `inputSchema` to be a FlexibleSchema, so describe the `command` input as a
+  // JSON Schema via `jsonSchema()`. The schema mirrors the toolkit's own
+  // input schema; execution still delegates to the toolkit's `execute`.
+  const bashTool = toolkit.tools.bash;
+  const aiBashTool = tool({
+    description: bashTool.description,
+    inputSchema: jsonSchema<{ command: string }>({
+      type: "object",
+      properties: {
+        command: {
+          type: "string",
+          description:
+            "The bash command to run (e.g. 'ls -R', 'cat README.md', 'grep -r \"pattern\" .')",
+        },
+      },
+      required: ["command"],
+    }),
+    execute: (args) => bashTool.execute(args),
   });
 
   const history: Array<{ role: "user" | "assistant"; content: string }> = [];
@@ -86,8 +157,8 @@ Help the user explore, search, and understand the contents.`,
       let fullText = "";
 
       const result = streamText({
-        model: "anthropic/claude-haiku-4.5",
-        tools: { bash: toolkit.tools.bash },
+        model: "anthropic:claude-3-5-sonnet-latest",
+        tools: { bash: aiBashTool },
         stopWhen: stepCountIs(50),
         messages: history,
       });

@@ -43,6 +43,7 @@ import { fileURLToPath } from "node:url";
 import { Bash } from "../Bash.js";
 import { OverlayFs } from "../fs/overlay-fs/index.js";
 import { sanitizeErrorMessage } from "../fs/real-fs-utils.js";
+import { VERSION } from "../version.js";
 import { Theme } from "./theme.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,6 +58,8 @@ interface CliOptions {
   allowWrite: boolean;
   python: boolean;
   javascript: boolean;
+  agentic: boolean;
+  plan: boolean;
   json: boolean;
   help: boolean;
   version: boolean;
@@ -81,6 +84,8 @@ function printHelp(): void {
     --allow-write     Allow write operations (default: read-only)
     --python          Enable python3 commands (isolated WASM)
     --javascript      Enable js-exec commands (QuickJS)
+    --agentic         Enable agentic behavior and tools
+    --plan            Start in plan mode (read-only for destructive tools)
     --json            Output results as JSON
     -h, --help        Show this help message
     -v, --version     Show version
@@ -98,7 +103,7 @@ function printVersion(): void {
   console.log(
     Theme.colors.cyan(Theme.colors.bold("ag-bash")) +
       " " +
-      Theme.colors.dim("v1.5.0"),
+      Theme.colors.dim(`v${VERSION}`),
   );
 }
 
@@ -111,6 +116,8 @@ function parseArgs(args: string[]): CliOptions {
     allowWrite: false,
     python: false,
     javascript: false,
+    agentic: false,
+    plan: false,
     json: false,
     help: false,
     version: false,
@@ -162,6 +169,13 @@ function parseArgs(args: string[]): CliOptions {
       i++;
     } else if (arg === "--javascript") {
       options.javascript = true;
+      i++;
+    } else if (arg === "--agentic") {
+      options.agentic = true;
+      i++;
+    } else if (arg === "--plan") {
+      options.agentic = true; // --plan implies --agentic
+      options.plan = true;
       i++;
     } else if (arg.startsWith("-")) {
       // Handle combined short options like -ec
@@ -280,13 +294,14 @@ async function main(): Promise<void> {
   } else {
     // No script provided - show banner if TTY, then help
     if (process.stdin.isTTY && process.stdout.isTTY) {
-      Theme.printHeader("1.5.0");
+      Theme.printHeader(VERSION);
       Theme.printBrandManifest();
       Theme.printManifest({
-        commands: 100,
+        commands: 120,
         filesystems: 2,
         python: options.python ? "Enabled" : "Available",
         javascript: options.javascript ? "Enabled" : "Available",
+        agentic: options.agentic ? "Enabled" : "Disabled",
       });
       Theme.printPowerSuite();
     }
@@ -316,7 +331,7 @@ async function main(): Promise<void> {
 
   // Load Tree-sitter WASM assets from vendor directory
   const vendorDir = join(__dirname, "..", "parser", "vendor");
-  const treeSitterConfig = {
+  const treeSitterWasmConfig = {
     webTreeSitterWasm: readFileSync(join(vendorDir, "web-tree-sitter.wasm")),
     bashGrammarWasm: readFileSync(join(vendorDir, "tree-sitter-bash.wasm")),
   };
@@ -324,10 +339,21 @@ async function main(): Promise<void> {
   const env = new Bash({
     fs,
     cwd,
-    python: options.python,
-    javascript: options.javascript,
-    treeSitterConfig,
+    runtimes: {
+      python: options.python,
+      javascript: options.javascript,
+    },
+    agentic: {
+      enabled: options.agentic,
+    },
+    parser: {
+      treeSitterConfig: treeSitterWasmConfig,
+    },
   });
+
+  if (options.plan) {
+    env.setMode("plan");
+  }
 
   // Prepend set -e if errexit is enabled
   if (options.errexit) {

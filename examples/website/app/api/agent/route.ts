@@ -1,10 +1,13 @@
-import { ToolLoopAgent, createAgentUIStreamResponse, stepCountIs } from "ai";
+import {
+  ToolLoopAgent,
+  createAgentUIStreamResponse,
+  jsonSchema,
+  stepCountIs,
+} from "ai";
 import { Bash, OverlayFs, createBashTool } from "@ag-bash/bash";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { join } from "path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const AGENT_DATA_DIR = join(__dirname, "../../../agent-data");
+const AGENT_DATA_DIR = join(process.cwd(), "public/agent-data");
 
 const SYSTEM_INSTRUCTIONS = `You are an expert on ag-bash, a TypeScript bash interpreter with an in-memory virtual filesystem.
 
@@ -46,11 +49,16 @@ export async function POST(req: Request) {
   });
 
   // Create a fresh agent per request for proper streaming
+  const bashTool = bashToolkit.tools.bash;
   const agent = new ToolLoopAgent({
     model: "claude-haiku-4-5",
     instructions: SYSTEM_INSTRUCTIONS,
     tools: {
-      bash: bashToolkit.tools.bash,
+      bash: {
+        description: bashTool.description,
+        inputSchema: jsonSchema(bashTool.inputSchema as Parameters<typeof jsonSchema>[0]),
+        execute: bashTool.execute,
+      },
     },
     stopWhen: stepCountIs(20),
   });

@@ -1,114 +1,54 @@
-import type { Bash } from "./Bash.js";
-import { sanitizeErrorMessage } from "./fs/sanitize-error.js";
+/**
+ * Backwards-compatible shim for the Vercel AI SDK tool format.
+ *
+ * The new multi-framework module (`./ai/index.js`) returns a BashToolBuilder.
+ * This shim calls `.forVercel()` to preserve the original return shape:
+ *   `{ tools: { bash: {...}, ... } }`
+ *
+ * New consumers should import directly from `./ai/index.js` for access to
+ * all framework adapters (.forOpenAI(), .forAnthropic(), .forLangChain(), etc).
+ */
+
+import {
+  createBashTool as _createBashTool,
+  type CreateBashToolOptions,
+} from "./ai/index.js";
+import type { VercelToolSet } from "./ai/types.js";
 
 /**
- * Options for creating an AI tool that wraps a Bash sandbox.
+ * Extended options that include the legacy `destination` field.
+ * New consumers should prefer `CreateBashToolOptions` from `./ai/index.js`.
  */
-export interface CreateBashToolOptions {
+export interface LegacyCreateBashToolOptions extends CreateBashToolOptions {
   /**
-   * The Bash sandbox instance to use for execution.
-   */
-  sandbox: Bash;
-
-  /**
-   * The destination path for the sandbox (currently used for metadata context).
+   * The destination path for the sandbox (metadata context, not used at runtime).
+   * @deprecated This field is no longer used by the multi-framework module.
    */
   destination?: string;
-
-  /**
-   * Extra instructions to append to the tool description.
-   */
-  extraInstructions?: string;
-
-  /**
-   * Optional callback called before a bash command is executed.
-   */
-  onBeforeBashCall?: (input: { command: string }) => void | Promise<void>;
-
-  /**
-   * Optional callback called after a bash command is executed.
-   */
-  onAfterBashCall?: (input: {
-    command: string;
-    // biome-ignore lint/suspicious/noExplicitAny: complex result type dependent on Sandbox output
-    result: any;
-  }) => void | Promise<void>;
 }
 
-/**
- * Creates a tool compatible with the Vercel AI SDK (ToolLoopAgent, etc.)
- * that allows an AI agent to execute bash commands in a secure sandbox.
- *
- * @param options Configuration for the bash tool
- * @returns An object containing the 'bash' tool definition
- */
-export function createBashTool(options: CreateBashToolOptions): {
-  tools: {
-    bash: {
-      description: string;
-      // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
-      inputSchema: any;
-      /** @deprecated Use inputSchema */
-      // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
-      parameters: any;
-      // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
-      execute: (args: any) => Promise<any>;
-    };
-  };
-} {
-  const { sandbox } = options;
+export type { CreateBashToolOptions };
 
-  return {
-    tools: {
-      bash: {
-        description: `Execute a bash command in a secure sandbox with a virtual filesystem. You can use common commands like ls, cat, grep, awk, sed, jq, etc. to explore the environment and process data.${
-          options.extraInstructions ? `\n\n${options.extraInstructions}` : ""
-        }`,
-        inputSchema: {
-          type: "object",
-          properties: {
-            command: {
-              type: "string",
-              description:
-                "The bash command to execute (e.g. 'ls -R', 'cat README.md', 'grep -r \"pattern\" .')",
-            },
-          },
-          required: ["command"],
-        } as const,
-        parameters: {
-          type: "object",
-          properties: {
-            command: {
-              type: "string",
-              description:
-                "The bash command to execute (e.g. 'ls -R', 'cat README.md', 'grep -r \"pattern\" .')",
-            },
-          },
-          required: ["command"],
-        } as const,
-        // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
-        execute: async ({ command }: { command: string }): Promise<any> => {
-          try {
-            await options.onBeforeBashCall?.({ command });
-            const result = await sandbox.exec(command);
-            const toolResult = {
-              stdout: result.stdout,
-              stderr: result.stderr,
-              exitCode: result.exitCode,
-            };
-            await options.onAfterBashCall?.({ command, result: toolResult });
-            return toolResult;
-            // biome-ignore lint/suspicious/noExplicitAny: Vercel AI SDK compatibility
-          } catch (error: any) {
-            const errorResult = {
-              error: sanitizeErrorMessage(error.message),
-              exitCode: 1,
-            };
-            await options.onAfterBashCall?.({ command, result: errorResult });
-            return errorResult;
-          }
-        },
-      },
-    },
-  };
+/**
+ * Creates a tool compatible with the Vercel AI SDK that lets an AI agent
+ * run bash commands inside a sandboxed environment.
+ *
+ * @param options - Sandbox instance and optional lifecycle hooks.
+ * @returns An object with a `tools` map (keys are tool names, including "bash").
+ *
+ * @example
+ * ```ts
+ * import { Bash, createBashTool } from "@ag-bash/bash";
+ *
+ * const bash = new Bash({ files: { "/data.json": '{"ok":true}' } });
+ * const { tools } = createBashTool({ sandbox: bash });
+ * // Pass `tools` to your Vercel AI SDK agent
+ * ```
+ */
+export function createBashTool(
+  options: LegacyCreateBashToolOptions,
+): VercelToolSet {
+  // `destination` is ignored — kept only for backwards compat
+  const { destination: _destination, ...coreOptions } = options;
+  return _createBashTool(coreOptions).forVercel();
 }

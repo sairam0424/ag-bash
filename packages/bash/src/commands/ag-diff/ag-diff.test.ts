@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { agDiffCommand } from "./ag-diff.js";
+import { beforeEach, describe, expect, it } from "vitest";
 import { InMemoryFs } from "../../fs/in-memory-fs/in-memory-fs.js";
-import { CommandContext } from "../../types.js";
+import type { CommandContext } from "../../types.js";
+import { agDiffCommand } from "./ag-diff.js";
 
 describe("ag-diff", () => {
   let fs: InMemoryFs;

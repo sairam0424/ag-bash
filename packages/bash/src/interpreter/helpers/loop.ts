@@ -11,6 +11,7 @@ import {
   ErrexitError,
   ExecutionLimitError,
   ExitError,
+  PosixFatalError,
   ReturnError,
 } from "../errors.js";
 import { getErrorMessage } from "./errors.js";
@@ -74,7 +75,8 @@ export function handleLoopError(
     error instanceof ReturnError ||
     error instanceof ErrexitError ||
     error instanceof ExitError ||
-    error instanceof ExecutionLimitError
+    error instanceof ExecutionLimitError ||
+    error instanceof PosixFatalError
   ) {
     error.prependOutput(stdout, stderr);
     return { action: "rethrow", stdout, stderr, error };

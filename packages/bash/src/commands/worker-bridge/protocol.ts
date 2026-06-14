@@ -76,7 +76,16 @@ export const ErrorCode = {
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
 
-/** Buffer layout offsets */
+// Buffer layout offsets.
+//
+// IMPORTANT (backward compatibility): the original control-region fields
+// (OP_CODE..MODE), PATH_BUFFER, and DATA_BUFFER offsets are LEFT UNCHANGED so
+// that prebuilt worker bundles (worker.js) — which embed the old layout — keep
+// interoperating with this main-thread protocol for single-shot operations.
+// The chunked-transfer framing fields are appended AFTER the 1MB data window
+// instead of widening the control region; older workers never read them, and
+// newer (rebuilt) workers use them to stream payloads >1MB. This avoids a
+// layout mismatch that would corrupt memory across the thread boundary.
 const Offset = {
   OP_CODE: 0,
   STATUS: 4,
@@ -87,19 +96,35 @@ const Offset = {
   FLAGS: 24,
   MODE: 28,
   PATH_BUFFER: 32,
-  DATA_BUFFER: 4128, // 32 + 4096
+  DATA_BUFFER: 4128, // 32 + 4096 (unchanged)
+  // Chunked transfer framing (added v6.0.0) — appended after the data window.
+  // OFFSET is the byte position of the current chunk within the logical
+  // payload; TOTAL_LENGTH is the full payload size; MORE is a 0/1 flag set by
+  // the producer when more chunks follow. 4128 + 1048576 = 1052704.
+  OFFSET: 1052704,
+  TOTAL_LENGTH: 1052708,
+  MORE: 1052712,
 } as const;
 
 /** Buffer sizes */
 const Size = {
   CONTROL_REGION: 32,
   PATH_BUFFER: 4096,
-  // 1MB limit applies to all FS read/write operations through the bridge.
-  // Files larger than this will be truncated. This is tight — consider
-  // increasing if real workloads hit the cap. Reduced from 16MB for faster tests.
+  // The data window is 1MB. Payloads larger than this are NOT truncated:
+  // read/write split them into <=DATA_BUFFER chunks and stream them across
+  // multiple synchronous round-trips via the chunked transfer framing
+  // (see Offset.OFFSET / TOTAL_LENGTH / MORE). DATA_BUFFER therefore bounds the
+  // per-round-trip window, not the maximum file size. Kept at 1MB for fast
+  // tests; raising it trades memory for fewer round-trips on large files.
   DATA_BUFFER: 1048576,
-  TOTAL: 1052704, // 32 + 4096 + 1MB
+  // Maximum bytes moved in a single chunk (== the data window size).
+  MAX_CHUNK: 1048576,
+  // 32 (control) + 4096 (path) + 1MB (data) + 12 (3 framing int32s) = 1052716.
+  TOTAL: 1052716,
 } as const;
+
+/** Maximum bytes that can be moved in a single chunked round-trip. */
+export const MAX_CHUNK_SIZE: number = Size.MAX_CHUNK;
 
 /** Flags for operations */
 export const Flags = {
@@ -210,6 +235,33 @@ export class ProtocolBuffer {
     _Atomics.store(this.int32View, Offset.MODE / 4, mode);
   }
 
+  /** Byte offset of the current chunk within the logical payload. */
+  getOffset(): number {
+    return _Atomics.load(this.int32View, Offset.OFFSET / 4);
+  }
+
+  setOffset(offset: number): void {
+    _Atomics.store(this.int32View, Offset.OFFSET / 4, offset);
+  }
+
+  /** Total size of the logical (possibly multi-chunk) payload, in bytes. */
+  getTotalLength(): number {
+    return _Atomics.load(this.int32View, Offset.TOTAL_LENGTH / 4);
+  }
+
+  setTotalLength(length: number): void {
+    _Atomics.store(this.int32View, Offset.TOTAL_LENGTH / 4, length);
+  }
+
+  /** True when more chunks follow the current one. */
+  getMore(): boolean {
+    return _Atomics.load(this.int32View, Offset.MORE / 4) === 1;
+  }
+
+  setMore(more: boolean): void {
+    _Atomics.store(this.int32View, Offset.MORE / 4, more ? 1 : 0);
+  }
+
   getPath(): string {
     const length = this.getPathLength();
     const bytes = this.uint8View.slice(
@@ -244,6 +296,27 @@ export class ProtocolBuffer {
     this.setDataLength(data.length);
   }
 
+  /**
+   * Write one chunk of an outbound (worker -> main) payload into the data
+   * window, recording its position via the chunked-transfer framing fields.
+   * `chunk` must already be a slice that fits in the data window.
+   */
+  setDataChunk(
+    chunk: Uint8Array,
+    offset: number,
+    totalLength: number,
+    more: boolean,
+  ): void {
+    if (chunk.length > Size.MAX_CHUNK) {
+      throw new Error(`Chunk too large: ${chunk.length} > ${Size.MAX_CHUNK}`);
+    }
+    this.uint8View.set(chunk, Offset.DATA_BUFFER);
+    this.setDataLength(chunk.length);
+    this.setOffset(offset);
+    this.setTotalLength(totalLength);
+    this.setMore(more);
+  }
+
   getDataAsString(): string {
     const data = this.getData();
     return new TextDecoder().decode(data);
@@ -268,6 +341,27 @@ export class ProtocolBuffer {
     }
     this.uint8View.set(data, Offset.DATA_BUFFER);
     this.setResultLength(data.length);
+  }
+
+  /**
+   * Write one chunk of an inbound (main -> worker) result into the data window,
+   * recording its position via the chunked-transfer framing fields. `chunk`
+   * must already be a slice that fits in the data window.
+   */
+  setResultChunk(
+    chunk: Uint8Array,
+    offset: number,
+    totalLength: number,
+    more: boolean,
+  ): void {
+    if (chunk.length > Size.MAX_CHUNK) {
+      throw new Error(`Chunk too large: ${chunk.length} > ${Size.MAX_CHUNK}`);
+    }
+    this.uint8View.set(chunk, Offset.DATA_BUFFER);
+    this.setResultLength(chunk.length);
+    this.setOffset(offset);
+    this.setTotalLength(totalLength);
+    this.setMore(more);
   }
 
   getResultAsString(): string {
@@ -417,5 +511,8 @@ export class ProtocolBuffer {
     this.setErrorCode(ErrorCode.NONE);
     this.setFlags(Flags.NONE);
     this.setMode(0);
+    this.setOffset(0);
+    this.setTotalLength(0);
+    this.setMore(false);
   }
 }

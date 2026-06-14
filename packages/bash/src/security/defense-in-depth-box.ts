@@ -29,6 +29,7 @@
  * available.
  */
 
+import { randomBytes } from "node:crypto";
 import { type BlockedGlobal, getBlockedGlobals } from "./blocked-globals.js";
 import type {
   DefenseInDepthConfig,
@@ -54,12 +55,12 @@ function generateUUID(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  // Fallback for older Node.js versions
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  // Fallback for older Node.js versions — uses node:crypto for CSPRNG
+  const bytes = randomBytes(16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 type AsyncLocalStorageType<T> = {
@@ -162,7 +163,8 @@ function resolveConfig(
   config?: DefenseInDepthConfig | boolean,
 ): DefenseInDepthConfig {
   if (config === undefined) {
-    return { ...DEFAULT_CONFIG, enabled: false };
+    // Fail-closed: default to enabled when no config is explicitly provided
+    return { ...DEFAULT_CONFIG, enabled: true };
   }
   if (typeof config === "boolean") {
     return { ...DEFAULT_CONFIG, enabled: config };

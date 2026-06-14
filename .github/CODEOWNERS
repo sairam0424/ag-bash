@@ -1,0 +1,27 @@
+# CODEOWNERS — review routing for Ag-Bash.
+#
+# NOTE: this repo is on a solo personal account, where CODEOWNERS does NOT
+# *enforce* review (required-CODEOWNERS-review needs org/team features). It is
+# used here as DOCUMENTATION + auto-request routing: opening a PR that touches
+# these paths auto-requests @sairam0424 and signals where the security-sensitive
+# surface lives. The actual merge gate is the branch ruleset (see CONTRIBUTING.md).
+
+# Default owner for everything.
+*                                   @sairam0424
+
+# Security-critical surface — highest review bar.
+/packages/bash/src/security/**      @sairam0424
+/SECURITY.md                        @sairam0424
+/THREAT_MODEL.md                    @sairam0424
+
+# Supply-chain & release surface — a compromise here is total.
+/.github/workflows/**               @sairam0424
+/.github/actions/**                 @sairam0424
+/.github/dependabot.yml             @sairam0424
+/.changeset/**                      @sairam0424
+/scripts/publish.sh                 @sairam0424
+/scripts/check-pack-contents.js     @sairam0424
+/scripts/check-version-sync.js      @sairam0424
+
+# Package manifests — exports/files/bin changes are packaging-defect risks.
+/packages/*/package.json            @sairam0424

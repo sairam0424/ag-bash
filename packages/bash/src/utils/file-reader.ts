@@ -5,8 +5,33 @@
  * including parallel batch reading for performance.
  */
 
-import type { CommandContext, ExecResult } from "../types.js";
+import { obs } from "../interpreter/helpers/result.js";
+import type { CommandContext, ExecResult, Observation } from "../types.js";
 import { DEFAULT_BATCH_SIZE } from "./constants.js";
+
+/**
+ * Classify a caught fs error into a typed source observation (A3).
+ *
+ * fs implementations throw errno-flavored messages ("ENOENT: ...",
+ * "EISDIR: ...", "ENOTDIR: ..."). We inspect the message to emit a precise,
+ * high-confidence Observation at the SOURCE rather than leaving AgTrace to
+ * regex-scrape stderr after the fact.
+ */
+function observeReadError(
+  error: unknown,
+  file: string,
+  cmdName: string,
+): Observation {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (msg.includes("EISDIR")) {
+    return obs.isADirectory(file, cmdName);
+  }
+  if (msg.includes("ENOTDIR")) {
+    return obs.notADirectory(file, cmdName);
+  }
+  // Default: path did not exist (ENOENT).
+  return obs.fileNotFound(file, cmdName);
+}
 
 export interface ReadFilesOptions {
   /** Command name for error messages */
@@ -33,6 +58,11 @@ export interface ReadFilesResult {
   stderr: string;
   /** 0 if all files read successfully, 1 if any errors */
   exitCode: number;
+  /**
+   * Typed observations emitted at the SOURCE for each failed read (A3).
+   * Present only when at least one file failed.
+   */
+  observations?: Observation[];
 }
 
 /**
@@ -74,6 +104,7 @@ export async function readFiles(
   const result: FileContent[] = [];
   let stderr = "";
   let exitCode = 0;
+  const observations: Observation[] = [];
 
   // Process files in parallel batches for better performance
   for (let i = 0; i < files.length; i += batchSize) {
@@ -81,7 +112,12 @@ export async function readFiles(
     const batchResults = await Promise.all(
       batch.map(async (file) => {
         if (allowStdinMarker && file === "-") {
-          return { filename: "-", content: ctx.stdin, error: null };
+          return {
+            filename: "-",
+            content: ctx.stdin,
+            error: null,
+            observation: null,
+          };
         }
         try {
           const filePath = ctx.fs.resolvePath(ctx.cwd, file);
@@ -89,12 +125,14 @@ export async function readFiles(
           // This is important for piping binary data through commands like cat.
           // UTF-8 decoding happens at the output boundary (Bash.exec) instead.
           const content = await ctx.fs.readFile(filePath, "binary");
-          return { filename: file, content, error: null };
-        } catch {
+          return { filename: file, content, error: null, observation: null };
+        } catch (err) {
+          // A3: classify the fs error into a typed observation at the SOURCE.
           return {
             filename: file,
             content: "",
             error: `${cmdName}: ${file}: No such file or directory\n`,
+            observation: observeReadError(err, file, cmdName),
           };
         }
       }),
@@ -105,8 +143,14 @@ export async function readFiles(
       if (r.error) {
         stderr += r.error;
         exitCode = 1;
+        if (r.observation) observations.push(r.observation);
         if (stopOnError) {
-          return { files: result, stderr, exitCode };
+          return {
+            files: result,
+            stderr,
+            exitCode,
+            observations,
+          };
         }
       } else {
         result.push({ filename: r.filename, content: r.content });
@@ -114,7 +158,9 @@ export async function readFiles(
     }
   }
 
-  return { files: result, stderr, exitCode };
+  return exitCode === 0
+    ? { files: result, stderr, exitCode }
+    : { files: result, stderr, exitCode, observations };
 }
 
 /**
@@ -140,7 +186,13 @@ export async function readAndConcat(
   if (result.exitCode !== 0) {
     return {
       ok: false,
-      error: { stdout: "", stderr: result.stderr, exitCode: result.exitCode },
+      error: {
+        stdout: "",
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        // A3: propagate typed source observations.
+        ...(result.observations ? { observations: result.observations } : null),
+      },
     };
   }
 

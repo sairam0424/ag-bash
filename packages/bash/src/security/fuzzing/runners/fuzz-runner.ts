@@ -143,14 +143,18 @@ export class FuzzRunner {
     // Create bash instance with fuzzing config
     const bash = new Bash({
       executionLimits: this.config.executionLimits,
-      defenseInDepth: this.config.defenseInDepth
-        ? {
-            enabled: true,
-            auditMode: false,
-            onViolation: (v) => violations.push(v),
-          }
-        : false,
-      coverage: coverageCollector,
+      security: {
+        defenseInDepth: this.config.defenseInDepth
+          ? {
+              enabled: true,
+              auditMode: false,
+              onViolation: (v: any) => violations.push(v),
+            }
+          : false,
+      },
+      debug: {
+        coverage: coverageCollector,
+      },
     });
 
     const result: FuzzResult = {

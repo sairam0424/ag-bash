@@ -77,6 +77,8 @@ export declare const Flags: {
   readonly FORCE: 2;
   readonly MKDIR_RECURSIVE: 1;
 };
+/** Maximum bytes that can be moved in a single chunked round-trip. */
+export declare const MAX_CHUNK_SIZE: number;
 export declare function createSharedBuffer(): SharedArrayBuffer;
 /**
  * Helper class for reading/writing protocol data
@@ -102,14 +104,32 @@ export declare class ProtocolBuffer {
   setFlags(flags: number): void;
   getMode(): number;
   setMode(mode: number): void;
+  getOffset(): number;
+  setOffset(offset: number): void;
+  getTotalLength(): number;
+  setTotalLength(length: number): void;
+  getMore(): boolean;
+  setMore(more: boolean): void;
   getPath(): string;
   setPath(path: string): void;
   getData(): Uint8Array;
   setData(data: Uint8Array): void;
+  setDataChunk(
+    chunk: Uint8Array,
+    offset: number,
+    totalLength: number,
+    more: boolean,
+  ): void;
   getDataAsString(): string;
   setDataFromString(str: string): void;
   getResult(): Uint8Array;
   setResult(data: Uint8Array): void;
+  setResultChunk(
+    chunk: Uint8Array,
+    offset: number,
+    totalLength: number,
+    more: boolean,
+  ): void;
   getResultAsString(): string;
   setResultFromString(str: string): void;
   encodeStat(stat: {
