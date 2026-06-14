@@ -671,9 +671,7 @@ export class BashToolbox {
           code: z.string().describe("The JS code to execute."),
         }),
         execute: async (bash: Bash, { code }: { code: string }) => {
-          const result = await bash.exec(
-            `js-exec -c "${code.replace(/"/g, '\\"')}"`,
-          );
+          const result = await bash.exec(`js-exec -c ${JSON.stringify(code)}`);
           return result;
         },
       }),
@@ -695,7 +693,7 @@ export class BashToolbox {
           { code, sessionId }: { code: string; sessionId: string },
         ) => {
           const result = await bash.exec(
-            `js-exec --session ${sessionId} -c "${code.replace(/"/g, '\\"')}"`,
+            `js-exec --session ${sessionId} -c ${JSON.stringify(code)}`,
           );
           return result;
         },
