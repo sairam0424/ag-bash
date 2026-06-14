@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.sairam0424/ag-bash",
-  "description": "Sandboxed AI-native bash environment with 70 agentic tools — run_bash, semantic code edit/diff/analyze, WASM Python/JS, task & worktree management — over stdio.",
+  "description": "Sandboxed AI-native bash with 70 agentic tools: run_bash, code edit/diff, WASM Python/JS.",
   "version": "6.0.2",
   "repository": {
     "url": "https://github.com/sairam0424/ag-bash",
