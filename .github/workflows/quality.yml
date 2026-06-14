@@ -51,10 +51,20 @@ jobs:
       # vulnerable transitive dependencies. Pin patched versions via the
       # pnpm.overrides block in the root package.json when an advisory lands.
       - run: pnpm audit --audit-level=high
-      - run: pnpm lint
+      # Lint the publishable packages only (Biome + banned-pattern gate). The
+      # examples/website app is a Next.js consumer with its own ESLint config and is
+      # not part of the package quality gate; `pnpm -r lint` would sweep it in.
+      - run: pnpm --filter './packages/*' lint
       - run: pnpm --filter @ag-bash/bash knip
-      - run: pnpm typecheck
+      # Build BEFORE typecheck: @ag-bash/agent-bridge (and other consumers) import
+      # @ag-bash/bash, whose types come from dist/index.d.ts — produced by the build.
+      # Typechecking first yields TS2307 "Cannot find module '@ag-bash/bash'".
       - run: pnpm build
+      # Typecheck the publishable packages only. The example consumers are owned by
+      # the dedicated "Examples & Exports" workflow (examples.yml), which builds first
+      # and is the canonical gate for them; sweeping them in here via `pnpm -r` is
+      # redundant and surfaces example-specific CJS/ESM noise (e.g. cjs-consumer TS1479).
+      - run: pnpm --filter './packages/*' typecheck
       - run: pnpm --filter @ag-bash/bash check:worker-sync
       # Packaging guards (release-integrity): versions stay synchronized and the
       # packed tarballs carry their load-bearing artifacts with no workspace:
