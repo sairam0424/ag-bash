@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/agent-bridge",
-  "version": "6.0.2",
+  "version": "6.0.3",
   "description": "Terminal UI bridge for Ag-Bash — streams AI-agent output and tool calls to xterm.js-compatible terminals via pluggable adapters (SSE/HTTP fetch, custom WebSocket).",
   "type": "module",
   "main": "dist/index.js",
