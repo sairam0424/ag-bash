@@ -1,16 +1,43 @@
 {
   "name": "@ag-bash/bash",
   "version": "6.0.2",
-  "description": "Unified Agentic Bash for Ag-Bash",
+  "description": "AI-native bash interpreter in TypeScript — a sandboxed, in-process POSIX shell engine for AI agents, with 110+ builtins, WASM Python/JS/SQLite runtimes, fork-speculation, an MCP server, and an agent terminal bridge.",
+  "keywords": [
+    "bash",
+    "shell",
+    "interpreter",
+    "sandbox",
+    "agentic",
+    "ai",
+    "ai-agents",
+    "mcp",
+    "model-context-protocol",
+    "typescript",
+    "wasm",
+    "terminal",
+    "posix",
+    "tree-sitter",
+    "agent",
+    "llm"
+  ],
   "files": [
     "dist/",
     "scripts/",
     "README.md",
     "LICENSE"
   ],
+  "homepage": "https://github.com/sairam0424/ag-bash/tree/main/packages/bash#readme",
+  "bugs": {
+    "url": "https://github.com/sairam0424/ag-bash/issues"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/sairam0424"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/sairam0424/ag-bash.git"
+    "url": "https://github.com/sairam0424/ag-bash.git",
+    "directory": "packages/bash"
   },
   "type": "module",
   "main": "dist/bundle/index.js",
@@ -144,7 +171,6 @@
     "publint": "publint",
     "attw": "attw --pack ."
   },
-  "keywords": [],
   "author": "Ag-Bash",
   "license": "Apache-2.0",
   "devDependencies": {

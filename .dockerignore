@@ -1,0 +1,5 @@
+# The image installs the published npm package — almost nothing from the repo
+# needs to enter the build context. Keep it tiny and avoid leaking local state.
+*
+!Dockerfile
+!tools.json
