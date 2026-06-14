@@ -44,11 +44,18 @@ if (unique.length !== 1) {
 
 // Optional tag match: `--tag vX.Y.Z` or env TAG / GITHUB_REF_NAME. A leading
 // `v` on the tag is tolerated. Only enforced when a tag is actually supplied.
+//
+// GITHUB_REF_NAME is set for BOTH branches and tags, so only treat it as a release
+// tag when GITHUB_REF_TYPE === "tag". Otherwise a push-to-main release (Changesets
+// flow, ref_type=branch, ref_name="main") would compare "main" against the semver and
+// always fail. Explicit `--tag`/`TAG` still take precedence for manual/tag releases.
 const tagArgIndex = process.argv.indexOf("--tag");
+const refNameTag =
+  process.env.GITHUB_REF_TYPE === "tag" ? process.env.GITHUB_REF_NAME : undefined;
 const tag =
   (tagArgIndex !== -1 ? process.argv[tagArgIndex + 1] : undefined) ??
   process.env.TAG ??
-  process.env.GITHUB_REF_NAME;
+  refNameTag;
 
 if (tag) {
   const normalized = tag.replace(/^v/, "");
