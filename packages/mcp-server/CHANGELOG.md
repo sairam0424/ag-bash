@@ -1,5 +1,12 @@
 # @ag-bash/mcp-server
 
+## 6.0.4
+
+### Patch Changes
+
+- Updated dependencies [[`6bc4e0f`](https://github.com/sairam0424/ag-bash/commit/6bc4e0f976697009cb84ab7a9ad5d0da026b9cc6)]:
+  - @ag-bash/bash@6.0.4
+
 ## 6.0.3
 
 ### Patch Changes

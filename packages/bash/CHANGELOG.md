@@ -1,5 +1,21 @@
 # @ag-bash/bash
 
+## 6.0.4
+
+### Patch Changes
+
+- [#100](https://github.com/sairam0424/ag-bash/pull/100) [`6bc4e0f`](https://github.com/sairam0424/ag-bash/commit/6bc4e0f976697009cb84ab7a9ad5d0da026b9cc6) Thanks [@sairam0424](https://github.com/sairam0424)! - Bug fixes (test-debt cleanup surfaced during the 6.0.3 release):
+
+  - **find:** fix `-path` fast-path returning **zero results** on filesystems without
+    `readdirWithFileTypes` — terminal-directory files (e.g. `find -path "*/pulls/*.json" -type f`)
+    were never enqueued. (Data-loss-class correctness bug.)
+  - **security:** enforce `maxFileDescriptors` for explicit numeric FDs (`exec N>file`, N>=3),
+    which previously bypassed the limit entirely.
+  - **agents:** add `CowFs` sync `mkdirSync`/`writeFileSync` so sub-agent spawn initializes its
+    filesystem (spawn was broken under copy-on-write filesystems).
+  - **pipeline:** hash/checksum filters (`md5sum`, `sha1sum`, `sha256sum`, …) now run on empty
+    stdin instead of being short-circuited to empty output (`echo -n '' | md5sum`).
+
 ## 6.0.3
 
 ### Patch Changes
