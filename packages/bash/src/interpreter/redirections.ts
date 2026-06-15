@@ -546,6 +546,35 @@ export async function applyRedirections(
             await ctx.fs.writeFile(filePath, stderr, getFileEncoding(stderr));
             stderr = "";
           }
+        } else if (fd >= 3) {
+          // Custom numeric FD (e.g. `exec 9>/dev/null`). Unlike the {var}> path
+          // (processFdVariableRedirections), these went untracked here — so the
+          // maxFileDescriptors limit was never enforced for explicit numeric FDs.
+          // Register the FD and enforce the limit (checkFdLimit throws an
+          // ExecutionLimitError whose message contains "file descriptors").
+          if (!ctx.state.fileDescriptors) {
+            ctx.state.fileDescriptors = new Map();
+          }
+          // Re-opening an already-open FD replaces its target (no new allocation),
+          // so only limit-check when this FD is genuinely new.
+          if (!ctx.state.fileDescriptors.has(fd)) {
+            checkFdLimit(ctx);
+          }
+          const filePath = ctx.fs.resolvePath(ctx.state.cwd, target);
+          if (target !== "/dev/null") {
+            const error = await checkOutputRedirectTarget(
+              ctx,
+              filePath,
+              target,
+              { checkNoclobber: true, isClobber },
+            );
+            if (error) {
+              stderr += error;
+              exitCode = 1;
+              break;
+            }
+          }
+          ctx.state.fileDescriptors.set(fd, `__file__:${filePath}`);
         }
         break;
       }
