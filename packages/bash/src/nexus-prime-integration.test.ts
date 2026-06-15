@@ -14,7 +14,12 @@ const mockClient = {
 
 vi.mock("./services/McpClient.js", () => {
   return {
-    McpClient: vi.fn(() => mockClient),
+    // Must be newable: ServiceContainer does `new McpClient()`. A plain
+    // `vi.fn(() => mockClient)` is callable but assigning the instance's
+    // members keeps it a valid constructor and exposes the mocked methods.
+    McpClient: vi.fn(function (this: Record<string, unknown>) {
+      Object.assign(this, mockClient);
+    }),
   };
 });
 

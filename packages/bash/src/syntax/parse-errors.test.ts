@@ -144,13 +144,13 @@ describe("Bash Syntax - Parse Errors", () => {
   });
 
   describe("redirection errors", () => {
-    it("should auto-create parent directories on redirect", async () => {
+    it("should error redirecting into a non-existent directory (matches bash)", async () => {
       const env = new Bash();
-      // VirtualFS auto-creates parent directories
-      const result = await env.exec("echo test > /newdir/file.txt");
-      expect(result.exitCode).toBe(0);
-      const content = await env.readFile("/newdir/file.txt");
-      expect(content).toBe("test\n");
+      // Real bash does NOT auto-create parent dirs on redirect — it errors.
+      // `> /newdir/file.txt` fails because /newdir does not exist.
+      await expect(env.exec("echo test > /newdir/file.txt")).rejects.toThrow(
+        /ENOENT|no such file or directory/i,
+      );
     });
 
     it("should error on redirect without target", async () => {
