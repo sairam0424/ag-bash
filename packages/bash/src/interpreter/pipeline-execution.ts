@@ -253,6 +253,20 @@ const STDIN_INDEPENDENT: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Commands that READ stdin but still produce NON-empty output on empty input,
+ * so they must NOT be short-circuited when upstream produced nothing. Hash/checksum
+ * filters have a defined value for the empty string (e.g. MD5 of "" is
+ * d41d8cd98f00b204e9800998ecf8427e), so `echo -n '' | md5sum` must actually run.
+ */
+const EMPTY_STDIN_PRODUCES_OUTPUT: ReadonlySet<string> = new Set([
+  "md5sum",
+  "sha1sum",
+  "sha256sum",
+  "sha512sum",
+  "cksum",
+]);
+
+/**
  * Detect if a command is stdin-independent (doesn't read from stdin).
  * Returns true if the command is in STDIN_INDEPENDENT or has file arguments.
  */
@@ -274,6 +288,17 @@ function isStdinIndependent(command: CommandNode): boolean {
   }
 
   return false;
+}
+
+/**
+ * True when the command, reading empty stdin with no file args, still emits
+ * non-empty output (hash/checksum filters) and therefore must not be
+ * short-circuited away.
+ */
+function producesOutputOnEmptyStdin(command: CommandNode): boolean {
+  if (command.type !== "SimpleCommand" || !command.name) return false;
+  const name = getLiteralValue(command.name);
+  return name !== null && EMPTY_STDIN_PRODUCES_OUTPUT.has(name);
 }
 
 /** Count newlines in a string without creating intermediate arrays. */
@@ -371,7 +396,10 @@ export async function executePipeline(
         !isFirst &&
         stdin === "" &&
         command.type === "SimpleCommand" &&
-        !isStdinIndependent(command);
+        !isStdinIndependent(command) &&
+        // Hash/checksum filters emit a defined non-empty value for empty input,
+        // so they must actually run rather than be short-circuited to "".
+        !producesOutputOnEmptyStdin(command);
 
       if (emptyStdinShortCircuit) {
         result = {

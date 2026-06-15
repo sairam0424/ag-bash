@@ -474,10 +474,25 @@ export const findCommand: Command = {
                 depth: depth + 1,
                 resultIndex: idx,
               }));
+            } else if (inTerminalDir) {
+              // Terminal directory of a -path pattern (e.g. '*/pulls/*.json'):
+              // we must still enqueue the entries so they can be matched. Without
+              // readdirWithFileTypes we have no type info here, so we can only apply
+              // the cheap extension hint; the isFile / -type filtering happens during
+              // evaluation (which stats as needed). Omitting this branch entirely
+              // meant terminal-dir files were never enqueued -> empty results.
+              const extFilter = pathPruningHints.requiredExtension;
+              children = entries
+                .filter((entry) => !extFilter || entry.endsWith(extFilter))
+                .map((entry, idx) => ({
+                  path:
+                    currentPath === "/"
+                      ? `/${entry}`
+                      : `${currentPath}/${entry}`,
+                  depth: depth + 1,
+                  resultIndex: idx,
+                }));
             }
-            // Note: when inTerminalDir and no readdirWithFileTypes,
-            // we can't filter by type, so we process all children
-            // (they'll be filtered during evaluation anyway)
           }
         }
 

@@ -7,12 +7,12 @@
 # including the native addons (which is why we use a fuller base, NOT distroless).
 #
 # Pin AG_BASH_VERSION at build time to the release you are publishing to the catalog:
-#   docker build --build-arg AG_BASH_VERSION=6.0.2 -t ag-bash-mcp .
+#   docker build --build-arg AG_BASH_VERSION=6.0.3 -t ag-bash-mcp .
 
 # ---- build stage: install the package + production deps into a clean prefix ----
 FROM node:22-bookworm-slim AS build
 
-ARG AG_BASH_VERSION=6.0.2
+ARG AG_BASH_VERSION=6.0.3
 
 # Build toolchain for any native addon that needs compilation (node-liblzma, zstd).
 RUN apt-get update \
