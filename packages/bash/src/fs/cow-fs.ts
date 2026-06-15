@@ -276,6 +276,44 @@ export class CowFs implements IFileSystem {
     this.modifiedPaths.add(normalized);
   }
 
+  /**
+   * Synchronous mkdir into the local overlay. CowFs stores everything in an
+   * in-memory Map, so this is sound. Providing mkdirSync/writeFileSync makes
+   * isSyncInitFs(cowFs) true, so initFilesystem() actually sets up /bin, /tmp,
+   * /dev, etc. in a spawned sub-agent's overlay (it previously skipped init for
+   * CowFs because only async methods existed, breaking sub-agent spawn).
+   */
+  mkdirSync(path: string, options?: { recursive?: boolean }): void {
+    const normalized = normalizePath(path);
+    if (this.local.get(normalized)?.type === "directory") {
+      return;
+    }
+    if (options?.recursive) {
+      this.ensureParentDirs(normalized);
+    }
+    this.local.set(normalized, {
+      type: "directory",
+      mode: DEFAULT_DIR_MODE,
+      mtime: new Date(),
+    });
+    this.deleted.delete(normalized);
+    this.modifiedPaths.add(normalized);
+  }
+
+  /** Synchronous writeFile into the local overlay (see mkdirSync). */
+  writeFileSync(path: string, content: string | Uint8Array): void {
+    const normalized = normalizePath(path);
+    this.ensureParentDirs(normalized);
+    this.local.set(normalized, {
+      type: "file",
+      content: toBuffer(content, "utf8"),
+      mode: DEFAULT_FILE_MODE,
+      mtime: new Date(),
+    });
+    this.deleted.delete(normalized);
+    this.modifiedPaths.add(normalized);
+  }
+
   async readdir(path: string): Promise<string[]> {
     const normalized = normalizePath(path);
 

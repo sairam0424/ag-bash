@@ -100,10 +100,11 @@ describe("Nexus Prime Integration (MCP & Orchestration)", () => {
       expect(listResult.stdout).toContain("test-server");
       expect(listResult.stdout).toContain("mcp_test_tool");
 
-      // Check if tool is registered in toolbox
+      // Check if tool is registered in toolbox. Registered MCP tools are named
+      // `mcp:<connectionId>:<toolName>` (registry.ts registerMcpTools).
       const tools = bash.toolbox.getTools();
       const hasTool = tools.some(
-        (t) => t.name === "mcp_test-server_mcp_test_tool",
+        (t) => t.name === "mcp:test-server:mcp_test_tool",
       );
       expect(hasTool).toBe(true);
     });
