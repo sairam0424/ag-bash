@@ -11,7 +11,7 @@
       "name": "ag-bash",
       "source": "./plugins/ag-bash",
       "description": "Sandboxed AI-native bash for Claude Code: 70 MCP tools backed by the @ag-bash/bash engine — run_bash with a full unix toolkit, surgical code edit/diff, WASM Python/JavaScript, semantic search, and agent task/worktree management.",
-      "version": "6.0.2",
+      "version": "6.0.3",
       "category": "mcp",
       "keywords": [
         "bash",
