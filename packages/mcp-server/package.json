@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/mcp-server",
-  "version": "6.0.3",
+  "version": "6.0.4",
   "description": "Standalone Model Context Protocol (MCP) server for Ag-Bash — a sandboxed bash environment with 70 agentic tools (run_bash, semantic code edit/diff/analyze, WASM Python/JS, task & worktree management) over stdio JSON-RPC.",
   "mcpName": "io.github.sairam0424/ag-bash",
   "type": "module",

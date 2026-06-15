@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/bash",
-  "version": "6.0.3",
+  "version": "6.0.4",
   "description": "AI-native bash interpreter in TypeScript — a sandboxed, in-process POSIX shell engine for AI agents, with 110+ builtins, WASM Python/JS/SQLite runtimes, fork-speculation, an MCP server, and an agent terminal bridge.",
   "keywords": [
     "bash",
