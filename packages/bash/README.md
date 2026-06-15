@@ -7,10 +7,12 @@
 
 A complete bash interpreter with an in-memory filesystem, built for AI agents and TypeScript applications. No VM, no Docker, no native dependencies.
 
+> Part of the Ag-Bash suite — also available as an MCP server (`@ag-bash/mcp-server`) and a Claude Code plugin.
+
 ## Quick Start
 
 ```bash
-npm install @ag-bash/bash
+npm i @ag-bash/bash
 ```
 
 ```typescript
@@ -71,9 +73,30 @@ const bash = new Bash({
 - Python/JS runtimes disabled by default
 - Prototype-pollution defenses via null-prototype objects throughout
 
+## Install & Distribution
+
+Ag-Bash ships across multiple channels, all synchronized at the current `6.0.4` baseline:
+
+```bash
+# npm — core engine library
+npm i @ag-bash/bash
+
+# MCP server in Claude Code (exposes 70 tools over stdio)
+claude mcp add ag-bash -- npx -y @ag-bash/mcp-server
+
+# Claude Code plugin
+/plugin marketplace add sairam0424/ag-bash
+/plugin install ag-bash@ag-bash
+
+# Homebrew (installs ag-bash, ag-shell, ag-bash-mcp bins)
+brew tap sairam0424/tap && brew install ag-bash
+```
+
+Also published to the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.sairam0424/ag-bash`. A Docker MCP Catalog submission is in review.
+
 ## Links
 
-- [GitHub Repository](https://github.com/AstroBaseCode/ag-bash)
+- [GitHub Repository](https://github.com/sairam0424/ag-bash)
 - [MCP Server](https://www.npmjs.com/package/@ag-bash/mcp-server)
 - [Agent Bridge](https://www.npmjs.com/package/@ag-bash/agent-bridge)
 
