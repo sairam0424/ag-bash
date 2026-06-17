@@ -11,23 +11,23 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "ai": "^6.0.66",
-    "geist": "^1.5.1",
+    "ai": "^6.0.207",
+    "geist": "^1.7.2",
     "@ag-bash/bash": "workspace:*",
     "@ag-bash/agent-bridge": "workspace:*",
-    "next": "16.2.0-canary.26",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "fast-check": "^4.5.3",
+    "eslint": "^10",
+    "eslint-config-next": "16.2.9",
+    "fast-check": "^4.8.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^6"
   }
 }
