@@ -8,9 +8,9 @@
     "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^3.0.2",
-    "@steipete/summarize-core": "^0.7.1",
-    "ai": "^6.0.66",
+    "@ai-sdk/gateway": "^4.0.8",
+    "@steipete/summarize-core": "^0.20.1",
+    "ai": "^7.0.10",
     "@ag-bash/bash": "workspace:*"
   }
 }
