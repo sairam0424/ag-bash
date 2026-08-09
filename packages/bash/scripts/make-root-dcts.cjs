@@ -51,8 +51,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const ts = require("typescript");
 
-const srcPath = path.resolve(process.argv[2] || path.join("dist", "index.d.ts"));
-const outPath = path.resolve(process.argv[3] || path.join("dist", "index.d.cts"));
+const srcPath = path.resolve(
+  process.argv[2] || path.join("dist", "index.d.ts"),
+);
+const outPath = path.resolve(
+  process.argv[3] || path.join("dist", "index.d.cts"),
+);
 
 const RESOLUTION_ATTR = '{ "resolution-mode": "import" }';
 
@@ -95,7 +99,8 @@ function parseBarrel(input) {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const exportRe = /^export\s+(type\s+)?\{([\s\S]*?)\}\s+from\s+["']([^"']+)["']$/;
+  const exportRe =
+    /^export\s+(type\s+)?\{([\s\S]*?)\}\s+from\s+["']([^"']+)["']$/;
   /** @type {{ syntacticType: boolean, source: string, alias: string, module: string }[]} */
   const records = [];
 
@@ -239,9 +244,7 @@ function render(records, classification) {
       const params = info.typeParams.length
         ? `<${info.typeParams.join(", ")}>`
         : "";
-      const args = info.typeArgs.length
-        ? `<${info.typeArgs.join(", ")}>`
-        : "";
+      const args = info.typeArgs.length ? `<${info.typeArgs.join(", ")}>` : "";
       typeLines.push(
         `export type ${rec.alias}${params} = ${ns}.${rec.source}${args};`,
       );
