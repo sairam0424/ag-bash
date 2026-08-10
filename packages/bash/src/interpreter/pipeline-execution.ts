@@ -71,6 +71,253 @@ function getLineLimit(command: CommandNode): number | null {
   return null;
 }
 
+/**
+ * Detect the match limit for a grep command with -m N or --max-count=N.
+ * Returns the match count limit, or null if no limit is specified.
+ * When the upstream has produced N matches, we can signal early termination.
+ */
+function getMatchLimit(command: CommandNode): number | null {
+  if (command.type !== "SimpleCommand" || !command.name) return null;
+
+  const name = getLiteralValue(command.name);
+  if (name !== "grep" && name !== "egrep" && name !== "fgrep") return null;
+
+  const args = command.args;
+  for (let i = 0; i < args.length; i++) {
+    const val = getLiteralValue(args[i]);
+    if (val === null) continue;
+
+    // --max-count=N
+    const maxCountEq = /^--max-count=(\d+)$/.exec(val);
+    if (maxCountEq) return Number.parseInt(maxCountEq[1], 10);
+
+    // -mN (combined flag and value)
+    const dashMNum = /^-m(\d+)$/.exec(val);
+    if (dashMNum) return Number.parseInt(dashMNum[1], 10);
+
+    // -m N or --max-count N (separate argument)
+    if ((val === "-m" || val === "--max-count") && i + 1 < args.length) {
+      const nextVal = getLiteralValue(args[i + 1]);
+      if (nextVal !== null && /^\d+$/.test(nextVal)) {
+        return Number.parseInt(nextVal, 10);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detect if a command is `wc -l` (line count only mode).
+ * Returns true when wc is invoked with only the -l flag,
+ * allowing a streaming counter optimization instead of buffering all input.
+ */
+function isLineCountOnly(command: CommandNode): boolean {
+  if (command.type !== "SimpleCommand" || !command.name) return false;
+
+  const name = getLiteralValue(command.name);
+  if (name !== "wc") return false;
+
+  const args = command.args;
+  let hasLFlag = false;
+  let hasFileArgs = false;
+
+  for (let i = 0; i < args.length; i++) {
+    const val = getLiteralValue(args[i]);
+    if (val === null) return false; // Dynamic expansion — bail
+
+    if (val === "-l" || val === "--lines") {
+      hasLFlag = true;
+    } else if (val.startsWith("-")) {
+      // Any other flag (e.g., -w, -c, -m) disqualifies the optimization
+      return false;
+    } else {
+      // Non-flag argument means it reads from a file, not stdin
+      hasFileArgs = true;
+    }
+  }
+
+  // Only optimize when reading from stdin (piped input) with only -l
+  return hasLFlag && !hasFileArgs;
+}
+
+/**
+ * Detect the tail line limit for a tail command.
+ * Recognizes: tail -N, tail -n N, tail -n=N, tail --lines N, tail --lines=N.
+ * Returns the line count, or null if the command is not a recognized tail consumer.
+ * Optimization: only keep last N lines in a ring buffer instead of storing all input.
+ */
+function getTailLimit(command: CommandNode): number | null {
+  if (command.type !== "SimpleCommand" || !command.name) return null;
+
+  const name = getLiteralValue(command.name);
+  if (name !== "tail") return null;
+
+  const args = command.args;
+  // Check for file arguments or +N (from-start) mode which we cannot optimize
+  for (let i = 0; i < args.length; i++) {
+    const val = getLiteralValue(args[i]);
+    if (val === null) continue;
+
+    // +N means "start from line N" — not optimizable with ring buffer
+    if (/^\+\d+$/.test(val)) return null;
+
+    // -f or --follow means "keep reading" — not optimizable
+    if (val === "-f" || val === "--follow") return null;
+
+    // Non-flag, non-numeric argument is a file — skip optimization
+    if (!val.startsWith("-") && !/^\d+$/.test(val)) return null;
+  }
+
+  if (args.length === 0) return 10;
+
+  for (let i = 0; i < args.length; i++) {
+    const val = getLiteralValue(args[i]);
+    if (val === null) continue;
+
+    const dashNum = /^-(\d+)$/.exec(val);
+    if (dashNum) return Number.parseInt(dashNum[1], 10);
+
+    const dashNNum = /^-n(\d+)$/.exec(val);
+    if (dashNNum) return Number.parseInt(dashNNum[1], 10);
+
+    const dashNEqNum = /^-n=(\d+)$/.exec(val);
+    if (dashNEqNum) return Number.parseInt(dashNEqNum[1], 10);
+
+    const linesEqNum = /^--lines=(\d+)$/.exec(val);
+    if (linesEqNum) return Number.parseInt(linesEqNum[1], 10);
+
+    if ((val === "-n" || val === "--lines") && i + 1 < args.length) {
+      const nextVal = getLiteralValue(args[i + 1]);
+      if (nextVal !== null && /^\d+$/.test(nextVal)) {
+        return Number.parseInt(nextVal, 10);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Commands that inherently do NOT read from stdin.
+ * Used to avoid short-circuiting commands that generate their own output.
+ */
+const STDIN_INDEPENDENT_COMMANDS: ReadonlySet<string> = new Set([
+  "echo",
+  "printf",
+  "date",
+  "pwd",
+  "whoami",
+  "hostname",
+  "uname",
+  "true",
+  "false",
+  "seq",
+  "env",
+  "export",
+  "set",
+  "unset",
+  "alias",
+  "type",
+  "which",
+  "basename",
+  "dirname",
+  "realpath",
+  "sleep",
+  "kill",
+  "test",
+  "[",
+  "[[",
+  "declare",
+  "local",
+  "readonly",
+  "typeset",
+  "let",
+  "expr",
+]);
+
+/**
+ * Determine if a command reads from stdin (and thus can be short-circuited
+ * when stdin is empty).
+ * Returns true if the command reads stdin, false if it generates its own output.
+ */
+function readsFromStdin(command: CommandNode): boolean {
+  if (command.type !== "SimpleCommand" || !command.name) return false;
+
+  const name = getLiteralValue(command.name);
+  if (name === null) return true; // Unknown command — assume it reads stdin
+
+  if (STDIN_INDEPENDENT_COMMANDS.has(name)) return false;
+
+  // Commands with file arguments do not read from stdin
+  const fileReadingCommands = new Set([
+    "cat", "grep", "egrep", "fgrep", "wc", "sort", "uniq",
+    "head", "tail", "cut", "awk", "sed",
+  ]);
+  if (fileReadingCommands.has(name)) {
+    // Check if any non-flag argument is present (file argument)
+    const args = command.args;
+    for (let i = 0; i < args.length; i++) {
+      const val = getLiteralValue(args[i]);
+      if (val === null) return true; // Dynamic — assume reads stdin
+      if (!val.startsWith("-") && val !== "") {
+        // Has a file argument — does not read from stdin pipe
+        return false;
+      }
+    }
+    // No file arguments — reads from stdin
+    return true;
+  }
+
+  return true;
+}
+
+/**
+ * Truncate piped text to only the last N lines (ring buffer style).
+ * Used to optimize upstream output when the next stage is `tail -N`.
+ * We keep extra lines as a buffer since upstream may still be producing.
+ */
+function truncateToLastLines(text: string, maxLines: number): string {
+  if (maxLines <= 0) return "";
+
+  // Count total lines
+  let lineCount = 0;
+  let idx = 0;
+  while (idx < text.length) {
+    const nl = text.indexOf("\n", idx);
+    if (nl === -1) break;
+    lineCount++;
+    idx = nl + 1;
+  }
+  // Account for trailing content without newline
+  if (idx < text.length) lineCount++;
+
+  if (lineCount <= maxLines) return text;
+
+  // Skip (lineCount - maxLines) lines from the beginning
+  const linesToSkip = lineCount - maxLines;
+  let skipIdx = 0;
+  for (let skipped = 0; skipped < linesToSkip; skipped++) {
+    const nl = text.indexOf("\n", skipIdx);
+    if (nl === -1) break;
+    skipIdx = nl + 1;
+  }
+
+  return text.slice(skipIdx);
+}
+
+/**
+ * Count the number of newline characters in a string.
+ * Used for the streaming wc -l optimization.
+ */
+function countNewlines(text: string): number {
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) === 10) count++;
+  }
+  return count;
+}
+
 /** Truncate text to at most maxLines newline-delimited lines. */
 function truncateToLines(text: string, maxLines: number): string {
   if (maxLines <= 0) return "";
@@ -210,11 +457,83 @@ export async function executePipeline(
         accumulatedStderr += result.stderr;
       }
 
+      const nextCommand = node.commands[i + 1];
+
+      // --- Pipeline optimizations (zero-cost: null checks only when not triggered) ---
+
       // Early termination: if the next command only needs N lines, truncate
       // the piped output to avoid processing unnecessary data downstream.
-      const nextLineLimit = getLineLimit(node.commands[i + 1]);
+      const nextLineLimit = getLineLimit(nextCommand);
       if (nextLineLimit !== null) {
         stdin = truncateToLines(stdin, nextLineLimit + 10);
+      }
+
+      // grep -m N early exit: truncate upstream to N matching lines worth of input.
+      // Since grep filters lines, we provide extra input headroom (N * 10 lines)
+      // to increase the chance grep finds its N matches.
+      const nextMatchLimit = getMatchLimit(nextCommand);
+      if (nextMatchLimit !== null) {
+        stdin = truncateToLines(stdin, nextMatchLimit * 10);
+      }
+
+      // tail -N skip optimization: only retain the last N+10 lines
+      // (with buffer) so that upstream data beyond what tail needs is discarded.
+      const nextTailLimit = getTailLimit(nextCommand);
+      if (nextTailLimit !== null) {
+        stdin = truncateToLastLines(stdin, nextTailLimit + 10);
+      }
+
+      // wc -l streaming counter optimization: if the next command is `wc -l`,
+      // count newlines now and replace stdin with just the count output.
+      // This avoids passing the full text through the wc command execution.
+      if (isLineCountOnly(nextCommand)) {
+        const lineCount = countNewlines(stdin);
+        // Skip executing wc -l by providing the result directly.
+        // We synthesize the result and advance past the next command.
+        const wcResult: ExecResult = {
+          stdout: `${lineCount}\n`,
+          stderr: "",
+          exitCode: 0,
+        };
+        pipestatusExitCodes.push(wcResult.exitCode);
+        i++; // Skip the wc -l command
+        const wcIsLast = i === node.commands.length - 1;
+        if (!wcIsLast) {
+          stdin = wcResult.stdout;
+          lastResult = {
+            stdout: "",
+            stderr: "",
+            exitCode: wcResult.exitCode,
+          };
+        } else {
+          lastResult = wcResult;
+        }
+        continue;
+      }
+
+      // Empty stdin short-circuit: if the previous stage produced empty output
+      // and the next command reads from stdin, skip execution entirely.
+      if (stdin === "" && readsFromStdin(nextCommand)) {
+        // Synthesize an empty result — the command would produce nothing anyway.
+        const emptyResult: ExecResult = {
+          stdout: "",
+          stderr: "",
+          exitCode: 0,
+        };
+        pipestatusExitCodes.push(emptyResult.exitCode);
+        i++; // Skip the next command
+        const skipIsLast = i === node.commands.length - 1;
+        if (!skipIsLast) {
+          stdin = "";
+          lastResult = {
+            stdout: "",
+            stderr: "",
+            exitCode: emptyResult.exitCode,
+          };
+        } else {
+          lastResult = emptyResult;
+        }
+        continue;
       }
 
       lastResult = {

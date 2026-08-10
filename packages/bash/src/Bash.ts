@@ -12,6 +12,9 @@ import type { FunctionDefNode, ScriptNode } from "./ast/types.js";
 // Eagerly import timers to capture references before defense-in-depth patches them
 import "./timers.js";
 import { EventEmitter } from "node:events";
+import type { BashEventMap } from "./events.js";
+import { StreamingExecutor } from "./streaming/StreamingExecutor.js";
+import type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
 import { AgenticHealer } from "./agentic/agentic-healer.js";
 import { BashToolbox } from "./agentic/BashToolbox.js";
 import type { AgenticHealerConfig } from "./agentic/types.js";
@@ -27,6 +30,16 @@ import {
   createLazyCustomCommand,
   isLazyCommand,
 } from "./custom-commands.js";
+import {
+  ExecutionPipeline,
+  NormalizeStage,
+  ParseStage,
+  TransformStage,
+  SandboxStage,
+  InterpretStage,
+  PersistStage,
+  categorizeError,
+} from "./execution/index.js";
 import { InMemoryFs } from "./fs/in-memory-fs/in-memory-fs.js";
 import { initFilesystem } from "./fs/init.js";
 import type { IFileSystem, InitialFiles } from "./fs/interface.js";
@@ -66,7 +79,6 @@ import {
 import { AgTrace } from "./observability/ag-trace.js";
 import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
-import { TreeSitterParser } from "./parser/tree-sitter-parser.js";
 import { TreeSitterToAst } from "./parser/tree-sitter-to-ast.js";
 import {
   DefenseInDepthBox,
@@ -370,6 +382,7 @@ export class Bash extends EventEmitter {
   private state: InterpreterState;
   private snapshots: Map<string, BashSnapshot> = new Map();
   public readonly options: BashOptions;
+  private readonly pipeline: ExecutionPipeline;
 
   constructor(options: BashOptions = {}) {
     super();
@@ -608,6 +621,87 @@ export class Bash extends EventEmitter {
         options.agentic?.healer || { enableHeuristics: true },
       );
     }
+
+    // Build the execution pipeline
+    this.pipeline = new ExecutionPipeline();
+    this.pipeline.addStage(new NormalizeStage());
+    this.pipeline.addStage(new ParseStage({
+      parserEngine: this.parserEngine,
+      treeSitterConfig: this.treeSitterConfig,
+      limits: this.limits,
+    }));
+    this.pipeline.addStage(new TransformStage(this.transformPlugins));
+    this.pipeline.addStage(new SandboxStage(this.defenseInDepthConfig));
+    this.pipeline.addStage(new InterpretStage({
+      fs: this.fs,
+      commands: this.commands,
+      limits: this.limits,
+      execFn: this.exec.bind(this),
+      secureFetch: this.secureFetch,
+      sleepFn: this.sleepFn,
+      traceFn: this.traceFn,
+      coverageWriter: this.coverageWriter,
+      jsBootstrapCode: this.jsBootstrapCode,
+      onCommandNotFound: this.onCommandNotFound,
+      agentic: this.agentic,
+      debugger: this.debugger,
+      semanticEngine: this.semanticEngine,
+      agenticHealer: this.agenticHealer,
+      bash: this,
+    }));
+    this.pipeline.addStage(new PersistStage(
+      this.defaultPersistState,
+      (execState, _exitCode) => {
+        this.state.cwd = execState.cwd;
+        this.state.env = execState.env;
+        this.state.functions = execState.functions;
+        this.state.lastExitCode = _exitCode;
+        this.state.shoptOptions = { ...execState.shoptOptions };
+        this.state.options = { ...execState.options };
+        this.state.hashTable = execState.hashTable;
+      },
+    ));
+  }
+
+  // =========================================================================
+  // Typed Event Overloads (additive — untyped usage still works via super)
+  // =========================================================================
+
+  /**
+   * Subscribe to a typed Bash event.
+   * Provides full type inference for known event names from BashEventMap.
+   */
+  on<K extends keyof BashEventMap & string>(
+    event: K,
+    handler: (data: BashEventMap[K]) => void,
+  ): this;
+  on(event: string | symbol, handler: (...args: unknown[]) => void): this;
+  on(event: string | symbol, handler: (...args: unknown[]) => void): this {
+    return super.on(event, handler);
+  }
+
+  /**
+   * Unsubscribe from a typed Bash event.
+   */
+  off<K extends keyof BashEventMap & string>(
+    event: K,
+    handler: (data: BashEventMap[K]) => void,
+  ): this;
+  off(event: string | symbol, handler: (...args: unknown[]) => void): this;
+  off(event: string | symbol, handler: (...args: unknown[]) => void): this {
+    return super.off(event, handler);
+  }
+
+  /**
+   * Emit a typed Bash event.
+   */
+  emit<K extends keyof BashEventMap & string>(
+    event: K,
+    data: BashEventMap[K],
+  ): boolean;
+  emit(event: string | symbol, ...args: unknown[]): boolean;
+  emit(event: string | symbol, ...args: unknown[]): boolean {
+    return super.emit(event, ...args);
   }
 
   /**
@@ -640,7 +734,7 @@ export class Bash extends EventEmitter {
   }
 
   public get env(): Record<string, string> {
-    const res: Record<string, string> = {};
+    const res: Record<string, string> = Object.create(null) as Record<string, string>;
     for (const [k, v] of this.state.env) {
       res[k] = v;
     }
@@ -750,53 +844,24 @@ export class Bash extends EventEmitter {
       });
     }
 
-    if (!commandLine.trim()) {
-      return {
-        stdout: "",
-        stderr: "",
-        exitCode: 0,
-        env: mapToRecordWithExtras(this.state.env, options?.env),
-      };
-    }
-
-    // Heredoc normalization (ensure delimiters are trimmed if not in raw mode)
-    const normalizedCommandLine = options?.rawScript
-      ? commandLine
-      : commandLine.replace(
-          /<<-?\s*["']?(\w+)["']?/g,
-          (_match, delimiter) => `<<${delimiter}`,
-        );
-
-    // Log command execution
-    this.logger?.info("exec", { command: normalizedCommandLine });
-
     // Each exec call gets an isolated state copy - like starting a new shell
     // This ensures exec calls never interfere with each other
     const effectiveCwd = options?.cwd ?? this.state.cwd;
 
     // Determine PWD and cwd for the new shell context
-    // If PWD is in the provided env, use it (inherited from parent)
-    // If PWD is NOT in the provided env (was unset), use realpath to get physical path
-    // This matches bash behavior: when PWD is unset and a new shell starts,
-    // it initializes PWD (and cwd) using realpath (resolving symlinks)
     let newPwd: string | undefined;
     let newCwd = effectiveCwd;
     if (options?.cwd) {
       if (options.env && "PWD" in options.env) {
-        // PWD explicitly provided - use it
         newPwd = options.env.PWD;
       } else if (options?.env && !("PWD" in options.env)) {
-        // PWD not in provided env - use realpath to resolve symlinks
-        // This also updates cwd since the shell determines its position from scratch
         try {
           newPwd = await this.fs.realpath(effectiveCwd);
-          newCwd = newPwd; // Both PWD and cwd should be the physical path
+          newCwd = newPwd;
         } catch {
-          // Fallback to logical path if realpath fails
           newPwd = effectiveCwd;
         }
       } else {
-        // No env provided - use logical cwd
         newPwd = effectiveCwd;
       }
     }
@@ -805,13 +870,11 @@ export class Bash extends EventEmitter {
     const execEnv = options?.replaceEnv
       ? new Map<string, string>()
       : new Map(this.state.env);
-    // Merge in options.env
     if (options?.env) {
       for (const [key, value] of Object.entries(options.env)) {
         execEnv.set(key, value);
       }
     }
-    // Update PWD when cwd option is provided
     if (newPwd !== undefined) {
       execEnv.set("PWD", newPwd);
     }
@@ -820,241 +883,59 @@ export class Bash extends EventEmitter {
       ...this.state,
       env: execEnv,
       cwd: newCwd,
-      // Deep copy mutable objects to prevent interference
       functions: new Map(this.state.functions),
       localScopes: [...this.state.localScopes],
       options: { ...this.state.options },
-      // Share hashTable reference - it should persist across exec calls
       hashTable: this.state.hashTable,
-      // Pass stdin through to commands (for bash -c with piped input)
       groupStdin: options?.stdin,
-      // Cooperative cancellation signal (used by timeout command)
       signal: options?.signal,
-      // Extra arguments injected directly into first command's arg list
       extraArgs: options?.args,
       executionStartTime: Date.now(),
       sessionId: options?.sessionId ?? this.state.sessionId,
     };
 
-    // Normalize indented multi-line scripts (unless rawScript is true)
-    // This allows writing indented bash scripts in template literals
-    // BUT we must preserve whitespace inside heredoc content
-    let normalized = normalizedCommandLine;
-    if (!options?.rawScript) {
-      normalized = normalizeScript(normalizedCommandLine);
-    }
-
-    // Activate defense-in-depth box if configured
-    // This wraps execution in AsyncLocalStorage context for context-aware blocking
-    const defenseBox = this.defenseInDepthConfig
-      ? DefenseInDepthBox.getInstance(this.defenseInDepthConfig)
-      : null;
-
-    // Pre-initialize Tree-sitter outside of the defense-in-depth sandbox
-    // because its WASM/JS glue code uses dynamic imports (e.g., 'module', 'fs')
-    // that are blocked during sandboxed script execution.
-    if (this.parserEngine === "tree-sitter" && this.treeSitterConfig) {
-      const grammars = { ...this.treeSitterConfig.grammars };
-      if (this.treeSitterConfig.bashGrammarWasm) {
-        grammars.bash = this.treeSitterConfig.bashGrammarWasm;
-      }
-      await TreeSitterParser.init({
-        webTreeSitterWasm: this.treeSitterConfig.webTreeSitterWasm,
-        grammars,
-      });
-    }
-
-    const defenseHandle = defenseBox?.activate();
-
     try {
-      // Run execution inside defense-in-depth context if enabled
-      const executeScript = async (): Promise<BashExecResult> => {
-        let ast: ScriptNode;
-
-        const astCache = this.services.astCache;
-        const cachedAst = astCache.get(normalized);
-        if (cachedAst) {
-          ast = cachedAst;
-        } else {
-          if (this.parserEngine === "tree-sitter" && this.treeSitterConfig) {
-            const tree = TreeSitterParser.parse(normalized);
-            const converter = new TreeSitterToAst(normalized);
-            ast = converter.convert(tree);
-          } else {
-            ast = parse(normalized, {
-              maxHeredocSize: this.limits.maxHeredocSize,
-            }) as ScriptNode;
-          }
-          astCache.set(normalized, ast);
-        }
-
-        // Apply transform plugins if any are registered.
-        // Keep metadata null-prototype even when plugins contribute dynamic keys.
-        let metadata: ReturnType<typeof mergeToNullPrototype> | undefined;
-        if (this.transformPlugins.length > 0) {
-          let meta: Record<string, unknown> = Object.create(null);
-          for (const plugin of this.transformPlugins) {
-            const pluginResult = plugin.transform({ ast, metadata: meta });
-            ast = pluginResult.ast;
-            if (pluginResult.metadata) {
-              meta = mergeToNullPrototype(meta, pluginResult.metadata);
-            }
-          }
-          metadata = meta;
-        }
-
-        // Create interpreter with appropriate state
-        const interpreterOptions: InterpreterOptions = {
-          fs: this.fs,
-          commands: this.commands,
-          limits: this.limits,
-          exec: this.exec.bind(this),
-          fetch: this.secureFetch,
-          sleep: this.sleepFn,
-          trace: this.traceFn,
-          coverage: this.coverageWriter,
-          requireDefenseContext: defenseBox?.isEnabled() === true,
-          jsBootstrapCode: this.jsBootstrapCode,
-          onCommandNotFound: this.onCommandNotFound,
-          agentic: this.agentic,
-          getRegisteredCommands: () => Array.from(this.commands.keys()),
-          debugger: options?.debugger ?? this.debugger,
-          semanticEngine: options?.semanticEngine ?? this.semanticEngine,
-          agenticHealer: options?.agenticHealer ?? this.agenticHealer,
-          sharedBus: this.services.sharedBus,
-          bash: this,
-        };
-
-        const interpreter = new Interpreter(interpreterOptions, execState);
-        const result = await interpreter.executeScript(ast);
-        // Interpreter always sets env, assert it for type safety
-        const execResult = result as BashExecResult;
-        if (metadata) {
-          execResult.metadata = metadata;
-        }
-        return this.logResult(execResult);
-      };
-
-      const execResult = await (defenseHandle
-        ? defenseHandle.run(executeScript)
-        : executeScript());
-
-      // If persistence is enabled, commit the state back to the Bash instance
-      const shouldPersist = options?.persistState ?? this.defaultPersistState;
-      if (shouldPersist && execResult.exitCode === 0) {
-        this.state.cwd = execState.cwd;
-        this.state.env = execState.env;
-        this.state.functions = execState.functions;
-        this.state.lastExitCode = execResult.exitCode;
-        this.state.shoptOptions = { ...execState.shoptOptions };
-        this.state.options = { ...execState.options };
-        this.state.hashTable = execState.hashTable;
-      }
-
-      return execResult;
-    } catch (error: any) {
-      // ExitError propagates from 'exit' builtin (including via eval/source)
-      if (error instanceof ExitError || error.name === "ExitError") {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: error.exitCode,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      // PosixFatalError propagates from special builtins in POSIX mode
-      if (error instanceof PosixFatalError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: error.exitCode,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      if (error instanceof ArithmeticError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      // ExecutionAbortedError is thrown when an AbortSignal fires (timeout cancellation)
-      if (error instanceof ExecutionAbortedError) {
-        return this.logResult({
-          stdout: error.stdout,
-          stderr: error.stderr,
-          exitCode: 124, // Same as timeout exit code
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      // SecurityViolationError is thrown when defense-in-depth detects a blocked operation
-      const errorName = error instanceof Error ? error.name : "";
-      if (
-        error instanceof SecurityViolationError ||
-        errorName === "SecurityViolationError"
-      ) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: security violation: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)],
-        });
-      }
-
-      // ExecutionLimitError is thrown when command limits are exceeded during interpreter loop
-      if (
-        error instanceof ExecutionLimitError ||
-        errorName === "ExecutionLimitError"
-      ) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
-          exitCode: ExecutionLimitError.EXIT_CODE,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)],
-        });
-      }
-
-      if ((error as ParseException).name === "ParseException") {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: syntax error: ${sanitizeErrorMessage((error as Error).message)}\n`,
-          exitCode: 2,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error as Error)],
-        });
-      }
-      // LexerError is thrown for lexer-level issues like unterminated quotes
-      if (error instanceof LexerError) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
-          exitCode: 2,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
-      }
-      // RangeError occurs when JavaScript call stack is exceeded (deep recursion)
-      if (error instanceof RangeError) {
-        return this.logResult({
-          stdout: "",
-          stderr: `bash: ${sanitizeErrorMessage(error.message)}\n`,
-          exitCode: 1,
-          env: mapToRecordWithExtras(this.state.env, options?.env),
-          observations: [AgTrace.analyzeError(error)],
-        });
+      const result = await this.pipeline.run(
+        commandLine,
+        options,
+        this,
+        this.services,
+        execState,
+      );
+      return this.logResult(result);
+    } catch (error: unknown) {
+      const categorized = categorizeError(
+        error,
+        this.state,
+        options?.env,
+      );
+      if (categorized) {
+        return this.logResult(categorized);
       }
       throw error;
-    } finally {
-      // Always deactivate defense-in-depth box when done
-      defenseHandle?.deactivate();
     }
+  }
+
+  /**
+   * Stream execution output as incremental chunks.
+   *
+   * Returns an AsyncGenerator that yields OutputChunk objects as stdout/stderr
+   * data becomes available. The final chunk has type "exit" with the exit code.
+   *
+   * @example
+   * ```ts
+   * for await (const chunk of bash.execStream("echo hello; sleep 1; echo world")) {
+   *   if (chunk.type === "stdout") process.stdout.write(chunk.data);
+   *   if (chunk.type === "exit") console.log(`Exit: ${chunk.data}`);
+   * }
+   * ```
+   */
+  async *execStream(
+    script: string,
+    options?: StreamExecOptions,
+  ): AsyncGenerator<OutputChunk, void, undefined> {
+    const executor = new StreamingExecutor(this);
+    yield* executor.execStream(script, options);
   }
 
   /**
@@ -1284,8 +1165,8 @@ export class Bash extends EventEmitter {
     };
   }
 
-  destroy(): void {
-    this.services.sharedBus.destroy();
+  async destroy(): Promise<void> {
+    await this.services.dispose();
     this.services.astCache.clear();
   }
 }

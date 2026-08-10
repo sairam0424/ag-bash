@@ -3,7 +3,9 @@
  */
 
 import type { ChildProcess } from "node:child_process";
+import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import type { ExecutionLimits } from "../limits.js";
+import { _clearTimeout, _setTimeout } from "../timers.js";
 import type { CommandContext } from "../types.js";
 
 /**
@@ -55,18 +57,192 @@ interface JsonRpcResponse {
   error?: { code?: number; message: string };
 }
 
-class HttpTransport implements McpTransport {
-  constructor(private url: string) {}
-  async init(): Promise<void> {}
-  async send(message: unknown): Promise<unknown> {
-    const response = await fetch(this.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(message),
-    });
-    return await response.json();
+/**
+ * Security configuration for the HTTP transport layer.
+ * Controls response size limits, redirect behavior, timeouts, and domain restrictions.
+ */
+export interface HttpTransportSecurityConfig {
+  /** Maximum response body size in bytes (default: 52428800 = 50MB) */
+  maxResponseBytes?: number;
+  /** Redirect policy: "error" rejects redirects, "follow" allows them (default: "error") */
+  redirectPolicy?: "error" | "follow";
+  /** Request timeout in milliseconds (default: 30000 = 30 seconds) */
+  timeoutMs?: number;
+  /** Optional list of allowed hostnames. When set, only these domains can be reached. */
+  allowedDomains?: string[];
+}
+
+/** Default security limits for MCP HTTP transport */
+const HTTP_TRANSPORT_DEFAULTS = {
+  maxResponseBytes: 52428800, // 50MB
+  redirectPolicy: "error" as const,
+  timeoutMs: 30000,
+} as const;
+
+/**
+ * Error thrown when an MCP HTTP transport security check fails.
+ */
+class McpTransportSecurityError extends Error {
+  constructor(reason: string) {
+    super(`MCP HTTP transport security error: ${reason}`);
+    this.name = "McpTransportSecurityError";
   }
+}
+
+class HttpTransport implements McpTransport {
+  private readonly maxResponseBytes: number;
+  private readonly redirectPolicy: "error" | "follow";
+  private readonly timeoutMs: number;
+  private readonly allowedDomains: ReadonlySet<string> | null;
+
+  constructor(
+    private url: string,
+    config?: HttpTransportSecurityConfig,
+  ) {
+    this.maxResponseBytes =
+      config?.maxResponseBytes ?? HTTP_TRANSPORT_DEFAULTS.maxResponseBytes;
+    this.redirectPolicy =
+      config?.redirectPolicy ?? HTTP_TRANSPORT_DEFAULTS.redirectPolicy;
+    this.timeoutMs = config?.timeoutMs ?? HTTP_TRANSPORT_DEFAULTS.timeoutMs;
+
+    if (config?.allowedDomains && config.allowedDomains.length > 0) {
+      this.allowedDomains = new Set(
+        config.allowedDomains.map((d) => d.toLowerCase()),
+      );
+    } else {
+      this.allowedDomains = null;
+    }
+  }
+
+  async init(): Promise<void> {}
+
+  async send(message: unknown): Promise<unknown> {
+    // --- Domain allowlist enforcement ---
+    this.validateDomain(this.url);
+
+    // --- Timeout via AbortController ---
+    const controller = new AbortController();
+    const timeoutId = _setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const response = await fetch(this.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(message),
+        signal: controller.signal,
+        redirect: this.redirectPolicy === "error" ? "error" : "follow",
+      });
+
+      // --- Content-Length pre-check (fast path) ---
+      const contentLengthHeader = response.headers.get("content-length");
+      if (contentLengthHeader) {
+        const declaredSize = parseInt(contentLengthHeader, 10);
+        if (
+          !Number.isNaN(declaredSize) &&
+          declaredSize > this.maxResponseBytes
+        ) {
+          throw new McpTransportSecurityError(
+            `Response Content-Length (${declaredSize} bytes) exceeds limit (${this.maxResponseBytes} bytes)`,
+          );
+        }
+      }
+
+      // --- Stream response body with size enforcement ---
+      const body = response.body;
+      if (body) {
+        const reader = body.getReader();
+        const chunks: Uint8Array[] = [];
+        let totalBytes = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          totalBytes += value.byteLength;
+          if (totalBytes > this.maxResponseBytes) {
+            reader.cancel();
+            throw new McpTransportSecurityError(
+              `Response body exceeded size limit (${this.maxResponseBytes} bytes)`,
+            );
+          }
+          chunks.push(value);
+        }
+
+        // Decode and parse the accumulated chunks
+        const decoder = new TextDecoder();
+        const parts: string[] = [];
+        for (const chunk of chunks) {
+          parts.push(decoder.decode(chunk, { stream: true }));
+        }
+        parts.push(decoder.decode());
+        const text = parts.join("");
+
+        return JSON.parse(text);
+      }
+
+      // Fallback: no body stream available (should not happen for POST responses)
+      return await response.json();
+    } catch (error: unknown) {
+      if (error instanceof McpTransportSecurityError) {
+        throw error;
+      }
+
+      // Wrap AbortError with a clearer message
+      if (
+        error instanceof Error &&
+        error.name === "AbortError"
+      ) {
+        throw new McpTransportSecurityError(
+          `Request timed out after ${this.timeoutMs}ms`,
+        );
+      }
+
+      // Wrap redirect errors (fetch throws TypeError on redirect: "error")
+      if (
+        error instanceof TypeError &&
+        this.redirectPolicy === "error"
+      ) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes("redirect")) {
+          throw new McpTransportSecurityError(
+            "Server attempted a redirect, which is blocked by redirect policy",
+          );
+        }
+      }
+
+      throw error;
+    } finally {
+      _clearTimeout(timeoutId);
+    }
+  }
+
   close(): void {}
+
+  /**
+   * Validates that the target URL's hostname is in the allowed domains list.
+   * @throws McpTransportSecurityError if the domain is not allowed
+   */
+  private validateDomain(targetUrl: string): void {
+    if (this.allowedDomains === null) {
+      return;
+    }
+
+    let hostname: string;
+    try {
+      const parsed = new URL(targetUrl);
+      hostname = parsed.hostname.toLowerCase();
+    } catch {
+      throw new McpTransportSecurityError(
+        `Invalid URL: ${targetUrl}`,
+      );
+    }
+
+    if (!this.allowedDomains.has(hostname)) {
+      throw new McpTransportSecurityError(
+        `Domain "${hostname}" is not in the allowed domains list`,
+      );
+    }
+  }
 }
 
 class StdioTransport implements McpTransport {
@@ -113,7 +289,7 @@ class StdioTransport implements McpTransport {
     if (!this.process)
       throw new Error("Transport not initialized. Call init() first.");
     const id = this.nextId++;
-    const envelope = Object.assign({}, message as object, {
+    const envelope = Object.assign(Object.create(null), message as object, {
       id,
       jsonrpc: "2.0",
     });
@@ -168,6 +344,7 @@ export class McpClient {
     id: string,
     url: string,
     bash?: McpBashLike,
+    securityConfig?: HttpTransportSecurityConfig,
   ): Promise<McpServerConnection> {
     if (bash && this.connections.size >= bash.limits.maxMcpServers) {
       throw new Error(
@@ -175,7 +352,7 @@ export class McpClient {
       );
     }
 
-    const transport = new HttpTransport(url);
+    const transport = new HttpTransport(url, securityConfig);
     await transport.init();
 
     const connection: McpServerConnection = {
@@ -198,7 +375,7 @@ export class McpClient {
 
     const response = (await conn.transport.send({
       method: "list_tools",
-      params: {},
+      params: Object.create(null),
     })) as JsonRpcResponse;
 
     if (response.result?.tools) {
@@ -238,7 +415,7 @@ export class McpClient {
     })) as JsonRpcResponse;
 
     if (response.error) {
-      throw new Error(response.error.message || "Unknown MCP error");
+      throw new Error(sanitizeErrorMessage(response.error.message) || "Unknown MCP error");
     }
 
     return response.result;
@@ -254,5 +431,24 @@ export class McpClient {
       conn.transport.close();
       this.connections.delete(id);
     }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  Disposable                                                        */
+  /* ---------------------------------------------------------------- */
+
+  private disposed = false;
+
+  /**
+   * Disconnect all transports and release resources.
+   * Idempotent — safe to call multiple times.
+   */
+  async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const conn of this.connections.values()) {
+      conn.transport.close();
+    }
+    this.connections.clear();
   }
 }

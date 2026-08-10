@@ -2,12 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InMemoryFs } from "../../fs/in-memory-fs/in-memory-fs.js";
 import { agAnalyzeCommand } from "./ag-analyze.js";
 
-vi.mock("../../parser/tree-sitter-parser.js", () => ({
-  TreeSitterParser: {
-    parse: vi.fn(),
-  },
-}));
-
 vi.mock("../../parser/tree-sitter-to-ast.js", () => {
   return {
     TreeSitterToAst: vi.fn().mockImplementation(() => ({

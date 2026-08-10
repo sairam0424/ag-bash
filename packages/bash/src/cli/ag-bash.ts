@@ -43,6 +43,7 @@ import { fileURLToPath } from "node:url";
 import { Bash } from "../Bash.js";
 import { OverlayFs } from "../fs/overlay-fs/index.js";
 import { sanitizeErrorMessage } from "../fs/real-fs-utils.js";
+import { VERSION } from "../version.js";
 import { Theme } from "./theme.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -102,7 +103,7 @@ function printVersion(): void {
   console.log(
     Theme.colors.cyan(Theme.colors.bold("ag-bash")) +
       " " +
-      Theme.colors.dim("v2.4.0"),
+      Theme.colors.dim(`v${VERSION}`),
   );
 }
 
@@ -293,7 +294,7 @@ async function main(): Promise<void> {
   } else {
     // No script provided - show banner if TTY, then help
     if (process.stdin.isTTY && process.stdout.isTTY) {
-      Theme.printHeader("2.4.0");
+      Theme.printHeader(VERSION);
       Theme.printBrandManifest();
       Theme.printManifest({
         commands: 120,

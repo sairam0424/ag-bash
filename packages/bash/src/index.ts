@@ -2,8 +2,39 @@
 
 export type { SearchResult } from "./agentic/ToolSearchEngine.js";
 export { ToolSearchEngine } from "./agentic/ToolSearchEngine.js";
-// AI Tool integration
+
+// Typed Events
+export type {
+  BashEventMap,
+  ExecEndEvent,
+  ExecStartEvent,
+  ToolEndEvent,
+  ToolProgressEvent,
+  ToolStartEvent,
+  TypedEventEmitter,
+} from "./events.js";
+
+// Version
+export { VERSION } from "./version.js";
+
+// Command helpers
+export { fail, output, success } from "./commands/result-helpers.js";
+export type { ParseArgsOptions, ParsedArgs } from "./commands/parse-args.js";
+export { parseArgs } from "./commands/parse-args.js";
+
+// AI Tool integration (multi-framework adapters)
 export { type CreateBashToolOptions, createBashTool } from "./ai.js";
+export type {
+  AnthropicToolSet,
+  BashToolBuilder,
+  GenericToolSet,
+  LangChainToolSet,
+  OpenAIToolSet,
+  ToolDefinition,
+  ToolResult,
+  VercelToolSet,
+} from "./ai/index.js";
+export { toAnthropic, toLangChain, toOpenAI, toVercel } from "./ai/adapters/index.js";
 export type {
   CommandNode,
   PipelineNode,
@@ -164,4 +195,8 @@ export type {
   CommandContext,
   ExecResult,
   IFileSystem,
+  Observation,
 } from "./types.js";
+// Streaming execution API
+export type { OutputChunk, StreamExecOptions } from "./streaming/types.js";
+export { StreamingExecutor } from "./streaming/StreamingExecutor.js";

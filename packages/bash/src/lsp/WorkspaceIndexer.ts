@@ -1,5 +1,4 @@
 import type { Bash } from "../Bash.js";
-import { TreeSitterParser } from "../parser/tree-sitter-parser.js";
 import type { SemanticEngine } from "./semantic-engine.js";
 
 export class WorkspaceIndexer {
@@ -73,7 +72,7 @@ export class WorkspaceIndexer {
         this.engine.indexNode(ast, path, "bash");
       } else {
         try {
-          const tree = TreeSitterParser.parse(content, language);
+          const tree = this.bash.services.parser.parse(content, language);
           this.engine.indexNode(tree.rootNode, path, language);
         } catch (_e) {
           // TreeSitter parse failed — fall back to literal indexing silently

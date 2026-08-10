@@ -278,4 +278,21 @@ export class GitTracker {
       .filter((op) => op.classification === "destructive")
       .map((op) => ({ ...op }));
   }
+
+  /* ---------------------------------------------------------------- */
+  /*  Disposable                                                        */
+  /* ---------------------------------------------------------------- */
+
+  private disposed = false;
+
+  /**
+   * Dispose all resources held by this tracker.
+   * Idempotent — safe to call multiple times.
+   */
+  async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.log = [];
+    this.bus = undefined;
+  }
 }

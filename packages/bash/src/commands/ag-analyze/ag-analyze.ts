@@ -1,5 +1,4 @@
 import { SemanticEngine, SymbolType } from "../../lsp/semantic-engine.js";
-import { TreeSitterParser } from "../../parser/tree-sitter-parser.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { parseArgs } from "../../utils/args.js";
 import { hasHelpFlag, showHelp } from "../help.js";
@@ -67,7 +66,15 @@ export const agAnalyzeCommand: Command = {
         const ast = parse(content);
         engine.indexNode(ast, filePath, "bash");
       } else {
-        const tree = TreeSitterParser.parse(content, language);
+        const parser = ctx.bash?.services.parser;
+        if (!parser) {
+          return {
+            stdout: "",
+            stderr: `ag-analyze: tree-sitter parser not available\n`,
+            exitCode: 1,
+          };
+        }
+        const tree = parser.parse(content, language);
         engine.indexNode(tree.rootNode, filePath, language);
       }
 

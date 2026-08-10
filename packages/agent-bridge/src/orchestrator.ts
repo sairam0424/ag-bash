@@ -325,7 +325,7 @@ export class AgentOrchestrator {
               : JSON.stringify(chunk.output, null, 2);
           const tc = {
             toolName: existing?.toolName || "tool",
-            args: existing?.args || {},
+            args: existing?.args || Object.create(null),
             result: resultStr,
           };
           formatToolResult(tc);

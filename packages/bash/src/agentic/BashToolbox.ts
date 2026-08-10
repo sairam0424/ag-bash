@@ -12,6 +12,13 @@ import { ExplainTool, FindSymbolTool, HoverTool } from "./SemanticTool.js";
 import { TodoTool } from "./TodoTool.js";
 import { buildTool, type ToolboxTool } from "./Tool.js";
 import { ToolSearchEngine } from "./ToolSearchEngine.js";
+import {
+  BashExecTool,
+  GlobTool,
+  ListDirTool,
+  ReadFileTool,
+  WriteFileTool,
+} from "./tools/index.js";
 import type { PermissionResult, ValidationResult } from "./types.js";
 
 /**
@@ -54,71 +61,12 @@ export class BashToolbox {
   }
 
   private registerCoreTools() {
-    this.registerTool(
-      buildTool({
-        name: "read_file",
-        description: "Read the contents of a file from the virtual filesystem.",
-        parameters: z.object({
-          path: z.string().describe("Absolute path to the file to read."),
-        }),
-        isReadOnly: true,
-        execute: async (bash: Bash, { path }: { path: string }) => {
-          try {
-            const content = await bash.fs.readFile(path, "utf-8");
-            bash.updateFileState(path, { content });
-            return content;
-          } catch (error: any) {
-            return `Error reading file: ${error.message}`;
-          }
-        },
-      }),
-    );
-
-    this.registerTool(
-      buildTool({
-        name: "write_file",
-        description: "Create or overwrite a file in the virtual filesystem.",
-        parameters: z.object({
-          path: z.string().describe("Absolute path to the file to write."),
-          content: z.string().describe("The content to write to the file."),
-        }),
-        isDestructive: true,
-        execute: async (
-          bash: Bash,
-          { path, content }: { path: string; content: string },
-        ) => {
-          try {
-            await bash.fs.mkdir("/.ag-bash", { recursive: true });
-            await bash.writeFileDirect(path, content);
-            await bash.indexer.indexFile(path);
-            await bash.saveIndex();
-            await bash.lsp.notifyDidChange(path, content);
-            return `Successfully wrote to ${path}.`;
-          } catch (error: any) {
-            return `Error writing file ${path}: ${error.message}`;
-          }
-        },
-      }),
-    );
-
-    this.registerTool(
-      buildTool({
-        name: "list_dir",
-        description: "List contents of a directory.",
-        parameters: z.object({
-          path: z.string().describe("Absolute path to the directory to list."),
-        }),
-        isReadOnly: true,
-        execute: async (bash: Bash, { path }: { path: string }) => {
-          try {
-            const files = await bash.listDirDirect(path);
-            return files.join("\n");
-          } catch (error: any) {
-            return `Error listing directory ${path}: ${error.message}`;
-          }
-        },
-      }),
-    );
+    // --- Extracted tools (from ./tools/) ---
+    this.registerTool(ReadFileTool);
+    this.registerTool(WriteFileTool);
+    this.registerTool(ListDirTool);
+    this.registerTool(BashExecTool);
+    this.registerTool(GlobTool);
 
     this.registerTool(
       buildTool({
@@ -218,9 +166,7 @@ export class BashToolbox {
             const content = await bash.readFileDirect(path);
             const { parse } = await import("../parser/parser.js");
             const ast = parse(content);
-            const { SemanticEngine } = await import(
-              "../lsp/semantic-engine.js"
-            );
+            const { SemanticEngine } = await import("../lsp/semantic-engine.js");
             const engine = new SemanticEngine(ast as any);
             return {
               type: "shell",
@@ -246,64 +192,6 @@ export class BashToolbox {
         }),
         execute: async (bash: Bash, { query }: { query?: string }) => {
           return await bash.indexer.findSymbols(query);
-        },
-      }),
-    );
-
-    this.registerTool(
-      buildTool({
-        name: "run_command",
-        description: "Execute a shell command in the sandbox.",
-        parameters: z.object({
-          command: z.string().describe("The shell command to execute."),
-        }),
-        isReadOnly: (args: { command: string }) => {
-          const cmd = args.command.trim().split(/\s+/)[0];
-          const readOnlyCommands = [
-            "ls",
-            "cat",
-            "grep",
-            "find",
-            "pwd",
-            "printenv",
-            "echo",
-            "id",
-            "whoami",
-            "stat",
-            "df",
-            "du",
-            "ls-R",
-            "tree",
-            "ag-hover",
-            "ag-explain",
-            "ag-find-symbol",
-          ];
-          return (
-            readOnlyCommands.includes(cmd) &&
-            !args.command.includes(">") &&
-            !args.command.includes("|")
-          );
-        },
-        isDestructive: (args: { command: string }) => {
-          const cmd = args.command.trim().split(/\s+/)[0];
-          const destructiveCommands = [
-            "rm",
-            "mv",
-            "mkdir",
-            "touch",
-            "chmod",
-            "chown",
-            "truncate",
-            "dd",
-            "cp",
-          ];
-          return (
-            destructiveCommands.includes(cmd) || args.command.includes(">")
-          );
-        },
-        execute: async (bash: Bash, { command }: { command: string }) => {
-          const result = await bash.exec(command);
-          return result;
         },
       }),
     );
@@ -589,7 +477,7 @@ export class BashToolbox {
       buildTool({
         name: "check_environment",
         description: "Get diagnostics about the sandboxed environment.",
-        parameters: z.object({}),
+        parameters: z.object(Object.create(null)),
         execute: async (bash: Bash) => {
           return {
             cwd: (bash as any).state.cwd,
@@ -747,7 +635,7 @@ export class BashToolbox {
       buildTool({
         name: "list_todos",
         description: "List all todo items.",
-        parameters: z.object({}),
+        parameters: z.object(Object.create(null)),
         execute: async (bash: Bash) => {
           const todosPath = "/.ag-bash/todos.json";
           if (await bash.fs.exists(todosPath)) {
@@ -789,7 +677,7 @@ export class BashToolbox {
         name: "plan_enter",
         description:
           "Enter plan mode to design an approach before making changes.",
-        parameters: z.object({}),
+        parameters: z.object(Object.create(null)),
         execute: async (bash: Bash) => {
           bash.setMode("plan");
           return "Entered plan mode. You are now in read-only mode. Use plan_exit to return to execute mode when ready.";
@@ -801,7 +689,7 @@ export class BashToolbox {
       buildTool({
         name: "plan_exit",
         description: "Exit plan mode and return to execution mode.",
-        parameters: z.object({}),
+        parameters: z.object(Object.create(null)),
         execute: async (bash: Bash) => {
           bash.setMode("execute");
           return "Exited plan mode. You can now make changes to the codebase.";
@@ -872,7 +760,7 @@ export class BashToolbox {
       buildTool({
         name: "list_mcp_tools",
         description: "List all tools available via connected MCP servers.",
-        parameters: z.object({}),
+        parameters: z.object(Object.create(null)),
         execute: async (bash: Bash) => {
           const client = bash.services.mcpClient;
           return client.listConnections().map((c) => ({
@@ -888,7 +776,7 @@ export class BashToolbox {
         name: "sync_mcp_tools",
         description:
           "Synchronize and register all MCP tools into the central toolbox.",
-        parameters: z.object({}),
+        parameters: z.object(Object.create(null)),
         isReadOnly: true,
         execute: async (bash: Bash) => {
           const client = bash.services.mcpClient;
@@ -1175,43 +1063,6 @@ export class BashToolbox {
 
     this.registerTool(
       buildTool({
-        name: "glob_files",
-        description:
-          "Fast glob pattern matching over the filesystem. Returns matching file paths sorted by name or mtime.",
-        searchHint: "find files by glob pattern",
-        parameters: z.object({
-          pattern: z
-            .string()
-            .describe('Glob pattern (e.g., "**/*.ts", "src/**/*.{ts,tsx}").'),
-          path: z
-            .string()
-            .optional()
-            .describe("Root directory (default: cwd)."),
-          sort: z.string().optional().describe('"alpha" (default) or "mtime".'),
-          limit: z.number().optional().describe("Max results (default: 1000)."),
-        }),
-        isReadOnly: true,
-        execute: async (
-          bash: Bash,
-          input: {
-            pattern: string;
-            path?: string;
-            sort?: string;
-            limit?: number;
-          },
-        ) => {
-          const args = [JSON.stringify(input.pattern)];
-          if (input.path) args.push("--path", JSON.stringify(input.path));
-          if (input.sort) args.push("--sort", input.sort);
-          if (input.limit) args.push("--limit", String(input.limit));
-          const result = await bash.exec(`ag-glob ${args.join(" ")}`);
-          return result.stdout.trim().split("\n").filter(Boolean);
-        },
-      }),
-    );
-
-    this.registerTool(
-      buildTool({
         name: "git_track",
         description:
           "Record and classify a git operation. Returns classification (safe/mutating/destructive) and audit entry.",
@@ -1339,7 +1190,7 @@ export class BashToolbox {
         name: "cron_list",
         description: "List all scheduled cron jobs.",
         searchHint: "list cron jobs",
-        parameters: z.object({}),
+        parameters: z.object(Object.create(null)),
         isReadOnly: true,
         execute: async (bash: Bash) => {
           return bash.services.cronScheduler.listJobs();
@@ -1385,7 +1236,7 @@ export class BashToolbox {
         description:
           "Exit the active worktree and restore the original working directory.",
         searchHint: "exit worktree isolation",
-        parameters: z.object({}),
+        parameters: z.object(Object.create(null)),
         execute: async (bash: Bash) => {
           const result = bash.services.worktreeManager.exitWorktree();
           if (!result) return "No active worktree.";
@@ -1440,9 +1291,9 @@ export class BashToolbox {
    * Simple JSON Schema to Zod converter for MCP tools.
    */
   private jsonSchemaToZod(schema: any): z.ZodType<any> {
-    const shape: any = {};
-    const props = schema.properties || {};
-    for (const key in props) {
+    const shape: any = Object.create(null);
+    const props = schema.properties || Object.create(null);
+    for (const key of Object.keys(props)) {
       const prop = props[key];
       let zType: any = z.string();
       if (prop.type === "number") zType = z.number();
@@ -1460,7 +1311,7 @@ export class BashToolbox {
   // Removed duplicate getTools method
 
   getAgenticTools(bash: Bash): Record<string, any> {
-    const result: Record<string, any> = {};
+    const result: Record<string, any> = Object.create(null) as Record<string, any>;
     for (const tool of this.getTools()) {
       result[tool.name] = {
         description: tool.description,
@@ -1558,10 +1409,10 @@ export class BashToolbox {
    */
   private zodToJsonSchema(schema: z.ZodType<any>): any {
     const shape = (schema as any).shape;
-    const properties: any = {};
+    const properties: any = Object.create(null);
     const required: string[] = [];
 
-    for (const key in shape) {
+    for (const key of Object.keys(shape)) {
       const field = shape[key];
       const desc = field.description;
 

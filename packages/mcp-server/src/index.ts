@@ -1,4 +1,111 @@
-import { Bash } from "@ag-bash/bash";
+import { Bash, VERSION } from "@ag-bash/bash";
+import { validateSnapshot, validateDelta } from "./schemas.js";
+
+// ---------------------------------------------------------------------------
+// CLI Argument Parsing (zero dependencies)
+// ---------------------------------------------------------------------------
+
+interface CliConfig {
+  networkAllowList: string[];
+  authToken: string | null;
+  maxPayloadSize: number;
+  noAuth: boolean;
+}
+
+function parseCliArgs(argv: string[]): CliConfig {
+  const config: CliConfig = {
+    networkAllowList: [],
+    authToken: null,
+    maxPayloadSize: 10_485_760, // 10MB default
+    noAuth: false,
+  };
+
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--network-allow" && i + 1 < argv.length) {
+      i++;
+      const value = argv[i];
+      config.networkAllowList = value
+        .split(",")
+        .map((d) => d.trim())
+        .filter((d) => d.length > 0);
+    } else if (arg === "--auth-token" && i + 1 < argv.length) {
+      i++;
+      config.authToken = argv[i];
+    } else if (arg === "--max-payload-size" && i + 1 < argv.length) {
+      i++;
+      const parsed = Number.parseInt(argv[i], 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        config.maxPayloadSize = parsed;
+      }
+    } else if (arg === "--no-auth") {
+      config.noAuth = true;
+    }
+  }
+
+  return config;
+}
+
+const cliConfig = parseCliArgs(process.argv);
+
+// ---------------------------------------------------------------------------
+// Rate Limiter (sliding window, 100 req/s)
+// ---------------------------------------------------------------------------
+
+const RATE_LIMIT_WINDOW_MS = 1000;
+const RATE_LIMIT_MAX_REQUESTS = 100;
+const MAX_CONCURRENT_TOOL_EXECUTIONS = 10;
+
+class RateLimiter {
+  private timestamps: number[] = [];
+  private concurrentToolCalls = 0;
+
+  isRateLimited(): boolean {
+    const now = Date.now();
+    // Evict timestamps outside the window
+    while (this.timestamps.length > 0 && this.timestamps[0] < now - RATE_LIMIT_WINDOW_MS) {
+      this.timestamps.shift();
+    }
+    if (this.timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+      return true;
+    }
+    this.timestamps.push(now);
+    return false;
+  }
+
+  acquireToolSlot(): boolean {
+    if (this.concurrentToolCalls >= MAX_CONCURRENT_TOOL_EXECUTIONS) {
+      return false;
+    }
+    this.concurrentToolCalls++;
+    return true;
+  }
+
+  releaseToolSlot(): void {
+    if (this.concurrentToolCalls > 0) {
+      this.concurrentToolCalls--;
+    }
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
+// ---------------------------------------------------------------------------
+// Output Truncation
+// ---------------------------------------------------------------------------
+
+const MAX_OUTPUT_SIZE = 1_048_576; // 1MB
+
+function truncateOutput(text: string): string {
+  if (text.length > MAX_OUTPUT_SIZE) {
+    return `${text.slice(0, MAX_OUTPUT_SIZE)}[truncated]`;
+  }
+  return text;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function sanitizeErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) return "Internal server error";
@@ -20,13 +127,21 @@ function sanitizeErrorMessage(error: unknown): string {
 class AgBashServer {
   private bash: Bash;
   private readonly protocolVersion = "2024-11-05";
+  private authenticated = false;
 
   constructor() {
-    // Initialize the persistent Bash engine
+    // Build network config from CLI allowlist (no full internet access)
+    const networkConfig: Record<string, unknown> = Object.create(null);
+    if (cliConfig.networkAllowList.length > 0) {
+      // Convert domain allowlist to URL prefixes (https only)
+      networkConfig.allowedUrlPrefixes = cliConfig.networkAllowList.map(
+        (domain) => `https://${domain}`,
+      );
+    }
+
+    // Initialize the persistent Bash engine with restricted network
     this.bash = new Bash({
-      network: {
-        dangerouslyAllowFullInternetAccess: true,
-      },
+      network: networkConfig,
       runtimes: { python: true, javascript: true },
       security: { defenseInDepth: true },
     });
@@ -103,6 +218,20 @@ class AgBashServer {
     try {
       switch (method) {
         case "initialize": {
+          // Authentication gate: validate token if configured
+          if (cliConfig.authToken && !cliConfig.noAuth) {
+            const clientToken = params?._authToken;
+            if (clientToken !== cliConfig.authToken) {
+              return this.sendResponse(id, {
+                error: {
+                  code: -32600,
+                  message: "Authentication failed",
+                },
+              });
+            }
+          }
+          this.authenticated = true;
+
           return this.sendResponse(id, {
             result: {
               protocolVersion: this.protocolVersion,
@@ -113,7 +242,7 @@ class AgBashServer {
               },
               serverInfo: {
                 name: "ag-bash",
-                version: "3.0.0",
+                version: VERSION,
               },
             },
           });
@@ -213,24 +342,34 @@ class AgBashServer {
         }
 
         case "tools/call": {
+          // Concurrency semaphore: max 10 concurrent tool executions
+          if (!rateLimiter.acquireToolSlot()) {
+            return this.sendResponse(id, {
+              error: {
+                code: -32429,
+                message: "Too many concurrent tool executions",
+              },
+            });
+          }
+          try {
           const { name, arguments: args } = params;
           if (name === "run_bash") {
             const script = String(args?.script || "");
-            const result = await this.bash.exec(script, { persistState: true });
+            const execResult = await this.bash.exec(script, { persistState: true });
 
             let output = "";
-            if (result.stdout) output += result.stdout;
-            if (result.stderr) output += `\nError:\n${result.stderr}`;
+            if (execResult.stdout) output += execResult.stdout;
+            if (execResult.stderr) output += `\nError:\n${execResult.stderr}`;
 
             return this.sendResponse(id, {
               result: {
                 content: [
                   {
                     type: "text",
-                    text: output || "(No output)",
+                    text: truncateOutput(output || "(No output)"),
                   },
                 ],
-                isError: result.exitCode !== 0,
+                isError: execResult.exitCode !== 0,
               },
             });
           } else if (name === "get_state") {
@@ -258,15 +397,17 @@ class AgBashServer {
             );
             return this.sendResponse(id, {
               result: {
-                content: [{ type: "text", text: encoded }],
+                content: [{ type: "text", text: truncateOutput(encoded) }],
               },
             });
           } else if (name === "restore") {
             const encodedSnapshot = String(args?.snapshot || "");
-            const snapshot = JSON.parse(
+            const rawSnapshot = JSON.parse(
               Buffer.from(encodedSnapshot, "base64").toString("utf-8"),
             );
-            await this.bash.restore(snapshot);
+            // Validate snapshot schema before passing to engine (throws on malformed input)
+            validateSnapshot(rawSnapshot);
+            await this.bash.restore(rawSnapshot);
             return this.sendResponse(id, {
               result: {
                 content: [
@@ -276,24 +417,28 @@ class AgBashServer {
             });
           } else if (name === "create_delta") {
             const encodedBase = String(args?.baseSnapshot || "");
-            const base = JSON.parse(
+            const rawBase = JSON.parse(
               Buffer.from(encodedBase, "base64").toString("utf-8"),
             );
-            const delta = await this.bash.createDelta(base);
+            // Validate the base snapshot input (throws on malformed input)
+            validateSnapshot(rawBase);
+            const delta = await this.bash.createDelta(rawBase);
             const encodedDelta = Buffer.from(JSON.stringify(delta)).toString(
               "base64",
             );
             return this.sendResponse(id, {
               result: {
-                content: [{ type: "text", text: encodedDelta }],
+                content: [{ type: "text", text: truncateOutput(encodedDelta) }],
               },
             });
           } else if (name === "apply_delta") {
             const encodedDelta = String(args?.delta || "");
-            const delta = JSON.parse(
+            const rawDelta = JSON.parse(
               Buffer.from(encodedDelta, "base64").toString("utf-8"),
             );
-            await this.bash.applyDelta(delta);
+            // Validate delta schema before passing to engine (throws on malformed input)
+            validateDelta(rawDelta);
+            await this.bash.applyDelta(rawDelta);
             return this.sendResponse(id, {
               result: {
                 content: [
@@ -303,6 +448,9 @@ class AgBashServer {
             });
           }
           break;
+          } finally {
+            rateLimiter.releaseToolSlot();
+          }
         }
 
         case "resources/list": {
@@ -449,8 +597,47 @@ class AgBashServer {
       const lines = data.toString().split("\n");
       for (const line of lines) {
         if (!line.trim()) continue;
+
+        // Payload size check (before JSON.parse to prevent OOM)
+        if (line.length > cliConfig.maxPayloadSize) {
+          this.sendResponse(null, {
+            error: {
+              code: -32600,
+              message: `Payload exceeds maximum size of ${cliConfig.maxPayloadSize} bytes`,
+            },
+          });
+          continue;
+        }
+
+        // Rate limiting check
+        if (rateLimiter.isRateLimited()) {
+          this.sendResponse(null, {
+            error: {
+              code: -32429,
+              message: "Rate limited",
+            },
+          });
+          continue;
+        }
+
         try {
           const request = JSON.parse(line);
+
+          // Authentication enforcement: after initialize, all methods require auth
+          const isInitialize = request.method === "initialize";
+          const isNotification = typeof request.method === "string" && request.method.startsWith("notifications/");
+          if (!isInitialize && !isNotification && !this.authenticated) {
+            if (cliConfig.authToken && !cliConfig.noAuth) {
+              this.sendResponse(request.id ?? null, {
+                error: {
+                  code: -32600,
+                  message: "Authentication required — call initialize first",
+                },
+              });
+              continue;
+            }
+          }
+
           this.handleRequest(request);
         } catch (_e) {
           console.error("Failed to parse JSON-RPC message");

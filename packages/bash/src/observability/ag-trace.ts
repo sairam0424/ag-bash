@@ -163,12 +163,16 @@ export class AgTrace {
     }
 
     if (error instanceof ParseException || error instanceof LexerError) {
+      const errLine = (error as { line?: number }).line;
+      const errColumn = (error as { column?: number }).column;
       return {
         type: "syntax_error",
         message: error.message,
+        line: errLine,
+        column: errColumn,
         context: {
-          line: (error as any).line,
-          column: (error as any).column,
+          line: errLine,
+          column: errColumn,
         },
       };
     }

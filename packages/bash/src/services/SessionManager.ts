@@ -64,4 +64,23 @@ export class SessionManager {
       lastUsed: Date.now() - s.lastUsedAt,
     }));
   }
+
+  /* ---------------------------------------------------------------- */
+  /*  Disposable                                                        */
+  /* ---------------------------------------------------------------- */
+
+  private disposed = false;
+
+  /**
+   * Terminate all active sessions and release resources.
+   * Idempotent — safe to call multiple times.
+   */
+  async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const session of this.sessions.values()) {
+      session.worker.terminate();
+    }
+    this.sessions.clear();
+  }
 }

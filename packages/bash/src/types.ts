@@ -30,6 +30,12 @@ export interface Observation {
   command?: string;
   /** Path related to the failure (if any) */
   path?: string;
+  /** Source line number where the error originated (1-based) */
+  line?: number;
+  /** Source column number where the error originated (1-based) */
+  column?: number;
+  /** Call stack trace at the point of failure */
+  callStack?: string[];
   /** Corrective suggestions for the agent */
   suggestions?: string[];
   /** Detailed technical context */
@@ -243,6 +249,12 @@ export interface CommandContext {
 
 export interface Command {
   name: string;
+  /** Human-readable description of what this command does. */
+  description?: string;
+  /** Usage pattern string (e.g., "mycommand [-v] [--out=path] <input>"). */
+  usage?: string;
+  /** Example invocations for documentation and help output. */
+  examples?: string[];
   /**
    * When true, execute this command inside DefenseInDepthBox.runTrustedAsync().
    * Use for trusted host-extension commands that need direct Node.js globals.
@@ -250,7 +262,7 @@ export interface Command {
    * trusted wrappers only at narrow infrastructure boundaries.
    */
   trusted?: boolean;
-  execute(args: string[], ctx: CommandContext): Promise<ExecResult>;
+  execute(args: string[], ctx: CommandContext): Promise<ExecResult> | ExecResult;
 }
 
 export type CommandRegistry = Map<string, Command>;

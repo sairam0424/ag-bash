@@ -40,7 +40,10 @@ export function createLazyCommand(def: LazyCommandDef): Command {
         }
       }
 
-      return DefenseInDepthBox.runTrustedAsync(() => cmd?.execute(args, ctx));
+      return DefenseInDepthBox.runTrustedAsync(async () => {
+        const result = await cmd?.execute(args, ctx);
+        return result as ExecResult;
+      });
     },
   };
 }

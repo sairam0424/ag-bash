@@ -472,7 +472,7 @@ export async function executeExternalCommand(
         ctx.requireDefenseContext,
         "command",
         `${commandName} execution`,
-        () => cmd.execute(args, guardedCmdCtx),
+        async () => cmd.execute(args, guardedCmdCtx),
       );
 
     if (cmd.trusted) {

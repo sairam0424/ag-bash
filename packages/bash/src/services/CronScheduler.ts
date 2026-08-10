@@ -346,4 +346,21 @@ export class CronScheduler {
       job: { ...job },
     });
   }
+
+  /* ---------------------------------------------------------------- */
+  /*  Disposable                                                        */
+  /* ---------------------------------------------------------------- */
+
+  private disposed = false;
+
+  /**
+   * Dispose all resources held by this scheduler.
+   * Idempotent — safe to call multiple times.
+   */
+  async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.jobs.clear();
+    this.bus = undefined;
+  }
 }
