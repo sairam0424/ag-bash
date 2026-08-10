@@ -1,0 +1,4 @@
+[submodule "mcp-registry"]
+	path = mcp-registry
+	url = https://github.com/sairam0424/mcp-registry.git
+	branch = add-ag-bash-mindforge
