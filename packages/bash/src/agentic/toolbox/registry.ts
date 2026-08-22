@@ -12,6 +12,7 @@ import type { Bash } from "../../Bash.js";
 import { WebFetchTool } from "../../commands/ag-web/ag-web-fetch.js";
 import { WebSearchTool } from "../../commands/ag-web/ag-web-search.js";
 import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
+import { shellJoinArgs } from "../../helpers/shell-quote.js";
 import { LspTool } from "../../lsp/LspTool.js";
 import { SemanticEngine } from "../../lsp/semantic-engine.js";
 import { detectDestructiveCommand } from "../../security/destructive-command-detector.js";
@@ -25,7 +26,6 @@ import { ExplainTool, FindSymbolTool, HoverTool } from "../SemanticTool.js";
 import { TodoTool } from "../TodoTool.js";
 import { buildTool, type ToolboxTool } from "../Tool.js";
 import { ToolSearchEngine } from "../ToolSearchEngine.js";
-import type { PermissionResult, ValidationResult } from "../types.js";
 import { executeTool } from "./executor.js";
 import {
   type JsonSchema,
@@ -63,18 +63,14 @@ interface AgenticToolEntry {
   execute: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
-/**
- * Defaults for all tools (fail-closed where it matters).
- */
-const _TOOL_DEFAULTS = {
-  isReadOnly: () => false,
-  isDestructive: () => false,
-  isConcurrencySafe: () => false,
-  checkPermissions: async (_bash: Bash): Promise<PermissionResult> => ({
-    behavior: "allow",
-  }),
-  validateInput: async (): Promise<ValidationResult> => ({ result: true }),
-};
+// NOTE: a `_TOOL_DEFAULTS` const previously sat here, documented as
+// "fail-closed where it matters" but never referenced by anything -- its only
+// occurrence in the repo was its own declaration. Its `validateInput` returned
+// `{ result: true }` unconditionally, so anyone reading it would conclude the
+// registry's default validation fails open. It does not: every tool is built
+// through `buildTool`, whose default `validateInput` runs `parameters.safeParse`
+// (see ../Tool.ts). The dead const has been removed rather than "fixed", since
+// correcting it would have implied it was on a live code path.
 
 /** Null-prototype empty shape for Zod schemas with no parameters. */
 const EMPTY_SHAPE: Record<string, never> = Object.create(null);
@@ -380,7 +376,9 @@ export class BashToolbox {
           { path, query }: { path: string; query: string },
         ) => {
           try {
-            const result = await bash.exec(`grep -r "${query}" ${path}`);
+            const result = await bash.exec(
+              shellJoinArgs(["grep", "-r", query, path]),
+            );
             return result.stdout || result.stderr || "No matches found.";
           } catch (error: unknown) {
             const message =
@@ -586,7 +584,9 @@ export class BashToolbox {
           bash: Bash,
           { file1, file2 }: { file1: string; file2: string },
         ) => {
-          const result = await bash.exec(`diff -u ${file1} ${file2}`);
+          const result = await bash.exec(
+            shellJoinArgs(["diff", "-u", file1, file2]),
+          );
           return result.stdout || result.stderr;
         },
       }),
@@ -600,7 +600,7 @@ export class BashToolbox {
           command: z.string().describe("The name of the builtin command."),
         }),
         execute: async (bash: Bash, { command }: { command: string }) => {
-          const result = await bash.exec(`help ${command}`);
+          const result = await bash.exec(shellJoinArgs(["help", command]));
           return result.stdout || result.stderr;
         },
       }),
@@ -620,7 +620,9 @@ export class BashToolbox {
           bash: Bash,
           { path, pattern }: { path: string; pattern: string },
         ) => {
-          const result = await bash.exec(`find ${path} -name "${pattern}"`);
+          const result = await bash.exec(
+            shellJoinArgs(["find", path, "-name", pattern]),
+          );
           return result.stdout.split("\n").filter(Boolean);
         },
       }),
@@ -671,7 +673,13 @@ export class BashToolbox {
           code: z.string().describe("The JS code to execute."),
         }),
         execute: async (bash: Bash, { code }: { code: string }) => {
-          const result = await bash.exec(`js-exec -c ${JSON.stringify(code)}`);
+          // JSON.stringify escapes `"` but not `$`, so the double-quoted word it
+          // produced still underwent command substitution. Shell-quoting also
+          // fixes multi-line sources, which previously reached js-exec with
+          // literal two-character \n sequences instead of real newlines.
+          const result = await bash.exec(
+            shellJoinArgs(["js-exec", "-c", code]),
+          );
           return result;
         },
       }),
@@ -1282,11 +1290,13 @@ export class BashToolbox {
             limit?: number;
           },
         ) => {
-          const args = [JSON.stringify(input.pattern)];
-          if (input.path) args.push("--path", JSON.stringify(input.path));
-          if (input.sort) args.push("--sort", input.sort);
-          if (input.limit) args.push("--limit", String(input.limit));
-          const result = await bash.exec(`ag-glob ${args.join(" ")}`);
+          // Build a real argv and shell-quote it. JSON.stringify was doing the
+          // quoting here, which stopped `"` and glob expansion but not `$(...)`.
+          const argv = ["ag-glob", input.pattern];
+          if (input.path) argv.push("--path", input.path);
+          if (input.sort) argv.push("--sort", input.sort);
+          if (input.limit) argv.push("--limit", String(input.limit));
+          const result = await bash.exec(shellJoinArgs(argv));
           return result.stdout.trim().split("\n").filter(Boolean);
         },
       }),
