@@ -45,6 +45,14 @@ jobs:
       attestations: write # actions/attest-build-provenance
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # vendor/cpython-emscripten/python.wasm is this repo's only Git-LFS
+          # tracked file. Without lfs:true the checkout leaves a 132-byte
+          # pointer in place of a 597KB binary, so the packed tarball ships a
+          # python3 worker with no CPython runtime and every python3/WASM test
+          # fails. Nothing else hydrates it: scripts/setup-vendor.js only
+          # provisions the tree-sitter artifacts out of node_modules.
+          lfs: true
       # NOTE: intentionally NOT using the composite setup action here — the
       # publish path needs registry-url wired and must NOT cache the pnpm store
       # on a credentialed job (cache-poisoning surface).

@@ -45,6 +45,11 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # check:pack-contents inspects the packed tarball, which must carry a
+          # real vendor/cpython-emscripten/python.wasm rather than the 132-byte
+          # Git-LFS pointer an lfs-less checkout leaves behind.
+          lfs: true
       - uses: ./.github/actions/setup
       # Supply-chain gate (E3): audit MUST fail the build on high/critical
       # advisories. Do NOT add continue-on-error here — that silently masks
