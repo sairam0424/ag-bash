@@ -110,7 +110,12 @@ import { type LLMProvider, RunLoop } from "@ag-bash/bash/agent-runtime";
 const llm: LLMProvider = {
   async generate(request) {
     // Call your model with request.messages / request.tools and map the reply.
-    return { content: "done", stopReason: "end_turn" };
+    // `usage` is required: RunLoop reads it every turn for budget accounting.
+    return {
+      content: "done",
+      stopReason: "end_turn",
+      usage: { inputTokens: 0, outputTokens: 0 },
+    };
   },
 };
 

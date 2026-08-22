@@ -142,40 +142,31 @@ function renameDuplicateDeclarations(code: string): string {
 
 /**
  * Add implied imports to a code block and wrap non-import code in async IIFE
- * to avoid redeclaration errors between examples
+ * to avoid redeclaration errors between examples.
+ *
+ * Deliberately does NOT emit `// @ts-nocheck`. An earlier version prepended it
+ * to `imports`, which then landed *after* the block's own imports (because the
+ * two lists were concatenated as `[...existingImports, ...newImports]`) and was
+ * therefore inert — TypeScript only honours the pragma in a file's leading
+ * comment block. Putting it back in the right place would silently neuter the
+ * whole compile check, so it is gone instead.
+ *
+ * Implied imports are only added for identifiers that are genuinely exported
+ * from the package root; the specifier must be a real entry point in the
+ * `exports` map of packages/bash/package.json, otherwise the harness would
+ * manufacture failures for examples that are perfectly valid.
  */
 function addImpliedImports(code: string): string {
-  const imports: string[] = ["// @ts-nocheck"];
+  const imports: string[] = [];
 
-  // Check what's used and add appropriate imports
-  if (code.includes("Bash") && !code.includes('from "@ag-bash/bash"')) {
-    imports.push('import { Bash } from "@ag-bash/bash";');
+  // Check what's used and add appropriate imports. All of these are root
+  // exports of @ag-bash/bash (see src/index.ts).
+  const impliedRootExports = ["Bash", "defineCommand", "Sandbox"];
+  for (const name of impliedRootExports) {
+    if (code.includes(name) && !code.includes('from "@ag-bash/bash"')) {
+      imports.push(`import { ${name} } from "@ag-bash/bash";`);
+    }
   }
-  if (
-    code.includes("defineCommand") &&
-    !code.includes('from "@ag-bash/bash"')
-  ) {
-    imports.push('import { defineCommand } from "@ag-bash/bash";');
-  }
-  if (code.includes("Sandbox") && !code.includes('from "@ag-bash/bash"')) {
-    imports.push('import { Sandbox } from "@ag-bash/bash";');
-  }
-  // @ag-bash/bash imports are handled via ephemeral type definitions
-  if (
-    code.includes("OverlayFs") &&
-    !code.includes('from "@ag-bash/bash/fs/overlay-fs"')
-  ) {
-    imports.push('import { OverlayFs } from "@ag-bash/bash/fs/overlay-fs";');
-  }
-  if (
-    code.includes("ReadWriteFs") &&
-    !code.includes('from "@ag-bash/bash/fs/read-write-fs"')
-  ) {
-    imports.push(
-      'import { ReadWriteFs } from "@ag-bash/bash/fs/read-write-fs";',
-    );
-  }
-  // ai imports are handled via ephemeral type definitions
 
   // Extract existing imports from code
   const existingImports = code.match(/^import .*/gm) || [];
@@ -202,19 +193,110 @@ function addImpliedImports(code: string): string {
   return `${allImports.join("\n")}\n\n${wrappedCode}`;
 }
 
+/** Absolute path to the real `@ag-bash/bash` package root. */
+const PACKAGE_ROOT = path.join(import.meta.dirname, "..");
+const PACKAGE_NAME = "@ag-bash/bash";
+
 /**
- * Compile TypeScript blocks from multiple sources in a single tsc invocation
+ * Map every entry point declared in the real `exports` map of
+ * packages/bash/package.json onto its REAL source module, for use as tsconfig
+ * `paths`. Documentation examples are then type-checked against the actual
+ * public surface instead of a hand-written stub.
+ *
+ * Derived from `exports` rather than hardcoded on purpose: a newly added
+ * subpath is picked up automatically. `./agent-runtime` was exactly this case —
+ * a real, published entry point that the old hand-written stub knew nothing
+ * about, so a correct README example failed to compile.
+ *
+ * The mapping targets the sources rather than the emitted declarations because
+ * `dist/` only exists after `pnpm build` and this file also runs in the unit
+ * lane on a plain checkout. Each `dist/<x>.d.ts` is generated from `src/<x>.ts`
+ * by `tsc`, so the surface being checked is the same one consumers get.
  */
-function compileTypeScriptBlocks(
+function resolveRealPackagePaths(): Map<string, string> {
+  const manifestPath = path.join(PACKAGE_ROOT, "package.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as {
+    exports?: unknown;
+  };
+  const exportsMap = manifest.exports;
+  if (typeof exportsMap !== "object" || exportsMap === null) {
+    throw new Error(`No "exports" map found in ${manifestPath}`);
+  }
+
+  const resolved = new Map<string, string>();
+  for (const [subpath, conditions] of Object.entries(exportsMap)) {
+    if (typeof conditions !== "object" || conditions === null) continue;
+    const entry = conditions as {
+      import?: { types?: unknown };
+      require?: { types?: unknown };
+    };
+    const types = entry.import?.types ?? entry.require?.types;
+    if (typeof types !== "string") continue;
+
+    // "./dist/agent-runtime/index.d.ts" -> "src/agent-runtime/index.ts"
+    const sourceRelative = types
+      .replace(/^\.\/dist\//, "src/")
+      .replace(/\.d\.ts$/, ".ts");
+    const sourceAbsolute = path.join(PACKAGE_ROOT, sourceRelative);
+    if (!fs.existsSync(sourceAbsolute)) {
+      throw new Error(
+        `exports["${subpath}"] declares types "${types}" but the source it is ` +
+          `generated from (${sourceRelative}) does not exist. ` +
+          "Update this test's dist->src mapping.",
+      );
+    }
+
+    const specifier =
+      subpath === "."
+        ? PACKAGE_NAME
+        : `${PACKAGE_NAME}/${subpath.replace(/^\.\//, "")}`;
+    resolved.set(specifier, sourceAbsolute);
+  }
+
+  if (!resolved.has(PACKAGE_NAME)) {
+    throw new Error(`exports map in ${manifestPath} has no "." entry`);
+  }
+  return resolved;
+}
+
+/**
+ * Collect `.d.ts` files under the package source that declare an *external*
+ * (non-relative) ambient module — e.g. `src/observability/opentelemetry-api.d.ts`
+ * declares `@opentelemetry/api`, an intentionally-uninstalled optional
+ * dependency. The real sources import those specifiers, so without these files
+ * in the program the whole graph fails to resolve with TS2307.
+ */
+function collectAmbientModuleDeclarations(dir: string): string[] {
+  const found: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules") continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...collectAmbientModuleDeclarations(full));
+      continue;
+    }
+    if (!entry.name.endsWith(".d.ts")) continue;
+    if (/declare\s+module\s+["'](?!\.)/.test(fs.readFileSync(full, "utf-8"))) {
+      found.push(full);
+    }
+  }
+  return found;
+}
+
+/**
+ * Type-check TypeScript blocks from multiple sources in a single tsc invocation
+ * and return the raw `error TS...` lines (empty when everything compiles).
+ */
+function typeCheckTypeScriptBlocks(
   blocksBySource: Array<{ source: string; blocks: string[] }>,
-): void {
+): string[] {
   const rootDir = path.join(import.meta.dirname, "..", "..", "..");
+  // Fixed name: `.docs-test-tmp/` is the directory the repo .gitignore covers.
   const tmpDir = path.join(rootDir, ".docs-test-tmp");
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
     const files: string[] = [];
-    const fileToSource: Map<string, string> = new Map();
 
     // Write all blocks from all sources to files
     for (const { source, blocks } of blocksBySource) {
@@ -224,115 +306,62 @@ function compileTypeScriptBlocks(
         const filePath = path.join(tmpDir, fileName);
         fs.writeFileSync(filePath, code);
         files.push(filePath);
-        fileToSource.set(fileName, source);
       }
     }
 
-    if (files.length === 0) return;
+    if (files.length === 0) return [];
 
-    // Create ephemeral type definitions for external packages
-    const BashDeclarations = `
-declare module "@ag-bash/bash" {
-  export interface BashOptions {
-    files?: Record<string, any>;
-    cwd?: string;
-    env?: Record<string, string>;
-    [key: string]: any;
-  }
-  export class Bash {
-    constructor(options?: BashOptions);
-    exec(command: string): Promise<{ stdout: string; stderr: string; exitCode: number; metadata?: any }>;
-    registerTransformPlugin(plugin: any): void;
-    transform(script: string): any;
-  }
-  export class Sandbox {
-    constructor(options?: any);
-    exec(command: string): Promise<any>;
-  }
-  export const defineCommand: any;
-  export interface CreateBashToolOptions {
-    sandbox?: any;
-    destination?: string;
-    extraInstructions?: string;
-    files?: any;
-    network?: any;
-    [key: string]: any;
-  }
-  export const createBashTool: any;
-  export class BashTransformPipeline {
-    use(plugin: any): this;
-    transform(script: string): any;
-  }
-  export class TeePlugin { constructor(options?: any); }
-  export class CommandCollectorPlugin { constructor(options?: any); }
-  export const parse: any;
-  export const serialize: any;
-  export type TransformPlugin<T = any> = any;
-  export type TransformContext = any;
-  export type TransformResult<T = any> = any;
-  export type ScriptNode = any;
-  export type StatementNode = any;
-  export type PipelineNode = any;
-  export type CommandNode = any;
-  export type SimpleCommandNode = any;
-  export type WordNode = any;
-  export class InMemoryFs { constructor(options?: any); }
-  export class ReadWriteFs { constructor(options?: any); }
-  export class OverlayFs { constructor(options?: any); }
-  export class MountableFs { constructor(options?: any); mount(path: string, fs: any): void; }
-}
-
-declare module "@ag/bash" {
-  export * from "@ag-bash/bash";
-}
-
+    // Only genuinely third-party packages are stubbed. `ai` (the Vercel AI SDK)
+    // is an optional peer that this monorepo does not install, and its surface
+    // is not ours to validate. Everything under "@ag-bash/bash" resolves to the
+    // REAL sources via tsconfig `paths` below — never to a stub.
+    const thirdPartyDeclarations = `
 declare module "ai" {
-  export const generateText: any;
-  export const streamText: any;
-  export interface Tool { [key: string]: any }
+  export function generateText(options: {
+    model: string;
+    tools?: unknown;
+    prompt: string;
+    maxSteps?: number;
+  }): Promise<{ text: string; steps?: unknown[] }>;
+  export function streamText(options: {
+    model: string;
+    tools?: unknown;
+    prompt: string;
+  }): { textStream: AsyncIterable<string> };
 }
 `;
+    const declarationsPath = path.join(tmpDir, "third-party.d.ts");
+    fs.writeFileSync(declarationsPath, thirdPartyDeclarations);
 
-    fs.writeFileSync(path.join(tmpDir, "declarations.d.ts"), BashDeclarations);
+    const paths: Record<string, string[]> = Object.create(null);
+    for (const [specifier, sourceFile] of resolveRealPackagePaths()) {
+      paths[specifier] = [sourceFile];
+    }
 
-    const aiTypes = `
-export function generateText(options: {
-  model: string;
-  tools?: Record<string, any>;
-  prompt: string;
-  maxSteps?: number;
-}): Promise<any>;
-`;
-    fs.writeFileSync(path.join(tmpDir, "ai.d.ts"), aiTypes);
-
-    // Create a single tsconfig for type checking all files
+    // Mirror the package's own compiler settings (strict, bundler resolution).
+    // Loosening `strict` is not an option: with `strictNullChecks` off, the
+    // real sources stop narrowing their discriminated-union results and emit
+    // hundreds of spurious internal TS2339s that have nothing to do with the
+    // documentation being checked.
     const tsconfig = {
       compilerOptions: {
         baseUrl: ".",
         target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        strict: false,
-        noImplicitAny: false,
+        module: "ESNext",
+        moduleResolution: "bundler",
+        strict: true,
         skipLibCheck: true,
         noEmit: true,
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
         resolveJsonModule: true,
-        paths: {
-          "@ag-bash/bash/fs/overlay-fs": [
-            path.join(import.meta.dirname, "..", "src/fs/overlay-fs/index.ts"),
-          ],
-          "@ag-bash/bash/fs/read-write-fs": [
-            path.join(
-              import.meta.dirname,
-              "..",
-              "src/fs/read-write-fs/index.ts",
-            ),
-          ],
-        },
+        paths,
       },
-      include: [...files, "declarations.d.ts"],
+      include: [
+        ...files,
+        declarationsPath,
+        ...collectAmbientModuleDeclarations(path.join(PACKAGE_ROOT, "src")),
+      ],
     };
     fs.writeFileSync(
       path.join(tmpDir, "tsconfig.json"),
@@ -346,27 +375,33 @@ export function generateText(options: {
         encoding: "utf-8",
         stdio: "pipe",
       });
+      return [];
     } catch (error) {
       const execError = error as { stdout?: string; stderr?: string };
       const output = execError.stdout || execError.stderr || "";
-
-      // Parse errors to show which example failed
-      const errorLines = output
-        .split("\n")
-        .filter((line) => line.includes("error TS"));
-
-      if (errorLines.length > 0) {
-        expect.fail(
-          `TypeScript errors in documentation examples:\n${errorLines.slice(0, 10).join("\n")}` +
-            (errorLines.length > 10
-              ? `\n... and ${errorLines.length - 10} more`
-              : ""),
-        );
-      }
+      return output.split("\n").filter((line) => line.includes("error TS"));
     }
   } finally {
     // Cleanup
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Compile TypeScript blocks from multiple sources and fail on any error.
+ */
+function compileTypeScriptBlocks(
+  blocksBySource: Array<{ source: string; blocks: string[] }>,
+): void {
+  const errorLines = typeCheckTypeScriptBlocks(blocksBySource);
+
+  if (errorLines.length > 0) {
+    expect.fail(
+      `TypeScript errors in documentation examples:\n${errorLines.slice(0, 10).join("\n")}` +
+        (errorLines.length > 10
+          ? `\n... and ${errorLines.length - 10} more`
+          : ""),
+    );
   }
 }
 
@@ -521,6 +556,27 @@ describe("Documentation TypeScript examples", () => {
         blocks: extractTypeScriptBlocks(transformReadme),
       },
     ]);
+  });
+
+  // Negative control for the check above. It resolves "@ag-bash/bash" to the
+  // real sources, so it must reject an example that names an export the package
+  // does not have. Without this guard the compile check could silently rot into
+  // a no-op (an inert `// @ts-nocheck`, an over-permissive stub, a `paths` entry
+  // pointing at nothing) and still report green.
+  it("should reject an example that imports a nonexistent export", {
+    timeout: 30000,
+  }, () => {
+    const errorLines = typeCheckTypeScriptBlocks([
+      {
+        source: "negative-control",
+        blocks: [
+          'import { thisExportDoesNotExist } from "@ag-bash/bash";\n' +
+            "console.log(thisExportDoesNotExist);\n",
+        ],
+      },
+    ]);
+
+    expect(errorLines.join("\n")).toContain("thisExportDoesNotExist");
   });
 });
 
