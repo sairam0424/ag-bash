@@ -26,7 +26,12 @@ import { bindDefenseContextCallback } from "../../security/defense-context.js";
 import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
 import type { SessionManager } from "../../services/SessionManager.js";
 import { _clearTimeout, _setTimeout } from "../../timers.js";
-import type { Command, CommandContext, ExecResult } from "../../types.js";
+import type {
+  Command,
+  CommandContext,
+  ExecResult,
+  Observation,
+} from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 import { BridgeHandler } from "../worker-bridge/bridge-handler.js";
 import { createSharedBuffer } from "../worker-bridge/protocol.js";
@@ -36,6 +41,53 @@ import type { WorkerInput, WorkerOutput } from "./worker.js";
 const DEFAULT_PYTHON_TIMEOUT_MS = 10000;
 /** Default Python execution timeout when network is enabled */
 const DEFAULT_PYTHON_NETWORK_TIMEOUT_MS = 60000;
+
+/**
+ * Stable, machine-readable code for "the CPython WASM runtime is absent from
+ * this build" — a PACKAGING condition, distinct from a sandbox refusal.
+ *
+ * Follows the same contract as `OBSERVATION_CODES` in
+ * `src/interpreter/helpers/result.ts`: a short, stable identifier an agent can
+ * switch on instead of parsing English stderr. It is declared here rather than
+ * added to that frozen enum because it is emitted across the worker boundary —
+ * `./worker.ts` raises it during throwing module-scope setup, so neither file
+ * can import the other for the value. Keep the two literals in sync.
+ */
+const RUNTIME_NOT_BUNDLED = "RUNTIME_NOT_BUNDLED";
+
+/** Runtime this command hosts, named in the typed missing-runtime observation. */
+const RUNTIME_NAME = "CPython (python3) WebAssembly";
+
+/**
+ * True when a worker error is the typed missing-runtime signal from
+ * {@link ./worker.ts} rather than a genuine execution or security failure.
+ */
+function isRuntimeNotBundled(message: string): boolean {
+  return message.includes(RUNTIME_NOT_BUNDLED);
+}
+
+/**
+ * Source-emitted observation for a missing CPython runtime.
+ *
+ * `type` is `"unknown"` because the `Observation` type union has no
+ * packaging-failure category; the stable `code` is what agents switch on. The
+ * suggestions deliberately steer AWAY from the sandbox: this is never fixed by
+ * relaxing security settings.
+ */
+function runtimeNotBundledObservation(message: string): Observation {
+  return Object.freeze({
+    type: "unknown",
+    code: RUNTIME_NOT_BUNDLED,
+    confidence: 1,
+    message,
+    command: "python3",
+    suggestions: [
+      `The ${RUNTIME_NAME} runtime is not bundled in this build; python3 cannot run here.`,
+      "This is a packaging gap — it is NOT a sandbox or defense-in-depth block, so no security setting will enable it.",
+      "Install a build that ships vendor/cpython-emscripten/, or use js-exec / sqlite3, which bundle their runtimes as npm dependencies.",
+    ],
+  });
+}
 
 const python3Help = {
   name: "python3",
@@ -809,10 +861,17 @@ async function executePython(
 
   if (!workerResult.success && workerResult.error && !isSpuriousDeadline) {
     const workerError = sanitizeHostErrorMessage(workerResult.error);
+    // A missing CPython runtime is a packaging condition, so it carries a stable
+    // machine code alongside the prose. Exit-code behaviour is unchanged — this
+    // adds a typed signal, it does not reclassify the failure.
+    const observations = isRuntimeNotBundled(workerError)
+      ? [runtimeNotBundledObservation(workerError)]
+      : undefined;
     return {
       stdout: bridgeOutput.stdout,
       stderr: `${bridgeOutput.stderr}python3: ${workerError}\n`,
       exitCode: bridgeOutput.exitCode || 1,
+      observations,
     };
   }
 

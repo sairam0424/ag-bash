@@ -8,14 +8,22 @@ import process from "node:process";
 // `pnpm pack`, installs the tarballs into a throwaway project OUTSIDE the
 // monorepo with plain `npm install` (reproducing what a real consumer gets —
 // flat-hoisted node_modules, no workspace symlinks), then exercises the public
-// surface: every @ag-bash/bash export subpath, both bins, and the MCP stdio
-// handshake. This is the ONLY gate that catches packaging defects the in-repo
-// workspace can't (it always resolves) — e.g. the v6.0.0 `workspace:*` leak and
-// the v6.0.2 missing-WASM. Each failure prints a clear, actionable message.
+// surface: every @ag-bash/bash export subpath, both bins, the MCP stdio
+// handshake, and each WASM runtime's documented contract. This is the ONLY gate
+// that catches packaging defects the in-repo workspace can't (it always
+// resolves) — e.g. the v6.0.0 `workspace:*` leak and the v6.0.2 missing-WASM.
+// Each failure prints a clear, actionable message.
 //
 // Usage: node scripts/install-smoke.mjs   (run AFTER `pnpm build`)
 
 const ROOT = resolve(import.meta.dirname, "..");
+/**
+ * Typed signal python3 emits when the CPython Emscripten runtime is absent from
+ * the build (see `RUNTIME_NOT_BUNDLED` in
+ * packages/bash/src/commands/python3/python3.ts). Asserting on this code — not
+ * on English prose — is what makes the python3 contract below machine-checkable.
+ */
+const RUNTIME_NOT_BUNDLED = "RUNTIME_NOT_BUNDLED";
 const BASH_SUBPATHS = [
   "",
   "/browser",
@@ -45,7 +53,7 @@ const consumer = join(stage, "consumer");
 
 try {
   // 1. Pack all three packages into the staging dir.
-  console.log("[1/5] pnpm pack (3 packages)…");
+  console.log("[1/6] pnpm pack (3 packages)…");
   const tarballs = [];
   for (const dir of [
     "packages/bash",
@@ -62,7 +70,7 @@ try {
   }
 
   // 2. Clean-room npm install (no workspace, flat node_modules like a consumer).
-  console.log("[2/5] npm install tarballs into clean consumer…");
+  console.log("[2/6] npm install tarballs into clean consumer…");
   run("mkdir", ["-p", consumer]);
   writeFileSync(
     join(consumer, "package.json"),
@@ -84,7 +92,7 @@ try {
   ok("installed @ag-bash/bash, @ag-bash/mcp-server, @ag-bash/agent-bridge");
 
   // 3. Resolve every @ag-bash/bash export subpath.
-  console.log("[3/5] resolve all 8 @ag-bash/bash export subpaths…");
+  console.log("[3/6] resolve all 8 @ag-bash/bash export subpaths…");
   const probe = BASH_SUBPATHS.map(
     (sp) =>
       `import('@ag-bash/bash${sp}').then(()=>console.log('OK ${sp || "."}'))` +
@@ -100,7 +108,7 @@ try {
   else ok("all 8 subpaths resolve");
 
   // 4. Run the two bins. ag-bash -c must echo; ag-shell --version must start.
-  console.log("[4/5] run bins (ag-bash, ag-bash-mcp)…");
+  console.log("[4/6] run bins (ag-bash, ag-bash-mcp)…");
   const agBash = spawnSync(
     "node",
     ["node_modules/@ag-bash/bash/dist/bin/ag-bash.js", "-c", "echo SMOKE_OK"],
@@ -114,7 +122,7 @@ try {
     );
 
   // 5. MCP stdio initialize handshake.
-  console.log("[5/5] ag-bash-mcp stdio initialize handshake…");
+  console.log("[5/6] ag-bash-mcp stdio initialize handshake…");
   const initMsg = JSON.stringify({
     jsonrpc: "2.0",
     id: 1,
@@ -150,6 +158,81 @@ try {
   );
   if (ab.status === 0) ok("@ag-bash/agent-bridge imports");
   else fail(`agent-bridge import failed: ${ab.stderr?.slice(0, 200)}`);
+
+  // 6. Exercise each WASM runtime's DOCUMENTED contract from the installed
+  //    tarball. Resolving a subpath and echoing a string (steps 3-4) proves
+  //    nothing about the runtimes, which is how a tarball with a dead python3
+  //    stayed invisible. Each runtime is asserted against what it actually
+  //    promises a consumer, so "green" means the promise held:
+  //      - js-exec  (QuickJS, npm dep `quickjs-emscripten`) → must COMPUTE.
+  //      - sqlite3  (sql.js, npm dep `sql.js`)              → must COMPUTE.
+  //      - python3  (CPython Emscripten, vendored, NOT in `files`) → must refuse
+  //        with a TYPED signal. See the comment on that assertion.
+  console.log("[6/6] runtime contracts (js-exec, sqlite3, python3)…");
+
+  const runBin = (flags, script) =>
+    spawnSync(
+      "node",
+      [
+        "node_modules/@ag-bash/bash/dist/bin/ag-bash.js",
+        ...flags,
+        "-c",
+        script,
+      ],
+      { cwd: consumer, encoding: "utf8", timeout: 120000 },
+    );
+
+  const js = runBin(["--javascript"], 'js-exec -c "console.log(6*7)"');
+  if (js.status === 0 && (js.stdout || "").includes("42"))
+    ok("js-exec (QuickJS) computes 6*7 → 42");
+  else
+    fail(
+      `js-exec runtime is broken in the tarball (exit ${js.status}): ` +
+        `${(js.stdout || "").slice(0, 200)}${(js.stderr || "").slice(0, 300)}`,
+    );
+
+  const sqlite = runBin([], 'sqlite3 :memory: "select 6*7;"');
+  if (sqlite.status === 0 && (sqlite.stdout || "").includes("42"))
+    ok("sqlite3 (sql.js) computes select 6*7 → 42");
+  else
+    fail(
+      `sqlite3 runtime is broken in the tarball (exit ${sqlite.status}): ` +
+        `${(sqlite.stdout || "").slice(0, 200)}${(sqlite.stderr || "").slice(0, 300)}`,
+    );
+
+  // python3's contract TODAY is an honest refusal, not a working interpreter:
+  // `files` ships dist/ + scripts/ only, so vendor/cpython-emscripten/ never
+  // reaches a consumer. Asserting `print(42)` here would install a permanently
+  // RED required gate, so instead we pin the refusal to the typed
+  // RUNTIME_NOT_BUNDLED signal — which also guards against the old failure mode
+  // where a missing binary surfaced as a `[Defense-in-depth]` security block and
+  // sent debuggers the wrong way.
+  //
+  // ►► BACKLOG ITEM U5 ("Tarball ships no CPython") FLIPS THIS ONE ASSERTION.
+  //    When U5 lands, delete the RUNTIME_NOT_BUNDLED branch and assert
+  //    `py.status === 0 && py.stdout.includes("42")`, exactly like js-exec
+  //    above. Nothing else in this file changes. Until then the tripwire below
+  //    fails loudly if python3 unexpectedly starts working, so a shipped
+  //    CPython can never sit behind a stale assertion.
+  const py = runBin(["--python"], 'python3 -c "print(6*7)"');
+  const pyOut = `${py.stdout || ""}${py.stderr || ""}`;
+  if (py.status === 0 && (py.stdout || "").includes("42"))
+    fail(
+      "python3 now WORKS from the tarball — the CPython runtime shipped. " +
+        "That is the U5 goal, but this assertion still checks for the refusal: " +
+        "flip it to assert '42' (see the comment above this check).",
+    );
+  else if (pyOut.includes(RUNTIME_NOT_BUNDLED))
+    ok(
+      `python3 refuses with the typed ${RUNTIME_NOT_BUNDLED} signal ` +
+        "(expected until U5 ships CPython in the tarball)",
+    );
+  else
+    fail(
+      `python3 failed WITHOUT the typed ${RUNTIME_NOT_BUNDLED} signal ` +
+        `(exit ${py.status}). A missing runtime must say so in machine-readable ` +
+        `terms, not as a generic or security-flavored error: ${pyOut.slice(0, 400)}`,
+    );
 } finally {
   rmSync(stage, { recursive: true, force: true });
 }

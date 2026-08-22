@@ -12,7 +12,7 @@
 
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
 
@@ -61,6 +61,39 @@ const require = createRequire(import.meta.url);
 const CPYTHON_ENTRY_BASENAME = "/vendor/cpython-emscripten/python.cjs";
 const CPYTHON_STDLIB_BASENAME = "/vendor/cpython-emscripten/python313.zip";
 let moduleLoadGuardInstalled = false;
+
+/**
+ * Stable, machine-readable code for "this build has no usable CPython runtime".
+ *
+ * A build that simply does not ship `vendor/cpython-emscripten/` is a PACKAGING
+ * gap, not a security decision — but it used to surface as
+ * `[Defense-in-depth] Could not locate CPython entry …`, which reads like a
+ * sandbox block and sends anyone debugging it in exactly the wrong direction.
+ * Emitting this code as the leading token lets the host classify the failure
+ * without parsing English prose (see `RUNTIME_NOT_BUNDLED` in ./python3.ts,
+ * which must stay in sync: worker.ts performs throwing module-scope setup, so
+ * the host cannot import it for the value).
+ */
+const RUNTIME_NOT_BUNDLED = "RUNTIME_NOT_BUNDLED";
+
+/** Human name of the runtime this worker hosts, named in every typed refusal. */
+const RUNTIME_NAME = "CPython (python3) WebAssembly";
+
+/**
+ * Build the typed missing-runtime error.
+ *
+ * `reason` must describe the artifact by BASENAME only — never an absolute host
+ * path. `sanitizeHostErrorMessage` would redact one anyway, and a redacted
+ * `<path>` is strictly less useful to a consumer than `python.wasm`.
+ */
+function runtimeNotBundledError(reason: string): Error {
+  return new Error(
+    `${RUNTIME_NOT_BUNDLED}: the ${RUNTIME_NAME} runtime is not bundled in ` +
+      `this build (${reason}). python3 is unavailable until the CPython ` +
+      "vendor bundle ships with the package; this is a packaging gap, not a " +
+      "sandbox or security block.",
+  );
+}
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/");
@@ -141,12 +174,15 @@ try {
 }
 
 function checkBinaryHealth(path: string, minSize = 51200): void {
+  const artifact = basename(path);
   try {
     const stats = statSync(path);
     if (stats.size < minSize) {
       // Python WASM should be ~6MB. LFS pointers and HTML error pages are much smaller.
-      throw new Error(
-        `Binary at ${path} is too small (${stats.size} bytes). Likely a Git LFS pointer or corrupted file. Please restore the valid binary.`,
+      throw runtimeNotBundledError(
+        `${artifact} is only ${stats.size} bytes, far below the ${minSize}-byte ` +
+          "floor for a real artifact — almost certainly an unresolved Git LFS " +
+          "pointer or a truncated download, not a usable binary",
       );
     }
 
@@ -158,15 +194,14 @@ function checkBinaryHealth(path: string, minSize = 51200): void {
 
     const firstChars = buffer.toString();
     if (firstChars.includes("<!DOCTYPE") || firstChars.includes("<html")) {
-      throw new Error(
-        `Binary at ${path} contains HTML instead of WebAssembly. This is likely a redirected GitHub error page. Please restore the valid binary.`,
+      throw runtimeNotBundledError(
+        `${artifact} contains HTML, not WebAssembly — likely a redirected ` +
+          "download that saved an error page over the artifact",
       );
     }
   } catch (error) {
     if ((error as { code?: string }).code === "ENOENT") {
-      throw new Error(
-        `Binary missing at ${path}. Please ensure vendor files are restored.`,
-      );
+      throw runtimeNotBundledError(`${artifact} is missing from the package`);
     }
     throw error;
   }
@@ -220,8 +255,10 @@ if (!foundPath) {
       "../../../vendor/cpython-emscripten/python.cjs",
     );
   } catch {
-    throw new Error(
-      `[Defense-in-depth] Could not locate CPython entry at any candidate path. WorkerDir: ${workerDir}`,
+    // NOT a defense-in-depth rejection: nothing was refused, there is simply no
+    // CPython entry point in this build to refuse. Say exactly that.
+    throw runtimeNotBundledError(
+      "python.cjs was not found at any candidate vendor path",
     );
   }
 }
