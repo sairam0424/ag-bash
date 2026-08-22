@@ -19,14 +19,14 @@
   "ignoreDependencies": ["tree-sitter-bash"],
   "tags": ["-public"],
   "rules": {
-    "exports": "warn",
-    "dependencies": "warn",
-    "devDependencies": "off",
+    "exports": "error",
+    "dependencies": "error",
+    "devDependencies": "error",
     "unlisted": "off",
-    "unresolved": "off",
-    "optionalPeerDependencies": "off",
+    "unresolved": "error",
+    "optionalPeerDependencies": "error",
     "types": "off",
     "enumMembers": "off",
-    "files": "warn"
+    "files": "error"
   }
 }
