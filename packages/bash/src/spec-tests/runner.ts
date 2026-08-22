@@ -16,6 +16,12 @@ import {
 } from "./parser.js";
 import { testHelperCommands } from "./spec-helper-commands.js";
 
+/**
+ * Scratch directory Oils spec cases write into, relative to the spec cwd
+ * (`/tmp`). Upstream this is the `_tmp` dir at the repo root.
+ */
+const SPEC_TMP_DIR = "/tmp/_tmp";
+
 export interface TestResult {
   testCase: TestCase;
   passed: boolean;
@@ -107,6 +113,15 @@ export async function runTestCase(
 
   // Set up /tmp with sticky bit (mode 1777) for tests that check it
   await env.fs.chmod("/tmp", 0o1777);
+
+  // Oils spec files declaring "## legacy_tmp_dir" assume a scratch directory
+  // named `_tmp` already exists in the cwd (the upstream harness creates it),
+  // e.g. `touch _tmp/a.A` followed by `echo _tmp/*.A`. Without it those cases
+  // ENOENT and report harness noise instead of real bash-compat gaps.
+  // Seeded per-case (fresh Bash per test) so cases cannot leak state.
+  // NOTE: keep it EMPTY - nested entries would leak into `*/*` globs that other
+  // spec files (globignore.test.sh) assert on.
+  await env.fs.mkdir(SPEC_TMP_DIR, { recursive: true });
 
   try {
     // Use rawScript to preserve leading whitespace for here-docs
