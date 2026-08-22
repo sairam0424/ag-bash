@@ -20,6 +20,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc",
+    "lint": "biome check .",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

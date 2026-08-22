@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { McpToolBridge } from "./tool-bridge.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RateLimiter } from "./rate-limiter.js";
+import { McpToolBridge } from "./tool-bridge.js";
 
 // --- Mock Setup ---
 
@@ -32,11 +32,15 @@ describe("McpToolBridge", () => {
     it("returns tool descriptors in MCP format", () => {
       mockToolbox.getAgenticTools.mockReturnValue({
         read_file: {
-          description: "Read the contents of a file from the virtual filesystem.",
+          description:
+            "Read the contents of a file from the virtual filesystem.",
           inputSchema: {
             type: "object",
             properties: {
-              path: { type: "string", description: "Absolute path to the file to read." },
+              path: {
+                type: "string",
+                description: "Absolute path to the file to read.",
+              },
             },
             required: ["path"],
           },
@@ -46,8 +50,14 @@ describe("McpToolBridge", () => {
           inputSchema: {
             type: "object",
             properties: {
-              path: { type: "string", description: "Absolute path to the file to write." },
-              content: { type: "string", description: "The content to write to the file." },
+              path: {
+                type: "string",
+                description: "Absolute path to the file to write.",
+              },
+              content: {
+                type: "string",
+                description: "The content to write to the file.",
+              },
             },
             required: ["path", "content"],
           },
@@ -144,11 +154,9 @@ describe("McpToolBridge", () => {
       expect(result.content[0].type).toBe("text");
       expect(result.content[0].text).toBe("file contents here");
       expect(result.isError).toBeFalsy();
-      expect(mockToolbox.callTool).toHaveBeenCalledWith(
-        mockBash,
-        "read_file",
-        { path: "/test.txt" },
-      );
+      expect(mockToolbox.callTool).toHaveBeenCalledWith(mockBash, "read_file", {
+        path: "/test.txt",
+      });
     });
 
     it("serializes object results to JSON", async () => {
@@ -176,9 +184,7 @@ describe("McpToolBridge", () => {
     });
 
     it("marks validation error results as isError", async () => {
-      mockToolbox.callTool.mockResolvedValue(
-        "Validation Error: Invalid input",
-      );
+      mockToolbox.callTool.mockResolvedValue("Validation Error: Invalid input");
 
       const result = await bridge.callTool("edit_file", {});
 

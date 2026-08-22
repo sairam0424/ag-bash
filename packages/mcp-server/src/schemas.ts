@@ -15,15 +15,6 @@ const MAX_VALUE_LENGTH = 1_048_576; // 1MB per value
 const MAX_ENTRIES = 10_000;
 const MAX_PATH_LENGTH = 4096;
 
-/** Bounded string record: keys and values both length-limited */
-const boundedStringRecord = z.record(
-  z.string().max(MAX_KEY_LENGTH),
-  z.string().max(MAX_VALUE_LENGTH),
-).refine(
-  (obj) => Object.keys(obj).length <= MAX_ENTRIES,
-  { message: `Record exceeds maximum of ${MAX_ENTRIES} entries` },
-);
-
 /**
  * Full snapshot schema — validated before restore operations.
  *
@@ -33,13 +24,15 @@ const boundedStringRecord = z.record(
  * requiring every internal field (the engine handles that).
  */
 export const BashSnapshotSchema = z.object({
-  state: z.object({
-    env: z.unknown(), // Map<string, string> serialized as object or array
-    cwd: z.string().min(1).max(MAX_PATH_LENGTH),
-    previousDir: z.string().max(MAX_PATH_LENGTH).optional(),
-    lastExitCode: z.number().int().optional(),
-    functions: z.unknown().optional(), // Map<string, FunctionDefNode>
-  }).passthrough(), // Allow additional InterpreterState fields
+  state: z
+    .object({
+      env: z.unknown(), // Map<string, string> serialized as object or array
+      cwd: z.string().min(1).max(MAX_PATH_LENGTH),
+      previousDir: z.string().max(MAX_PATH_LENGTH).optional(),
+      lastExitCode: z.number().int().optional(),
+      functions: z.unknown().optional(), // Map<string, FunctionDefNode>
+    })
+    .passthrough(), // Allow additional InterpreterState fields
   fs: z.unknown(), // Filesystem snapshot (opaque)
 });
 
@@ -55,30 +48,37 @@ export const BashSnapshotSchema = z.object({
  * }
  */
 export const StateDeltaSchema = z.object({
-  envDelta: z.record(
-    z.string().max(MAX_KEY_LENGTH),
-    z.union([z.string().max(MAX_VALUE_LENGTH), z.null()]),
-  ).refine(
-    (obj) => Object.keys(obj).length <= MAX_ENTRIES,
-    { message: `envDelta exceeds maximum of ${MAX_ENTRIES} entries` },
-  ).optional(),
-  funcDelta: z.record(
-    z.string().max(MAX_KEY_LENGTH),
-    z.union([z.string().max(MAX_VALUE_LENGTH), z.null()]),
-  ).refine(
-    (obj) => Object.keys(obj).length <= MAX_ENTRIES,
-    { message: `funcDelta exceeds maximum of ${MAX_ENTRIES} entries` },
-  ).optional(),
-  fsDelta: z.object({
-    modified: z.record(
-      z.string().max(MAX_PATH_LENGTH),
-      z.unknown(), // string or Uint8Array serialized
-    ).refine(
-      (obj) => Object.keys(obj).length <= MAX_ENTRIES,
-      { message: `fsDelta.modified exceeds maximum of ${MAX_ENTRIES} entries` },
-    ),
-    deleted: z.array(z.string().max(MAX_PATH_LENGTH)).max(MAX_ENTRIES),
-  }).optional(),
+  envDelta: z
+    .record(
+      z.string().max(MAX_KEY_LENGTH),
+      z.union([z.string().max(MAX_VALUE_LENGTH), z.null()]),
+    )
+    .refine((obj) => Object.keys(obj).length <= MAX_ENTRIES, {
+      message: `envDelta exceeds maximum of ${MAX_ENTRIES} entries`,
+    })
+    .optional(),
+  funcDelta: z
+    .record(
+      z.string().max(MAX_KEY_LENGTH),
+      z.union([z.string().max(MAX_VALUE_LENGTH), z.null()]),
+    )
+    .refine((obj) => Object.keys(obj).length <= MAX_ENTRIES, {
+      message: `funcDelta exceeds maximum of ${MAX_ENTRIES} entries`,
+    })
+    .optional(),
+  fsDelta: z
+    .object({
+      modified: z
+        .record(
+          z.string().max(MAX_PATH_LENGTH),
+          z.unknown(), // string or Uint8Array serialized
+        )
+        .refine((obj) => Object.keys(obj).length <= MAX_ENTRIES, {
+          message: `fsDelta.modified exceeds maximum of ${MAX_ENTRIES} entries`,
+        }),
+      deleted: z.array(z.string().max(MAX_PATH_LENGTH)).max(MAX_ENTRIES),
+    })
+    .optional(),
   cwd: z.string().min(1).max(MAX_PATH_LENGTH).optional(),
 });
 

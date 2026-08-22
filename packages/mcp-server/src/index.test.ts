@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockBashInstance = {
   exec: vi.fn(),
@@ -417,10 +417,9 @@ describe("AgBashServer", () => {
         expect(response.id).toBe(10);
         expect(response.result.content[0].text).toBe("hello world\n");
         expect(response.result.isError).toBe(false);
-        expect(mockBashInstance.exec).toHaveBeenCalledWith(
-          "echo hello world",
-          { persistState: true },
-        );
+        expect(mockBashInstance.exec).toHaveBeenCalledWith("echo hello world", {
+          persistState: true,
+        });
       } finally {
         capture.restore();
       }
