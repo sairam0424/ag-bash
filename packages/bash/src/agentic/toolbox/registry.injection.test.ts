@@ -130,6 +130,73 @@ describe("agentic toolbox shell injection", () => {
     expect(await probeExists(bash, "/home/user/pwned-glob")).toBe(false);
   });
 
+  // The five sites below were MISSED by the first pass. Its search was a
+  // single-line regex for `.exec(` followed by an interpolated template
+  // literal, but these calls put `.exec(` on one line and the literal on the
+  // next -- and query_json builds into a `let cmd` first, then execs the
+  // variable, so no call-site pattern matches it at all. Provenance of the
+  // argument is the only sound check.
+
+  it("query_json does not execute a command smuggled through query in the piped form", async () => {
+    const bash = createTestBash({ files: KEEP });
+
+    // `json` is escaped here but `query` never was, inside jq '...'.
+    await runTool(bash, "query_json", {
+      query: "'; touch /home/user/pwned-jq-query; echo '",
+      json: '{"a":1}',
+    });
+
+    expect(await probeExists(bash, "/home/user/pwned-jq-query")).toBe(false);
+  });
+
+  it("query_json does not execute a command smuggled through the bare path argument", async () => {
+    const bash = createTestBash({
+      files: { ...KEEP, "/home/user/d.json": '{"a":1}\n' },
+    });
+
+    await runTool(bash, "query_json", {
+      query: ".a",
+      path: "/home/user/d.json; touch /home/user/pwned-jq-path",
+    });
+
+    expect(await probeExists(bash, "/home/user/pwned-jq-path")).toBe(false);
+  });
+
+  it("run_js_session does not execute a command smuggled through the bare sessionId", async () => {
+    const bash = createTestBash({ files: KEEP });
+
+    // Trailing `#` comments out the ` -c "..."` tail so the smuggled `touch`
+    // receives no stray arguments.
+    await runTool(bash, "run_js_session", {
+      code: "1+1",
+      sessionId: "main; touch /home/user/pwned-jssess #",
+    });
+
+    expect(await probeExists(bash, "/home/user/pwned-jssess")).toBe(false);
+  });
+
+  it("run_python does not execute command substitution that quote-escaping leaves intact", async () => {
+    const bash = createTestBash({ files: KEEP });
+
+    // .replace(/"/g, '\\"') escapes double quotes but not `$`.
+    await runTool(bash, "run_python", {
+      code: "$(touch /home/user/pwned-py)",
+    });
+
+    expect(await probeExists(bash, "/home/user/pwned-py")).toBe(false);
+  });
+
+  it("run_python_session does not execute a command smuggled through the bare sessionId", async () => {
+    const bash = createTestBash({ files: KEEP });
+
+    await runTool(bash, "run_python_session", {
+      code: "pass",
+      sessionId: "s1; touch /home/user/pwned-pysess #",
+    });
+
+    expect(await probeExists(bash, "/home/user/pwned-pysess")).toBe(false);
+  });
+
   it("glob_files does not execute a command smuggled through the path option", async () => {
     const bash = createTestBash({ files: KEEP });
 

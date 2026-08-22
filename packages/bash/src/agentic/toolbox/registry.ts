@@ -562,10 +562,12 @@ export class BashToolbox {
             json,
           }: { query: string; path?: string; json?: string },
         ) => {
-          let cmd = `echo '${(json || "").replace(/'/g, "'\\''")}' | jq '${query}'`;
-          if (path) {
-            cmd = `jq '${query}' ${path}`;
-          }
+          // `query`, `path` and `json` are all model-controlled. The previous
+          // form hand-escaped only `json`, left `query` bare inside jq '...',
+          // and interpolated `path` with no quoting at all.
+          const cmd = path
+            ? shellJoinArgs(["jq", query, path])
+            : `${shellJoinArgs(["echo", json || ""])} | ${shellJoinArgs(["jq", query])}`;
           const result = await bash.exec(cmd);
           return result.stdout || result.stderr;
         },
@@ -701,7 +703,7 @@ export class BashToolbox {
           { code, sessionId }: { code: string; sessionId: string },
         ) => {
           const result = await bash.exec(
-            `js-exec --session ${sessionId} -c ${JSON.stringify(code)}`,
+            shellJoinArgs(["js-exec", "--session", sessionId, "-c", code]),
           );
           return result;
         },
@@ -717,8 +719,10 @@ export class BashToolbox {
           code: z.string().describe("The Python code to execute."),
         }),
         execute: async (bash: Bash, { code }: { code: string }) => {
+          // Hand-escaping `"` left `$` untouched, so $(...) still expanded
+          // inside the double-quoted word.
           const result = await bash.exec(
-            `python3 -c "${code.replace(/"/g, '\\"')}"`,
+            shellJoinArgs(["python3", "-c", code]),
           );
           return result;
         },
@@ -741,7 +745,7 @@ export class BashToolbox {
           { code, sessionId }: { code: string; sessionId: string },
         ) => {
           const result = await bash.exec(
-            `python3 --session ${sessionId} -c "${code.replace(/"/g, '\\"')}"`,
+            shellJoinArgs(["python3", "--session", sessionId, "-c", code]),
           );
           return result;
         },
