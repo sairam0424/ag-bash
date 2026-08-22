@@ -62,6 +62,11 @@ jobs:
             cross-os: true
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # The unit leg collects sqlite3 and python3 spec files; hydrate the
+          # LFS binary here too rather than relying on the build artifact,
+          # which carries only packages/*/dist.
+          lfs: true
       # Skip the costly Windows/macOS legs on pull_request; run them on
       # push(main/develop) and manual dispatch. The leg still appears but no-ops.
       - id: gate
@@ -142,6 +147,12 @@ jobs:
             cross-os: true
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # This is the job that runs test:wasm, so it is the one that most
+          # needs the hydrated vendor/cpython-emscripten/python.wasm. Hydrating
+          # it in the `build` job cannot help: build uploads packages/*/dist
+          # only, and vendor/ sits at the monorepo root outside that artifact.
+          lfs: true
       - id: gate
         shell: bash
         run: |

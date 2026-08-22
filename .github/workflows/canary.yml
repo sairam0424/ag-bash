@@ -20,6 +20,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # canary runs test:slow, whose first step (test:integration) reaches
+          # python-backed suites; hydrate the repo's only Git-LFS object.
+          lfs: true
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm --filter @ag-bash/bash test:fuzz:long
@@ -40,6 +44,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # canary runs test:slow, whose first step (test:integration) reaches
+          # python-backed suites; hydrate the repo's only Git-LFS object.
+          lfs: true
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm --filter @ag-bash/bash test:slow
@@ -51,5 +59,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # canary runs test:slow, whose first step (test:integration) reaches
+          # python-backed suites; hydrate the repo's only Git-LFS object.
+          lfs: true
       - uses: ./.github/actions/setup
       - run: pnpm audit --audit-level=high
