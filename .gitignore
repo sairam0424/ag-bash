@@ -72,3 +72,15 @@ packages/bash/bench-results.*.json
 
 # Private working notes (daily logs) — never commit
 scratch-pad/
+
+# Agent-tooling scratch state (claude-flow / ruflo / swarm memory). These are
+# written into whatever directory a tool happens to run from, so they appear at
+# arbitrary depths inside packages/ and src/ — hence no leading slash. They are
+# machine-local databases, must never be committed, and their unformatted JSON
+# otherwise fails `biome check .` for whichever package they land in.
+.claude-flow/
+.swarm/
+.aava/
+ruvector.db
+agentdb.rvf
+agentdb.rvf.lock
