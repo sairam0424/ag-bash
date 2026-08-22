@@ -142,6 +142,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check . && pnpm lint:banned",
     "check:worker-sync": "node ../../scripts/check-worker-sync.js",
+    "check:spec-ratchet": "node ../../scripts/check-spec-ratchet.js",
+    "check:spec-ratchet:update": "node ../../scripts/check-spec-ratchet.js --update",
     "lint:banned": "node ../../scripts/check-banned-patterns.js",
     "lint:fix": "biome check --write .",
     "knip": "knip --config ../../knip.json",

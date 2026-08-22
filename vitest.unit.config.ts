@@ -11,6 +11,14 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
+      // The Oils bash-parity corpus is owned by the ratchet
+      // (scripts/check-spec-ratchet.js), not by this suite. It has 43 known
+      // failures out of 3826 cases, so as an absolute-count gate it can never
+      // be green and blocks every other gate from being made required. The
+      // ratchet enforces the same corpus as a REGRESSION gate instead: it fails
+      // on a new failure AND on a stale baseline entry. Coverage is relocated,
+      // not dropped — `check:spec-ratchet` runs in quality.yml.
+      "**/spec-tests/**",
       "**/security/attacks/**",
       "**/security/defense-in-depth-box*.test.ts",
       "**/browser.bundle.test.ts",
