@@ -16,13 +16,13 @@
     "src/**/*.d.ts"
   ],
   "ignoreBinaries": ["tsx"],
-  "ignoreDependencies": ["tree-sitter-bash"],
+  "ignoreDependencies": ["tree-sitter-bash", "@opentelemetry/api"],
   "tags": ["-public"],
   "rules": {
     "exports": "error",
     "dependencies": "error",
     "devDependencies": "error",
-    "unlisted": "off",
+    "unlisted": "error",
     "unresolved": "error",
     "optionalPeerDependencies": "error",
     "types": "off",
