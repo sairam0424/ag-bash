@@ -26,16 +26,20 @@ npm install @ag-bash/bash
 ```
 
 ```typescript
-import { createBashTool } from "@ag-bash/bash";
+import { Bash, createBashTool } from "@ag-bash/bash";
 import { generateText } from "ai";
 
-const bashTool = createBashTool({
+const bash = new Bash({
   files: { "/data/users.json": '[{"name": "Alice"}, {"name": "Bob"}]' },
 });
 
+// createBashTool takes the sandbox and returns a Vercel AI SDK tool set
+// keyed by tool name ("bash", "read_file", "grep_search", …).
+const { tools } = createBashTool({ sandbox: bash });
+
 const result = await generateText({
   model: "anthropic/claude-sonnet-4",
-  tools: { bash: bashTool },
+  tools,
   prompt: "Count the users in /data/users.json",
 });
 ```
@@ -64,21 +68,43 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 3. **No network by default**: `curl` doesn't exist unless you configure `network` options with URL allowlists.
 
-4. **No binaries/WASM**: Only built-in commands work. You cannot run node, python, or other binaries.
+4. **No host binaries**: Only built-in commands work — there is no `PATH` lookup, so arbitrary host executables cannot be launched. The `python3`/`python` and `js-exec` built-ins run inside WASM sandboxes (CPython and QuickJS) and are disabled unless you opt in via `runtimes`.
 
 5. **ReadWriteFs root separation**: If you use `ReadWriteFs`, point it at a workspace directory, not at the installed `@ag-bash/bash` package or other trusted runtime code.
 
 ## Available Commands
 
-**Text processing**: `awk`, `cat`, `column`, `comm`, `cut`, `egrep`, `expand`, `fgrep`, `fold`, `grep`, `head`, `join`, `nl`, `paste`, `rev`, `rg`, `sed`, `sort`, `strings`, `tac`, `tail`, `tr`, `unexpand`, `uniq`, `wc`, `xargs`
+112 built-in commands, plus `curl` (network, opt-in) and two WASM runtimes.
 
-**Data processing**: `jq` (JSON), `js-exec` (JavaScript/TypeScript via QuickJS), `python3`/`python` (Python via WASM/CPython), `sqlite3` (SQLite), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
+**Text processing**: `awk`, `cat`, `column`, `comm`, `cut`, `egrep`, `expand`, `fgrep`, `fold`, `grep`, `head`, `join`, `nl`, `paste`, `rev`, `rg`, `sed`, `sort`, `strings`, `tac`, `tail`, `tee`, `tr`, `unexpand`, `uniq`, `wc`, `xargs`
+
+**Data processing**: `jq` (JSON), `yq` (YAML/XML/TOML/CSV/INI), `xan` (CSV), `sqlite3` (SQLite), `js-exec` (JavaScript/TypeScript via QuickJS), `python3` and `python` (CPython via WASM)
 
 **File operations**: `basename`, `chmod`, `cp`, `dirname`, `du`, `file`, `find`, `ln`, `ls`, `mkdir`, `mv`, `od`, `pwd`, `readlink`, `rm`, `rmdir`, `split`, `stat`, `touch`, `tree`
 
-**Utilities**: `ag-analyze`, `ag-diff`, `ag-edit`, `ag-explain`, `ag-find-symbol`, `ag-hover`, `ag-mcp`, `ag-notebook`, `ag-plan`, `ag-snapshot`, `ag-todo`, `alias`, `base64`, `bash`, `clear`, `curl`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `hello`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `zcat`
+**Archives, encoding and hashing**: `base64`, `gunzip`, `gzip`, `md5sum`, `sha1sum`, `sha256sum`, `tar`, `zcat`
 
-All commands support `--help` for usage details.
+**Shell and environment**: `alias`, `bash`, `clear`, `echo`, `env`, `expr`, `false`, `history`, `hostname`, `printenv`, `printf`, `seq`, `sh`, `true`, `unalias`, `whoami`
+
+**Time and control**: `date`, `sleep`, `time`, `timeout`
+
+**Comparison and conversion**: `diff`, `html-to-markdown`
+
+**Introspection**: `about`, `commands`, `doctor`, `hello`, `help`, `which`
+
+**Version control**: `git` — in-VFS init / add / commit / log tracking
+
+**Network** (opt-in, requires a URL allowlist): `curl`
+
+**Code intelligence**: `ag-analyze`, `ag-explain`, `ag-find-symbol`, `ag-hover`, `ag-references`
+
+**Editing, diffing and conversion**: `ag-convert`, `ag-diff`, `ag-edit`, `ag-notebook`, `ag-snapshot`
+
+**Agentic search**: `ag-find-files`, `ag-glob`, `ag-grep`
+
+**Agent orchestration**: `ag-cron`, `ag-list-agents`, `ag-mcp`, `ag-message`, `ag-plan`, `ag-spawn`, `ag-task`, `ag-team`, `ag-todo`, `ag-wait`, `ag-worktree`
+
+All commands support `--help` for usage details. `node` is accepted as an alias that redirects to `js-exec`.
 
 ## Tools by File Format
 
