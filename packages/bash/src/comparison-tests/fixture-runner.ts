@@ -267,10 +267,22 @@ export async function setupFiles(
     bashEnvFiles[path.join(testDir, filePath)] = content;
   }
 
-  return new Bash({
+  const bash = new Bash({
     files: bashEnvFiles,
     cwd: testDir,
   });
+
+  // createTestDir() mkdir'd testDir on the real filesystem, but seeding `files`
+  // is the only thing that ever created it inside the VFS -- InMemoryFs creates
+  // parent directories implicitly for each seeded file. With `files` empty the
+  // cwd therefore pointed at a directory that did not exist in the VFS, so any
+  // command that only *wrote* (`> out.txt`, `tee out.txt`, `touch`, `mkdir`)
+  // failed with ENOENT from checkParentExists while every test that read a
+  // seeded file passed. Mirror the directory explicitly so the VFS matches the
+  // real filesystem state the comparison is against.
+  await bash.fs.mkdir(testDir, { recursive: true });
+
+  return bash;
 }
 
 /**
