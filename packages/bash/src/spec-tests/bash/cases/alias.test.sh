@@ -111,7 +111,6 @@ status=0
 ## END
 
 #### List aliases by providing names
-## SKIP (unimplementable): alias expansion not implemented - parsing happens before execution
 
 alias e=echo ll='ls -l'
 alias e ll
