@@ -1,4 +1,12 @@
-import { existsSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
@@ -6,28 +14,40 @@ import { OverlayFs } from "../../fs/overlay-fs/index.js";
 
 describe("ag-convert command", () => {
   const testCsvName = "test_ag_convert_data.csv";
-  const testCsvPath = join(process.cwd(), testCsvName);
   const testCsvContent = `ID,Name,Department,Salary,Performance_Rating,Notes
 101,John Doe,Engineering,125000,Exceeds Expectations,Senior Developer with focus on WASM and AI Integration
 102,Jane Smith,Product,115000,Outstanding,Product Manager for Ag-Bash project. Great at cross-functional communication.
 103,Bob Wilson,Design,95000,Meets Expectations,Lead UI Designer. Responsible for the new glassmorphism theme.
 104,Alice Brown,Research,140000,Exceptional,ML Researcher working on the Hyperion Document Intelligence layer.`;
 
+  /**
+   * Temp dir this suite OWNS, holding the CSV fixture and the OverlayFs root.
+   *
+   * The fixture used to be written to — and unlinked from — `process.cwd()`,
+   * i.e. `packages/bash/test_ag_convert_data.csv`, which is a TRACKED file.
+   * Every run therefore clobbered it and left the working tree dirty with a
+   * spurious deletion. Owning a temp dir keeps the tree clean; the tracked copy
+   * is left untouched and this suite no longer depends on it.
+   */
+  let fixtureDir = "";
+
   beforeAll(() => {
-    // Create test CSV file
-    writeFileSync(testCsvPath, testCsvContent);
+    // realpathSync: on macOS `tmpdir()` is /var/… symlinked to /private/var/…,
+    // and OverlayFs canonicalises its root for symlink-escape checks — so hand
+    // it a symlink-free path from the start.
+    fixtureDir = realpathSync(mkdtempSync(join(tmpdir(), "ag-convert-")));
+    writeFileSync(join(fixtureDir, testCsvName), testCsvContent);
   });
 
   afterAll(() => {
-    // Cleanup test file
-    if (existsSync(testCsvPath)) {
-      unlinkSync(testCsvPath);
+    if (fixtureDir) {
+      rmSync(fixtureDir, { recursive: true, force: true });
     }
   });
 
   const createEnv = () =>
     new Bash({
-      fs: new OverlayFs({ root: process.cwd(), mountPoint: "/" }),
+      fs: new OverlayFs({ root: fixtureDir, mountPoint: "/" }),
       cwd: "/",
     });
 
@@ -161,11 +181,11 @@ describe("ag-convert command", () => {
     it("should handle relative paths", async () => {
       const env = createEnv();
       const fileName = "relative_test_manual.csv";
-      const realPath = join(process.cwd(), fileName);
+      const realPath = join(fixtureDir, fileName);
       writeFileSync(realPath, testCsvContent);
 
       try {
-        // Current working directory in env is '/', which maps to process.cwd()
+        // Current working directory in env is '/', which maps to fixtureDir
         const result = await env.exec(`ag-convert ${fileName}`);
         expect(result.stdout).toContain("John Doe");
       } finally {

@@ -123,13 +123,20 @@ try {
 
   // 5. MCP stdio initialize handshake.
   console.log("[5/6] ag-bash-mcp stdio initialize handshake…");
+  // `capabilities` is the empty-capability set MCP requires in `initialize`.
+  // Object.create(null) rather than {} to satisfy the repo's no-bare-record rule
+  // (scripts/check-banned-patterns.js), and rather than nullPrototype() from
+  // packages/bash/src/fs/safe-object.ts because this script is plain ESM run by
+  // bare `node` before/independently of any build — it cannot import package
+  // source. JSON.stringify serializes a null-prototype object to `{}`, so the
+  // bytes on the wire are unchanged.
   const initMsg = JSON.stringify({
     jsonrpc: "2.0",
     id: 1,
     method: "initialize",
     params: {
       protocolVersion: "2024-11-05",
-      capabilities: {},
+      capabilities: Object.create(null),
       clientInfo: { name: "smoke", version: "1.0.0" },
     },
   });
