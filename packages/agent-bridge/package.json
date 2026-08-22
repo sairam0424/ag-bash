@@ -20,7 +20,8 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc",
-    "lint": "biome check .",
+    "lint": "biome check . && pnpm lint:banned",
+    "lint:banned": "node ../../scripts/check-banned-patterns.js",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
