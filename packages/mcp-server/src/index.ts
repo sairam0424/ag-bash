@@ -52,7 +52,7 @@ const MAX_BASE64_LENGTH = 22_000_000;
  * `package.json` outside the bundled module, making a runtime relative import
  * fragile.
  */
-const SERVER_VERSION = "6.0.2";
+const SERVER_VERSION = "6.0.4";
 
 /**
  * Ag-Bash MCP Server (Dependency-Free Implementation)
