@@ -1,7 +1,8 @@
 import { z } from "zod";
-import type { ToolboxTool } from "../../agentic/Tool.js";
+import { buildTool, type ToolboxTool } from "../../agentic/Tool.js";
 import type { Bash } from "../../Bash.js";
 import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
+import { shellJoinArgs } from "../../helpers/shell-quote.js";
 import { WebCache } from "../../network/WebCache.js";
 
 const cache = new WebCache();
@@ -23,7 +24,10 @@ const webFetchParameters: z.ZodType<WebFetchArgs> = z.object({
  * ag-web-fetch: Fetch content from a URL and convert to markdown.
  * Includes response caching (15min TTL) and redirect following.
  */
-export const WebFetchTool: ToolboxTool<WebFetchArgs, string> = {
+export const WebFetchTool: ToolboxTool<WebFetchArgs, string> = buildTool<
+  WebFetchArgs,
+  string
+>({
   name: "ag_web_fetch",
   description:
     "Fetch the content of a web page and convert it to clean markdown. Results are cached for 15 minutes.",
@@ -33,7 +37,9 @@ export const WebFetchTool: ToolboxTool<WebFetchArgs, string> = {
   checkPermissions: async (_bash: Bash, _args: WebFetchArgs) => ({
     behavior: "allow",
   }),
-  validateInput: async (_args: unknown) => ({ result: true }),
+  // validateInput is intentionally omitted: buildTool supplies a zod
+  // safeParse gate derived from `parameters`. The previous explicit
+  // `async () => ({ result: true })` stub silently disabled that gate.
   execute: async (bash: Bash, { url, noCache }: WebFetchArgs) => {
     try {
       if (!noCache) {
@@ -45,15 +51,22 @@ export const WebFetchTool: ToolboxTool<WebFetchArgs, string> = {
 
       const fetchUrl = url.replace(/^http:\/\//, "https://");
 
-      const fetchResult = await bash.exec(`curl -sL "${fetchUrl}"`);
+      // `url` is attacker-controlled (model or user text). Double quotes do
+      // not suppress $(...) or backticks, so the URL must be a fully quoted
+      // literal token rather than interpolated into the command string.
+      const fetchResult = await bash.exec(
+        shellJoinArgs(["curl", "-sL", fetchUrl]),
+      );
       if (fetchResult.exitCode !== 0) {
         return `Failed to fetch ${fetchUrl}: ${fetchResult.stderr}`;
       }
 
       const html = fetchResult.stdout;
 
+      // The fetched body is remote-controlled too, so it goes through the same
+      // canonical quoting helper instead of a hand-rolled escape.
       const convertResult = await bash.exec(
-        `echo '${html.replace(/'/g, "'\\''")}' | html-to-markdown`,
+        `${shellJoinArgs(["echo", html])} | html-to-markdown`,
       );
 
       const markdown =
@@ -71,4 +84,4 @@ export const WebFetchTool: ToolboxTool<WebFetchArgs, string> = {
       return `Fetch failed: ${sanitizeErrorMessage(message)}`;
     }
   },
-};
+});
