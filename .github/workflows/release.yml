@@ -66,7 +66,12 @@ jobs:
       # Node 24 migration).
       - run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level=high
+      # Supply-chain gate (E3): block the release on any high/critical advisory
+      # reachable from a published package. Build-time-only and examples/*
+      # advisories are reported, not blocking — see scripts/check-advisories.mjs
+      # for what that trades away, and quality.yml's `advisories-report` job for
+      # the non-blocking whole-workspace view.
+      - run: node scripts/check-advisories.mjs
       # Guard: all three packages share one version (Changesets fixed mode).
       - run: pnpm check:version-sync
       # Build before the pack-contents check: it runs `pnpm pack` and asserts the

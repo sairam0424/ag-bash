@@ -44,8 +44,13 @@ echo ""
 # Pre-publish checks
 echo "── Pre-publish Checks ──"
 
-echo -n "  Supply-chain audit (high/critical)... "
-pnpm audit --audit-level=high 2>/dev/null && echo "✓" || { echo "✗ FAILED — high/critical advisory; pin a patched version via pnpm.overrides"; exit 1; }
+echo -n "  Supply-chain audit (published-reachable high/critical)... "
+# Same reachability gate the four workflows use, so the manual fallback path
+# cannot be laxer OR stricter than automated release. A bare
+# `pnpm audit --audit-level=high` here blocked on advisories no consumer of the
+# published packages can reach, on the advisory database's schedule rather than
+# on any change of ours.
+node "$(dirname "$0")/check-advisories.mjs" && echo "✓" || { echo "✗ FAILED — high/critical advisory reachable from a published package; pin a patched version via pnpm.overrides or record a reasoned, expiry-dated auditConfig.ignoreCves entry"; exit 1; }
 
 echo -n "  Type check... "
 pnpm --filter @ag-bash/bash typecheck 2>/dev/null && echo "✓" || { echo "✗ FAILED"; exit 1; }

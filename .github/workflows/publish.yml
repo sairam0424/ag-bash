@@ -47,8 +47,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Supply-chain gate (E3): block publish on any high/critical advisory.
-      - run: pnpm audit --audit-level=high
+      # Supply-chain gate (E3): block publish on any high/critical advisory
+      # reachable from a published package. Build-time-only and examples/*
+      # advisories are reported, not blocking — see scripts/check-advisories.mjs
+      # for what that trades away, and quality.yml's `advisories-report` job for
+      # the non-blocking whole-workspace view.
+      - run: node scripts/check-advisories.mjs
 
       # Verify registry signatures of installed dependencies via the npm CLI
       # (Sigstore + npm registry keys). Best-effort on the pnpm store layout:

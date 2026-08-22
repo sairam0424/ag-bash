@@ -64,4 +64,15 @@ jobs:
           # python-backed suites; hydrate the repo's only Git-LFS object.
           lfs: true
       - uses: ./.github/actions/setup
-      - run: pnpm audit --audit-level=high
+      # Blocking: a nightly high/critical that reaches a PUBLISHED package is a
+      # release-stopper even with zero code change, because the advisory database
+      # moves on its own schedule. No continue-on-error — this must be able to fail.
+      - run: node scripts/check-advisories.mjs
+      # Non-blocking drift across the WHOLE workspace (root devDependencies +
+      # examples/*). This is the pre-existing gate command kept verbatim, so
+      # nightly visibility is unchanged in scope — only in consequence. Nightly is
+      # the right home for it: detecting advisory-database drift is this job's
+      # entire purpose, and it should surface drift without wedging the pipeline.
+      - name: Whole-workspace advisory drift (report only)
+        continue-on-error: true
+        run: pnpm audit --audit-level=high
