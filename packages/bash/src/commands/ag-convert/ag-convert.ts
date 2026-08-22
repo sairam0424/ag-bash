@@ -129,15 +129,23 @@ export const agConvertCommand: Command = {
     // Resolve relative path to absolute virtual path
     const virtualPath = ctx.fs.resolvePath(ctx.cwd, files[0]);
 
-    // For host-side tools like Hyperion, we need to translate the virtual path back to a real host path
-    let realFilePath = virtualPath;
-
-    if (typeof ctx.fs.toRealPath === "function") {
-      const resolved = ctx.fs.toRealPath(virtualPath);
-      if (resolved) {
-        realFilePath = resolved;
-      }
-    }
+    // For host-side tools like Hyperion, we need to translate the virtual path
+    // back to a real host path.
+    //
+    // SECURITY: there is deliberately NO fallback to `virtualPath` here. This
+    // previously defaulted `realFilePath = virtualPath` and kept that default
+    // whenever `toRealPath()` returned null — which `MountableFs` does for any
+    // in-memory path. The existence check below validates against the VFS, but
+    // the path is then handed to host `python3`, which resolves the same string
+    // against the HOST filesystem. That turned a VFS path into an arbitrary
+    // host-file read: creating `/etc/passwd` inside the sandbox made ag-convert
+    // return the host's `/etc/passwd`. `--analyze` leaked host stat metadata by
+    // the same route with no third-party python dependency at all.
+    // Proven and guarded by ag-convert.hostpath.test.ts.
+    const realFilePath =
+      typeof ctx.fs.toRealPath === "function"
+        ? ctx.fs.toRealPath(virtualPath)
+        : null;
 
     const exists = await ctx.fs.exists(virtualPath);
 
@@ -145,6 +153,18 @@ export const agConvertCommand: Command = {
       return {
         stdout: "",
         stderr: `Error: File not found: ${virtualPath}\n`,
+        exitCode: 1,
+      };
+    }
+
+    // Exists in the VFS but has no host representation: fail closed rather than
+    // letting the host resolve the path itself.
+    if (!realFilePath) {
+      return {
+        stdout: "",
+        stderr:
+          `ag-convert: ${virtualPath} exists only in the virtual filesystem and has no host path.\n` +
+          "ag-convert delegates to host python3, which cannot read virtual paths. Mount a real directory (OverlayFs/ReadWriteFs) or copy the file to a mounted path first.\n",
         exitCode: 1,
       };
     }
