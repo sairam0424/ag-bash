@@ -14,6 +14,24 @@ three layers:
 > parsed, and interpreted — there is no code path from a bash command to
 > `eval` / `Function` / dynamic `import()`.
 
+> [!IMPORTANT]
+> **Two controls documented in earlier releases are NOT enforced in 6.1.** Do not
+> rely on either; both are labelled in `THREAT_MODEL.md` and targeted for 7.0.
+>
+> - **Plan mode is not a security boundary.** It blocks command-layer writes
+>   (`touch`, `rm`, `tee`) but a shell redirection — `echo x > file` — writes
+>   through it. For a confined session use `new OverlayFs({ root, readOnly: true })`;
+>   that boundary *is* enforced (`EROFS` on every write path, redirections
+>   included). Note `InMemoryFs` is **not** a read-only VFS — it has no
+>   `readOnly` option and accepts writes — and dropping the writable overlay is
+>   not sufficient either, since `OverlayFs` always keeps an in-memory layer.
+>   A refused write currently rejects the `exec()` promise rather than returning a
+>   non-zero result, so wrap it in `try/catch`. (`THREAT_MODEL.md` TB7.)
+> - **`ag-convert` is not WASM-sandboxed.** It spawns **host** `python3` with the
+>   full parent environment (`{ ...process.env }`) and is registered by default.
+>   The `python3` builtin *is* WASM-sandboxed; `ag-convert` is a different path.
+>   (`THREAT_MODEL.md` TB8.)
+
 ---
 
 ## 1. Reporting a vulnerability
@@ -119,38 +137,136 @@ Notes:
 
 ---
 
-## 4. Runtime launch hardening (Node.js CLI / MCP server) — E4
+## 4. Runtime launch hardening (Node.js CLI / MCP server) — ADVISORY
 
-When running the ag-bash CLI or the MCP server binary, launch Node with its own
-hardening flags so the *host process* is constrained even if a sandbox escape
-were attempted. Recommended invocation:
+> [!WARNING]
+> **This section is ADVISORY, not a supported configuration.** ag-bash's CI does
+> not run under these flags, and enabling the Permission Model **disables shipped
+> features** — see §4.3. Read §4.1 and §4.3 before copying anything here into a
+> deployment.
+>
+> The previous revision of this section recommended
+> `node --frozen-intrinsics --disallow-code-generation-from-strings --permission --allow-child-process=false ./dist/bin/ag-bash.js`
+> as a drop-in. That invocation is wrong twice over: it **does not start**
+> (`ERR_ACCESS_DENIED`, `permission: 'FileSystemRead'` — the Permission Model
+> denies reading the CLI's own chunk files), and `--allow-child-process=false`
+> **grants** child-process access rather than denying it (§4.2). It has been
+> replaced.
+
+### 4.1 What these flags are, and what they are not
+
+These flags constrain the **host process**. None of them is a sandbox, and none of
+them is what confines an untrusted bash script — that is the architectural
+boundary in §2 plus the VFS and network allow-list. Treat this section as
+belt-and-braces for the operator, not as a security control you can point an
+auditor at.
+
+Explicit non-guarantees:
+
+- **The Node.js Permission Model is not a sandbox, by Node's own definition.**
+  Quoting the Node.js documentation verbatim: *"The permission model implements a
+  "seat belt" approach, which prevents trusted code from unintentionally changing
+  files or using resources that access has not explicitly been granted to. It does
+  not provide security guarantees in the presence of malicious code. Malicious
+  code can bypass the permission model and execute arbitrary code without the
+  restrictions imposed by the permission model."* The same page notes *"This
+  feature does not protect against malicious code"* and *"The model does not
+  inherit to a worker thread"* — the latter matters here, because ag-bash's WASM
+  runtimes (`python3`, `js-exec`, `sqlite3`) each run in a `node:worker_threads`
+  Worker.
+- **ag-bash cannot enable `--frozen-intrinsics` on your behalf.** It has **no
+  programmatic API** — it is a startup-only CLI flag (settable via `NODE_OPTIONS`
+  or a Node config file, but never from library code). A dependency cannot turn it
+  on for a consumer. It is also `Stability: 1 - Experimental`, documented as
+  *"Only the root context is supported… Code may break under this flag."*
+- **`--disallow-code-generation-from-strings` does not cover `node:vm`.** Node
+  documents the exclusion explicitly: *"This does not affect the Node.js
+  `node:vm` module."* Verified on Node v26.5.0 — with the flag set, `eval("1+1")`
+  throws `EvalError`, while `vm.runInNewContext("1+41")`, `vm.compileFunction(…)`,
+  and `new vm.Script(…).runInThisContext()` all return normally. It is therefore
+  **not** equivalent to a CSP without `'unsafe-eval'` (§3.3), which blocks code
+  generation at the engine level with no such carve-out.
+
+### 4.2 Corrected invocation
+
+To deny child processes under the Permission Model you **omit** the grant flag —
+`--allow-child-process` is a pure *grant*, so any form of its presence
+(`--allow-child-process`, `=true`, `=false`, `=0`) turns the permission **on**.
+Node itself warns about this: `SecurityWarning: The flag --allow-child-process
+must be used with extreme caution. It could invalidate the permission model.`
+Measured on Node v26.5.0:
+
+| Invocation | `child_process.spawnSync` |
+| --- | --- |
+| `--permission` | **DENIED** (`ERR_ACCESS_DENIED`) ← what you want |
+| `--permission --no-allow-child-process` | DENIED (explicit, redundant) |
+| `--permission --allow-child-process` | ALLOWED |
+| `--permission --allow-child-process=false` | **ALLOWED** ← the old recipe's bug |
+| `--permission --allow-child-process=true` | ALLOWED |
+
+A launch line that actually starts must also grant reads for the code it loads.
+The following was verified to start and execute on Node v26.5.0 —
+`PKG` is the installed package root (`…/node_modules/@ag-bash/bash`), `WS` is
+your workspace:
 
 ```bash
 node \
   --frozen-intrinsics \
   --disallow-code-generation-from-strings \
   --permission \
-  --allow-child-process=false \
-  ./dist/bin/ag-bash.js
+  --allow-fs-read="$PKG/*" \
+  --allow-fs-read="$WS" \
+  --allow-fs-write="$WS" \
+  "$PKG/dist/bin/ag-bash.js"
+# echo 'echo hello' | … → hello
 ```
 
-| Flag | Effect |
-| --- | --- |
-| `--frozen-intrinsics` | Freezes all JS intrinsics at startup (the Node-native equivalent of `hardenBrowserGlobals()`), blocking prototype-pollution / intrinsic-hijack. |
-| `--disallow-code-generation-from-strings` | Makes `eval` and `new Function` throw process-wide — a hard backstop matching the browser CSP `script-src` recommendation. |
-| `--permission` | Enables the Node.js Permission Model (deny-by-default for fs / child_process / worker / addons unless explicitly granted). |
-| `--allow-child-process=false` | Explicitly denies spawning child processes (`child_process`), neutralizing the most valuable escape target. Add `--allow-fs-read=`/`--allow-fs-write=` to grant only the directories the workload needs. |
+> The read grant has to cover the **whole package root**, not just `dist/`.
+> `--allow-fs-read="$PKG/dist/*"` alone still dies with
+> `Fatal error: Access to this API has been restricted` — the CLI's module graph
+> and vendored WASM resolution reach outside `dist/`. The exact minimal grant is
+> install-layout- and version-dependent, so **validate your own launch line by
+> actually running it** rather than trusting a copied one. That is precisely the
+> failure the previous revision of this section shipped.
 
-> Caveats:
-> - `--frozen-intrinsics` is marked experimental in some Node versions and can
->   conflict with libraries that patch built-ins at import time. Validate against
->   your dependency set before enabling in production.
-> - The Permission Model intercepts `fs`, `child_process`, `worker_threads`, and
->   native addons; grant the minimum the workload needs via `--allow-fs-read` /
->   `--allow-fs-write` allowlists rather than enabling broadly.
-> - These flags must be passed to the `node` binary directly (not via npm
->   scripts that re-exec), or set through `NODE_OPTIONS` where the flag is
->   permitted there.
+`child_process`, `worker_threads`, and addons are denied because they are not
+granted (verified: under `--permission` with no grant,
+`child_process.spawnSync` throws `ERR_ACCESS_DENIED`). Scope the two
+`--allow-fs-*` paths to the narrowest tree the workload needs;
+`--allow-fs-read='*'` re-opens the whole host filesystem to `node:fs` and defeats
+the point. Note also that under the Permission Model *"Symbolic links will be
+followed even to locations outside of the set of paths that access has been
+granted to"* — ag-bash's own VFS default-denies symlinks
+(`THREAT_MODEL.md` §3.3); the Permission Model does not.
+
+### 4.3 Compatibility: what each flag disables
+
+**A hardening recipe that silently breaks shipped features is worse than no
+recipe.** Check this table against your feature usage first.
+
+| Flag | Breaks | Why |
+| --- | --- | --- |
+| `--permission` (no `--allow-child-process`) | **`ag-convert`** | Spawns host `python3` (`commands/ag-convert/ag-convert.ts:205`) → `ERR_ACCESS_DENIED`. See THREAT_MODEL TB8 — for most threat models breaking this is a *feature*. |
+| `--permission` (no `--allow-child-process`) | **MCP stdio client** (`ag-mcp`, `@ag-bash/mcp-server` connecting outward) | `spawn()` of the server process (`services/McpClient.ts:205`). HTTP-transport MCP servers are unaffected. |
+| `--permission` (no `--allow-child-process`) | **LSP integration** | `spawn()` of the language server (`lsp/LSPConnection.ts:1`). |
+| `--permission` (no `--allow-worker`) | **WASM runtimes: `python3`, `js-exec`, `sqlite3`** | Each runs in a `node:worker_threads` Worker. Add `--allow-worker` if you need them — and note Node's *"The model does not inherit to a worker thread"*, so the Worker itself is then unconstrained. |
+| `--permission` (no `--allow-fs-read`) | **Process startup** | Node cannot read the CLI's own module graph. This is why the old recipe failed to launch. |
+| `--permission` (no `--allow-fs-read` / `--allow-fs-write` for the mount) | **Host-backed VFS: `OverlayFs`, `ReadWriteFs`, `MountableFs`** | These go through `node:fs`. `InMemoryFs` is unaffected. |
+| `--frozen-intrinsics` | Host code that patches built-ins at import time | Experimental; validate against your whole dependency set. Use `--require`/`--import` for polyfills — both run *before* freezing. |
+| `--disallow-code-generation-from-strings` | Host code using `eval` / `new Function` (some template engines, some bundler dev servers) | ag-bash core does not need either. `node:vm` keeps working — see §4.1. |
+
+### 4.4 Other notes
+
+- These flags must be passed to the `node` binary directly (not via an npm script
+  that re-execs). All of `--frozen-intrinsics`,
+  `--disallow-code-generation-from-strings`, `--permission`,
+  `--allow-child-process`, `--allow-fs-read`, `--allow-fs-write`, and
+  `--allow-worker` are present in `process.allowedNodeEnvironmentFlags`, so
+  `NODE_OPTIONS` works too.
+- Node's Permission Model is also configurable from a config file
+  (`"permission": { "allow-child-process": false, … }`). In *that* form `false`
+  does withhold the grant — unlike the CLI `=false` in §4.2. If you prefer
+  boolean-shaped config, use the config file, not the flag.
 
 ---
 
@@ -271,9 +387,28 @@ waivers through this table:
 
 ## 6. Hardening checklist for embedders
 
+Enforced controls — rely on these:
+
+- [ ] Use the narrowest VFS that works: `InMemoryFs` if the workload needs no host
+      files. Grant filesystem/network access only through ag-bash's VFS and
+      network allow-list, never the host's ambient authority.
+- [ ] Keep `defenseInDepth` enabled (the v5.0.0+ default) for `bash.exec()`.
 - [ ] Browser: call `hardenBrowserGlobals()` once at startup.
 - [ ] Browser: serve under a strict CSP without `'unsafe-eval'` / `'unsafe-inline'`.
-- [ ] Node CLI/MCP: launch with `--frozen-intrinsics --disallow-code-generation-from-strings --permission --allow-child-process=false`.
-- [ ] Keep `defenseInDepth` enabled (the v5.0.0+ default) for `bash.exec()`.
-- [ ] Grant filesystem/network access only through ag-bash's VFS and network
-      allow-list, never the host's ambient authority.
+
+Not enforced in 6.1 — do **not** rely on these:
+
+- [ ] Do **not** use plan mode as a confinement mechanism (`THREAT_MODEL.md` TB7).
+      Use a read-only VFS instead.
+- [ ] Decide explicitly about `ag-convert`: it is registered by default and spawns
+      host `python3` with the parent environment (`THREAT_MODEL.md` TB8). If you do
+      not need document conversion, do not mount a host directory it could read,
+      or launch without a `child_process` grant (§4.3).
+
+Advisory (§4) — read the compatibility table first:
+
+- [ ] Node CLI/MCP: consider `--frozen-intrinsics
+      --disallow-code-generation-from-strings --permission` plus narrowly scoped
+      `--allow-fs-read` / `--allow-fs-write`. **Omit** `--allow-child-process`
+      entirely to deny child processes — `=false` grants it (§4.2). Note this
+      disables `ag-convert`, MCP stdio clients, and LSP (§4.3).

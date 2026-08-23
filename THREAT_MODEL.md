@@ -1,10 +1,23 @@
-# Ag-Bash Security Threat Model (v3.0.0)
+# Ag-Bash Security Threat Model (v6.1)
 
 This document outlines the security architecture and threat mitigations for Ag-Bash.
 
 > [!IMPORTANT]
-> **Status: v3.0.0-LOCKED**
-> All core security layers described below (Architecture, FS, Network, Runtime) are implemented and verified. TB6–TB9 cover attack surface introduced in the v2.x–v3.0 cycle including MCP client isolation, plan mode enforcement, document processing, and agentic healer governance.
+> **Status: v6.1 — two documented controls are NOT enforced as shipped.**
+>
+> The primary layers (Architecture, Filesystem, Network, Parser/Execution limits,
+> Prototype-pollution guards, re2js) are implemented and tested. Two boundaries
+> previously documented here as enforced are **not** boundaries in 6.1 and are
+> now labelled accordingly — read the `Status:` line on each entry before relying
+> on it:
+>
+> | Boundary | 6.1 reality | Target |
+> | :--- | :--- | :--- |
+> | **TB7 — Plan mode** | **NOT a security boundary.** A shell redirection (`echo x > file`) writes through it. | enforced in 7.0 |
+> | **TB8 — `ag-convert` "WASM-sandboxed Python"** | **False for this path.** `ag-convert` spawns **host** `python3` with the parent environment, and is registered by default. | opt-in behind `runtimes.hostPython` in 7.0 |
+>
+> Every threat entry below carries an explicit `Status:` line. An entry without
+> `Status: ENFORCED` is a described intent, not a control you can rely on.
 
 ## Context
 
@@ -74,40 +87,256 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 │  │  │ Filesystem       │ Network          │ Commands     │  │  │
 │  │  │ (InMemoryFs/     │ (Allow-list)     │ (Registry)   │  │  │
 │  │  │  OverlayFs)      │ Default: OFF     │ 110+ built-in│  │  │
-│  │  │ Symlinks: DENY   │                  │ No spawn()   │  │  │
-│  │  └──────────────────┴──────────────────┴──────────────┘  │  │
-│  │                                                           │  │
-│  │  ┌───────────────────────────────────────────────────┐    │  │
-│  │  │ Defense-in-Depth (SECONDARY)                      │    │  │
-│  │  │ AsyncLocalStorage context-aware monkey-patching   │    │  │
-│  │  │ PermissionMgr: plan-mode destructive-op blocking  │    │  │
-│  │  │ Blocks: Function, eval, setTimeout, process.*,   │    │  │
-│  │  │   performance, Module._resolveFilename,           │    │  │
-│  │  │   __defineGetter__/__defineSetter__, stdout/stderr │    │  │
-│  │  └───────────────────────────────────────────────────┘    │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  Host filesystem, process.env, network, child_process           │
+│  │  │ Symlinks: DENY   │                  │ ag-convert   │  │  │
+│  │  └──────────────────┴──────────────────┴──────┬───────┘  │  │
+│  │                                               │          │  │
+│  │  ┌────────────────────────────────────────┐   │          │  │
+│  │  │ Defense-in-Depth (SECONDARY)           │   │          │  │
+│  │  │ AsyncLocalStorage context-aware        │   │          │  │
+│  │  │   monkey-patching                      │   │          │  │
+│  │  │ Blocks: Function, eval, setTimeout,    │   │          │  │
+│  │  │   process.*, performance,              │   │          │  │
+│  │  │   Module._resolveFilename,             │   │          │  │
+│  │  │   __defineGetter__/__defineSetter__,   │   │          │  │
+│  │  │   stdout/stderr                        │   │          │  │
+│  │  │ Also: plan-mode write block —          │   │          │  │
+│  │  │   COMMAND LAYER ONLY; a shell          │   │          │  │
+│  │  │   redirection bypasses it (see TB7)    │   │          │  │
+│  │  └────────────────────────────────────────┘   │          │  │
+│  └───────────────────────────────────────────────┼──────────┘  │
+│                                                  │             │
+│  Host filesystem, process.env, network,          │             │
+│  child_process                                   ▼             │
+│                          spawnSync("python3", …,               │
+│                            { env: { ...process.env } })        │
+│                          ^ LEAVES THE SANDBOX (see TB8)        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+> **Note on "No spawn()".** Earlier revisions of this diagram claimed the command
+> registry contains no `spawn()` path. That is **not true as shipped.** Five
+> non-`.test.ts` source files reference `node:child_process`:
+>
+> | File | Form | Reachable from an untrusted script? |
+> |---|---|---|
+> | `commands/ag-convert/ag-convert.ts:1` | `import { spawnSync }` | **Yes — registered by default.** See TB8, §4.11 |
+> | `lsp/LSPConnection.ts:1` | `import { spawn }` | Only if the LSP service is used |
+> | `services/McpClient.ts:205` | `await import(...)` (the `:5` import is type-only, erased) | Only if an MCP server is configured |
+> | `cli/exec.ts:25` | `import { spawnSync }` | No — dev-only CLI path |
+> | `comparison-tests/fixture-runner.ts:1` | `import { exec }` | No — test harness, not shipped in `dist` |
+>
+> The one that matters for the threat model is `ag-convert`, because it is
+> **registered by default** and therefore reachable from an untrusted script.
+>
+> Note also what is *not* on this list: `commands/python3/worker.ts` names
+> `"child_process"` only as an entry in a `Module._load` deny-list (:135-136),
+> i.e. it blocks `require("child_process")` rather than using it. A grep for the
+> module name matches that guard, so the string count is not the importer count.
+> The
+> no-bash→JavaScript-escape guarantee is unaffected — `ag-convert` spawns a
+> *Python* interpreter, not `eval` — but "no child process" is a different claim,
+> and it does not hold.
+
 **TB1 — Script Input → Parser**: User script is completely untrusted. Parser must handle any input without crashing, hanging, or leaking information.
+**Status: ENFORCED** — §3.1.
 
 **TB2 — Interpreter → Filesystem**: The interpreter issues filesystem operations. The FS layer must confine all access to the sandbox root, block symlink traversal, and prevent writes to the real filesystem.
+**Status: ENFORCED** — §3.3. This is the boundary to rely on for read-only or
+confined sessions; **not** TB7's plan mode.
 
 **TB3 — Interpreter → Network**: Network access disabled by default. When enabled, URLs must pass the allow-list.
+**Status: ENFORCED** — §3.4.
 
-**TB4 — Interpreter → Host Process**: The interpreter must never spawn child processes, access host environment variables, or reach Node.js internals (process.binding, require, import()).
+**TB4 — Interpreter → Host Process**: The interpreter must never access host environment variables or reach Node.js internals (process.binding, require, import()).
+**Status: PARTIALLY ENFORCED.** The `process.*` / module-loading / `eval` side is
+enforced (§3.5, §3.6). The **"never spawn child processes" half is not**: the
+default-registered `ag-convert` command spawns host `python3` (TB8, §4.11), and
+the MCP stdio client and LSP client each spawn a server process when the embedder
+uses them. Earlier revisions of this document asserted the stronger claim; it was
+wrong.
 
 **TB5 — Data → Variable/Key Space**: User-controlled data becomes JS object keys (env vars, AWK variables, associative array keys). Must use null-prototype objects or Maps to prevent prototype pollution.
+**Status: ENFORCED** — §3.9.
 
-**TB6 — MCP Client → External Server** (v2.6.0+): The `@ag-bash/mcp-server` connects to external MCP servers via JSON-RPC 2.0 over stdio and HTTP transports. External servers are untrusted at the transport layer: tool schemas are validated via Zod at registration time, and responses pass through strict JSON parsing before reaching the interpreter. However, a compromised MCP server could return structurally valid but semantically malicious tool results (e.g., a `read_file` tool returning fabricated content). The ag-bash sandbox confines execution, but the orchestrating agent may act on the poisoned data. **Residual risk**: Semantically valid but malicious tool results that pass structural validation.
+**TB6 — MCP Client → External Server** (v2.6.0+)
+**Status: ENFORCED at the transport layer; semantic content trusted (see residual
+risk).** The `@ag-bash/mcp-server` connects to external MCP servers via JSON-RPC 2.0 over stdio and HTTP transports. External servers are untrusted at the transport layer: tool schemas are validated via Zod at registration time, and responses pass through strict JSON parsing before reaching the interpreter. However, a compromised MCP server could return structurally valid but semantically malicious tool results (e.g., a `read_file` tool returning fabricated content). The ag-bash sandbox confines execution, but the orchestrating agent may act on the poisoned data. **Residual risk**: Semantically valid but malicious tool results that pass structural validation.
 
-**TB7 — Plan Mode → Tool Dispatch** (v2.6.0+): The `PermissionManager` (`src/services/PermissionManager.ts`) enforces plan-mode restrictions by blocking destructive operations (file writes, `rm`, `chmod`, network mutations) via regex pattern matching at the tool dispatch level, not at the raw command level. This prevents bypass via shell aliases or indirect execution chains. **Residual risk**: Custom commands registered by the host application via `customCommands` can bypass `PermissionManager` checks because they execute as opaque JS functions, not as dispatchable tool invocations.
+**TB7 — Plan Mode → Tool Dispatch** (v2.6.0+)
 
-**TB8 — ag-convert → Document Processing** (v2.6.0+): The `ag-convert` command processes untrusted documents (PDF, DOCX, HTML) by routing them through Python-based converters (Docling/MarkItDown). Python execution runs inside a CPython Emscripten WASM sandbox with no host filesystem access — the same isolation model described in §4.7. Document content is treated as untrusted data; output is plain text/markdown only. **Residual risk**: A crafted document could trigger WASM memory exhaustion (OOM) within the Emscripten heap. The 30-second `maxPythonTimeoutMs` timeout bounds the blast radius, but repeated invocations could degrade host performance before the timeout fires.
+> **Status: NOT ENFORCED in 6.1. Plan mode is a UX affordance, not a security
+> boundary. Enforced in 7.0.**
+>
+> Do not use plan mode to contain an untrusted script or an untrusted agent. If
+> you need a read-only session in 6.1, construct the instance with
+> `new OverlayFs({ root, readOnly: true })` — that *is* enforced (TB2):
+> `assertWritable()` throws `EROFS` on every write path, including the shell
+> redirection that bypasses plan mode.
+>
+> Two things that do **not** work and must not be substituted for it:
+> `InMemoryFs` has no `readOnly` option at all and accepts writes (it is the
+> default FS, and it is what makes the plan-mode bypass above observable); and
+> omitting the writable overlay does not help, because `OverlayFs` always keeps
+> an in-memory layer — `readOnly: true` is the only thing that enforces.
+>
+> Known rough edge: a refused write currently rejects the `exec()` promise with a
+> raw `Error` rather than returning a non-zero `BashExecResult`, so callers must
+> wrap it in `try/catch`.
 
-**TB9 — Agentic Healer → Auto-Remediation** (v2.6.0+): The `AgenticHealer` observes script failures and suggests recovery commands. In the default `keyword` mode, suggestions are generated via fixed keyword matching against a scored tool registry — no external model is involved. Suggestions are advisory only (displayed to the user/agent, not auto-executed) unless the host explicitly configures auto-execution. **Residual risk**: If `llm` mode is enabled, the healer delegates suggestion generation to an LLM. An attacker who controls stderr output (e.g., via a crafted script that writes attacker-controlled error messages) could prompt-inject the LLM into suggesting malicious remediation commands. The `keyword` default mode is immune to this vector.
+*Intent*: while `bash.getMode() === "plan"`, destructive operations (file writes,
+`rm`, `chmod`, network mutations) are refused so an agent can plan without
+mutating state.
+
+*What is actually enforced in 6.1*: a write block on the **command layer only**.
+`createDefenseAwareCommandContext()`
+(`src/interpreter/defense-aware-command-context.ts:26-40`) wraps the `fs` handed
+to a builtin and throws `SecurityViolationError` when the wrapped method name
+matches `writeFile|appendFile|mkdir|rm|cp|mv|chmod|symlink|link|utimes|restore`.
+It is installed at exactly one dispatch site,
+`src/interpreter/builtin-dispatch.ts:465`. So `touch`, `rm`, `tee`, and `ag-edit`
+are refused — **but a redirection is not.** Observed transcript (`ag-plan enter`
+is the only supported way to enter the mode; there is no `--mode` CLI flag):
+
+```
+$ ag-plan enter
+Entered plan mode. You are now in read-only mode.
+$ ag-plan status
+Current mode: plan
+
+$ touch /a.txt                                          # exit 1  — refused
+touch: cannot touch '/a.txt': security violation: Destructive operation
+'fs.writeFile' blocked in 'plan' mode.
+
+$ ag-edit replace /main.sh --line 1 --text bar           # exit 1  — refused
+ag-edit: failed to write /main.sh: security violation: Destructive operation
+'fs.writeFile' blocked in 'plan' mode.
+
+$ echo pwned > /b.txt                                    # exit 0  — WRITTEN
+$ cat /b.txt
+pwned
+```
+
+*The bypass*: **a shell redirection reaches the filesystem through the
+interpreter's own context, not the command's.**
+Redirections are applied by `applyRedirections(this.ctx, …)` — 6 call sites in
+`src/interpreter/interpreter.ts` plus more in `control-flow.ts`, `functions.ts`,
+and `subshell-group.ts` (`grep -n applyRedirections src/interpreter/`) — which is handed the raw
+`InterpreterContext` and calls `ctx.fs.writeFile()` / `ctx.fs.appendFile()`
+directly (`src/interpreter/redirections.ts:577`, `:615`, `:690`, `:1037`, …).
+That `ctx.fs` is never passed through
+`createDefenseAwareCommandContext()`, so the guard never runs. Every
+redirection form is affected: `>` (create), `>` (truncate an existing file, e.g.
+`: > file`), `>>` (append), and `&>`/`2>`.
+
+*Two further gaps in the guard that does exist*:
+
+- It is **coupled to defense-in-depth**. `requireDefenseContext` is computed from
+  `DefenseInDepthBox.isEnabled()` (`src/Bash.ts`, in
+  `buildExecutionPipeline()`), and
+  `createDefenseAwareCommandContext()` early-returns when neither
+  `requireDefenseContext` nor `bash.agentic` is set
+  (`defense-aware-command-context.ts:265-267`). With
+  `{ security: { defenseInDepth: false } }`, `touch /c.txt` succeeds in plan mode.
+- It is **absent in browser builds**. `isEnabled()` returns `false` whenever
+  `IS_BROWSER` (`src/security/defense-in-depth-box.ts:397-400`), so the browser
+  bundle has no plan-mode write block at all unless `agentic: true` is set.
+
+*`PermissionManager` is dead code in 6.1.* `src/services/PermissionManager.ts`
+implements the rule engine, the `mode: "plan"` deny rule, and the strict
+allowlist described in earlier revisions of this document. It is constructed in
+the `Bash` constructor and assigned to the public `this.permissionManager` field
+(`src/Bash.ts`), and
+**`checkPermission()` is called from nowhere** in either package or in any
+test. `enableStrictMode()`, `setAllowedPlanTools()`, and `setHandler()` are
+likewise never called. The plan-mode denial that *does* fire comes from the
+`defense-aware-command-context` wrapper above, and — for agent-runtime tool calls
+only — from `ToolboxTool.checkPermissions`'s default
+(`src/agentic/Tool.ts:62-72`) and `RunLoop.isGated()`
+(`src/agent-runtime/RunLoop.ts:248`). Neither of those sees a shell redirection.
+
+**Residual risk**: plan mode does not prevent filesystem mutation. Additionally,
+custom commands registered via `customCommands` execute as opaque JS functions
+and are not subject to any plan-mode check.
+
+**Planned for 7.0**: move the plan-mode decision behind a single choke point that
+every write path (command dispatch *and* redirection *and* heredoc) must pass,
+and either wire `PermissionManager` into that choke point or delete it.
+
+---
+
+**TB8 — ag-convert → Document Processing** (v2.6.0+)
+
+> **Status: the "WASM-sandboxed Python" claim is FALSE for this path in 6.1.
+> `ag-convert` spawns HOST `python3`. Planned to move behind a
+> `runtimes.hostPython` opt-in in 7.0.**
+
+The `ag-convert` command processes untrusted documents (PDF, DOCX, HTML) by
+routing them through Python-based converters (Docling/MarkItDown). Earlier
+revisions of this document stated that this Python ran inside the CPython
+Emscripten WASM sandbox of §4.7. **It does not.** `ag-convert` shells out to the
+host interpreter:
+
+- `spawnSync("python3", [bridgePath, realFilePath, …], { env: { ...process.env } })`
+  — `src/commands/ag-convert/ag-convert.ts:205-209`. The **full parent
+  environment is inherited**, including any API keys, cloud credentials, and
+  tokens present in `process.env`.
+- `ag-convert --setup` additionally runs `uv pip install --system …` or
+  `python3 -m pip install … --break-system-packages` with `shell: true` and
+  `env: { ...process.env }` (`ag-convert.ts:283-322`), i.e. it mutates the host
+  Python environment. It also reads `process.env.HOME` (`ag-convert.ts:259`).
+- **It is registered by default**, with no opt-in flag: entry in `agenticLoaders`
+  (`src/commands/definitions/agentic.ts:63-67`), merged into `commandLoaders` at
+  `src/commands/registry.ts:139`. A plain `new Bash()` can run it.
+
+None of the §4.7 build-time or runtime restrictions apply to this path: there is
+no Emscripten VFS, no fresh-Worker-per-execution, no `maxPythonTimeoutMs`, and no
+`/host` mount indirection. Whatever the host `python3` can do — read the host
+filesystem, open sockets, `os.system()` — the converter can do.
+
+*What IS enforced*: **path translation is fail-closed.** `ag-convert` resolves the
+argument to a virtual path, then requires `ctx.fs.toRealPath()` to return a real
+host path; if it returns `null` (as `MountableFs`/`InMemoryFs` do for any
+purely in-memory path) the command refuses rather than handing the untranslated
+string to the host (`ag-convert.ts:135-170`):
+
+```
+$ ag-bash -c 'mkdir -p /etc && echo secret > /etc/passwd; ag-convert /etc/passwd'
+ag-convert: /etc/passwd exists only in the virtual filesystem and has no host path.
+ag-convert delegates to host python3, which cannot read virtual paths. …
+```
+
+This closes the earlier defect in which creating `/etc/passwd` *inside* the
+sandbox caused `ag-convert` to return the **host's** `/etc/passwd` (and
+`--analyze` to leak host stat metadata with no third-party Python dependency at
+all). It is a regression test, not a comment:
+`src/commands/ag-convert/ag-convert.hostpath.test.ts`. So the reachable surface is
+confined to files the embedder has *deliberately* mounted — but on those files
+the converter runs as a full host process.
+
+**Residual risk**:
+1. Host code execution by design. A crafted document that exploits a
+   Docling/MarkItDown/native-codec parser bug executes on the host with the
+   embedder's own privileges, outside every ag-bash sandbox layer.
+2. Environment exfiltration. `env: { ...process.env }` hands the whole parent
+   environment to the converter; a hostile or trojaned `docling`/`markitdown`
+   wheel reads it directly.
+3. No timeout and no memory ceiling on the spawned process (`maxBuffer` caps
+   captured output at 50 MB; it does not bound CPU or RSS).
+4. `--setup` performs an unpinned network package install into the host Python
+   environment.
+
+**Mitigation available today**: do not mount host directories you would not hand
+to `python3` directly; and if you do not need document conversion, launch under
+the Node.js Permission Model *without* granting `child_process` (see
+`SECURITY.md` §4 — note that this also disables MCP stdio servers and LSP).
+
+**Planned for 7.0**: gate `ag-convert`'s host-`python3` path behind an explicit
+`runtimes.hostPython` opt-in (default off), pass an explicit minimal environment
+instead of `{ ...process.env }`, and add a wall-clock timeout.
+
+**TB9 — Agentic Healer → Auto-Remediation** (v2.6.0+)
+**Status: ENFORCED in the default `keyword` mode; NOT a boundary in `llm` mode
+(see residual risk).** The `AgenticHealer` observes script failures and suggests recovery commands. In the default `keyword` mode, suggestions are generated via fixed keyword matching against a scored tool registry — no external model is involved. Suggestions are advisory only (displayed to the user/agent, not auto-executed) unless the host explicitly configures auto-execution. **Residual risk**: If `llm` mode is enabled, the healer delegates suggestion generation to an LLM. An attacker who controls stderr output (e.g., via a crafted script that writes attacker-controlled error messages) could prompt-inject the LLM into suggesting malicious remediation commands. The `keyword` default mode is immune to this vector.
 
 ---
 
@@ -181,7 +410,7 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 | WeakRef/FinalizationRegistry | GC observation/side channels | Blocked by defense-in-depth proxy | `src/security/blocked-globals.ts` |
 | process.chdir() | Confuse CWD tracking | Blocked by defense-in-depth proxy | `src/security/blocked-globals.ts` |
 | **dynamic import()** | `import('/tmp/evil.js')` | **BLOCKED**: `Module._resolveFilename` blocks file specifiers; ESM loader hooks block `data:`/`blob:` URLs (Node.js 20.6+; see §4.1) | `src/security/defense-in-depth-box.ts` |
-| child_process | spawn/exec/fork | Not imported anywhere; no code path from interpreter | Architecture |
+| child_process | spawn/exec/fork | **NOT BLOCKED.** No bash builtin gives a script *arbitrary* argv, but `child_process` is referenced by 5 non-`.test.ts` source files (table in §2) and `ag-convert` — which spawns host `python3` — is registered by default. See TB8 and §4.11. | `commands/ag-convert/ag-convert.ts:205`, `lsp/LSPConnection.ts:1`, `services/McpClient.ts:205` |
 
 ### 3.6 Information Disclosure
 
@@ -320,6 +549,11 @@ FD exhaustion is now enforced: `checkFdLimit()` is called before every `fileDesc
 
 **Risk**: MEDIUM (intentional, opt-in, isolation by construction)
 
+> **Scope**: this section describes the **`python3` builtin only**
+> (`src/commands/python3/`). It does **not** describe `ag-convert`, which spawns
+> host `python3` via `child_process` and is subject to none of the restrictions
+> below — see TB8 and §4.11.
+
 When `python: true`, CPython 3.13 Emscripten provides full Python execution via WASM. Unlike the previous Pyodide-based approach, CPython Emscripten has zero JS bridge code — `import js` fails with `ModuleNotFoundError` because the module simply doesn't exist in the binary. No Python-level sandbox is needed; isolation is by construction.
 
 **Build-time restrictions** (capabilities removed from binary):
@@ -367,13 +601,45 @@ Heredocs with variable expansion are size-limited (10MB) but nested heredocs wit
 
 `Reflect` is frozen (not blocked) in the defense-in-depth layer. `Reflect.construct`, `Reflect.apply` etc. remain callable but cannot construct `Function` directly because the `Function` constructor itself is blocked.
 
+### 4.11 Host Process Spawning via `ag-convert`
+
+**Risk**: HIGH when a host directory is mounted (default-on command, host
+execution, inherited environment) — **not** opt-in in 6.1
+
+`ag-convert` is registered by default and calls
+`spawnSync("python3", …, { env: { ...process.env } })`
+(`src/commands/ag-convert/ag-convert.ts:205-209`). An untrusted script can invoke
+it. Full detail, evidence, and the one control that *is* enforced (fail-closed
+`toRealPath()` translation) are in **TB8**; this entry exists so the gap appears
+in the gaps list rather than only in the boundary list.
+
+Reachability is bounded by the fail-closed path translation: the argument must
+resolve to a real host path, so with `InMemoryFs` (the default) every invocation
+is refused. The exposure is real only for embedders using `OverlayFs` /
+`ReadWriteFs` / `MountableFs` with a host-backed mount — for those, the converter
+runs as an unconfined host process over the mounted tree.
+
+**Mitigation**: see TB8. **Planned for 7.0**: `runtimes.hostPython` opt-in,
+explicit minimal environment, wall-clock timeout.
+
+### 4.12 Plan Mode Is Not a Confinement Mechanism
+
+**Risk**: HIGH if relied upon as a boundary; LOW if treated as a UX affordance
+
+Plan mode blocks command-layer writes but not shell redirections. Full detail and
+the reproduction are in **TB7**. Listed here because "plan mode" reads like a
+sandbox mode and previous revisions of this document described it as one.
+
+**Mitigation**: use a read-only VFS (TB2), which *is* enforced. **Planned for
+7.0**: a single write choke point that redirections also traverse.
+
 ---
 
 ## 5. Defense Layer Summary
 
 | Layer | Type | Scope | Bypass Difficulty |
 |-------|------|-------|-------------------|
-| **Architecture** (no child_process import) | Primary | Code execution | Very High — no code path exists |
+| **Architecture** (no bash → JavaScript path) | Primary | JS code execution | Very High — no code path exists from bash to `eval`/`Function`/`import()` |
 | **Filesystem** (OverlayFs/InMemoryFs) | Primary | File access | High — central gate functions (`resolveCanonicalPath`) |
 | **Symlink blocking** (default-deny) | Primary | Path traversal | High — zero-extra-I/O validation via path comparison |
 | **Network allow-list** | Primary | Network access | High — default-off, per-redirect validation |
@@ -385,6 +651,13 @@ Heredocs with variable expansion are size-limited (10MB) but nested heredocs wit
 | **Defense-in-depth** (globals) | Secondary | JS escape | Medium — monkey-patching has inherent limits |
 | **Virtual process info** | Secondary | Info disclosure | High — no real values exposed |
 | **Error sanitization** | Secondary | Info disclosure | High — systematic at FS layers + all error choke points + node:internal paths |
+| **Plan mode** (TB7) | ~~Secondary~~ **NOT A LAYER in 6.1** | — | **Trivial — `echo x > file` bypasses it.** Enforced in 7.0 |
+| **No host child process** (TB8 / §4.11) | ~~Primary~~ **NOT A LAYER in 6.1** | — | **None — `ag-convert` spawns host `python3` and is default-on.** Opt-in in 7.0 |
+
+> The last two rows are deliberately kept in this table rather than deleted. A
+> reader comparing 6.1 against an older revision of this document needs to see
+> that these were *claimed* and are *not delivered*, not find the claim silently
+> gone.
 
 ---
 
@@ -414,10 +687,34 @@ Heredocs with variable expansion are size-limited (10MB) but nested heredocs wit
 | 21 | Prototype pollution via `__defineGetter__` | Inject getter on prototype → blocked by defense-in-depth | **BLOCKED** (secondary) |
 | 22 | File-based import() | `import('/tmp/evil.js')` → Module._resolveFilename blocked → throw | **BLOCKED** (secondary) |
 | 23 | data: URL import() | `import('data:text/javascript,...')` → ESM loader hooks → throw | **BLOCKED** (Node.js 20.6+) |
+| 24 | Plan-mode write via builtin | `touch /a.txt` in plan mode → `defense-aware-command-context` → SecurityViolationError | **BLOCKED** (command layer only; see 25) |
+| 25 | **Plan-mode write via redirection** | `echo pwned > /b.txt` in plan mode → `applyRedirections(ctx)` → raw `ctx.fs.writeFile` | **NOT BLOCKED** — exit 0, file written (TB7). Enforced in 7.0 |
+| 26 | Plan-mode write, defense-in-depth off | `{ security: { defenseInDepth: false } }` + `touch /c.txt` → guard not installed | **NOT BLOCKED** (TB7) |
+| 27 | **Host `python3` via ag-convert** | `ag-convert <mounted-file>` → `spawnSync("python3", …, { env: {...process.env} })` | **NOT SANDBOXED** — runs on the host with the parent environment (TB8). Opt-in in 7.0 |
+| 28 | ag-convert on a VFS-only path | `ag-convert /etc/passwd` (in-memory) → `toRealPath()` returns null → refuse | **BLOCKED** (fail-closed translation; `ag-convert.hostpath.test.ts`) |
 
 ---
 
 ## 7. Recommendations for Future Hardening
+
+### Committed for 7.0 (the two false claims above)
+
+- **P0 — Make plan mode a real boundary (TB7).** Route every filesystem write
+  through one choke point that `applyRedirections()` also traverses, so
+  `echo x > f`, `: > f`, `>>`, and `&>` are subject to the same mode check as
+  `touch`. Decouple that check from `defenseInDepth` / `IS_BROWSER` so it holds in
+  browser builds too. Then either wire `PermissionManager.checkPermission()` into
+  the choke point or delete `PermissionManager` — shipping an unreferenced
+  permission engine is how this claim survived four minor versions.
+- **P0 — Put `ag-convert`'s host `python3` behind `runtimes.hostPython` (TB8).**
+  Default off. Replace `env: { ...process.env }` with an explicit minimal
+  environment. Add a wall-clock timeout. Require an explicit second opt-in for
+  `--setup` (it network-installs unpinned packages into the host Python).
+- **P1 — Add a doc/code drift gate.** Both of these claims were false in shipped
+  documentation across several releases. A `Status:` line that no test asserts is
+  the same failure mode one level up.
+
+### Longer-term
 
 1. ~~**`--experimental-loader` for import() blocking**~~ — **IMPLEMENTED**: ESM loader hooks via `module.register()` (Node.js 20.6+) / `module.registerHooks()` (Node.js 23.5+) block `data:` and `blob:` URL imports process-wide. Combined with `Module._resolveFilename` blocking for file specifiers, `import()` is fully mitigated on Node.js 20.6+. No CLI flags required.
 2. ~~**Systematic error message audit**~~ — **IMPLEMENTED**: `sanitizeErrorMessage()` applied at all error choke points; strips OS paths, `node:internal/` paths, and stack traces

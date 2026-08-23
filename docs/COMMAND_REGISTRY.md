@@ -1,6 +1,6 @@
 # Ag-Bash Command Registry
 
-This registry provides a categorized index of the commands supported by Ag-Bash. All commands are virtualized, sandboxed, and optimized for Project V-Next.
+This registry provides a categorized index of the commands supported by Ag-Bash. Commands run against the virtual filesystem and are optimized for Project V-Next — **with two documented exceptions that are not sandboxed as the rest are. See [Security caveats on specific commands](#security-caveats-on-specific-commands) before assuming a command is confined.**
 
 **How to read this file.** Everything between the `BEGIN GENERATED` / `END GENERATED` markers is produced from the command registry by `scripts/gen-command-registry.mjs` and must not be hand-edited; the sections after the closing marker are hand-authored. `packages/bash/src/commands/registry.doc.test.ts` fails if the generated inventory and the registry disagree in either direction, which is what keeps this document from drifting the way it did through v5.0.0.
 
@@ -238,6 +238,23 @@ run `node scripts/gen-command-registry.mjs` instead.
 | `about` | Show ag-bash features, architecture, and version. |
 | `doctor` | Run environment health checks and verify setup. |
 <!-- END GENERATED: command-inventory -->
+
+---
+
+## Security caveats on specific commands
+
+*Hand-authored. The generated inventory above lists what each command **does**; it
+carries no security metadata, so these two exceptions are recorded here. Both are
+tracked in `THREAT_MODEL.md` and targeted for 7.0.*
+
+| Command | Caveat |
+| :--- | :--- |
+| `ag-convert` | **Not WASM-sandboxed.** Spawns **host** `python3` via `spawnSync` with the full parent environment (`{ ...process.env }`), and is registered by default. This is a different path from the `python3` builtin, which *is* confined to the CPython Emscripten WASM sandbox. `ag-convert` fails closed on paths that exist only in the VFS, so exposure is limited to host directories the embedder deliberately mounted — but over those files it runs as an unconfined host process. See `THREAT_MODEL.md` TB8 and §4.11. |
+| `ag-plan` | **Plan mode is not a security boundary.** `ag-plan enter` blocks destructive *commands* (`touch`, `rm`, `tee`, `ag-edit`), but a shell **redirection** bypasses it entirely — `echo x > file` succeeds with exit 0 in plan mode. Treat it as a guardrail against accidental edits, not as confinement. For a genuinely read-only session use `new OverlayFs({ root, readOnly: true })` — note `InMemoryFs` has no `readOnly` option and accepts writes. See `THREAT_MODEL.md` TB7. |
+
+The MCP stdio client (`ag-mcp`) and the LSP integration also spawn host
+processes, but only when the embedder configures a server — unlike `ag-convert`
+they are not reachable from a bare `new Bash()`.
 
 ---
 

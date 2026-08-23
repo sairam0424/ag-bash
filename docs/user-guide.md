@@ -181,22 +181,47 @@ ag-diff config.yaml --summary
 ag-snapshot restore nexus-pre-fix
 ```
 
-### Plan Mode (Safe Multi-Step Design)
+### Plan Mode (Multi-Step Design Guardrail)
 
-Plan Mode puts the shell into a **read-only** state where destructive tools are blocked. Use it when an agent needs to design a multi-step solution, inspect files, and draft edits before committing any changes.
+Plan Mode makes the shell refuse destructive **commands**, so an agent can design a
+multi-step solution, inspect files, and draft edits before committing any changes.
+
+> [!WARNING]
+> **Plan Mode is a guardrail against accidental edits, not a security boundary,
+> and it is not read-only.** A shell redirection bypasses it — see the last two
+> lines of the example. If you need a genuinely read-only session, construct the
+> `Bash` instance with `new OverlayFs({ root, readOnly: true })` instead of
+> relying on the mode. `InMemoryFs` will not do — it has no `readOnly` option and
+> accepts writes — and neither does omitting the writable overlay, because
+> `OverlayFs` always keeps an in-memory layer. Be aware that a refused write
+> currently rejects the `exec()` promise instead of returning a non-zero result,
+> so wrap it in `try/catch`. Details and the 7.0 enforcement plan:
+> `THREAT_MODEL.md` TB7.
 
 ```bash
-# Enter plan mode
-ag-plan start
+# Enter plan mode  (subcommands: enter | exit | status | add | list)
+ag-plan enter
+# → Entered plan mode. You are now in read-only mode.
 
-# In plan mode: reads, searches, and analysis are allowed.
-# Writes, deletes, and destructive commands are rejected.
-ag-edit replace --target "foo" --replacement "bar" main.sh
-# → Error: destructive tools blocked in plan mode
+ag-plan status
+# → Current mode: plan
 
-# Commit the plan and switch back to execute mode
-ag-plan commit
+# Reads, searches, and analysis are allowed.
+# Destructive COMMANDS are rejected:
+ag-edit replace /main.sh --line 1 --text bar
+# → ag-edit: failed to write /main.sh: security violation:
+#   Destructive operation 'fs.writeFile' blocked in 'plan' mode.     (exit 1)
+
+# ...but a REDIRECTION is NOT rejected — this is the TB7 gap:
+echo redirected > /main.sh
+# → exit 0, and /main.sh now contains "redirected"
+
+# Leave plan mode
+ag-plan exit
 ```
+
+Note that `ag-plan enter` prints "You are now in read-only mode." That message
+overstates what the mode does; treat the warning above as authoritative.
 
 ### MCP Client Integration
 

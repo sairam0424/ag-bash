@@ -180,7 +180,20 @@ The **Nexus Suite** provides a cohesive set of tools purpose-built for agentic f
 
 ### Plan Mode
 
-The `ag-plan` command activates **Planning Mode** — a read-only sandbox where destructive tools are automatically blocked. This allows agents to design multi-step strategies with checkpoints before committing any changes to the filesystem.
+The `ag-plan` command activates **Planning Mode**, in which destructive *commands*
+(`touch`, `rm`, `tee`, `ag-edit`, …) are refused. This lets agents design
+multi-step strategies with checkpoints before committing changes.
+
+> [!WARNING]
+> **Plan mode is not a security boundary and is not a read-only sandbox in 6.1.**
+> The block is applied at command dispatch only; a shell **redirection** writes
+> straight through it (`echo x > file` succeeds, exit 0). Use it as a UX guardrail
+> against accidental edits, not as confinement for an untrusted script or agent.
+> For an actually read-only session, use `new OverlayFs({ root, readOnly: true })`
+> — that boundary *is* enforced, including on the redirection path that bypasses
+> plan mode. `InMemoryFs` is not an alternative: it has no `readOnly` option and
+> accepts writes. See `THREAT_MODEL.md` TB7; plan-mode enforcement is targeted
+> for 7.0.
 
 ---
 
