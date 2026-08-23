@@ -932,48 +932,51 @@ export class Bash extends EventEmitter {
     // exec logging, PWD/realpath/cwd derivation, execEnv + execState build,
     // whitespace normalization) is SHARED by both engines and stays here so
     // that recursive execs (via the exec.bind hook) re-enter the same guard.
+    // v6.0.0: The monolith code path has been removed. The ExecutionPipeline
+    // is now the sole execution engine, so `execMode` survives only as a
+    // backward-compat alias — "monolith" transparently resolves to the same
+    // pipeline. It therefore MUST NOT gate behaviour. The OTel span used to sit
+    // inside an `if (execMode === "pipeline")` branch, which silently dropped
+    // every span for callers passing execMode:"monolith" (or
+    // AG_BASH_EXEC_MODE=monolith) even though they ran the identical engine.
+    // The mode is now recorded ON the span instead of gating it.
     const execMode = options?.execMode ?? this.defaultExecMode;
-    if (execMode === "pipeline") {
-      // Wrap in OTEL span when tracer is configured (zero-cost no-op otherwise)
-      if (this.otelTracer) {
-        const span = this.otelTracer.startExecSpan(commandLine);
-        // Monotonic start mark for span duration. performance.now() is a
-        // monotonic clock (immune to wall-clock jumps) and is NOT one of the
-        // banned nondeterministic primitives (Date.now / new Date / Math.random).
-        const spanStart = performance.now();
-        try {
-          const result = await this.execViaPipeline(
-            commandLine,
-            options,
-            execState,
-          );
-          span.setAttribute("ag-bash.exitCode", result.exitCode);
-          span.setAttribute(
-            "ag-bash.durationMs",
-            performance.now() - spanStart,
-          );
-          span.end();
-          return result;
-        } catch (spanError: unknown) {
-          // Record the exception event BEFORE setting error status so the span
-          // carries both the typed exception and the error code.
-          span.recordException(spanError);
-          span.setAttribute(
-            "ag-bash.durationMs",
-            performance.now() - spanStart,
-          );
-          span.setStatus({ code: 2, message: "exec failed" });
-          span.end();
-          throw spanError;
-        }
-      }
+    if (!this.otelTracer) {
       return this.execViaPipeline(commandLine, options, execState);
     }
 
-    // v6.0.0: The monolith code path has been removed. The ExecutionPipeline
-    // is now the sole execution engine. If execMode is "monolith" (for backward
-    // compat at the type level), it transparently falls through to the pipeline.
-    return this.execViaPipeline(commandLine, options, execState);
+    // Await tracer initialization BEFORE opening the span. initialize() resolves
+    // a dynamic import("@opentelemetry/api") that cannot settle inside the
+    // synchronous constructor turn that kicked it off, so the previous
+    // fire-and-forget `void initialize()` meant the first exec()s of a process
+    // opened spans on the no-op tracer and recorded nothing at all — fatal for
+    // short-lived callers (bash -c, one-shot MCP tool calls). initialize()
+    // memoizes its promise, so every call after the first is one
+    // already-resolved microtask, and this whole block is skipped entirely when
+    // the otel option is absent.
+    await this.otelTracer.initialize();
+    const span = this.otelTracer.startExecSpan(commandLine);
+    span.setAttribute("ag-bash.execMode", execMode);
+    // Monotonic start mark for span duration. performance.now() is a
+    // monotonic clock (immune to wall-clock jumps) and is NOT one of the
+    // banned nondeterministic primitives (Date.now / new Date / Math.random).
+    const spanStart = performance.now();
+    try {
+      const result = await this.execViaPipeline(commandLine, options, execState);
+      span.setAttribute("ag-bash.exitCode", result.exitCode);
+      return result;
+    } catch (spanError: unknown) {
+      // Record the exception event BEFORE setting error status so the span
+      // carries both the typed exception and the error code.
+      span.recordException(spanError);
+      span.setStatus({ code: 2, message: "exec failed" });
+      throw spanError;
+    } finally {
+      // In `finally` rather than duplicated per branch so duration and end()
+      // are recorded on every exit path, including cancellation.
+      span.setAttribute("ag-bash.durationMs", performance.now() - spanStart);
+      span.end();
+    }
   }
 
   /**
