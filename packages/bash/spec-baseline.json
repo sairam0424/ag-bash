@@ -36,7 +36,6 @@
     "bash/cases/strict-options.test.sh::empty argv WITHOUT strict_argv",
     "bash/cases/strict-options.test.sh::shopt -s strict_binding: Persistent prefix bindings not allowed on special builtins",
     "bash/cases/temp-binding.test.sh::Temp bindings with unset",
-    "bash/cases/vars-special.test.sh::$PIPESTATUS",
     "bash/cases/vars-special.test.sh::$_ and ${_}",
     "bash/cases/vars-special.test.sh::$_ is not reset with (( and [[",
     "bash/cases/vars-special.test.sh::$_ with && and ||",

@@ -305,6 +305,28 @@ function producesOutputOnEmptyStdin(command: CommandNode): boolean {
   return name !== null && EMPTY_STDIN_PRODUCES_OUTPUT.has(name);
 }
 
+/**
+ * True when a stage carries state that only the real execution path can honour,
+ * so the fabricated-result fast paths below (Optimization B and D) must decline.
+ *
+ * `executeCommand` is the ONLY place that:
+ *   - overrides stdin from `<`, `<<`/`<<-`, `<<<` or `<&`,
+ *   - diverts stdout/stderr to a file via `>`, `>>`, `2>`, `&>`/`&>>`, `>&`,
+ *     including creating/truncating that file when the stream is empty,
+ *   - allocates `{var}>file` descriptors, and
+ *   - evaluates `VAR=$(...)` prefix assignments, whose expansion can have
+ *     side effects of its own.
+ *
+ * Fabricating a result for such a stage silently discards all of it — e.g.
+ * `printf 'a\nb\n' | wc -l > out.txt` would print the count to stdout and never
+ * create out.txt at all. Correctness wins: the fast paths keep their value for
+ * the overwhelmingly common bare-filter stage.
+ */
+function requiresRealExecution(command: CommandNode): boolean {
+  if (command.redirections.length > 0) return true;
+  return command.type === "SimpleCommand" && command.assignments.length > 0;
+}
+
 /** Count newlines in a string without creating intermediate arrays. */
 function countNewlines(text: string): number {
   let count = 0;
@@ -377,7 +399,12 @@ export async function executePipeline(
     // Optimization B: wc -l streaming counter — count newlines directly
     // instead of executing the full wc command when only line count is needed.
     // Only applies to non-first commands in a pipeline (where stdin comes from pipe).
-    const wcLineCountOptimized = !isFirst && isLineCountOnly(command);
+    //
+    // Declined for stages carrying redirections or prefix assignments: this path
+    // never calls executeCommand, so it would drop them entirely (see
+    // requiresRealExecution).
+    const wcLineCountOptimized =
+      !isFirst && !requiresRealExecution(command) && isLineCountOnly(command);
     if (wcLineCountOptimized) {
       const lineCount = countNewlines(stdin);
       result = {
@@ -396,10 +423,16 @@ export async function executePipeline(
       // them would fabricate exit 0 — e.g. `true | (false)` or the PIPESTATUS
       // restore `(exit 0) | (exit 1)` would wrongly report 0, dropping the
       // last stage's real exit code from $? and PIPESTATUS.
+      //
+      // Also declined for stages carrying redirections or prefix assignments:
+      // an input redirection REPLACES the empty piped stdin (`printf '' | cat <
+      // f` prints f), and an output redirection must still create/truncate its
+      // file even with nothing to write (see requiresRealExecution).
       const emptyStdinShortCircuit =
         !isFirst &&
         stdin === "" &&
         command.type === "SimpleCommand" &&
+        !requiresRealExecution(command) &&
         !isStdinIndependent(command) &&
         // Hash/checksum filters emit a defined non-empty value for empty input,
         // so they must actually run rather than be short-circuited to "".
