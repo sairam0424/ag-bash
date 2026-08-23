@@ -1075,6 +1075,15 @@ export class Interpreter {
         commandName === "export" ||
         commandName === "readonly");
 
+    // $_ tracking: bash binds $_ to the LAST argument of this simple command,
+    // *after expansion* (so after word splitting, quote removal and globbing).
+    // Tracked alongside the pushes rather than read back off `args` at the end
+    // because one arg word can expand to zero values (e.g. an unquoted empty
+    // variable), in which case $_ must keep the previous word's value.
+    // `undefined` means "no argument produced a value" -> $_ becomes the
+    // command name (see `underscoreArg` below).
+    let lastExpandedArg: string | undefined;
+
     if (isLiteralAssignmentBuiltin) {
       for (const arg of node.args) {
         const arrayAssignResult = await expandLocalArrayAssignmentHelper(
@@ -1084,6 +1093,17 @@ export class Interpreter {
         if (arrayAssignResult) {
           args.push(arrayAssignResult);
           quotedArgs.push(true);
+          // bash quirk: for a COMPOUND array assignment to an assignment
+          // builtin (`declare a=(1 2)`), $_ is the bare LHS name ("a"), not
+          // the whole word — unlike a scalar assignment (`declare s=bar`),
+          // where $_ is the full "s=bar". expandLocalArrayAssignment always
+          // returns the shape `name=(...)`, so the name is the prefix
+          // before the first "=(".
+          const nameEnd = arrayAssignResult.indexOf("=(");
+          lastExpandedArg =
+            nameEnd > 0
+              ? arrayAssignResult.slice(0, nameEnd)
+              : arrayAssignResult;
         } else {
           // Check if this looks like a scalar assignment (name=value)
           // For assignments, we should NOT glob-expand the value part
@@ -1094,12 +1114,14 @@ export class Interpreter {
           if (scalarAssignResult !== null) {
             args.push(scalarAssignResult);
             quotedArgs.push(true);
+            lastExpandedArg = scalarAssignResult;
           } else {
             // Not an assignment - use normal glob expansion
             const expanded = await expandWordWithGlob(this.ctx, arg);
             for (const value of expanded.values) {
               args.push(value);
               quotedArgs.push(expanded.quoted);
+              lastExpandedArg = value;
             }
           }
         }
@@ -1111,6 +1133,7 @@ export class Interpreter {
         for (const value of expanded.values) {
           args.push(value);
           quotedArgs.push(expanded.quoted);
+          lastExpandedArg = value;
         }
       }
     }
@@ -1124,9 +1147,14 @@ export class Interpreter {
       for (const extra of extraArgs) {
         args.push(extra);
         quotedArgs.push(true);
+        lastExpandedArg = extra;
       }
       this.ctx.state.extraArgs = undefined;
     }
+
+    // A command with no arguments sets $_ to the command name itself
+    // (`true` -> "true", `echo` -> "echo").
+    const underscoreArg = lastExpandedArg ?? commandName;
 
     // Generate xtrace output (set -x) BEFORE running the command, matching
     // bash which prints the trace line just before executing. The command's
@@ -1181,6 +1209,14 @@ export class Interpreter {
         `bash: ${commandName}: unexpected error: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
       );
     }
+
+    // Bind $_ (bash's bind_lastarg). The VALUE was computed from the expanded
+    // words *before* execution — that is why `declare -g d=(1 2)` leaves $_ as
+    // "d" even when the flag is rejected — but the BINDING happens *after* the
+    // command finishes, which is what makes a function call's own last argument
+    // win over whatever its body last executed (`f aa bb` -> $_ is "bb", not
+    // the body's last word). Bound even on failure, matching bash.
+    this.ctx.state.lastArg = underscoreArg;
 
     // Apply redirections if command succeeded (or even if it failed, bash applies them)
     const redirectedResult = await applyRedirections(
