@@ -40,11 +40,47 @@ export interface MountableFsOptions {
 }
 
 /**
+ * Result of asking a MountableFs whether its EFFECTIVE base filesystem can
+ * service synchronous scaffolding (see {@link MountableFs.inspectSyncInitSupport}).
+ */
+export interface SyncInitSupport {
+  /** True when the effective base exposes both mkdirSync and writeFileSync. */
+  supported: boolean;
+  /** Class name of the effective base filesystem, for diagnostics. */
+  baseName: string;
+}
+
+/**
  * Internal mount entry with normalized mount point
  */
 interface MountEntry {
   mountPoint: string;
   filesystem: IFileSystem;
+}
+
+/**
+ * Describe a filesystem for diagnostics without trusting its prototype chain.
+ */
+function describeFilesystem(fs: IFileSystem): string {
+  const ctor = (fs as { constructor?: { name?: string } }).constructor;
+  const name = typeof ctor?.name === "string" ? ctor.name : "";
+  return name.length > 0 ? name : "unknown";
+}
+
+/**
+ * Duck-type check for the synchronous write operations that filesystem
+ * scaffolding needs. Only meaningful on a TERMINAL filesystem: MountableFs
+ * itself always declares these methods but merely delegates them.
+ */
+function hasSyncWriteOps(fs: IFileSystem): boolean {
+  const maybeSync = fs as Partial<{
+    mkdirSync: unknown;
+    writeFileSync: unknown;
+  }>;
+  return (
+    typeof maybeSync.mkdirSync === "function" &&
+    typeof maybeSync.writeFileSync === "function"
+  );
 }
 
 /**
@@ -172,6 +208,41 @@ export class MountableFs implements IFileSystem {
       mountPoint: entry.mountPoint,
       filesystem: entry.filesystem,
     }));
+  }
+
+  /**
+   * Report whether the EFFECTIVE base filesystem can service synchronous
+   * scaffolding (`mkdirSync` / `writeFileSync`).
+   *
+   * MountableFs always declares those methods, but they only delegate: with a
+   * pure-async base such as `ReadWriteFs` they throw. Duck-typing the wrapper
+   * therefore answers the wrong question — callers must ask the base, which is
+   * what this method does. Nested MountableFs bases are unwrapped to the
+   * terminal filesystem.
+   *
+   * Mounting at '/' is rejected (see validateMount), so the base always owns
+   * part of the root namespace and its capabilities always matter.
+   */
+  inspectSyncInitSupport(): SyncInitSupport {
+    const base = this.resolveEffectiveBase();
+    return {
+      supported: hasSyncWriteOps(base),
+      baseName: describeFilesystem(base),
+    };
+  }
+
+  /**
+   * Walk down nested MountableFs bases to the terminal base filesystem.
+   * Guards against a self-referential base rather than looping forever.
+   */
+  private resolveEffectiveBase(): IFileSystem {
+    const seen = new Set<IFileSystem>([this]);
+    let current: IFileSystem = this.baseFs;
+    while (current instanceof MountableFs && !seen.has(current)) {
+      seen.add(current);
+      current = current.baseFs;
+    }
+    return current;
   }
 
   /**

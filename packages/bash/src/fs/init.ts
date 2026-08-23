@@ -7,6 +7,13 @@
 
 import { formatProcStatus, KERNEL_VERSION } from "../shell-metadata.js";
 import type { IFileSystem } from "./interface.js";
+import {
+  MountableFs,
+  type SyncInitSupport,
+} from "./mountable-fs/mountable-fs.js";
+
+/** Standard layout this module scaffolds, quoted in the topology error. */
+const STANDARD_LAYOUT = "/bin, /usr/bin, /tmp, /home/user, /dev, /proc";
 
 /**
  * Interface for filesystems that support sync initialization
@@ -29,6 +36,28 @@ function isSyncInitFs(fs: IFileSystem): fs is IFileSystem & SyncInitFs {
   return (
     typeof maybeFs.mkdirSync === "function" &&
     typeof maybeFs.writeFileSync === "function"
+  );
+}
+
+/**
+ * Build the actionable error for a MountableFs whose base cannot service the
+ * synchronous scaffolding below.
+ *
+ * Why fail instead of skipping: skipping leaves a shell with no /bin, /tmp or
+ * /dev/null, and `Bash.registerCommand()` swallows the resulting stub-write
+ * errors, so the gap only surfaces much later as unrelated command failures.
+ * Why fail instead of scaffolding asynchronously: `initFilesystem()` runs
+ * inside the `Bash` constructor, which cannot await.
+ */
+function unsupportedBaseError(support: SyncInitSupport): Error {
+  return new Error(
+    `Unsupported filesystem topology: MountableFs base '${support.baseName}' ` +
+      "is pure-async (no synchronous mkdirSync/writeFileSync), so the " +
+      `standard layout (${STANDARD_LAYOUT}) cannot be created during ` +
+      "construction. Use a sync-capable base (InMemoryFs, OverlayFs or " +
+      `CowFs) and mount '${support.baseName}' at a subpath instead, e.g. ` +
+      "new MountableFs({ base: new InMemoryFs(), mounts: [{ mountPoint: " +
+      '"/work", filesystem: hostFs }] }).',
   );
 }
 
@@ -110,6 +139,18 @@ export function initFilesystem(
   useDefaultLayout: boolean,
   processInfo: VirtualProcessInfo = { pid: 1, ppid: 0, uid: 1000, gid: 1000 },
 ): void {
+  // A MountableFs always exposes mkdirSync/writeFileSync, but they only
+  // delegate to whichever filesystem owns the path — so duck-typing the
+  // wrapper below would inspect the WRAPPER instead of the effective BASE.
+  // Ask the base directly and fail with an actionable message, rather than
+  // letting the first mkdirSync blame '/bin' for a topology problem.
+  if (fs instanceof MountableFs) {
+    const support = fs.inspectSyncInitSupport();
+    if (!support.supported) {
+      throw unsupportedBaseError(support);
+    }
+  }
+
   // Initialize for filesystems that support sync methods (InMemoryFs and OverlayFs)
   if (isSyncInitFs(fs)) {
     initCommonDirectories(fs, useDefaultLayout);
