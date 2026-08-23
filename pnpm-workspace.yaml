@@ -1,3 +1,25 @@
 packages:
   - "packages/*"
   - "examples/*"
+
+# Dependency overrides. These live here, NOT in package.json's `pnpm.overrides`:
+# pnpm 10 stopped reading the `pnpm` field and warns
+#   [WARN] The "pnpm" field in package.json is no longer read by pnpm.
+#          The following keys were ignored: "pnpm.overrides"
+# The overrides kept working only because they were already baked into
+# pnpm-lock.yaml's own `overrides:` block, so a from-scratch lockfile
+# regeneration would have silently dropped them and re-admitted the advisories.
+# That matters beyond hygiene: scripts/check-advisories.mjs documents pinning a
+# patched version via an override as the sanctioned remediation for a
+# published-reachable advisory, so declaring them where pnpm ignores them made
+# that remediation path inert for the next advisory.
+overrides:
+  # Expansion-time DoS in ag-bash's globbing engine (minimatch -> brace-expansion),
+  # reachable from a shell one-liner. Clears 1 moderate + 3 highs on the 5.x line;
+  # `^5.0.5` (what minimatch@10.2.5 declares) accepts 5.0.9, so no major bump.
+  # Keyed `@5` deliberately: `<5.0.9` would also match 1.1.14 and force a major
+  # jump on eslint's tree.
+  brace-expansion@5: ">=5.0.9"
+  fast-xml-builder@<1.1.7: ">=1.1.7"
+  sanitize-html@2.17.3: ">=2.17.4"
+  esbuild@<0.28.1: ">=0.28.1"
