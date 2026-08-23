@@ -110,7 +110,11 @@ import {
   preOpenOutputRedirects,
   processFdVariableRedirections,
 } from "./redirections.js";
-import { processAssignments } from "./simple-command-assignments.js";
+import {
+  popTempEnvFrame,
+  processAssignments,
+  pushTempEnvFrame,
+} from "./simple-command-assignments.js";
 import {
   executeGroup as executeGroupHelper,
   executeSubshell as executeSubshellHelper,
@@ -1283,101 +1287,121 @@ export class Interpreter {
     const xtracePrefix =
       expansionStderr + xtraceAssignmentOutput + xtraceCommandOutput;
 
-    // Built-in commands are registered with CommandRegistry.
-    // External commands are handled by the shell path lookup.
-    let execResult: ExecResult;
+    // ---- Temp frame: `VAR=x cmd` binds VAR only for the duration of cmd -----
+    // Pushed HERE, not at processAssignments(): the words above are expanded
+    // with the new values already in `env`, but the frame must not be observable
+    // until `cmd` itself runs, or an argument's own read would be recorded as
+    // "the command accessed the temp binding".
+    //
+    // Popped in the `finally` so a `break`/`return`/`exit` out of `cmd` cannot
+    // strand a frame on the stack, and only AFTER applyRedirections(), whose
+    // target words may still reference the binding (`FOO=f cmd > $FOO`).
+    const hasTempFrame = tempAssignments.size > 0;
+    if (hasTempFrame) {
+      pushTempEnvFrame(this.ctx, tempAssignments);
+    }
+
     try {
-      execResult = await this.runCommand(
-        argvName,
-        argvArgs,
-        argvQuoted,
-        stdin,
-        false, // skipFunctions
-        false, // useDefaultPath
-        stdinSourceFd,
-      );
-    } catch (error: any) {
-      // Re-throw control flow and fatal errors to be handled by the top-level Bash.
-      // SubshellExitError belongs here: `break`/`continue` inside a subshell that
-      // was spawned from a loop unwinds to executeSubshell(), which turns it into
-      // a clean status-0 subshell exit. Omitting it swallowed the flow control
-      // (the rest of the subshell body kept running) AND surfaced the internal
-      // sentinel to the user as "bash: continue: unexpected error: subshell exit".
-      const errorName = error instanceof Error ? error.name : "";
-      if (
-        error instanceof SecurityViolationError ||
-        error instanceof ExecutionLimitError ||
-        error instanceof ExitError ||
-        error instanceof ReturnError ||
-        error instanceof BreakError ||
-        error instanceof ContinueError ||
-        error instanceof SubshellExitError ||
-        error instanceof ErrexitError ||
-        error instanceof ArithmeticError ||
-        error instanceof PosixFatalError ||
-        errorName === "SecurityViolationError" ||
-        errorName === "ExecutionLimitError" ||
-        errorName === "ExitError" ||
-        errorName === "ReturnError" ||
-        errorName === "BreakError" ||
-        errorName === "ContinueError" ||
-        errorName === "SubshellExitError" ||
-        errorName === "ErrexitError" ||
-        errorName === "ArithmeticError" ||
-        errorName === "PosixFatalError"
-      ) {
-        throw error;
+      // Built-in commands are registered with CommandRegistry.
+      // External commands are handled by the shell path lookup.
+      let execResult: ExecResult;
+      try {
+        execResult = await this.runCommand(
+          argvName,
+          argvArgs,
+          argvQuoted,
+          stdin,
+          false, // skipFunctions
+          false, // useDefaultPath
+          stdinSourceFd,
+        );
+      } catch (error: any) {
+        // Re-throw control flow and fatal errors to be handled by the top-level Bash.
+        // SubshellExitError belongs here: `break`/`continue` inside a subshell that
+        // was spawned from a loop unwinds to executeSubshell(), which turns it into
+        // a clean status-0 subshell exit. Omitting it swallowed the flow control
+        // (the rest of the subshell body kept running) AND surfaced the internal
+        // sentinel to the user as "bash: continue: unexpected error: subshell exit".
+        const errorName = error instanceof Error ? error.name : "";
+        if (
+          error instanceof SecurityViolationError ||
+          error instanceof ExecutionLimitError ||
+          error instanceof ExitError ||
+          error instanceof ReturnError ||
+          error instanceof BreakError ||
+          error instanceof ContinueError ||
+          error instanceof SubshellExitError ||
+          error instanceof ErrexitError ||
+          error instanceof ArithmeticError ||
+          error instanceof PosixFatalError ||
+          errorName === "SecurityViolationError" ||
+          errorName === "ExecutionLimitError" ||
+          errorName === "ExitError" ||
+          errorName === "ReturnError" ||
+          errorName === "BreakError" ||
+          errorName === "ContinueError" ||
+          errorName === "SubshellExitError" ||
+          errorName === "ErrexitError" ||
+          errorName === "ArithmeticError" ||
+          errorName === "PosixFatalError"
+        ) {
+          throw error;
+        }
+        // Catch unexpected command internal errors and treat as failure
+        execResult = failure(
+          `bash: ${argvName}: unexpected error: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
+        );
       }
-      // Catch unexpected command internal errors and treat as failure
-      execResult = failure(
-        `bash: ${argvName}: unexpected error: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
-      );
-    }
 
-    // Bind $_ (bash's bind_lastarg). The VALUE was computed from the expanded
-    // words *before* execution — that is why `declare -g d=(1 2)` leaves $_ as
-    // "d" even when the flag is rejected — but the BINDING happens *after* the
-    // command finishes, which is what makes a function call's own last argument
-    // win over whatever its body last executed (`f aa bb` -> $_ is "bb", not
-    // the body's last word). Bound even on failure, matching bash.
-    this.ctx.state.lastArg = underscoreArg;
+      // Bind $_ (bash's bind_lastarg). The VALUE was computed from the expanded
+      // words *before* execution — that is why `declare -g d=(1 2)` leaves $_ as
+      // "d" even when the flag is rejected — but the BINDING happens *after* the
+      // command finishes, which is what makes a function call's own last argument
+      // win over whatever its body last executed (`f aa bb` -> $_ is "bb", not
+      // the body's last word). Bound even on failure, matching bash.
+      this.ctx.state.lastArg = underscoreArg;
 
-    // Apply redirections if command succeeded (or even if it failed, bash applies them)
-    const redirectedResult = await applyRedirections(
-      this.ctx,
-      execResult,
-      node.redirections,
-    );
-
-    // Prepend xtrace (set -x) trace lines to stderr. Bash writes the trace to
-    // the shell's stderr (fd 2), which is NOT affected by the command's own
-    // redirections, so this is applied AFTER applyRedirections.
-    const finalResult = prependStderr(redirectedResult, xtracePrefix);
-
-    // Ag-Trace: Analyze failure if exitCode exists and is non-zero.
-    // Source-emitted observations (already on finalResult) are the primary
-    // channel; AgTrace is the FALLBACK. combineObservations dedups/merges so
-    // the same failure is never double-emitted (A3).
-    if (finalResult.exitCode !== 0) {
-      const fresh = await AgTrace.analyze(
+      // Apply redirections if command succeeded (or even if it failed, bash applies them)
+      const redirectedResult = await applyRedirections(
         this.ctx,
-        argvName,
-        argvArgs,
-        finalResult,
+        execResult,
+        node.redirections,
       );
-      if (fresh && fresh.length > 0) {
-        // Immutability: return a NEW result rather than mutating finalResult.
-        return {
-          ...finalResult,
-          observations: AgTrace.combineObservations(
-            finalResult.observations ?? [],
-            fresh,
-          ),
-        };
+
+      // Prepend xtrace (set -x) trace lines to stderr. Bash writes the trace to
+      // the shell's stderr (fd 2), which is NOT affected by the command's own
+      // redirections, so this is applied AFTER applyRedirections.
+      const finalResult = prependStderr(redirectedResult, xtracePrefix);
+
+      // Ag-Trace: Analyze failure if exitCode exists and is non-zero.
+      // Source-emitted observations (already on finalResult) are the primary
+      // channel; AgTrace is the FALLBACK. combineObservations dedups/merges so
+      // the same failure is never double-emitted (A3).
+      if (finalResult.exitCode !== 0) {
+        const fresh = await AgTrace.analyze(
+          this.ctx,
+          argvName,
+          argvArgs,
+          finalResult,
+        );
+        if (fresh && fresh.length > 0) {
+          // Immutability: return a NEW result rather than mutating finalResult.
+          return {
+            ...finalResult,
+            observations: AgTrace.combineObservations(
+              finalResult.observations ?? [],
+              fresh,
+            ),
+          };
+        }
+      }
+
+      return finalResult;
+    } finally {
+      if (hasTempFrame) {
+        popTempEnvFrame(this.ctx, tempAssignments, tempExportedVars, argvName);
       }
     }
-
-    return finalResult;
   }
 
   private async runCommand(

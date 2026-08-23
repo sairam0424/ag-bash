@@ -35,6 +35,7 @@ import {
 } from "./helpers/nameref.js";
 import { checkReadonlyError, isReadonly } from "./helpers/readonly.js";
 import { result } from "./helpers/result.js";
+import { POSIX_SPECIAL_BUILTINS } from "./helpers/shell-constants.js";
 import { expandTildesInValue } from "./helpers/tilde.js";
 import { traceAssignment } from "./helpers/xtrace.js";
 import type { InterpreterContext } from "./types.js";
@@ -158,6 +159,110 @@ export async function processAssignments(
     xtraceOutput,
     tempAssignments,
   };
+}
+
+/**
+ * Push a "temp frame" for the prefix assignments of `VAR=x cmd`.
+ *
+ * `processAssignments()` has already written the new values into `ctx.state.env`
+ * and recorded the SHADOWED (outer) value for each name in `tempAssignments`.
+ * Publishing that same map on `ctx.state.tempEnvBindings` is what makes the
+ * frame observable to the rest of the interpreter while `cmd` runs:
+ *   - `unset` reveals the shadowed value instead of deleting the variable
+ *     (`handleTempEnvUnset` in builtins/unset.ts);
+ *   - a bare `local v` INHERITS the temp value (builtins/local.ts);
+ *   - reads/writes of the name are recorded in `accessedTempEnvVars` /
+ *     `mutatedTempEnvVars`, which decide whether a later local-unset is a
+ *     value-unset or reveals the shadowed value.
+ *
+ * The map is shared, NOT copied, on purpose: when `unset` reveals a shadowed
+ * value it deletes that entry, and the delete must also cancel the restore in
+ * `popTempEnvFrame()`. Otherwise `f() { unset x; x=new; }; x=temp f` would
+ * clobber the fresh `x=new` with the stale shadowed value on the way out.
+ */
+export function pushTempEnvFrame(
+  ctx: InterpreterContext,
+  tempAssignments: Map<string, string | undefined>,
+): void {
+  const stack = ctx.state.tempEnvBindings ?? [];
+  stack.push(tempAssignments);
+  ctx.state.tempEnvBindings = stack;
+}
+
+/**
+ * Whether the temp frame is unwound when its command finishes.
+ *
+ * bash restores prefix assignments after EVERY command by default — that is why
+ * `foo=bar true; echo $foo` prints nothing and why `true` being redefinable as a
+ * function changes nothing (builtin-special.test.sh :: "true is not special").
+ * The POSIX rule that assignments preceding a SPECIAL builtin persist is only
+ * honoured under `set -o posix` (builtin-special.test.sh :: "Prefix assignments
+ * persist after special builtins, like : (set -o posix)"), and bash does not
+ * extend it to `unset`/`eval`, whose whole job may be to touch the same name.
+ */
+function shouldRestoreTempEnv(
+  ctx: InterpreterContext,
+  commandName: string,
+): boolean {
+  if (!ctx.state.options.posix || !POSIX_SPECIAL_BUILTINS.has(commandName)) {
+    return true;
+  }
+  return commandName === "unset" || commandName === "eval";
+}
+
+/**
+ * Pop the temp frame pushed by `pushTempEnvFrame()` and unwind its effects.
+ *
+ * `boundNames` is the frame's ORIGINAL key set, captured before the command ran:
+ * `frame` itself may have shrunk (see `pushTempEnvFrame`), but the export and
+ * access bookkeeping still has to be cleared for every name that was bound.
+ * Each name is only cleared when no OUTER frame still binds it, so
+ * `X=1 f` -> `X=2 g` does not lose X's outer binding when g returns.
+ */
+export function popTempEnvFrame(
+  ctx: InterpreterContext,
+  frame: Map<string, string | undefined>,
+  boundNames: readonly string[],
+  commandName: string,
+): void {
+  const stack = ctx.state.tempEnvBindings;
+  if (stack) {
+    const index = stack.lastIndexOf(frame);
+    if (index !== -1) {
+      stack.splice(index, 1);
+    }
+  }
+
+  for (const name of boundNames) {
+    if (ctx.state.tempEnvBindings?.some((outer) => outer.has(name))) {
+      continue;
+    }
+    if (ctx.state.tempExportedVars?.delete(name)) {
+      ctx.state.exportedEnvDirty = true;
+    }
+    // These two only mean "…since the frame that bound this name was pushed",
+    // so they MUST NOT outlive the frame: a stale entry would turn the next
+    // command's local-unset of the same name into a reveal.
+    ctx.state.accessedTempEnvVars?.delete(name);
+    ctx.state.mutatedTempEnvVars?.delete(name);
+  }
+
+  if (!shouldRestoreTempEnv(ctx, commandName)) {
+    return;
+  }
+
+  for (const [name, shadowed] of frame) {
+    // A local cell that was unset all the way down suppresses the restore:
+    // bash leaves the name unset rather than resurrecting the temp value.
+    if (ctx.state.fullyUnsetLocals?.has(name)) {
+      continue;
+    }
+    if (shadowed === undefined) {
+      ctx.state.env.delete(name);
+    } else {
+      ctx.state.env.set(name, shadowed);
+    }
+  }
 }
 
 interface SingleAssignmentResult {

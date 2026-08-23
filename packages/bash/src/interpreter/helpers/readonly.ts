@@ -7,13 +7,20 @@
 import type { ExecResult } from "../../types.js";
 import { ExitError } from "../errors.js";
 import type { InterpreterContext } from "../types.js";
+import { promoteTempEnvBinding } from "./temp-env-frame.js";
 
 /**
  * Mark a variable as readonly.
+ *
+ * Marking a temp-env-bound name `readonly` PROMOTES the temporary binding to a
+ * permanent one, matching bash:
+ *   R=g; f() { readonly R; }; R=t f; echo "$R"   # -> t
+ * See {@link promoteTempEnvBinding}.
  */
 export function markReadonly(ctx: InterpreterContext, name: string): void {
   ctx.state.readonlyVars = ctx.state.readonlyVars || new Set();
   ctx.state.readonlyVars.add(name);
+  promoteTempEnvBinding(ctx, name);
 }
 
 /**
@@ -58,12 +65,21 @@ export function checkReadonlyError(
  * current scope), track it as a locally-exported variable. When the scope
  * is popped, the export attribute will be removed if it wasn't exported
  * before entering the function.
+ *
+ * Marking a temp-env-bound name `export` PROMOTES the temporary binding to a
+ * permanent one, matching bash. Note this is NOT conditional on the export
+ * attribute actually changing — `export V` on a name that was already exported
+ * still promotes:
+ *   V=g; export V; f() { export V; }; V=t f; echo "$V"   # -> t
+ * so `wasExported` must not be used to gate it. See
+ * {@link promoteTempEnvBinding}.
  */
 export function markExported(ctx: InterpreterContext, name: string): void {
   const wasExported = ctx.state.exportedVars?.has(name) ?? false;
   ctx.state.exportedVars = ctx.state.exportedVars || new Set();
   ctx.state.exportedVars.add(name);
   ctx.state.exportedEnvDirty = true;
+  promoteTempEnvBinding(ctx, name);
 
   // If we're in a local scope and the variable is local, track it
   if (ctx.state.localScopes.length > 0) {
