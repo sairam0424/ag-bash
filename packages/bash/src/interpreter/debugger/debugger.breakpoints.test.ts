@@ -18,8 +18,7 @@ import { DebuggerBridge } from "./debugger.js";
  *    (`vitest.unit.config.ts` includes `src/**` only), and its debug
  *    `console.log` calls would have polluted the suite once it did.
  *
- * `paused` is not on the public surface, so reading it needs a cast rather
- * than a suppression.
+ * Pause state is observed through the public `isPaused()` accessor.
  */
 
 /** Poll a predicate until true, or return false once the budget is spent. */
@@ -61,31 +60,28 @@ describe("DebuggerBridge breakpoints", () => {
   }, 20_000);
 
   /**
-   * KNOWN DEFECT — `it.fails` asserts this currently does NOT work, so the
-   * suite stays green today and starts FAILING the moment someone fixes it.
-   * That is deliberate: it documents the gap without hiding it, and notifies
-   * automatically rather than rotting into a skipped test nobody revisits.
+   * REGRESSION — this was an `it.fails` documenting a real defect. Every
+   * component was individually correct, which is what made it confusing:
    *
-   * What is established (each verified, not assumed):
    *  - `DebuggerBridge` is public API (exported at src/index.ts:78).
-   *  - It had ZERO coverage anywhere in src/. Its only test was a root-level
-   *    `verify-intelligence.test.ts` scratch harness that no vitest config
-   *    collected, and which was permanently red.
    *  - The hook IS wired: Bash.ts:1040 passes `debugger: this.debugger` into
    *    the interpreter ctx, and interpreter.ts:545-547 awaits
    *    `onBeforeStatement` whenever `ctx.debugger` is set.
    *  - The hook DOES fire with correct 1-indexed lines — proven by the passing
    *    test above, which observes line 3 for a 3-statement script.
-   *  - The bridge's own logic reads correctly: `onBeforeStatement` sets
-   *    `paused = true` when `breakpoints.has(node.line ?? 0)` and then awaits
-   *    `waitForResume()`, which loops `while (this.paused)`.
+   *  - `onBeforeStatement` correctly matched `breakpoints.has(node.line ?? 0)`.
    *
-   * So the wiring, the line numbers and the bridge logic are all individually
-   * correct, yet execution runs to completion in ~24ms without ever pausing.
-   * The remaining question is why setting `paused` does not block the awaited
-   * hook, which needs focused debugging rather than a guess.
+   * The break was in the *pause primitive*, one frame deeper.
+   * `waitForResume()` busy-waited on `while (this.paused) await new
+   * Promise(r => setTimeout(r, 100))`. `executeStatement` calls the hook
+   * immediately after `assertDefenseContext("statement")` — i.e. inside the
+   * defense-in-depth AsyncLocalStorage context, where `globalThis.setTimeout`
+   * is a proxy that throws `SecurityViolationError` (gated on
+   * `sandboxActive === true`; security/blocked-globals.ts:88-94). So the first
+   * breakpoint hit threw out of the hook rather than pausing, and the script
+   * ran to completion in ~24ms. Fix: resolver-based resume, no timer at all.
    */
-  it.fails("pauses at a breakpoint, steps to the next statement, then runs to completion", async () => {
+  it("pauses at a breakpoint, steps to the next statement, then runs to completion", async () => {
     const bridge = new DebuggerBridge();
     const bash = new Bash({
       // NOT a top-level `debugger:` — the constructor reads
@@ -98,7 +94,7 @@ describe("DebuggerBridge breakpoints", () => {
       parser: { engine: "legacy" },
     });
 
-    const isPaused = () => (bridge as unknown as { paused: boolean }).paused;
+    const isPaused = () => bridge.isPaused();
 
     bridge.setBreakpoint(3);
 
@@ -127,6 +123,10 @@ describe("DebuggerBridge breakpoints", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Line 1");
     expect(result.stdout).toContain("Line 4");
+    // Pins the root cause: pausing must not reach for a global blocked inside
+    // the defense-in-depth context. If the busy-wait ever comes back, this is
+    // the message that surfaces.
+    expect(result.stderr).not.toContain("blocked during script execution");
   }, 20_000);
 
   it("runs straight through when no breakpoint is set", async () => {
@@ -141,6 +141,6 @@ describe("DebuggerBridge breakpoints", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("a");
     expect(result.stdout).toContain("b");
-    expect((bridge as unknown as { paused: boolean }).paused).toBe(false);
+    expect(bridge.isPaused()).toBe(false);
   }, 20_000);
 });
