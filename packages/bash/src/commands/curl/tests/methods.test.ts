@@ -7,6 +7,7 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 // Mock fetch for these tests
 const originalFetch = global.fetch;
@@ -34,7 +35,10 @@ describe("curl HTTP method restrictions", () => {
     it("allows GET requests by default", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec("curl https://api.example.com/data");
       expect(result.exitCode).toBe(0);
@@ -44,7 +48,10 @@ describe("curl HTTP method restrictions", () => {
     it("allows HEAD requests by default", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec("curl -I https://api.example.com/data");
       expect(result.exitCode).toBe(0);
@@ -54,7 +61,10 @@ describe("curl HTTP method restrictions", () => {
     it("blocks POST requests by default", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl -X POST https://api.example.com/data",
@@ -67,7 +77,10 @@ describe("curl HTTP method restrictions", () => {
     it("blocks PUT requests by default", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec("curl -X PUT https://api.example.com/data");
       expect(result.exitCode).toBe(3);
@@ -78,7 +91,10 @@ describe("curl HTTP method restrictions", () => {
     it("blocks DELETE requests by default", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl -X DELETE https://api.example.com/data",
@@ -91,7 +107,10 @@ describe("curl HTTP method restrictions", () => {
     it("blocks PATCH requests by default", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl -X PATCH https://api.example.com/data",
@@ -104,7 +123,10 @@ describe("curl HTTP method restrictions", () => {
     it("blocks -d data (implies POST) by default", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         'curl -d "data=test" https://api.example.com/data',
@@ -120,6 +142,7 @@ describe("curl HTTP method restrictions", () => {
       mockFetch.mockClear();
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["GET", "POST"],
         },
@@ -135,6 +158,7 @@ describe("curl HTTP method restrictions", () => {
       mockFetch.mockClear();
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["GET", "POST"],
         },
@@ -151,6 +175,7 @@ describe("curl HTTP method restrictions", () => {
       mockFetch.mockClear();
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
         },
@@ -170,6 +195,7 @@ describe("curl HTTP method restrictions", () => {
       mockFetch.mockClear();
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["GET", "POST"],
         },
@@ -185,7 +211,10 @@ describe("curl HTTP method restrictions", () => {
     it("allows all methods with dangerous flag", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { dangerouslyAllowFullInternetAccess: true },
+        network: {
+          _dnsResolve: publicResolver(),
+          dangerouslyAllowFullInternetAccess: true,
+        },
       });
 
       const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"];
@@ -201,7 +230,10 @@ describe("curl HTTP method restrictions", () => {
     it("allows POST with data when dangerous flag is set", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { dangerouslyAllowFullInternetAccess: true },
+        network: {
+          _dnsResolve: publicResolver(),
+          dangerouslyAllowFullInternetAccess: true,
+        },
       });
       const result = await env.exec(
         'curl -d "data=test" https://any-domain.com/data',
@@ -214,7 +246,10 @@ describe("curl HTTP method restrictions", () => {
     it("shows allowed methods in error message", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl -X POST https://api.example.com/data",
@@ -226,7 +261,10 @@ describe("curl HTTP method restrictions", () => {
     it("silent mode hides method error", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl -s -X POST https://api.example.com/data",
@@ -238,7 +276,10 @@ describe("curl HTTP method restrictions", () => {
     it("-sS shows method error", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl -sS -X POST https://api.example.com/data",

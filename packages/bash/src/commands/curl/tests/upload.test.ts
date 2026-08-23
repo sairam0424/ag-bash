@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 const originalFetch = global.fetch;
 let lastRequest: { url: string; options: RequestInit } | null = null;
@@ -43,6 +44,7 @@ describe("curl upload", () => {
       const env = new Bash({
         files: { "/upload.txt": "upload content" },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["PUT"],
         },
@@ -59,6 +61,7 @@ describe("curl upload", () => {
       const env = new Bash({
         files: { "/data.bin": "binary data" },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["PUT"],
         },
@@ -75,6 +78,7 @@ describe("curl upload", () => {
       const env = new Bash({
         files: { "/file.txt": "file data" },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["PUT"],
         },
@@ -90,6 +94,7 @@ describe("curl upload", () => {
       const env = new Bash({
         files: { "/file.txt": "content" },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -105,6 +110,7 @@ describe("curl upload", () => {
     it("fails if file does not exist", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["PUT"],
         },

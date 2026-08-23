@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 const originalFetch = global.fetch;
 let lastRequest: { url: string; options: RequestInit } | null = null;
@@ -35,6 +36,7 @@ afterAll(() => {
 const createEnv = () =>
   new Bash({
     network: {
+      _dnsResolve: publicResolver(),
       allowedUrlPrefixes: ["https://api.example.com"],
       allowedMethods: ["GET", "POST", "PUT", "DELETE"],
     },

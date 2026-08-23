@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 const originalFetch = global.fetch;
 
@@ -36,7 +37,10 @@ afterAll(() => {
 
 const createEnv = () =>
   new Bash({
-    network: { allowedUrlPrefixes: ["https://api.example.com"] },
+    network: {
+      _dnsResolve: publicResolver(),
+      allowedUrlPrefixes: ["https://api.example.com"],
+    },
   });
 
 describe("curl verbose output", () => {
@@ -133,6 +137,7 @@ describe("curl verbose output", () => {
     it("should show POST method in verbose output", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -146,6 +151,7 @@ describe("curl verbose output", () => {
     it("should show PUT method in verbose output", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["PUT"],
         },
@@ -159,6 +165,7 @@ describe("curl verbose output", () => {
     it("should show DELETE method in verbose output", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["DELETE"],
         },

@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 const originalFetch = global.fetch;
 let lastRequest: { url: string; options: RequestInit } | null = null;
@@ -40,7 +41,10 @@ describe("curl binary data", () => {
       }) as typeof fetch;
 
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec("curl https://api.example.com/binary");
 
@@ -58,7 +62,10 @@ describe("curl binary data", () => {
       }) as typeof fetch;
 
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       await env.exec("curl -o /output.bin https://api.example.com/binary");
 
@@ -77,7 +84,10 @@ describe("curl binary data", () => {
       }) as typeof fetch;
 
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec("curl https://api.example.com/binary");
 
@@ -94,6 +104,7 @@ describe("curl binary data", () => {
 
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -116,6 +127,7 @@ describe("curl binary data", () => {
       const env = new Bash({
         files: { "/data.bin": binaryContent },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["PUT"],
         },
@@ -135,6 +147,7 @@ describe("curl binary data", () => {
       const env = new Bash({
         files: { "/upload.bin": binaryContent },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -162,6 +175,7 @@ describe("curl binary data", () => {
           ]),
         },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["PUT"],
         },

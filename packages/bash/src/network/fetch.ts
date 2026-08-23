@@ -9,6 +9,7 @@
 
 import { lookup as dnsLookup } from "node:dns";
 import { createRequire as nodeCreateRequire } from "node:module";
+import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import { DefenseInDepthBox } from "../security/defense-in-depth-box.js";
 import { _clearTimeout, _setTimeout } from "../timers.js";
 import {
@@ -31,12 +32,11 @@ import {
 } from "./types.js";
 
 /**
- * Error thrown when the private-IP DNS lookup exceeds its bound. Treated by
- * {@link checkAndResolve} exactly like an ENOTFOUND: the resolver produced no
- * address within the window, so there is nothing to pin and the request is
- * allowed to proceed to the real fetch (which performs its own bounded
- * connect). A distinct class lets the caller distinguish this from a genuine
- * resolver failure that must fail closed.
+ * Error thrown when the private-IP DNS lookup exceeds its bound. Carries
+ * `code = "ETIMEDOUT"` so {@link checkAndResolve} handles a self-imposed bound
+ * and a resolver-reported timeout identically: neither produced an address, so
+ * NOTHING was range-checked and there is nothing to pin. Both must fail closed
+ * — see {@link DnsResolutionUnverifiedError}.
  */
 class DnsLookupTimeoutError extends Error {
   readonly code = "ETIMEDOUT" as const;
@@ -46,25 +46,112 @@ class DnsLookupTimeoutError extends Error {
   }
 }
 
+/**
+ * Thrown when the hostname's resolution could not be VERIFIED, so the
+ * private/metadata-range policy could not be applied to any address.
+ *
+ * Proceeding in that state is a fail-open: `fetch`'s dispatcher (undici)
+ * resolves the hostname independently and has never seen the blocklist, so an
+ * attacker who can make the first resolution slow or fail would obtain an
+ * unvalidated connection. A request that cannot be validated is refused.
+ *
+ * Subclasses {@link NetworkAccessDeniedError} so the message keeps the
+ * `Network access denied: …` prefix every existing caller matches on (curl's
+ * exit-code mapping among them) while still being distinguishable by type.
+ * The reason is a fixed, caller-independent string routed through
+ * {@link sanitizeErrorMessage}: never resolver error text, never a resolved
+ * address.
+ */
+export class DnsResolutionUnverifiedError extends NetworkAccessDeniedError {
+  constructor(url: string, reason: string) {
+    super(url, sanitizeErrorMessage(reason));
+    this.name = "DnsResolutionUnverifiedError";
+  }
+}
+
+/** Why a request proceeded without a connection pin. */
+export type UnpinnedRequestReason = "pinning-unavailable" | "unresolved-host";
+
+/** An observable record of one request that proceeded without a pin. */
+export interface UnpinnedRequestRecord {
+  readonly hostname: string;
+  readonly reason: UnpinnedRequestReason;
+}
+
+/** Bound on the retained unpinned-request records (newest kept). */
+const MAX_UNPINNED_RECORDS = 50;
+
+let unpinnedRequests: readonly UnpinnedRequestRecord[] = [];
+let unpinnedWarningEmitted = false;
+
+/**
+ * Records — and, once per process, loudly reports — a request that proceeded
+ * without a connection pin.
+ *
+ * These requests are NOT unvalidated: the resolve-once/validate-all gate either
+ * cleared every resolved address or the resolver definitively reported that the
+ * host does not exist. What is missing is the pin, i.e. the guarantee that the
+ * socket connects to the address that was validated, so the DNS-rebinding
+ * window between validation and connect stays open. Silence about that is the
+ * defect (U52): an operator would believe rebinding protection is active when
+ * it is not.
+ */
+function recordUnpinnedRequest(
+  hostname: string,
+  reason: UnpinnedRequestReason,
+): void {
+  const appended = [...unpinnedRequests, { hostname, reason }];
+  unpinnedRequests =
+    appended.length > MAX_UNPINNED_RECORDS
+      ? appended.slice(appended.length - MAX_UNPINNED_RECORDS)
+      : appended;
+
+  if (unpinnedWarningEmitted) return;
+  unpinnedWarningEmitted = true;
+  if (typeof console !== "undefined" && typeof console.warn === "function") {
+    console.warn(
+      `[ag-bash] network: a request proceeded WITHOUT a connection pin (${reason}). ` +
+        "Resolved addresses were validated, but DNS rebinding between validation " +
+        "and connect is not prevented for these requests. " +
+        "Inspect getUnpinnedRequests() for details.",
+    );
+  }
+}
+
+/** All retained unpinned-request records, oldest first. */
+export function getUnpinnedRequests(): readonly UnpinnedRequestRecord[] {
+  return unpinnedRequests;
+}
+
+/** Drops retained records and re-arms the one-time warning. */
+export function clearUnpinnedRequests(): void {
+  unpinnedRequests = [];
+  unpinnedWarningEmitted = false;
+}
+
 const DEFAULT_MAX_REDIRECTS = 20;
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_RESPONSE_SIZE = 10485760; // 10MB
 const DEFAULT_ALLOWED_METHODS: HttpMethod[] = ["GET", "HEAD"];
 /**
- * Upper bound for the private-range DNS lookup. The lexical and pin checks are
- * the real SSRF defenses; this lookup only catches domains that resolve to a
- * private IP, and a real public resolver answers in well under a second. The
- * bound therefore tracks the request timeout but is capped tightly so the
- * lookup can NEVER hang the caller (e.g. when the host resolver itself blocks
- * for ~30s in an offline/sandboxed environment) — the cap is the load-bearing
- * value; the per-request timeout only ever lowers it.
+ * Upper bound for the private-range DNS lookup. The bound exists so a blocking
+ * host resolver can never hang the caller; it still tracks the request timeout,
+ * which only ever lowers it.
+ *
+ * This bound is now a REFUSAL threshold, not a skip threshold: exceeding it
+ * fails the request closed (see {@link DnsResolutionUnverifiedError}). Back when
+ * a timeout merely dropped the pin, an aggressive 1s cap was free. Under
+ * fail-closed semantics that trade-off inverts — too tight a cap turns an
+ * ordinary cold cross-continent lookup into a refused request — so the cap is
+ * now generous enough for a real resolver while still strictly bounded.
  */
-const DNS_LOOKUP_TIMEOUT_CAP_MS = 1000;
+const DNS_LOOKUP_TIMEOUT_CAP_MS = 5000;
 
 // DNS resolution for private IP check. Bounded so a blocking host resolver
 // (offline/sandboxed environments where getaddrinfo can stall ~30s) can never
-// hang the request. On timeout we reject with DnsLookupTimeoutError, which
-// checkAndResolve treats like ENOTFOUND (no address obtained → nothing to pin).
+// hang the request. On timeout we reject with DnsLookupTimeoutError, and
+// checkAndResolve fails the request closed: no address was obtained, so no
+// address was validated.
 function dnsLookupAll(
   hostname: string,
   timeoutMs: number,
@@ -99,9 +186,11 @@ function dnsLookupAll(
  * {@link loadPinningAgentFactory}. When they are unavailable (e.g. `fetch` is
  * mocked in tests, or undici is not resolvable), {@link buildPinnedDispatcher}
  * returns `undefined` and the resolve-once/validate-all gate in
- * {@link checkAndResolve} remains the authoritative protection.
+ * {@link checkAndResolve} remains the authoritative protection — a state that
+ * is now recorded via {@link recordUnpinnedRequest} instead of passing
+ * silently.
  */
-type UndiciAgent = {
+export type UndiciAgent = {
   // biome-ignore lint/suspicious/noExplicitAny: undici Agent options are broad
   new (opts: any): unknown;
 };
@@ -136,10 +225,35 @@ function loadPinningAgentFactory(): UndiciAgent | null {
 }
 
 /**
+ * @internal Test seam. Overrides the cached pinning `Agent` factory so both the
+ * pinned and the unpinned path can be exercised deterministically, independent
+ * of whether `undici` happens to be resolvable in the host environment. Pass
+ * `undefined` to restore lazy detection. Not re-exported from the package's
+ * public entry points.
+ */
+export function _setPinningAgentFactory(
+  factory: UndiciAgent | null | undefined,
+): void {
+  pinningAgentFactory = factory;
+}
+
+/**
  * Returns the IP family (4 or 6) for a pinned address literal.
  */
 function familyOf(address: string): number {
   return address.includes(":") ? 6 : 4;
+}
+
+/**
+ * Hostname of an already-validated URL, for observability records only. Returns
+ * "" rather than throwing: a record must never be able to fail a request.
+ */
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -279,10 +393,17 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
    * subsequent connection can be pinned to it (TOCTOU / DNS-rebinding
    * protection). For IP literals the literal itself is the pin.
    *
+   * A resolution that never completed is NOT a pass: it means no address was
+   * range-checked, and `fetch` would then resolve the hostname itself with no
+   * knowledge of the blocklist. Those cases fail closed.
+   *
    * @returns the list of validated IP addresses to pin the connection to, or
-   *   `null` when no pin is available/needed (full-access without
-   *   denyPrivateRanges, ENOTFOUND domains, or invalid URLs).
+   *   `null` when no pin is needed (denyPrivateRanges off, invalid URL) or when
+   *   the resolver definitively reported the host does not exist (recorded via
+   *   {@link recordUnpinnedRequest}).
    * @throws NetworkAccessDeniedError if the URL is not allowed
+   * @throws DnsResolutionUnverifiedError if the resolution could not be
+   *   verified (timed out, failed, or produced no address)
    */
   async function checkAndResolve(url: string): Promise<string[] | null> {
     if (
@@ -339,18 +460,28 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
     try {
       addresses = await resolveDns(hostname);
     } catch (dnsErr) {
-      // ENOTFOUND/ENODATA: domain doesn't resolve, so it can't resolve to a
-      // private IP — no rebinding risk; let the fetch fail naturally.
-      // ETIMEDOUT: the bounded lookup produced no address within the window
-      // (e.g. a blocking host resolver). Like ENOTFOUND there is no resolved
-      // address to pin and the real fetch performs its own bounded connect, so
-      // we proceed without a pin rather than hang.
       const code = (dnsErr as NodeJS.ErrnoException)?.code;
-      if (code === "ENOTFOUND" || code === "ENODATA" || code === "ETIMEDOUT") {
+      // ENOTFOUND/ENODATA: the resolver answered definitively — the name has no
+      // address — so there is nothing to range-check and nothing to pin. Kept
+      // as a pass-through, but recorded: `fetch` still resolves the name
+      // itself, so the rebinding window is open for this hop.
+      if (code === "ENOTFOUND" || code === "ENODATA") {
+        recordUnpinnedRequest(hostname, "unresolved-host");
         return null;
       }
-      // Unexpected DNS error: fail closed (block).
-      throw new NetworkAccessDeniedError(
+      // ETIMEDOUT (a resolver-reported timeout or our own DnsLookupTimeoutError)
+      // is NOT an answer: the resolution did not complete, so no address was
+      // validated. Previously this returned `null` — no pin AND no range check —
+      // and undici then resolved the hostname independently, so anyone able to
+      // slow the first resolution got an unvalidated connection. Fail closed.
+      if (code === "ETIMEDOUT") {
+        throw new DnsResolutionUnverifiedError(
+          url,
+          "DNS resolution timed out for private IP check",
+        );
+      }
+      // Any other DNS error: fail closed (block).
+      throw new DnsResolutionUnverifiedError(
         url,
         "DNS resolution failed for private IP check",
       );
@@ -373,9 +504,16 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
       pinned.push(address);
     }
 
-    // No addresses returned (empty resolver result): nothing to pin, let the
-    // fetch fail naturally rather than fabricating a target.
-    return pinned.length > 0 ? pinned : null;
+    // An empty resolver result is the same fail-open shape as a timeout: the
+    // call "succeeded" but validated nothing, so there is no pin and `fetch`
+    // would resolve the hostname itself. Refuse rather than proceed blind.
+    if (pinned.length === 0) {
+      throw new DnsResolutionUnverifiedError(
+        url,
+        "DNS resolution returned no addresses for private IP check",
+      );
+    }
+    return pinned;
   }
 
   /**
@@ -443,14 +581,20 @@ export function createSecureFetch(config: NetworkConfig): SecureFetch {
           // Pin the connection to the validated address(es) so undici cannot
           // re-resolve the hostname to a different (rebound) IP between our
           // validation and the actual connect. `dispatcher` is an undici
-          // extension on RequestInit; when pinning primitives are unavailable
-          // the dispatcher is undefined and the resolve-once gate still holds.
+          // extension on RequestInit; when the pinning primitives are
+          // unavailable the dispatcher is undefined and the resolve-once gate
+          // is the sole protection — recorded, never silent (U52).
           if (pinnedAddresses && pinnedAddresses.length > 0) {
             const dispatcher = buildPinnedDispatcher(pinnedAddresses);
             if (dispatcher) {
               (
                 fetchOptions as RequestInit & { dispatcher?: unknown }
               ).dispatcher = dispatcher;
+            } else {
+              recordUnpinnedRequest(
+                hostnameOf(currentUrl),
+                "pinning-unavailable",
+              );
             }
           }
 

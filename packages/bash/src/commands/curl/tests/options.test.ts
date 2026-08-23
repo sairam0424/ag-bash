@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 const originalFetch = global.fetch;
 let lastRequest: { url: string; options: RequestInit } | null = null;
@@ -35,7 +36,10 @@ afterAll(() => {
 // All tests need network configured since curl doesn't exist otherwise
 const createEnv = () =>
   new Bash({
-    network: { allowedUrlPrefixes: ["https://api.example.com"] },
+    network: {
+      _dnsResolve: publicResolver(),
+      allowedUrlPrefixes: ["https://api.example.com"],
+    },
   });
 
 describe("curl options", () => {
@@ -79,6 +83,7 @@ describe("curl options", () => {
     it("sets method with -X POST", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -90,6 +95,7 @@ describe("curl options", () => {
     it("sets method with --request PUT", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["PUT"],
         },
@@ -101,6 +107,7 @@ describe("curl options", () => {
     it("sets method with -XDELETE (no space)", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["DELETE"],
         },
@@ -160,6 +167,7 @@ describe("curl options", () => {
     it("sends data with -d and switches to POST", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -172,6 +180,7 @@ describe("curl options", () => {
     it("sends JSON with --data-raw", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -185,6 +194,7 @@ describe("curl options", () => {
     it("sends data with --data=value format", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },

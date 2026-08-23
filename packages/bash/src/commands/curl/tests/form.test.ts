@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 const originalFetch = global.fetch;
 let lastRequest: { url: string; options: RequestInit } | null = null;
@@ -42,6 +43,7 @@ describe("curl form data", () => {
     it("URL-encodes data with --data-urlencode", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -56,6 +58,7 @@ describe("curl form data", () => {
     it("encodes special characters", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -70,6 +73,7 @@ describe("curl form data", () => {
     it("appends multiple --data-urlencode values", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -86,6 +90,7 @@ describe("curl form data", () => {
     it("sends data as-is with --data-binary", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -100,6 +105,7 @@ describe("curl form data", () => {
     it("supports --data-binary=value format", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -114,6 +120,7 @@ describe("curl form data", () => {
     it("sends multipart form data with -F", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -131,6 +138,7 @@ describe("curl form data", () => {
     it("sends multiple form fields", async () => {
       const env = new Bash({
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -150,6 +158,7 @@ describe("curl form data", () => {
       const env = new Bash({
         files: { "/data.txt": "file contents here" },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },
@@ -168,6 +177,7 @@ describe("curl form data", () => {
       const env = new Bash({
         files: { "/doc.json": '{"key":"value"}' },
         network: {
+          _dnsResolve: publicResolver(),
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["POST"],
         },

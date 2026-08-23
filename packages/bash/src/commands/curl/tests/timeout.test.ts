@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 const originalFetch = global.fetch;
 let lastSignal: AbortSignal | null | undefined;
@@ -41,7 +42,10 @@ describe("curl timeouts", () => {
   describe("-m/--max-time", () => {
     it("accepts -m timeout option", async () => {
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec("curl -m 5 https://api.example.com/test");
       expect(result.exitCode).toBe(0);
@@ -51,7 +55,10 @@ describe("curl timeouts", () => {
 
     it("accepts --max-time timeout option", async () => {
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl --max-time 10 https://api.example.com/test",
@@ -61,7 +68,10 @@ describe("curl timeouts", () => {
 
     it("accepts --max-time=value format", async () => {
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl --max-time=30 https://api.example.com/test",
@@ -71,7 +81,10 @@ describe("curl timeouts", () => {
 
     it("accepts decimal timeout values", async () => {
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec("curl -m 0.5 https://api.example.com/test");
       expect(result.exitCode).toBe(0);
@@ -81,7 +94,10 @@ describe("curl timeouts", () => {
   describe("--connect-timeout", () => {
     it("accepts --connect-timeout option", async () => {
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl --connect-timeout 5 https://api.example.com/test",
@@ -91,7 +107,10 @@ describe("curl timeouts", () => {
 
     it("accepts --connect-timeout=value format", async () => {
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec(
         "curl --connect-timeout=10 https://api.example.com/test",
@@ -116,7 +135,10 @@ describe("curl timeouts", () => {
       global.fetch = abortingFetch as typeof fetch;
 
       const env = new Bash({
-        network: { allowedUrlPrefixes: ["https://api.example.com"] },
+        network: {
+          _dnsResolve: publicResolver(),
+          allowedUrlPrefixes: ["https://api.example.com"],
+        },
       });
       const result = await env.exec("curl -m 1 https://api.example.com/slow");
 
