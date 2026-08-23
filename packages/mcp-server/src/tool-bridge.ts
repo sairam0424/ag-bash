@@ -44,6 +44,23 @@ const NATIVE_MCP_TOOLS = new Set([
 ]);
 
 /**
+ * Value to advertise for `readOnlyHint` when the tool's `isReadOnly`
+ * declaration cannot be resolved. `false` means "this tool may write", which is
+ * both the MCP spec default and the conservative answer: a client that trusts
+ * it treats the tool as a writer.
+ */
+const UNRESOLVED_READ_ONLY_HINT = false;
+
+/**
+ * Value to advertise for `destructiveHint` when the tool's `isDestructive`
+ * declaration cannot be resolved. `true` means "this tool may destroy", which
+ * is both the MCP spec default and the conservative answer: a client that
+ * trusts it asks for confirmation. `false` here would tell clients that an
+ * unknown tool is safe to invoke unattended.
+ */
+const UNRESOLVED_DESTRUCTIVE_HINT = true;
+
+/**
  * McpToolBridge — Bridges BashToolbox tools to MCP protocol format.
  *
  * Converts the toolbox's Zod-based tool definitions into MCP-compatible
@@ -58,20 +75,29 @@ export class McpToolBridge {
   }
 
   /**
-   * Resolve isReadOnly/isDestructive which can be boolean or function.
-   * When a function, call with empty args to get the default hint.
+   * Resolve a tool's `isReadOnly`/`isDestructive` declaration into an MCP hint.
+   *
+   * Only a literal boolean is resolvable. A function-valued declaration is
+   * argument-dependent, and `listTools()` has no arguments to give it, so it is
+   * treated as UNRESOLVABLE rather than probed with a synthetic empty object:
+   *
+   *  - The answer for empty args describes neither the tool as a whole nor the
+   *    call the client is about to make, so it cannot be advertised as either.
+   *  - Probing is actively unsafe in both directions. `(args) =>
+   *    args.command.startsWith("rm")` throws on `{}`, and `(args) =>
+   *    !args.write` returns `true` on `{}` — which would advertise a writing
+   *    tool as read-only.
+   *
+   * Unresolvable and absent declarations both fall back to `unresolved`, which
+   * callers must set to the conservative value for that specific hint (see
+   * UNRESOLVED_READ_ONLY_HINT / UNRESOLVED_DESTRUCTIVE_HINT — they point in
+   * opposite directions).
    */
   private resolveHint(
-    value: ((args: unknown) => boolean) | boolean | undefined,
+    value: ((args: never) => boolean) | boolean | undefined,
+    unresolved: boolean,
   ): boolean {
-    if (typeof value === "function") {
-      try {
-        return value(Object.create(null)) ?? false;
-      } catch {
-        return false;
-      }
-    }
-    return value ?? false;
+    return typeof value === "boolean" ? value : unresolved;
   }
 
   /**
@@ -86,13 +112,19 @@ export class McpToolBridge {
       // Skip tools that already exist as native MCP tools
       if (NATIVE_MCP_TOOLS.has(name)) continue;
 
-      // Resolve annotations from the raw tool metadata
+      // Resolve annotations from the raw tool metadata. A missing rawTool is
+      // just another unresolvable declaration, so it takes the same
+      // conservative defaults rather than a hardcoded `false` pair.
       const rawTool = this.bash.toolbox.getTool(name);
       const annotations: McpToolAnnotations = {
-        readOnlyHint: rawTool ? this.resolveHint(rawTool.isReadOnly) : false,
-        destructiveHint: rawTool
-          ? this.resolveHint(rawTool.isDestructive)
-          : false,
+        readOnlyHint: this.resolveHint(
+          rawTool?.isReadOnly,
+          UNRESOLVED_READ_ONLY_HINT,
+        ),
+        destructiveHint: this.resolveHint(
+          rawTool?.isDestructive,
+          UNRESOLVED_DESTRUCTIVE_HINT,
+        ),
       };
 
       descriptors.push({
