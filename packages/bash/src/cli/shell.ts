@@ -19,6 +19,7 @@ import {
   type ProjectBrief,
 } from "../services/DiscoveryService.js";
 import { Theme } from "./theme.js";
+import { createTreeSitterConfig } from "./tree-sitter-assets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -104,10 +105,10 @@ class VirtualShell {
       },
       parser: {
         engine: "tree-sitter",
-        treeSitterConfig: {
-          webTreeSitterWasm: path.join(vendorDir, "web-tree-sitter.wasm"),
-          bashGrammarWasm: path.join(vendorDir, "tree-sitter-bash.wasm"),
-        },
+        // Paths, not bytes: TreeSitterParser.init() reads them. ag-shell DOES
+        // select the tree-sitter engine, so the read happens — just at init
+        // time, from the one place that needs it.
+        treeSitterConfig: createTreeSitterConfig(vendorDir),
       },
     });
 

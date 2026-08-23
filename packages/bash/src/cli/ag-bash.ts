@@ -37,7 +37,6 @@
  *   ag-bash -e -c 'set -e; false; echo "not reached"'
  */
 
-import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Bash } from "../Bash.js";
@@ -45,6 +44,7 @@ import { OverlayFs } from "../fs/overlay-fs/index.js";
 import { sanitizeErrorMessage } from "../fs/real-fs-utils.js";
 import { VERSION } from "../version.js";
 import { Theme } from "./theme.js";
+import { createTreeSitterConfig } from "./tree-sitter-assets.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -330,12 +330,15 @@ async function main(): Promise<void> {
   // Normalize --cwd to prevent path traversal (resolve . and ..)
   const cwd = options.cwdOverridden ? normalizePath(options.cwd) : mountPoint;
 
-  // Load Tree-sitter WASM assets from vendor directory
-  const vendorDir = join(__dirname, "..", "parser", "vendor");
-  const treeSitterWasmConfig = {
-    webTreeSitterWasm: readFileSync(join(vendorDir, "web-tree-sitter.wasm")),
-    bashGrammarWasm: readFileSync(join(vendorDir, "tree-sitter-bash.wasm")),
-  };
+  // Locate the Tree-sitter WASM assets WITHOUT reading them. The default parser
+  // engine is "legacy" and never touches this config, so eagerly loading the
+  // 1.55 MB of grammar + runtime here was pure dead weight on every invocation.
+  // TreeSitterParser.init() reads these paths if — and only if — the
+  // tree-sitter engine is actually selected. This layout (`../parser/vendor`)
+  // holds for all three ag-bash layouts: src/cli, dist/cli and dist/bin.
+  const treeSitterWasmConfig = createTreeSitterConfig(
+    join(__dirname, "..", "parser", "vendor"),
+  );
 
   const env = new Bash({
     fs,
