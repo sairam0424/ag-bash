@@ -193,10 +193,21 @@ describe("Oils Spec Tests", () => {
         const scriptPreview = truncateScript(testCase.script);
         const testName = `[L${testCase.lineNumber}] ${testCase.name}: ${scriptPreview}`;
 
-        it(testName, async () => {
+        it(testName, async (ctx) => {
           const result = await runTestCase(testCase, { filePath });
 
           if (result.skipped) {
+            // Report the skip to vitest rather than returning early. A bare
+            // `return` here made an un-run case indistinguishable from a passing
+            // one: `runTestCase` returns `{ passed: true, skipped: true }` for a
+            // case marked `## N-I <bash-compatible>` (runner.ts) without
+            // executing a line of its script, and the reporter then recorded it
+            // as `passed`. scripts/check-spec-ratchet.js buckets off that
+            // reporter status, so 61 bash cases were being counted as VERIFIED
+            // when they had never run. The pass *rate* barely moves — they leave
+            // both numerator and denominator — but "passing" claimed more than
+            // was checked.
+            ctx.skip(result.skipReason ?? "skipped");
             return;
           }
 
