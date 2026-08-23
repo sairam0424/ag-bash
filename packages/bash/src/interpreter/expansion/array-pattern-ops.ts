@@ -19,6 +19,7 @@ import type {
 } from "./array-word-expansion.js";
 import { patternToRegex } from "./pattern.js";
 import { applyPatternRemoval } from "./pattern-removal.js";
+import { expandReplacementWord, replaceLiteral } from "./replacement-word.js";
 import { getArrayElements } from "./variable.js";
 
 /**
@@ -124,9 +125,12 @@ export async function handleArrayPatternReplacement(
     );
   }
 
-  const replacement = operation.replacement
-    ? await expandWordPartsAsync(ctx, operation.replacement.parts)
-    : "";
+  // Literal replacement text - see replacement-word.ts.
+  const replacement = await expandReplacementWord(
+    ctx,
+    operation.replacement,
+    expandPart,
+  );
 
   // Apply anchor modifiers
   let regexPattern = regex;
@@ -141,7 +145,7 @@ export async function handleArrayPatternReplacement(
   try {
     const re = createUserRegex(regexPattern, operation.all ? "g" : "");
     for (const value of values) {
-      replacedValues.push(re.replace(value, replacement));
+      replacedValues.push(replaceLiteral(re, value, replacement));
     }
   } catch {
     // Invalid regex - return values unchanged

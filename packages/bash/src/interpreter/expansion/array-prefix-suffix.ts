@@ -20,6 +20,7 @@ import { escapeRegex } from "../helpers/regex.js";
 import type { InterpreterContext } from "../types.js";
 import { patternToRegex } from "./pattern.js";
 import { applyPatternRemoval } from "./pattern-removal.js";
+import { expandReplacementWord, replaceLiteral } from "./replacement-word.js";
 import { getArrayElements, getVariable, isVariableSet } from "./variable.js";
 
 /**
@@ -336,9 +337,12 @@ export async function handleArrayPatternWithPrefixSuffix(
       }
     }
 
-    const replacement = op.replacement
-      ? await expandWordPartsAsync(ctx, op.replacement.parts)
-      : "";
+    // Literal replacement text - see replacement-word.ts.
+    const replacement = await expandReplacementWord(
+      ctx,
+      op.replacement,
+      expandPart,
+    );
 
     // Apply anchor modifiers
     let regexPattern = regex;
@@ -351,7 +355,7 @@ export async function handleArrayPatternWithPrefixSuffix(
     // Apply replacement to each element
     try {
       const re = createUserRegex(regexPattern, op.all ? "g" : "");
-      values = values.map((value) => re.replace(value, replacement));
+      values = values.map((value) => replaceLiteral(re, value, replacement));
     } catch {
       // Invalid regex - leave values unchanged
     }

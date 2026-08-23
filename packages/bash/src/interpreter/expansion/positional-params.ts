@@ -20,6 +20,7 @@ import { escapeRegex } from "../helpers/regex.js";
 import type { InterpreterContext } from "../types.js";
 import { patternToRegex } from "./pattern.js";
 import { applyPatternRemoval } from "./pattern-removal.js";
+import { expandReplacementWord, replaceLiteral } from "./replacement-word.js";
 
 /**
  * Result type for positional parameter expansion handlers.
@@ -296,9 +297,12 @@ export async function handlePositionalPatternReplacement(
     }
   }
 
-  const replacement = operation.replacement
-    ? await expandWordPartsAsync(ctx, operation.replacement.parts)
-    : "";
+  // Literal replacement text - see replacement-word.ts.
+  const replacement = await expandReplacementWord(
+    ctx,
+    operation.replacement,
+    expandPart,
+  );
 
   // Apply anchor modifiers
   let regexPattern = regex;
@@ -313,7 +317,7 @@ export async function handlePositionalPatternReplacement(
   try {
     const re = createUserRegex(regexPattern, operation.all ? "g" : "");
     for (const param of params) {
-      replacedParams.push(re.replace(param, replacement));
+      replacedParams.push(replaceLiteral(re, param, replacement));
     }
   } catch {
     // Invalid regex - return params unchanged

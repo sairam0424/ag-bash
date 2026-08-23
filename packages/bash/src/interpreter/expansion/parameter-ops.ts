@@ -38,6 +38,7 @@ import { patternToRegex } from "./pattern.js";
 import { getVarNamesWithPrefix } from "./pattern-removal.js";
 import { expandPrompt } from "./prompt.js";
 import { quoteValue } from "./quoting.js";
+import { expandReplacementWord, replaceLiteral } from "./replacement-word.js";
 import { getArrayElements, getVariable, isArray } from "./variable.js";
 import { getVariableAttributes } from "./variable-attrs.js";
 
@@ -292,9 +293,13 @@ export async function handlePatternReplacement(
     }
   }
 
-  const replacement = operation.replacement
-    ? await expandWordPartsAsync(ctx, operation.replacement.parts)
-    : "";
+  // The replacement is literal text, not a pattern and not a regex replacement
+  // template - see replacement-word.ts.
+  const replacement = await expandReplacementWord(
+    ctx,
+    operation.replacement,
+    expandPart,
+  );
 
   // Apply anchor modifiers
   if (operation.anchor === "start") {
@@ -342,7 +347,7 @@ export async function handlePatternReplacement(
       result += value.slice(lastIndex);
       return result;
     }
-    return re.replace(value, replacement);
+    return replaceLiteral(re, value, replacement);
   } catch (e) {
     if (e instanceof ExecutionLimitError) {
       throw e;
