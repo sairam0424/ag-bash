@@ -81,7 +81,9 @@ import {
   NounsetError,
   PosixFatalError,
   ReturnError,
+  SubshellExitError,
 } from "./errors.js";
+import { analyzeWordParts } from "./expansion/analysis.js";
 import {
   expandHereDocContent,
   expandWord,
@@ -934,6 +936,10 @@ export class Interpreter {
 
     // Clear expansion stderr at the start
     this.ctx.state.expansionStderr = "";
+    // ...and the per-command command-substitution status, so that an empty argv
+    // can tell "MY last substitution exited 42" from "the previous statement
+    // happened to leave 42 in $?".
+    this.ctx.state.expansionExitCode = undefined;
 
     // Process all assignments (array, subscript, and scalar)
     const assignmentResult = await processAssignments(this.ctx, node);
@@ -1196,35 +1202,107 @@ export class Interpreter {
       this.ctx.state.extraArgs = undefined;
     }
 
+    // Take the shell-level diagnostics raised while expanding THIS command's
+    // words — `bad array subscript`, command-substitution stderr, arithmetic
+    // complaints. Captured here, before the command runs, because a function or
+    // builtin body executes its own simple commands and each of those clears
+    // this state. They are written back onto the result below: they must reach
+    // the shell's stderr, which is what makes an out-of-bounds negative array
+    // subscript diagnosed rather than SILENT.
+    const expansionStderr = this.ctx.state.expansionStderr || "";
+    this.ctx.state.expansionStderr = "";
+
+    // ---- The command word may have VANISHED (POSIX 2.9.1) -------------------
+    // A word that expands to nothing is removed from the command entirely, so
+    // `$empty` is not a lookup of a command literally named "" (which would be
+    // 127) — it leaves the command with one word fewer.
+    //
+    // `expandWord()` collapses both `$empty` (ZERO fields) and `"$empty"` (ONE
+    // empty field) to "", so the two are told apart structurally: only a word
+    // with no quoted part can vanish. Re-expanding the word to count its fields
+    // is not an option, because it may hold command substitutions whose side
+    // effects must happen exactly once.
+    const commandWordVanished =
+      commandName === "" && !analyzeWordParts(node.name.parts).hasQuoted;
+
+    if (commandWordVanished && args.length === 0) {
+      // Empty argv: nothing left to execute. bash makes this a no-op whose
+      // status is that of the LAST command substitution this command performed
+      // (0 when it performed none) — which is why `$(exit 42)` exits 42 and a
+      // backtick `if` condition sees the substitution's status rather than 127.
+      // The assignment prefixes stay in the current environment (there is no
+      // command to scope a temp frame to) and the redirections still happen.
+      this.ctx.state.lastArg = "";
+      const status = this.ctx.state.expansionExitCode ?? 0;
+
+      if (node.redirections.length > 0) {
+        const redirectError = await preOpenOutputRedirects(
+          this.ctx,
+          node.redirections,
+        );
+        if (redirectError) {
+          return redirectError;
+        }
+      }
+      const redirected = await applyRedirections(
+        this.ctx,
+        createExecResult("", "", status),
+        node.redirections,
+      );
+      // Expansion diagnostics and the assignment xtrace go to the shell's own
+      // stderr, so they are added AFTER the redirections. bash emits no xtrace
+      // line for the command itself here — there is no command.
+      return prependStderr(
+        redirected,
+        expansionStderr + xtraceAssignmentOutput,
+      );
+    }
+
+    // Otherwise the first surviving argument is promoted to the command name,
+    // exactly as if the vanished word had never been written: with x='',
+    // `$x echo hi` runs `echo hi`.
+    const [promotedName = "", ...promotedArgs] = args;
+    const argvName = commandWordVanished ? promotedName : commandName;
+    const argvArgs = commandWordVanished ? promotedArgs : args;
+    const argvQuoted = commandWordVanished ? quotedArgs.slice(1) : quotedArgs;
+
     // A command with no arguments sets $_ to the command name itself
     // (`true` -> "true", `echo` -> "echo").
-    const underscoreArg = lastExpandedArg ?? commandName;
+    const underscoreArg = lastExpandedArg ?? argvName;
 
     // Generate xtrace output (set -x) BEFORE running the command, matching
     // bash which prints the trace line just before executing. The command's
     // own xtrace plus any assignment-prefix xtrace are emitted to stderr.
     const xtraceCommandOutput = await traceSimpleCommand(
       this.ctx,
-      commandName,
-      args,
+      argvName,
+      argvArgs,
     );
-    const xtracePrefix = xtraceAssignmentOutput + xtraceCommandOutput;
+    // The expansion diagnostics happened first, then the trace line, then the
+    // command itself — keep that order on the shell's stderr.
+    const xtracePrefix =
+      expansionStderr + xtraceAssignmentOutput + xtraceCommandOutput;
 
     // Built-in commands are registered with CommandRegistry.
     // External commands are handled by the shell path lookup.
     let execResult: ExecResult;
     try {
       execResult = await this.runCommand(
-        commandName,
-        args,
-        quotedArgs,
+        argvName,
+        argvArgs,
+        argvQuoted,
         stdin,
         false, // skipFunctions
         false, // useDefaultPath
         stdinSourceFd,
       );
     } catch (error: any) {
-      // Re-throw control flow and fatal errors to be handled by the top-level Bash
+      // Re-throw control flow and fatal errors to be handled by the top-level Bash.
+      // SubshellExitError belongs here: `break`/`continue` inside a subshell that
+      // was spawned from a loop unwinds to executeSubshell(), which turns it into
+      // a clean status-0 subshell exit. Omitting it swallowed the flow control
+      // (the rest of the subshell body kept running) AND surfaced the internal
+      // sentinel to the user as "bash: continue: unexpected error: subshell exit".
       const errorName = error instanceof Error ? error.name : "";
       if (
         error instanceof SecurityViolationError ||
@@ -1233,6 +1311,7 @@ export class Interpreter {
         error instanceof ReturnError ||
         error instanceof BreakError ||
         error instanceof ContinueError ||
+        error instanceof SubshellExitError ||
         error instanceof ErrexitError ||
         error instanceof ArithmeticError ||
         error instanceof PosixFatalError ||
@@ -1242,6 +1321,7 @@ export class Interpreter {
         errorName === "ReturnError" ||
         errorName === "BreakError" ||
         errorName === "ContinueError" ||
+        errorName === "SubshellExitError" ||
         errorName === "ErrexitError" ||
         errorName === "ArithmeticError" ||
         errorName === "PosixFatalError"
@@ -1250,7 +1330,7 @@ export class Interpreter {
       }
       // Catch unexpected command internal errors and treat as failure
       execResult = failure(
-        `bash: ${commandName}: unexpected error: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
+        `bash: ${argvName}: unexpected error: ${sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}\n`,
       );
     }
 
@@ -1281,8 +1361,8 @@ export class Interpreter {
     if (finalResult.exitCode !== 0) {
       const fresh = await AgTrace.analyze(
         this.ctx,
-        commandName,
-        args,
+        argvName,
+        argvArgs,
         finalResult,
       );
       if (fresh && fresh.length > 0) {

@@ -145,6 +145,27 @@ export function isWordFullyQuoted(word: WordNode): boolean {
 }
 
 /**
+ * Publish the exit status of a command substitution that just finished.
+ *
+ * Two sinks, deliberately kept in one place:
+ *  - `lastExitCode`/`$?` — visible to the rest of the script, and carried over
+ *    to the NEXT statement.
+ *  - `expansionExitCode` — scoped to the simple command currently being
+ *    expanded (cleared at its start, like `expansionStderr`). This is what lets
+ *    an empty-argv command adopt the status of its LAST command substitution
+ *    without mistaking a status left behind by the previous statement for one
+ *    of its own (POSIX 2.9.1, `$(exit 42)` -> 42).
+ */
+function recordSubstitutionStatus(
+  ctx: InterpreterContext,
+  exitCode: number,
+): void {
+  ctx.state.lastExitCode = exitCode;
+  ctx.state.expansionExitCode = exitCode;
+  ctx.state.env.set("?", String(exitCode));
+}
+
+/**
  * Handle simple part types that don't require recursion or async.
  * Returns the expanded string, or null if the part type needs special handling.
  * inDoubleQuotes flag suppresses tilde expansion (tilde is literal inside "...")
@@ -748,8 +769,7 @@ async function expandPart(
             : `${ctx.state.cwd}/${filePath}`;
           // Read the file
           const content = await ctx.fs.readFile(resolvedPath);
-          ctx.state.lastExitCode = 0;
-          ctx.state.env.set("?", "0");
+          recordSubstitutionStatus(ctx, 0);
           // Strip trailing newlines (like command substitution does)
           const result = content.replace(/\n+$/, "");
           // Check string length limit
@@ -765,8 +785,7 @@ async function expandPart(
             throw error;
           }
           // File not found or read error - return empty string, set exit code
-          ctx.state.lastExitCode = 1;
-          ctx.state.env.set("?", "1");
+          recordSubstitutionStatus(ctx, 1);
           return "";
         }
       }
@@ -806,8 +825,7 @@ async function expandPart(
         ctx.state.cwd = savedCwd;
         ctx.state.suppressVerbose = savedSuppressVerbose;
         // Store the exit code for $?
-        ctx.state.lastExitCode = exitCode;
-        ctx.state.env.set("?", String(exitCode));
+        recordSubstitutionStatus(ctx, exitCode);
         // Command substitution stderr should go to the shell's stderr at expansion time,
         // NOT be affected by later redirections on the outer command
         if (result.stderr) {
@@ -837,8 +855,7 @@ async function expandPart(
         }
         if (error instanceof ExitError) {
           // Catch exit in command substitution - return output so far
-          ctx.state.lastExitCode = error.exitCode;
-          ctx.state.env.set("?", String(error.exitCode));
+          recordSubstitutionStatus(ctx, error.exitCode);
           // Also forward stderr from the exit
           if (error.stderr) {
             ctx.state.expansionStderr =

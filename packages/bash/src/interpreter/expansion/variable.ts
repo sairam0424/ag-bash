@@ -17,6 +17,7 @@ import { BadSubstitutionError, NounsetError } from "../errors.js";
 import {
   getArrayIndices,
   getAssocArrayKeys,
+  resolveNegativeArrayIndex,
   unquoteKey,
 } from "../helpers/array.js";
 import { getIfsSeparator } from "../helpers/ifs.js";
@@ -342,29 +343,17 @@ export async function getVariable(
       }
     }
 
-    // Handle negative indices - bash counts from max_index + 1
-    // So a[-1] = a[max_index], a[-2] = a[max_index - 1], etc.
+    // Handle negative indices - bash counts back from the highest SET index,
+    // so a[-1] = a[maxIndex], a[-2] = a[maxIndex - 1], etc. Out of bounds is a
+    // diagnosed error, not a silently wrong value.
     if (index < 0) {
-      const elements = getArrayElements(ctx, arrayName);
-      const lineNum = ctx.state.currentLine;
-      if (elements.length === 0) {
-        // Empty array with negative index - output error to stderr and return empty
-        ctx.state.expansionStderr =
-          (ctx.state.expansionStderr || "") +
-          `bash: line ${lineNum}: ${arrayName}: bad array subscript\n`;
-        return "";
-      }
-      // Find the maximum index
-      const maxIndex = Math.max(
-        ...elements.map(([idx]) => (typeof idx === "number" ? idx : 0)),
+      const actualIdx = resolveNegativeArrayIndex(
+        ctx,
+        arrayName,
+        index,
+        getArrayElements(ctx, arrayName),
       );
-      // Convert negative index to actual index
-      const actualIdx = maxIndex + 1 + index;
-      if (actualIdx < 0) {
-        // Out of bounds negative index - output error to stderr and return empty
-        ctx.state.expansionStderr =
-          (ctx.state.expansionStderr || "") +
-          `bash: line ${lineNum}: ${arrayName}: bad array subscript\n`;
+      if (actualIdx === null) {
         return "";
       }
       // Look up by actual index, not position

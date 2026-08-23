@@ -25,6 +25,7 @@ import {
 import { Parser } from "../parser/parser.js";
 import { ArithmeticError, NounsetError } from "./errors.js";
 import { getArrayElements, getVariable } from "./expansion.js";
+import { resolveNegativeArrayIndex } from "./helpers/array.js";
 import type { InterpreterContext } from "./types.js";
 
 /**
@@ -536,24 +537,16 @@ export async function evaluateArithmetic(
           isExpansionContext,
         );
 
-        // Handle negative indices - bash counts from max_index + 1
+        // Handle negative indices - bash counts back from the highest SET index.
+        // Out of bounds is a diagnosed error yielding 0, not a silent misread.
         if (index < 0) {
-          const elements = getArrayElements(ctx, expr.array);
-          const lineNum = ctx.state.currentLine;
-          if (elements.length === 0) {
-            ctx.state.expansionStderr =
-              (ctx.state.expansionStderr || "") +
-              `bash: line ${lineNum}: ${expr.array}: bad array subscript\n`;
-            return 0;
-          }
-          const maxIndex = Math.max(
-            ...elements.map(([idx]) => (typeof idx === "number" ? idx : 0)),
+          const actualIdx = resolveNegativeArrayIndex(
+            ctx,
+            expr.array,
+            index,
+            getArrayElements(ctx, expr.array),
           );
-          const actualIdx = maxIndex + 1 + index;
-          if (actualIdx < 0) {
-            ctx.state.expansionStderr =
-              (ctx.state.expansionStderr || "") +
-              `bash: line ${lineNum}: ${expr.array}: bad array subscript\n`;
+          if (actualIdx === null) {
             return 0;
           }
           index = actualIdx;

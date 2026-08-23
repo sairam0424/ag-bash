@@ -341,7 +341,15 @@ export interface IOState {
  * with their exit codes and stderr preserved.
  */
 export interface ExpansionState {
-  /** Exit code from expansion errors (arithmetic, etc.) - overrides command exit code */
+  /**
+   * Exit status of the most recent command substitution performed while
+   * expanding the CURRENT simple command; `undefined` when this command
+   * performed none. Reset alongside `expansionStderr` at the start of every
+   * simple command, which is what distinguishes it from `lastExitCode` (that
+   * one carries over from the previous statement). Consumed when a command's
+   * words all expand to zero fields: POSIX 2.9.1 gives such a command the
+   * status of its last command substitution, so `$(exit 42)` exits 42.
+   */
   expansionExitCode?: number;
   /** Stderr from expansion errors */
   expansionStderr?: string;

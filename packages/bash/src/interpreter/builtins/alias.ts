@@ -9,6 +9,21 @@ const ALIAS_HELP =
 const UNALIAS_HELP =
   "unalias: unalias [-a] name [name ...]\n    Remove alias definitions.\n";
 
+/**
+ * Drop a leading `--` end-of-options marker.
+ *
+ * `--` is not an alias name: everything after it is an operand, even when it
+ * starts with `-` (`alias -- -x=echo` defines an alias literally called `-x`).
+ * Without this, `alias -- foo=echo` looked up an alias named `--`, printed
+ * `bash: alias: --: not found` and returned 1 instead of defining `foo`.
+ *
+ * Only the FIRST `--` is the marker, matching bash's option parsing - a second
+ * one is an ordinary operand.
+ */
+function stripEndOfOptions(args: string[]): string[] {
+  return args[0] === "--" ? args.slice(1) : args;
+}
+
 export function handleAlias(
   ctx: InterpreterContext,
   args: string[],
@@ -17,7 +32,11 @@ export function handleAlias(
     return success(ALIAS_HELP);
   }
 
-  if (args.length === 0) {
+  // `alias --` has no operands left after the marker, so it lists every alias,
+  // exactly like a bare `alias`.
+  const operands = stripEndOfOptions(args);
+
+  if (operands.length === 0) {
     let stdout = "";
     for (const [key, value] of ctx.state.env) {
       if (key.startsWith(ALIAS_PREFIX)) {
@@ -32,7 +51,7 @@ export function handleAlias(
   let stdout = "";
   let stderr = "";
 
-  for (const arg of args) {
+  for (const arg of operands) {
     const eqIndex = arg.indexOf("=");
     if (eqIndex === -1) {
       const value = ctx.state.env.get(`${ALIAS_PREFIX}${arg}`);
@@ -83,10 +102,18 @@ export function handleUnalias(
     return OK;
   }
 
+  // `-a` is a real option, so it is consumed before `--`; after the marker even
+  // `-a` would be an alias name. `unalias --` leaves no names at all, which bash
+  // reports as a usage error with status 2 - the same as a bare `unalias`.
+  const operands = stripEndOfOptions(args);
+  if (operands.length === 0) {
+    return failure("bash: unalias: usage: unalias [-a] name [name ...]\n", 2);
+  }
+
   let exitCode = 0;
   let stderr = "";
 
-  for (const name of args) {
+  for (const name of operands) {
     const key = `${ALIAS_PREFIX}${name}`;
     if (!ctx.state.env.has(key)) {
       stderr += `bash: unalias: ${name}: not found\n`;

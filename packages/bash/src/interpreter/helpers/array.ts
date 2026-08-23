@@ -31,6 +31,45 @@ export function getArrayIndices(
 }
 
 /**
+ * Resolve a NEGATIVE array subscript to a real index.
+ *
+ * bash counts back from the highest SET index, not from the element count, so
+ * for a sparse array whose largest index is 8 (`a=({1..9}); unset a[2]`), `a[-1]`
+ * is `a[8]` and `a[-9]` is `a[0]`. When the arithmetic lands below zero — or the
+ * array is empty — the subscript is invalid, and bash writes
+ *
+ *     bash: line <N>: <name>: bad array subscript
+ *
+ * to the SHELL's stderr while the reference still yields the empty string (0 in
+ * an arithmetic context) and status 0. Emitting that diagnostic is the whole
+ * point: without it an out-of-bounds negative subscript is silently wrong.
+ *
+ * `elements` is passed in rather than looked up here because the lookup lives in
+ * `expansion/variable.ts`, which already imports this module.
+ *
+ * @returns the resolved non-negative index, or `null` when the subscript is out
+ *   of bounds (the diagnostic has then already been recorded).
+ */
+export function resolveNegativeArrayIndex(
+  ctx: InterpreterContext,
+  arrayName: string,
+  index: number,
+  elements: Array<[number | string, string]>,
+): number | null {
+  if (elements.length > 0) {
+    const maxIndex = Math.max(
+      ...elements.map(([idx]) => (typeof idx === "number" ? idx : 0)),
+    );
+    const resolved = maxIndex + 1 + index;
+    if (resolved >= 0) {
+      return resolved;
+    }
+  }
+  ctx.state.expansionStderr = `${ctx.state.expansionStderr || ""}bash: line ${ctx.state.currentLine}: ${arrayName}: bad array subscript\n`;
+  return null;
+}
+
+/**
  * Clear all elements of an array from the environment.
  */
 export function clearArray(ctx: InterpreterContext, arrayName: string): void {
