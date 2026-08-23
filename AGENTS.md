@@ -57,7 +57,11 @@ pnpm --filter @ag-bash/bash check:worker-sync    # Verify worker files in sync
 pnpm --filter @ag-bash/bash shell                # Interactive shell (tsx)
 ```
 
-**Single test**: `pnpm --filter @ag-bash/bash vitest run path/to/test.test.ts`
+**Single test**: `pnpm --filter @ag-bash/bash exec vitest run path/to/test.test.ts`
+(`exec` is required — there is no `vitest` script, so the bare form fails with
+`ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT`. Add `-t "name"` to target one case, and
+`--config ../../vitest.unit.config.ts` to run under the unit lane's settings —
+note `--config` *replaces* the root config rather than extending it.)
 
 ### MCP Server (`@ag-bash/mcp-server`)
 
