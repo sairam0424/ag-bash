@@ -1,9 +1,15 @@
-// @ts-expect-error - Importing from vendored file
-import * as TreeSitter from "./vendor/web-tree-sitter.js";
-
 /**
  * TreeSitterParser handles WASM initialization and parser instantiation
  * for the v2.9 AST-based transition.
+ *
+ * The vendored `web-tree-sitter.js` emscripten glue (153,666 bytes) is loaded
+ * through a DYNAMIC import, never a static top-level one. Every importer of
+ * this module — ParseStage, ServiceContainer, WorkspaceIndexer, ag-analyze —
+ * is on the CLI's startup path, but the tree-sitter engine is not: `Bash`
+ * defaults `parser.engine` to "legacy" and ParseStage gates both tree-sitter
+ * branches on `parserEngine === "tree-sitter"`. A static import therefore made
+ * Node parse and evaluate the whole glue on 100% of invocations to serve 0% of
+ * them. See tree-sitter-parser.lazy-glue.test.ts for the pinned contract.
  */
 // Converting this to a const-object (to satisfy noStaticOnlyClass) surfaces the
 // private static fields into the public type, which trips TS9013
@@ -15,6 +21,27 @@ export class TreeSitterParser {
   private static parser: any = null;
   private static languages: Map<string, any> = new Map();
   private static initPromise: Promise<void> | null = null;
+  private static treeSitterPromise: Promise<any> | null = null;
+
+  /**
+   * Resolves the vendored emscripten glue on first use. The promise is cached
+   * so concurrent callers share one evaluation; Node's own ESM cache makes a
+   * repeat `import()` free, but caching here keeps `loadLanguage()` free of an
+   * await-on-microtask per grammar too.
+   */
+  private static loadTreeSitter(): Promise<any> {
+    if (TreeSitterParser.treeSitterPromise) {
+      return TreeSitterParser.treeSitterPromise;
+    }
+    // The specifier stays a single-line string literal on purpose: the
+    // check-banned-patterns.js "Dynamic import() with non-literal specifier"
+    // rule matches `import(` not immediately followed by a quote, so wrapping
+    // the argument onto its own line would read as a tainted-specifier vector.
+    // @ts-expect-error - Importing from vendored file
+    const glue: Promise<any> = import("./vendor/web-tree-sitter.js");
+    TreeSitterParser.treeSitterPromise = glue;
+    return glue;
+  }
 
   static async init(options: {
     webTreeSitterWasm: string | Uint8Array;
@@ -42,7 +69,8 @@ export class TreeSitterParser {
     grammars?: Record<string, string | Uint8Array>;
   }): Promise<void> {
     try {
-      const { Parser, Language } = TreeSitter as any;
+      const { Parser, Language } =
+        (await TreeSitterParser.loadTreeSitter()) as any;
 
       if (!TreeSitterParser.parser) {
         // Initializing core with vendored library
@@ -109,7 +137,7 @@ export class TreeSitterParser {
     grammarWasm: string | Uint8Array,
   ): Promise<void> {
     if (TreeSitterParser.languages.has(name)) return;
-    const { Language } = TreeSitter as any;
+    const { Language } = (await TreeSitterParser.loadTreeSitter()) as any;
     const wasm =
       grammarWasm instanceof Uint8Array
         ? grammarWasm
