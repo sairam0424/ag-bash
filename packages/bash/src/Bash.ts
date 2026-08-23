@@ -368,6 +368,50 @@ export interface ExecOptions {
   onChunk?: OutputSink;
 }
 
+const trafficByteEncoder = new TextEncoder();
+
+/** UTF-8 byte length of a payload, for network-traffic accounting. */
+function trafficByteLength(payload: string): number {
+  return trafficByteEncoder.encode(payload).byteLength;
+}
+
+/**
+ * Wraps a caller-supplied {@link SecureFetch} so its request/response bodies are
+ * credited to the session network-traffic budget.
+ *
+ * The built-in {@link createSecureFetch} reports traffic through its
+ * `onTraffic` config hook; a caller-supplied fetch has no such hook, so
+ * `executionLimits.maxNetworkTrafficBytes` was completely blind to it. This
+ * wrapper restores parity by measuring the same two payloads the built-in path
+ * counts: the outgoing request body and the incoming response body.
+ *
+ * The request body is credited BEFORE awaiting, so traffic is accounted even
+ * when the underlying fetch rejects mid-flight. Unlike the built-in path this
+ * counts a body on any method (the built-in drops bodies on GET/HEAD/OPTIONS
+ * before sending, whereas a custom fetch may well transmit them).
+ *
+ * Both payloads are `typeof`-guarded rather than trusted: a caller-supplied
+ * fetch is external input and may resolve a shape that only approximates
+ * `FetchResult` (existing tests pass Response-like objects with no `body`).
+ */
+function withTrafficAccounting(
+  fetchFn: SecureFetch,
+  onTraffic: (bytes: number) => void,
+): SecureFetch {
+  return async (url, options) => {
+    const requestBody: unknown = options?.body;
+    if (typeof requestBody === "string" && requestBody.length > 0) {
+      onTraffic(trafficByteLength(requestBody));
+    }
+    const result = await fetchFn(url, options);
+    const responseBody: unknown = result?.body;
+    if (typeof responseBody === "string" && responseBody.length > 0) {
+      onTraffic(trafficByteLength(responseBody));
+    }
+    return result;
+  };
+}
+
 /**
  * A sandboxed bash shell with a virtual filesystem, built-in commands, and
  * optional WASM runtimes. Safe to run untrusted scripts — all I/O stays in-memory.
@@ -441,6 +485,20 @@ export class Bash extends EventEmitter {
   private snapshots: Map<string, BashSnapshot> = new Map();
   public readonly options: BashOptions;
 
+  /**
+   * Exec-scoped interpreter states currently in flight.
+   *
+   * Every exec() runs against a `{ ...this.state }` COPY, so
+   * `networkTrafficBytes` — a primitive — is snapshotted at exec entry and can
+   * never be moved by a hook that only writes `this.state`. That made
+   * `executionLimits.maxNetworkTrafficBytes` unenforceable during the very exec
+   * it governs: the interpreter's guard read a frozen 0 while the real counter
+   * grew on the instance. Live copies are tracked here so
+   * {@link recordNetworkTraffic} can credit them in lockstep with the
+   * session-wide counter.
+   */
+  private readonly liveExecStates = new Set<InterpreterState>();
+
   constructor(options: BashOptions = {}) {
     super();
     this.options = options;
@@ -492,15 +550,29 @@ export class Bash extends EventEmitter {
       maxEntries: this.limits.astCacheSize,
     });
 
-    // Create secure fetch: prefer explicit fetch, fall back to network config
+    // Create secure fetch: prefer explicit fetch, fall back to network config.
+    // BOTH paths must install traffic accounting, otherwise
+    // executionLimits.maxNetworkTrafficBytes silently never fires. A
+    // caller-supplied fetch used to be adopted verbatim, which made every byte
+    // through it invisible to the budget — exactly the case where a
+    // caller-imposed limit is the only remaining control.
+    const onTraffic = (bytes: number): void => {
+      this.recordNetworkTraffic(bytes);
+    };
     if (options.fetch) {
-      this.secureFetch = options.fetch;
+      this.secureFetch = withTrafficAccounting(options.fetch, onTraffic);
     } else if (options.network) {
+      // A caller-supplied network.onTraffic is a documented public hook, so
+      // chain it rather than letting the spread clobber it.
+      const callerOnTraffic = options.network.onTraffic;
       this.secureFetch = createSecureFetch({
         ...options.network,
-        onTraffic: (bytes) => {
-          this.state.networkTrafficBytes += bytes;
-        },
+        onTraffic: callerOnTraffic
+          ? (bytes) => {
+              onTraffic(bytes);
+              callerOnTraffic(bytes);
+            }
+          : onTraffic,
       });
     }
 
@@ -962,7 +1034,11 @@ export class Bash extends EventEmitter {
     // banned nondeterministic primitives (Date.now / new Date / Math.random).
     const spanStart = performance.now();
     try {
-      const result = await this.execViaPipeline(commandLine, options, execState);
+      const result = await this.execViaPipeline(
+        commandLine,
+        options,
+        execState,
+      );
       span.setAttribute("ag-bash.exitCode", result.exitCode);
       return result;
     } catch (spanError: unknown) {
@@ -1059,6 +1135,29 @@ export class Bash extends EventEmitter {
   }
 
   /**
+   * Credit `bytes` of network traffic to the session-wide budget AND to every
+   * exec currently in flight.
+   *
+   * The double bookkeeping is load-bearing, not redundant:
+   * - `this.state` is the session counter, so the budget survives across
+   *   exec() calls (a script cannot reset it by starting a new exec).
+   * - each live exec state is a `{ ...this.state }` COPY whose
+   *   `networkTrafficBytes` is a primitive snapshot. Crediting only the
+   *   session counter left the interpreter's per-statement guard reading a
+   *   frozen value, so `maxNetworkTrafficBytes` could never fire during the
+   *   exec that produced the traffic — the whole point of the limit.
+   */
+  private recordNetworkTraffic(bytes: number): void {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return;
+    }
+    this.state.networkTrafficBytes += bytes;
+    for (const execState of this.liveExecStates) {
+      execState.networkTrafficBytes += bytes;
+    }
+  }
+
+  /**
    * Execute a script through the composable ExecutionPipeline.
    *
    * The instance-coupled prologue (command-count guard, empty short-circuit,
@@ -1073,7 +1172,7 @@ export class Bash extends EventEmitter {
    * cannot change for a given Bash instance, so caching is safe and matches the
    * monolith's per-call recomputation.
    */
-  private execViaPipeline(
+  private async execViaPipeline(
     commandLine: string,
     options: ExecOptions | undefined,
     execState: InterpreterState,
@@ -1081,14 +1180,24 @@ export class Bash extends EventEmitter {
     if (!this.executionPipeline) {
       this.executionPipeline = this.buildExecutionPipeline();
     }
-    return this.executionPipeline.run(
-      commandLine,
-      options,
-      this,
-      this.services,
-      execState,
-      this.state,
-    );
+    // Register the exec-scoped state so network traffic generated by THIS exec
+    // reaches the interpreter's budget guard (see recordNetworkTraffic). This is
+    // the single funnel for every exec — both the plain and OTel-instrumented
+    // branches of exec() route here, and execStream() goes through exec() too —
+    // so one register/unregister pair covers all of them.
+    this.liveExecStates.add(execState);
+    try {
+      return await this.executionPipeline.run(
+        commandLine,
+        options,
+        this,
+        this.services,
+        execState,
+        this.state,
+      );
+    } finally {
+      this.liveExecStates.delete(execState);
+    }
   }
 
   /**

@@ -167,6 +167,22 @@ function prependStderr(result: ExecResult, prefix: string): ExecResult {
   return result;
 }
 
+const BYTES_PER_MIB = 1024 * 1024;
+
+/**
+ * Renders a network-traffic byte count for a limit diagnostic.
+ *
+ * Sub-megabyte values are reported in bytes: the previous unconditional
+ * `Math.round(bytes / 1024 / 1024)` rendered every small budget as the
+ * uninterpretable "0MB exceeds 0MB limit".
+ */
+function formatTrafficBytes(bytes: number): string {
+  if (bytes < BYTES_PER_MIB) {
+    return `${bytes}B`;
+  }
+  return `${Math.round(bytes / BYTES_PER_MIB)}MB`;
+}
+
 export interface InterpreterOptions {
   fs: IFileSystem;
   commands: CommandRegistry;
@@ -589,16 +605,11 @@ export class Interpreter {
         );
       }
 
-      // Performance: Network traffic accounting
-      if (
-        this.ctx.state.networkTrafficBytes >
-        this.ctx.limits.maxNetworkTrafficBytes
-      ) {
-        throwExecutionLimit(
-          `network traffic limit exceeded: ${Math.round(this.ctx.state.networkTrafficBytes / 1024 / 1024)}MB exceeds ${Math.round(this.ctx.limits.maxNetworkTrafficBytes / 1024 / 1024)}MB limit`,
-          "network_traffic",
-        );
-      }
+      // Performance: Network traffic accounting.
+      // Checked BEFORE the statement runs (traffic from earlier statements) and
+      // again AFTER it completes (traffic the statement itself generated), so a
+      // single network-heavy statement cannot overshoot the budget unchecked.
+      this.assertNetworkBudget();
 
       // Check for deferred syntax error
       if (node.deferredError) {
@@ -688,6 +699,14 @@ export class Interpreter {
         throw new ErrexitError(exitCode, stdout, stderr, observations);
       }
 
+      // Post-statement network budget check. The pre-statement check above can
+      // only see traffic that PRECEDED this statement, so without this a single
+      // statement (`curl huge-url`, or a whole loop of them) could blow the
+      // budget by any margin and still exit 0 — the limit would only surface on
+      // the next statement, and never at all for a one-statement script.
+      // Output produced so far is carried on the error so it is not lost.
+      this.assertNetworkBudget(stdout, stderr);
+
       return { stdout, stderr, exitCode, observations };
     } catch (error: any) {
       if (
@@ -717,6 +736,31 @@ export class Interpreter {
       }
       throw error;
     }
+  }
+
+  /**
+   * Throws {@link ExecutionLimitError} when the session's accumulated network
+   * traffic has passed `executionLimits.maxNetworkTrafficBytes`.
+   *
+   * `ctx.state.networkTrafficBytes` is credited by Bash's traffic accounting
+   * hook (which fans out to every in-flight exec state), so this reads a LIVE
+   * counter rather than the exec-entry snapshot it used to see.
+   *
+   * @param stdout output produced so far, carried on the error so it is not lost
+   * @param stderr error output produced so far, carried on the error
+   */
+  private assertNetworkBudget(stdout = "", stderr = ""): void {
+    const used = this.ctx.state.networkTrafficBytes;
+    const limit = this.ctx.limits.maxNetworkTrafficBytes;
+    if (used <= limit) {
+      return;
+    }
+    throwExecutionLimit(
+      `network traffic limit exceeded: ${formatTrafficBytes(used)} exceeds ${formatTrafficBytes(limit)} limit`,
+      "network_traffic",
+      stdout,
+      stderr,
+    );
   }
 
   public async executePipeline(node: PipelineNode): Promise<ExecResult> {
