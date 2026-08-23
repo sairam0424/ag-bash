@@ -15,10 +15,34 @@
 import type { Observation } from "../types.js";
 
 /**
+ * Brand key stamped onto every ControlFlowError instance.
+ *
+ * Why a global-registry symbol rather than a string field on the prototype:
+ *
+ * 1. `Symbol.for()` resolves through the cross-realm global symbol registry, so
+ *    two copies of this module (the ESM bundle and the CJS bundle both ship in
+ *    `dist/`) agree on the same key. This is exactly the situation where
+ *    `instanceof ControlFlowError` silently returns false because each bundle
+ *    owns a distinct class object.
+ * 2. It is stamped as an OWN property in the base constructor, so it survives a
+ *    severed or rewritten prototype chain — the other way `instanceof` fails.
+ * 3. A symbol key can never appear in JSON, so `JSON.parse()` output (or any
+ *    other deserialised, attacker-influenced payload) can never carry it.
+ * 4. Non-enumerable, so spread / `Object.assign` / `JSON.stringify` do not copy
+ *    it onto look-alike objects, and it stays invisible to output formatting.
+ * 5. Non-writable and non-configurable, so it cannot be deleted or flipped
+ *    after construction.
+ *
+ * Reads go through `Object.hasOwn` (see `isControlFlowError`) so that polluting
+ * `Object.prototype` with this symbol cannot brand unrelated objects.
+ */
+const CONTROL_FLOW_BRAND = Symbol.for("@ag-bash/bash.ControlFlowError");
+
+/**
  * Base class for all control flow errors.
  * Carries stdout/stderr to preserve output during propagation.
  */
-abstract class ControlFlowError extends Error {
+export abstract class ControlFlowError extends Error {
   constructor(
     message: string,
     public stdout: string = "",
@@ -26,6 +50,13 @@ abstract class ControlFlowError extends Error {
     public observations?: Observation[],
   ) {
     super(message);
+    // @banned-pattern-ignore: key is a module-private Symbol constant, never user input; a symbol can never be "__proto__"/"constructor", and the target is a fresh instance, not a shared prototype
+    Object.defineProperty(this, CONTROL_FLOW_BRAND, {
+      value: true,
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    });
   }
 
   /**
@@ -35,6 +66,28 @@ abstract class ControlFlowError extends Error {
     this.stdout = stdout + this.stdout;
     this.stderr = stderr + this.stderr;
   }
+}
+
+/**
+ * Branded type guard for every ControlFlowError subclass.
+ *
+ * Prefer this over `error instanceof ControlFlowError` at any boundary that can
+ * see errors thrown by another copy of this module — host extensions and the
+ * bundled ESM/CJS `dist`, where each copy owns a distinct class object. Control
+ * flow swallowed at such a boundary loses the requested exit status and lets the
+ * rest of the script run. (It does not survive `structuredClone`/worker message
+ * passing, which drops symbol keys along with the whole Error subclass.)
+ *
+ * @param error - Unknown caught value
+ * @returns true if the value was constructed by a ControlFlowError subclass
+ */
+export function isControlFlowError(error: unknown): error is ControlFlowError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    Object.hasOwn(error, CONTROL_FLOW_BRAND) &&
+    (error as Record<symbol, unknown>)[CONTROL_FLOW_BRAND] === true
+  );
 }
 
 /**

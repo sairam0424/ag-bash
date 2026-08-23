@@ -52,7 +52,7 @@ import {
 } from "./command-resolution.js";
 import { evaluateTestArgs } from "./conditionals.js";
 import { createDefenseAwareCommandContext } from "./defense-aware-command-context.js";
-import { ExecutionLimitError } from "./errors.js";
+import { isControlFlowError } from "./errors.js";
 import { callFunction } from "./functions.js";
 import { getErrorMessage } from "./helpers/errors.js";
 import { failure, OK, obs, testResult } from "./helpers/result.js";
@@ -479,8 +479,17 @@ export async function executeExternalCommand(
     }
     return await runCommand();
   } catch (error) {
-    // ExecutionLimitError must propagate - these are safety limits
-    if (error instanceof ExecutionLimitError) {
+    // Every ControlFlowError must propagate: exit/return/break/continue carry
+    // the script's requested control transfer, PosixFatalError and
+    // ExecutionLimitError carry a mandated exit status. Swallowing them into a
+    // generic failure() loses the status, surfaces the internal marker message
+    // ("exit") as a fake command error, and lets the rest of the script run.
+    //
+    // Branded predicate rather than `instanceof ControlFlowError`: dist ships
+    // both an ESM and a CJS bundle, so two copies of the error module can
+    // coexist in one process and cross-realm `instanceof` then returns false —
+    // precisely the host-extension context this catch block guards.
+    if (isControlFlowError(error)) {
       throw error;
     }
     // Security violations must propagate to top-level error handling
