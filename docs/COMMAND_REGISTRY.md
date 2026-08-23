@@ -1,104 +1,175 @@
-# Ag-Bash Command Registry (v5.0.0)
+# Ag-Bash Command Registry
 
-This registry provides a categorized index of the **150+ commands** supported by Ag-Bash. All commands are virtualized, sandboxed, and optimized for Project V-Next.
+This registry provides a categorized index of the commands supported by Ag-Bash. All commands are virtualized, sandboxed, and optimized for Project V-Next.
+
+**How to read this file.** Everything between the `BEGIN GENERATED` / `END GENERATED` markers is produced from the command registry by `scripts/gen-command-registry.mjs` and must not be hand-edited; the sections after the closing marker are hand-authored. `packages/bash/src/commands/registry.doc.test.ts` fails if the generated inventory and the registry disagree in either direction, which is what keeps this document from drifting the way it did through v5.0.0.
+
+---
+
+<!-- BEGIN GENERATED: command-inventory -->
+This inventory is generated from `packages/bash/src/commands/definitions/` by
+`scripts/gen-command-registry.mjs`. Do not hand-edit between the markers —
+run `node scripts/gen-command-registry.mjs` instead.
+
+**117 commands** are registered: 112 always-on builtins, 1 gated on network access, 2 on the Python (WASM) runtime, and 2 on the JavaScript (WASM) runtime.
+
+---
+
+## Basic I/O
+
+*Reading and writing streams — the primitives everything else composes.*
+
+| Command | Description |
+| :--- | :--- |
+| `cat` | Concatenate files to standard output. |
+| `echo` | Write arguments to standard output. |
+| `printf` | Format and print data with printf(3) conversions. |
 
 ---
 
 ## Core Operations & Filesystem
 
-*Standard POSIX-compliant tools for file management and navigation.*
+*Standard POSIX-compliant tools for file management and navigation. See [details](./registry/core_io.md).*
 
-| Command | Description | Registry Link |
-| :--- | :--- | :--- |
-| `ls` | List directory contents with high-fidelity formatting. | [View Details](./registry/core_io.md) |
-| `cd` / `pwd` | Change and print working directory. | [View Details](./registry/core_io.md) |
-| `mkdir` / `rmdir` | Directory creation and removal. | [View Details](./registry/core_io.md) |
-| `cp` / `mv` / `rm` | File copying, moving, and deletion. | [View Details](./registry/core_io.md) |
-| `chmod` / `stat` | Permission management and file metadata. | [View Details](./registry/core_io.md) |
-| `ln` / `readlink` | Symbolic and hard link management. | [View Details](./registry/core_io.md) |
-| `touch` / `file` | File creation and type detection. | [View Details](./registry/core_io.md) |
-| `tree` / `du` | Directory tree visualization and disk usage. | [View Details](./registry/core_io.md) |
-| `find` | Recursive file search with filter predicates. | [View Details](./registry/core_io.md) |
-| `tar` / `gzip` | Archive and compression utilities. | [View Details](./registry/core_io.md) |
+| Command | Description |
+| :--- | :--- |
+| `ls` | List directory contents with high-fidelity formatting. |
+| `pwd` | Print the current working directory. |
+| `mkdir` | Create directories. |
+| `rmdir` | Remove empty directories. |
+| `cp` | Copy files and directories. |
+| `mv` | Move and rename files and directories. |
+| `rm` | Delete files and directories. |
+| `chmod` | Change file permission bits. |
+| `stat` | Report file metadata. |
+| `ln` | Create symbolic and hard links. |
+| `readlink` | Resolve the target of a symbolic link. |
+| `touch` | Create files and update timestamps. |
+| `file` | Detect file type from content. |
+| `basename` | Strip directory and suffix from a path. |
+| `dirname` | Strip the last component from a path. |
+| `tree` | Visualize a directory tree. |
+| `du` | Report disk usage. |
+| `find` | Recursive file search with filter predicates. |
+| `tar` | Create and extract tar archives. |
+| `gzip` | Compress files with gzip. |
+| `gunzip` | Decompress gzip archives. |
+| `zcat` | Stream the decompressed contents of a gzip file. |
+
+---
+
+## Text Processing
+
+*Stream editing, filtering, and transformation utilities.*
+
+| Command | Description |
+| :--- | :--- |
+| `grep` | Pattern matching with basic regular expressions. |
+| `fgrep` | Pattern matching with fixed strings. |
+| `egrep` | Pattern matching with extended regular expressions. |
+| `rg` | Ultra-fast recursive code search (ripgrep). |
+| `sed` | Stream editing with substitution and scripting. |
+| `awk` | Pattern-action text processing and reporting. |
+| `sort` | Sort lines of text. |
+| `uniq` | Report or filter repeated lines. |
+| `comm` | Compare two sorted files line by line. |
+| `cut` | Extract columns from each line. |
+| `paste` | Merge lines of files side by side. |
+| `join` | Relational join on a common field. |
+| `tr` | Translate or delete characters. |
+| `rev` | Reverse the characters on each line. |
+| `fold` | Wrap lines to a fixed width. |
+| `nl` | Number the lines of output. |
+| `expand` | Convert tabs to spaces. |
+| `unexpand` | Convert spaces to tabs. |
+| `column` | Format input into aligned columns. |
+| `tee` | Copy standard input to files and standard output. |
+| `tac` | Print lines in reverse order. |
+| `od` | Dump files in octal and other formats. |
+| `head` | Print the first lines of a file. |
+| `tail` | Print the last lines of a file. |
+| `wc` | Count lines, words, and bytes. |
+| `diff` | File comparison with unified diff output. |
+| `strings` | Extract printable strings from binary data. |
+| `split` | Split a file into pieces. |
 
 ---
 
 ## Data Intelligence
 
-*Advanced structured data processing tools running natively in WASM.*
+*Advanced structured data processing tools running natively in WASM. See [details](./registry/data_intel.md).*
 
-| Command | Category | Best For | Registry Link |
-| :--- | :--- | :--- | :--- |
-| `jq` | JSON | Stream processing and filtering. | [Data Intel](./registry/data_intel.md) |
-| `yq` | YAML | Multi-document processing. | [Data Intel](./registry/data_intel.md) |
-| `sqlite3` | SQL | In-memory relational logic. | [Data Intel](./registry/data_intel.md) |
-| `xan` | CSV/TSV | High-performance tabular data manipulation. | [Data Intel](./registry/data_intel.md) |
-| `html-to-markdown` | Web | Transforming web content for LLM RAG. | [Data Intel](./registry/data_intel.md) |
+| Command | Description |
+| :--- | :--- |
+| `jq` | JSON stream processing and filtering. |
+| `yq` | YAML multi-document processing. |
+| `sqlite3` | In-memory relational logic over SQL. |
+| `xan` | High-performance CSV/TSV tabular data manipulation. |
+| `html-to-markdown` | Transform web content to markdown for LLM retrieval. |
 
 ---
 
 ## Agentic Runtimes
 
-*Sandbox isolation for arbitrary code execution.*
+*Sandbox isolation for arbitrary code execution. See [details](./registry/agentic_runtimes.md).*
 
-| Command | Runtime | Description | Registry Link |
-| :--- | :--- | :--- | :--- |
-| `python3` | CPython (WASM) | Complete Python 3.11 environment. | [Agentic Guide](./registry/agentic_runtimes.md) |
-| `js-exec` | QuickJS | Lightweight, extremely fast JavaScript logic. | [Agentic Guide](./registry/agentic_runtimes.md) |
-| `awk` / `sed` | POSIX | Traditional stream editing and reporting. | [Agentic Guide](./registry/agentic_runtimes.md) |
+| Command | Description |
+| :--- | :--- |
+| `python3` | Complete Python 3.11 environment (CPython on WASM). |
+| `python` | Alias for `python3`. |
+| `js-exec` | Lightweight, extremely fast JavaScript logic (QuickJS). |
+| `node` | Stub that exits non-zero and redirects the caller to `js-exec`; there is no Node runtime in the sandbox. |
 
 ---
 
 ## Nexus Suite
 
-*AI-native surgical editing, analysis, and code intelligence tools.*
+*AI-native surgical editing, analysis, and code intelligence tools. See [details](./registry/nexus.md).*
 
-| Command | Runtime | Description | Registry Link |
-| :--- | :--- | :--- | :--- |
-| `ag-edit` | Nexus | Atomic, line-based file editing for autonomous agents. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-diff` | Nexus | Semantic diff engine with LLM-optimized summaries. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-snapshot` | Nexus | Persistent environment state and filesystem checkpointing. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-analyze` | Nexus | Structural script analysis and symbol extraction. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-hover` | Nexus Prime | Retrieve metadata and documentation for a specific symbol. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-explain` | Nexus Prime | Parse and explain the structure of complex shell commands. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-find-symbol` | Nexus Prime | Global search for symbol definitions and references. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-references` | Nexus Prime | Find all references to a symbol across the workspace. | [Nexus Upgrades](./registry/nexus.md) |
-| `ag-todo` | Nexus Prime | Persistent local task management for agent tracking. | [Nexus Upgrades](./registry/nexus.md) |
+| Command | Description |
+| :--- | :--- |
+| `ag-edit` | Atomic, line-based file editing for autonomous agents. |
+| `ag-diff` | Semantic diff engine with LLM-optimized summaries. |
+| `ag-snapshot` | Persistent environment state and filesystem checkpointing. |
+| `ag-analyze` | Structural script analysis and symbol extraction. |
+| `ag-hover` | Retrieve metadata and documentation for a specific symbol. |
+| `ag-explain` | Parse and explain the structure of complex shell commands. |
+| `ag-find-symbol` | Global search for symbol definitions and references. |
+| `ag-references` | Find all references to a symbol across the workspace. |
+| `ag-todo` | Persistent local task management for agent tracking. |
 
 ---
 
 ## Agentic Tools
 
-*Plan-mode, document conversion, search, and notebook management.*
+*Plan-mode, document conversion, search, and notebook management. See [details](./registry/agentic_tools.md).*
 
-| Command | Runtime | Description | Registry Link |
-| :--- | :--- | :--- | :--- |
-| `ag-plan` | Nexus | Plan-mode orchestration: enter/exit read-only mode and manage multi-step plans. | [Agentic Tools](./registry/agentic_tools.md) |
-| `ag-notebook` | Nexus | Read, edit, and append cells in Jupyter Notebook (.ipynb) files. | [Agentic Tools](./registry/agentic_tools.md) |
-| `ag-convert` | Hyperion | Intelligent document and image-to-markdown conversion with AI vision. | [Agentic Tools](./registry/agentic_tools.md) |
-| `ag-grep` | Nexus | High-performance recursive pattern search across the virtual filesystem. | [Agentic Tools](./registry/agentic_tools.md) |
-| `ag-find-files` | Nexus | High-performance recursive file search by name pattern. | [Agentic Tools](./registry/agentic_tools.md) |
-| `ag-glob` | Nexus | Fast glob pattern matching over the virtual filesystem. | [Agentic Tools](./registry/agentic_tools.md) |
-| `ag-worktree` | Nexus | Manage isolated virtual worktrees for parallel development. | [Agentic Tools](./registry/agentic_tools.md) |
+| Command | Description |
+| :--- | :--- |
+| `ag-plan` | Plan-mode orchestration: enter/exit read-only mode and manage multi-step plans. |
+| `ag-notebook` | Read, edit, and append cells in Jupyter Notebook (.ipynb) files. |
+| `ag-convert` | Intelligent document and image-to-markdown conversion with AI vision. |
+| `ag-grep` | High-performance recursive pattern search across the virtual filesystem. |
+| `ag-find-files` | High-performance recursive file search by name pattern. |
+| `ag-glob` | Fast glob pattern matching over the virtual filesystem. |
+| `ag-worktree` | Manage isolated virtual worktrees for parallel development. |
 
 ---
 
 ## MCP & Orchestration
 
-*Model Context Protocol integration and multi-agent coordination.*
+*Model Context Protocol integration and multi-agent coordination. See [details](./registry/mcp_orchestration.md).*
 
-| Command | Runtime | Description | Registry Link |
-| :--- | :--- | :--- | :--- |
-| `ag-mcp` | Nexus | Connect to MCP servers, list tools, and invoke remote tool calls. | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-spawn` | Nexus | Start a sub-agent in the background with a given command. | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-wait` | Nexus | Synchronize with and collect output from a sub-agent. | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-list-agents` | Nexus | List all active sub-agents and their statuses. | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-task` | Nexus | Manage background tasks with lifecycle tracking (create, update, stop). | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-team` | Nexus | Manage multi-agent teams (create, add/remove agents, list). | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-message` | Nexus | Inter-agent messaging: send, broadcast, and read inbox. | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-cron` | Nexus | Manage scheduled cron jobs with standard 5-field expressions. | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-web-fetch` | Toolbox | Fetch a web page and convert content to clean markdown (cached). | [MCP & Orchestration](./registry/mcp_orchestration.md) |
-| `ag-web-search` | Toolbox | Search the web for current information and documentation. | [MCP & Orchestration](./registry/mcp_orchestration.md) |
+| Command | Description |
+| :--- | :--- |
+| `ag-mcp` | Connect to MCP servers, list tools, and invoke remote tool calls. |
+| `ag-spawn` | Start a sub-agent in the background with a given command. |
+| `ag-wait` | Synchronize with and collect output from a sub-agent. |
+| `ag-list-agents` | List all active sub-agents and their statuses. |
+| `ag-task` | Manage background tasks with lifecycle tracking (create, update, stop). |
+| `ag-team` | Manage multi-agent teams (create, add/remove agents, list). |
+| `ag-message` | Inter-agent messaging: send, broadcast, and read inbox. |
+| `ag-cron` | Manage scheduled cron jobs with standard 5-field expressions. |
 
 ---
 
@@ -106,7 +177,7 @@ This registry provides a categorized index of the **150+ commands** supported by
 
 *Tools for cryptographic verification and auditing.*
 
-| Command | Use Case |
+| Command | Description |
 | :--- | :--- |
 | `sha256sum` | Verify file integrity with high-entropy hashing. |
 | `sha1sum` | SHA-1 checksum generation and verification. |
@@ -119,37 +190,64 @@ This registry provides a categorized index of the **150+ commands** supported by
 
 *Bridging the virtual sandbox with the outside world.*
 
-| Command | Use Case |
+| Command | Description |
 | :--- | :--- |
 | `git` | Perform version control operations within the OverlayFS. |
 | `curl` | Audited network requests (isolated via proxy). |
-| `rg` (ripgrep) | Ultra-fast semantic code search. |
 
 ---
 
-## Text Processing
+## Shell & Environment
 
-*Stream editing, filtering, and transformation utilities.*
+*Nested shells, environment inspection, and small process utilities. These are registry commands; for interpreter-level builtins such as `export` or `[[`, see the hand-authored section below.*
 
-| Command | Use Case |
+| Command | Description |
 | :--- | :--- |
-| `grep` / `fgrep` / `egrep` | Pattern matching with basic, fixed, and extended regex. |
-| `sort` / `uniq` | Sorting and deduplication. |
-| `cut` / `paste` / `join` | Column extraction, merging, and relational joins. |
-| `tr` / `rev` / `fold` | Character translation, reversal, and line wrapping. |
-| `nl` / `expand` / `column` | Line numbering, tab expansion, and table formatting. |
-| `tee` / `tac` / `od` | Tee output, reverse line order, and octal dump. |
-| `diff` | File comparison with unified diff output. |
-| `strings` / `split` | Binary string extraction and file splitting. |
-| `head` / `tail` / `wc` | Viewing file heads/tails and counting lines/words/bytes. |
+| `bash` | Run a script or command string in a nested shell. |
+| `sh` | POSIX shell entry point backed by the same nested shell. |
+| `env` | Print the environment, or run a command with a modified one. |
+| `printenv` | Print environment variable values. |
+| `alias` | Define or list command aliases. |
+| `unalias` | Remove command aliases. |
+| `history` | List the command history. |
+| `xargs` | Build and run command lines from standard input. |
+| `which` | Locate a command on the search path. |
+| `help` | Show usage for builtin commands. |
+| `true` | Do nothing, successfully — exit status 0. |
+| `false` | Do nothing, unsuccessfully — exit status 1. |
+| `clear` | Clear the terminal screen. |
+| `whoami` | Print the effective user name. |
+| `hostname` | Print the sandbox host name. |
+| `date` | Print or format the current date and time. |
+| `sleep` | Delay for a specified duration. |
+| `timeout` | Run a command with a wall-clock limit. |
+| `time` | Measure the execution time of a command. |
+| `seq` | Print a sequence of numbers. |
+| `expr` | Evaluate an integer or string expression. |
+| `hello` | Minimal smoke-test command that greets the caller. |
 
 ---
 
-## Shell Builtins
+## Discoverability & Diagnostics
 
-*Interpreter-level commands handled directly by the execution engine.*
+*Commands for exploring the shell's capabilities and verifying setup health.*
 
-| Command | Use Case |
+| Command | Description |
+| :--- | :--- |
+| `commands` | List all available commands with categories and search. |
+| `about` | Show ag-bash features, architecture, and version. |
+| `doctor` | Run environment health checks and verify setup. |
+<!-- END GENERATED: command-inventory -->
+
+---
+
+## Interpreter Builtins
+
+*Hand-authored. These are handled directly by the execution engine rather than
+dispatched through the command registry, so they are deliberately outside the
+generated inventory above and do not appear in `commands --list`.*
+
+| Builtin | Use Case |
 | :--- | :--- |
 | `export` / `declare` / `local` | Variable declaration and scoping. |
 | `set` / `shopt` | Shell option configuration. |
@@ -165,15 +263,19 @@ This registry provides a categorized index of the **150+ commands** supported by
 
 ---
 
-## Discoverability & Diagnostics
+## Agent Toolbox Tools
 
-*Commands for exploring the shell's capabilities and verifying setup health (v5.0.0).*
+*Hand-authored, and **not** shell commands. These are `ToolboxTool` entries in
+`packages/bash/src/agentic/toolbox/registry.ts`, surfaced to agents as tool calls;
+they are not registered in the command registry and cannot be invoked from a
+script. Revisions of this document through v5.0.0 listed them alongside real
+commands, which was incorrect. The toolbox has no generator yet, so this table
+is hand-maintained.*
 
-| Command | Description | Registry Link |
-| :--- | :--- | :--- |
-| `commands` | List all available commands with categories and search. | [Discoverability](./registry/discoverability.md) |
-| `about` | Show ag-bash features, architecture, and version. | [Discoverability](./registry/discoverability.md) |
-| `doctor` | Run environment health checks and verify setup. | [Discoverability](./registry/discoverability.md) |
+| Tool | Use Case |
+| :--- | :--- |
+| `ag-web-fetch` | Fetch a web page and convert content to clean markdown (cached). |
+| `ag-web-search` | Search the web for current information and documentation. |
 
 ---
 
