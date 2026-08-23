@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 // Reachability-aware supply-chain gate. Replaces the bare
 // `pnpm audit --audit-level=high` that used to guard quality/release/publish/
@@ -44,6 +45,12 @@ import process from "node:process";
 //     --workspace-json=w.json --closure-json=c.json   # offline / fixture mode
 //
 // Exit codes: 0 = clean · 1 = gate failure · 2 = tool/report-shape failure.
+//
+// Layering: everything below `evaluateAdvisories` is pure — reports in, verdict
+// out, no I/O and no process.exit — so the gate's own logic is unit-tested from
+// checked-in fixtures in packages/bash/src/check-advisories.test.ts. `main()`
+// is the only part that shells out, reads files or prints, and it runs only
+// when this file is the process entry point.
 
 const ROOT = resolve(import.meta.dirname, "..");
 const SEVERITY_ORDER = ["info", "low", "moderate", "high", "critical"];
@@ -71,13 +78,24 @@ const CLASS_LABEL = new Map([
 // cannot prove a finding is unreachable, it refuses to call it harmless.
 const BLOCKING_CLASSES = new Set([PUBLISHED, UNKNOWN]);
 
-function hardFail(lines) {
-  console.error("\n✗ check-advisories cannot produce a trustworthy result:\n");
-  for (const line of [].concat(lines)) {
-    console.error(`  ${line}`);
+/**
+ * "This gate cannot produce a trustworthy result" — always exit 2, never a pass.
+ * Thrown rather than exited so the pure layer can be called in-process (a unit
+ * test must not be able to kill its own worker); `runCli` turns it back into the
+ * same stderr block and the same exit code the CLI has always produced.
+ */
+class AdvisoryGateError extends Error {
+  /** @param {string[]} lines */
+  constructor(lines) {
+    super(lines.join(" | "));
+    this.name = "AdvisoryGateError";
+    /** @type {string[]} */
+    this.lines = lines;
   }
-  console.error("");
-  process.exit(2);
+}
+
+function hardFail(lines) {
+  throw new AdvisoryGateError([].concat(lines));
 }
 
 function severityRank(severity) {
@@ -445,13 +463,18 @@ function classify(record, closure, tokens) {
  *         "expires": "2026-11-30" }
  *     ]
  *   }
+ *
+ * @param {unknown} manifest parsed root package.json
+ * @param {string} today YYYY-MM-DD an entry is expired strictly before
  */
-function loadIgnoreRules(today, manifestPath) {
-  const manifest = readJsonFile(
-    manifestPath ?? join(ROOT, "package.json"),
-    "root package.json",
-  );
-  const config = manifest.auditConfig;
+export function parseIgnoreRules(manifest, today) {
+  if (!ISO_DATE.test(String(today))) {
+    // Without a usable "today" nothing can expire, which would silently turn
+    // every waiver permanent — the one outcome the expiry rule exists to stop.
+    hardFail([`ignore expiry needs today as YYYY-MM-DD, got "${today}"`]);
+  }
+  const config =
+    manifest && typeof manifest === "object" ? manifest.auditConfig : undefined;
   const entries =
     config && Array.isArray(config.ignoreCves) ? config.ignoreCves : [];
   const rules = [];
@@ -563,155 +586,252 @@ function printFindings(heading, records, explain) {
     }
   }
 }
+/**
+ * The entire verdict with no I/O: parsed reports in, classified buckets and an
+ * exit code out. Kept pure on purpose — this is the layer the unit tests drive
+ * from fixtures, because "the gate quietly stopped failing" has no symptom.
+ *
+ * @param {object} input
+ * @param {unknown} input.auditReport parsed `pnpm audit --json`
+ * @param {unknown} input.workspaceListing parsed `pnpm list -r --depth=-1 --json`
+ * @param {unknown} input.closureListing parsed `pnpm list --prod --depth=Infinity`
+ * @param {unknown} input.manifest parsed root package.json (supplies auditConfig)
+ * @param {string} [input.level] blocking severity threshold
+ * @param {string} input.today YYYY-MM-DD an ignore entry is expired strictly before
+ */
+export function evaluateAdvisories({
+  auditReport,
+  workspaceListing,
+  closureListing,
+  manifest,
+  level = DEFAULT_LEVEL,
+  today,
+}) {
+  const records = normalizeAudit(auditReport);
+  const packages = normalizeWorkspace(workspaceListing);
+  const closure = productionClosure(normalizeClosureSource(closureListing));
+  const tokens = new Map(packages.map((pkg) => [pkg.token, pkg]));
+  const { rules, errors: configErrors } = parseIgnoreRules(manifest, today);
+  const usedRuleIds = new Set();
 
-const options = parseArgs(process.argv.slice(2));
+  const threshold = severityRank(level);
+  const buckets = new Map(
+    CLASS_ORDER.map((reach) => [
+      reach,
+      { all: [], atLevel: [], blocked: [], ignored: [] },
+    ]),
+  );
 
-const auditReport =
-  options.auditJson === null
-    ? runPnpmJson(["audit", "--json"], "advisory report")
-    : readJsonFile(options.auditJson, "audit report");
-const workspaceListing =
-  options.workspaceJson === null
-    ? runPnpmJson(
-        ["list", "--recursive", "--depth=-1", "--json"],
-        "workspace package map",
-      )
-    : readJsonFile(options.workspaceJson, "workspace package map");
-const closureListing =
-  options.closureJson === null
-    ? runPnpmJson(
-        [
-          "list",
-          "--prod",
-          "--depth=Infinity",
-          "--json",
-          "--filter",
-          `./${PUBLISHABLE_DIR}/*`,
-        ],
-        "publishable production closure",
-      )
-    : readJsonFile(options.closureJson, "publishable production closure");
-
-const records = normalizeAudit(auditReport);
-const packages = normalizeWorkspace(workspaceListing);
-const closure = productionClosure(normalizeClosureSource(closureListing));
-const tokens = new Map(packages.map((pkg) => [pkg.token, pkg]));
-const { rules, errors: configErrors } = loadIgnoreRules(
-  options.today,
-  options.manifestJson,
-);
-const usedRuleIds = new Set();
-
-const threshold = severityRank(options.level);
-const buckets = new Map(
-  CLASS_ORDER.map((reach) => [
-    reach,
-    { all: [], atLevel: [], blocked: [], ignored: [] },
-  ]),
-);
-
-for (const record of records) {
-  const { reach, why } = classify(record, closure, tokens);
-  const classified = { ...record, reach, why };
-  const bucket = buckets.get(reach);
-  bucket.all.push(classified);
-  if (severityRank(record.severity) < threshold) {
-    continue;
+  for (const record of records) {
+    const { reach, why } = classify(record, closure, tokens);
+    const classified = { ...record, reach, why };
+    const bucket = buckets.get(reach);
+    bucket.all.push(classified);
+    if (severityRank(record.severity) < threshold) {
+      continue;
+    }
+    bucket.atLevel.push(classified);
+    if (!BLOCKING_CLASSES.has(reach)) {
+      continue;
+    }
+    const rule = rules.find((candidate) => record.ids.has(candidate.id));
+    if (rule === undefined) {
+      bucket.blocked.push(classified);
+    } else {
+      usedRuleIds.add(rule.id);
+      bucket.ignored.push({ ...classified, ignoredBy: rule });
+    }
   }
-  bucket.atLevel.push(classified);
-  if (!BLOCKING_CLASSES.has(reach)) {
-    continue;
-  }
-  const rule = rules.find((candidate) => record.ids.has(candidate.id));
-  if (rule === undefined) {
-    bucket.blocked.push(classified);
-  } else {
-    usedRuleIds.add(rule.id);
-    bucket.ignored.push({ ...classified, ignoredBy: rule });
-  }
+
+  const blocked = CLASS_ORDER.flatMap((reach) => buckets.get(reach).blocked);
+  const ignored = CLASS_ORDER.flatMap((reach) => buckets.get(reach).ignored);
+  return {
+    level,
+    records,
+    packages,
+    closure,
+    rules,
+    staleRules: rules.filter((rule) => !usedRuleIds.has(rule.id)),
+    buckets,
+    blocked,
+    ignored,
+    configErrors,
+    // A config error fails the run on its own: an unusable ignore list means the
+    // suppression set is unknown, and an unknown suppression set cannot pass.
+    exitCode: configErrors.length > 0 || blocked.length > 0 ? 1 : 0,
+  };
 }
 
-console.log("Advisory gate — reachability-classified pnpm audit");
-console.log(
-  `  publishable packages : ${packages
-    .filter((pkg) => pkg.publishable)
-    .map((pkg) => pkg.name)
-    .join(", ")}`,
-);
-console.log(
-  `  production closure   : ${closure.size} resolved name@version pairs`,
-);
-console.log(`  advisory findings    : ${records.length}`);
-console.log(`  active ignores       : ${rules.length}`);
+function printReport(result) {
+  const { level } = result;
+  console.log("Advisory gate — reachability-classified pnpm audit");
+  console.log(
+    `  publishable packages : ${result.packages
+      .filter((pkg) => pkg.publishable)
+      .map((pkg) => pkg.name)
+      .join(", ")}`,
+  );
+  console.log(
+    `  production closure   : ${result.closure.size} resolved name@version pairs`,
+  );
+  console.log(`  advisory findings    : ${result.records.length}`);
+  console.log(`  active ignores       : ${result.rules.length}`);
 
-printSummary(buckets, options.level);
+  printSummary(result.buckets, level);
 
-const blocked = CLASS_ORDER.flatMap((reach) => buckets.get(reach).blocked);
-const ignored = CLASS_ORDER.flatMap((reach) => buckets.get(reach).ignored);
+  printFindings(
+    `BLOCKING — ${level}+ reachable from a published package:`,
+    result.blocked,
+    true,
+  );
+  printFindings(
+    "IGNORED — matched an unexpired auditConfig.ignoreCves entry:",
+    result.ignored,
+    true,
+  );
+  printFindings(
+    "ADVISORY — build-time only (root devDependencies), does NOT fail the run:",
+    result.buckets.get(DEV).atLevel,
+    false,
+  );
+  printFindings(
+    "ADVISORY — examples/* only (never published), does NOT fail the run:",
+    result.buckets.get(EXAMPLE).atLevel,
+    false,
+  );
 
-printFindings(
-  `BLOCKING — ${options.level}+ reachable from a published package:`,
-  blocked,
-  true,
-);
-printFindings(
-  "IGNORED — matched an unexpired auditConfig.ignoreCves entry:",
-  ignored,
-  true,
-);
-printFindings(
-  "ADVISORY — build-time only (root devDependencies), does NOT fail the run:",
-  buckets.get(DEV).atLevel,
-  false,
-);
-printFindings(
-  "ADVISORY — examples/* only (never published), does NOT fail the run:",
-  buckets.get(EXAMPLE).atLevel,
-  false,
-);
+  if (result.staleRules.length > 0) {
+    console.log("");
+    console.log(
+      "NOTE — ignore entries that matched nothing (candidates for deletion):",
+    );
+    for (const rule of result.staleRules) {
+      console.log(`  ${pad(rule.id, 24)}expires ${rule.expires}`);
+    }
+  }
 
-const staleRules = rules.filter((rule) => !usedRuleIds.has(rule.id));
-if (staleRules.length > 0) {
+  if (result.configErrors.length > 0) {
+    console.log("");
+    console.log("✗ auditConfig.ignoreCves is not usable as written:");
+    for (const error of result.configErrors) {
+      console.log(`  - ${error}`);
+    }
+  }
+
   console.log("");
-  console.log(
-    "NOTE — ignore entries that matched nothing (candidates for deletion):",
-  );
-  for (const rule of staleRules) {
-    console.log(`  ${pad(rule.id, 24)}expires ${rule.expires}`);
+  if (result.blocked.length > 0) {
+    console.log(
+      `✗ ${result.blocked.length} ${level}+ advisory finding(s) reach a published package.`,
+    );
+    console.log(
+      "  Fix by pinning a patched version (pnpm overrides / catalog), or record an",
+    );
+    console.log(
+      "  auditConfig.ignoreCves entry with a written reason and an expiry date.",
+    );
+  }
+  if (result.exitCode !== 0) {
+    return;
+  }
+
+  console.log(`✓ No ${level}+ advisory reaches a published package.`);
+  const advisoryCount =
+    result.buckets.get(DEV).atLevel.length +
+    result.buckets.get(EXAMPLE).atLevel.length;
+  if (advisoryCount > 0) {
+    console.log(
+      `  ${advisoryCount} ${level}+ finding(s) remain in build-time/example trees —` +
+        " reported above, not blocking.",
+    );
   }
 }
 
-if (configErrors.length > 0) {
-  console.log("");
-  console.log("✗ auditConfig.ignoreCves is not usable as written:");
-  for (const error of configErrors) {
-    console.log(`  - ${error}`);
+/** Gather every input (shelling out to pnpm unless overridden), then report. */
+function main(argv) {
+  const options = parseArgs(argv);
+  const auditReport =
+    options.auditJson === null
+      ? runPnpmJson(["audit", "--json"], "advisory report")
+      : readJsonFile(options.auditJson, "audit report");
+  const workspaceListing =
+    options.workspaceJson === null
+      ? runPnpmJson(
+          ["list", "--recursive", "--depth=-1", "--json"],
+          "workspace package map",
+        )
+      : readJsonFile(options.workspaceJson, "workspace package map");
+  const closureListing =
+    options.closureJson === null
+      ? runPnpmJson(
+          [
+            "list",
+            "--prod",
+            "--depth=Infinity",
+            "--json",
+            "--filter",
+            `./${PUBLISHABLE_DIR}/*`,
+          ],
+          "publishable production closure",
+        )
+      : readJsonFile(options.closureJson, "publishable production closure");
+  const manifest = readJsonFile(
+    options.manifestJson ?? join(ROOT, "package.json"),
+    "root package.json",
+  );
+
+  const result = evaluateAdvisories({
+    auditReport,
+    workspaceListing,
+    closureListing,
+    manifest,
+    level: options.level,
+    today: options.today,
+  });
+  printReport(result);
+  return result.exitCode;
+}
+
+function runCli(argv) {
+  try {
+    return main(argv);
+  } catch (error) {
+    if (error instanceof AdvisoryGateError) {
+      console.error(
+        "\n✗ check-advisories cannot produce a trustworthy result:\n",
+      );
+      for (const line of error.lines) {
+        console.error(`  ${line}`);
+      }
+      console.error("");
+      return 2;
+    }
+    throw error;
   }
 }
 
-console.log("");
-if (blocked.length > 0) {
-  console.log(
-    `✗ ${blocked.length} ${options.level}+ advisory finding(s) reach a published package.`,
-  );
-  console.log(
-    "  Fix by pinning a patched version (pnpm overrides / catalog), or record an",
-  );
-  console.log(
-    "  auditConfig.ignoreCves entry with a written reason and an expiry date.",
-  );
-}
-if (configErrors.length > 0 || blocked.length > 0) {
-  process.exit(1);
+/**
+ * True only when node was pointed at THIS file. `import`ing the module (the unit
+ * test does) must not run the gate; `node scripts/check-advisories.mjs` must.
+ * A misfire in the "not entry" direction would make all five CI call sites print
+ * nothing and pass, so check-advisories.test.ts spawns the real CLI against
+ * fixtures and asserts its exit code — a silent no-op fails there.
+ */
+function isProcessEntry() {
+  const entry = process.argv[1];
+  if (typeof entry !== "string" || entry === "") {
+    return false;
+  }
+  const self = fileURLToPath(import.meta.url);
+  if (resolve(entry) === self) {
+    return true;
+  }
+  try {
+    return realpathSync(entry) === realpathSync(self);
+  } catch {
+    return false;
+  }
 }
 
-console.log(`✓ No ${options.level}+ advisory reaches a published package.`);
-const advisoryCount =
-  buckets.get(DEV).atLevel.length + buckets.get(EXAMPLE).atLevel.length;
-if (advisoryCount > 0) {
-  console.log(
-    `  ${advisoryCount} ${options.level}+ finding(s) remain in build-time/example trees —` +
-      " reported above, not blocking.",
-  );
+if (isProcessEntry()) {
+  process.exit(runCli(process.argv.slice(2)));
 }
-process.exit(0);

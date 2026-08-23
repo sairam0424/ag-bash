@@ -1,0 +1,118 @@
+{
+  "actions": [],
+  "advisories": {
+    "1117911": {
+      "findings": [
+        {
+          "version": "5.6.0",
+          "paths": ["packages__bash>fast-xml-parser"]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-gh4j-gqv2-49f6",
+      "created": "2026-04-22T20:04:17.000Z",
+      "id": 1117911,
+      "npm_advisory_id": null,
+      "overview": "# fast-xml-parser XMLBuilder: Comment and CDATA Injection via Unescaped Delimiters",
+      "reported_by": null,
+      "title": "fast-xml-parser XMLBuilder: XML Comment and CDATA Injection via Unescaped Delimiters",
+      "metadata": null,
+      "cves": ["CVE-2026-41650"],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "fast-xml-parser",
+      "vulnerable_versions": "<5.7.0",
+      "github_advisory_id": "GHSA-gh4j-gqv2-49f6",
+      "recommendation": "Upgrade to version 5.7.0 or later",
+      "patched_versions": ">=5.7.0",
+      "updated": "2026-05-08T21:47:28.000Z",
+      "cvss": {
+        "score": 6.1,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+      },
+      "cwe": ["CWE-91"],
+      "url": "https://github.com/advisories/GHSA-gh4j-gqv2-49f6"
+    },
+    "1123259": {
+      "findings": [
+        {
+          "version": "8.20.0",
+          "paths": [".>vitest>jsdom>ws"]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/websockets/ws/security/advisories/GHSA-96hv-2xvq-fx4p",
+      "created": "2026-06-15T16:34:23.000Z",
+      "id": 1123259,
+      "npm_advisory_id": null,
+      "overview": "### Impact",
+      "reported_by": null,
+      "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+      "metadata": null,
+      "cves": ["CVE-2026-48779"],
+      "access": "public",
+      "severity": "high",
+      "module_name": "ws",
+      "vulnerable_versions": ">=8.0.0 <8.21.0",
+      "github_advisory_id": "GHSA-96hv-2xvq-fx4p",
+      "recommendation": "Upgrade to version 8.21.0 or later",
+      "patched_versions": ">=8.21.0",
+      "updated": "2026-07-13T15:31:39.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": ["CWE-400", "CWE-770", "CWE-1050"],
+      "url": "https://github.com/advisories/GHSA-96hv-2xvq-fx4p"
+    },
+    "1123527": {
+      "findings": [
+        {
+          "version": "8.0.8",
+          "paths": [".>vitest>vite"]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitejs/vite/security/advisories/GHSA-fx2h-pf6j-xcff",
+      "created": "2026-06-15T17:17:45.000Z",
+      "id": 1123527,
+      "npm_advisory_id": null,
+      "overview": "### Summary",
+      "reported_by": null,
+      "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+      "metadata": null,
+      "cves": ["CVE-2026-53571"],
+      "access": "public",
+      "severity": "high",
+      "module_name": "vite",
+      "vulnerable_versions": ">=8.0.0 <=8.0.15",
+      "github_advisory_id": "GHSA-fx2h-pf6j-xcff",
+      "recommendation": "Upgrade to version 8.0.16 or later",
+      "patched_versions": ">=8.0.16",
+      "updated": "2026-07-15T22:05:54.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+      },
+      "cwe": ["CWE-22", "CWE-200"],
+      "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff"
+    }
+  },
+  "muted": [],
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 1,
+      "high": 2,
+      "critical": 0
+    },
+    "dependencies": 870,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 870
+  }
+}

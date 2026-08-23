@@ -1,0 +1,159 @@
+{
+  "actions": [],
+  "advisories": {
+    "1121860": {
+      "findings": [
+        {
+          "version": "4.1.1",
+          "paths": [
+            ".>@changesets/cli>@changesets/read>@changesets/parse>js-yaml"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/nodeca/js-yaml/security/advisories/GHSA-h67p-54hq-rp68",
+      "created": "2026-06-15T17:15:07.000Z",
+      "id": 1121860,
+      "npm_advisory_id": null,
+      "overview": "### Summary",
+      "reported_by": null,
+      "title": "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases",
+      "metadata": null,
+      "cves": ["CVE-2026-53550"],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "js-yaml",
+      "vulnerable_versions": ">=4.0.0 <=4.1.1",
+      "github_advisory_id": "GHSA-h67p-54hq-rp68",
+      "recommendation": "Upgrade to version 4.2.0 or later",
+      "patched_versions": ">=4.2.0",
+      "updated": "2026-06-29T15:06:00.000Z",
+      "cvss": {
+        "score": 5.3,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+      },
+      "cwe": ["CWE-407"],
+      "url": "https://github.com/advisories/GHSA-h67p-54hq-rp68"
+    },
+    "1123897": {
+      "findings": [
+        {
+          "version": "1.1.14",
+          "paths": ["examples__website>eslint>minimatch>brace-expansion"]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/juliangruber/brace-expansion/security/advisories/GHSA-3jxr-9vmj-r5cp",
+      "created": "2026-07-20T20:51:09.000Z",
+      "id": 1123897,
+      "npm_advisory_id": null,
+      "overview": "### Summary",
+      "reported_by": null,
+      "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+      "metadata": null,
+      "cves": ["CVE-2026-13149"],
+      "access": "public",
+      "severity": "high",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": "<1.1.16",
+      "github_advisory_id": "GHSA-3jxr-9vmj-r5cp",
+      "recommendation": "Upgrade to version 1.1.16 or later",
+      "patched_versions": ">=1.1.16",
+      "updated": "2026-07-20T20:51:11.000Z",
+      "cvss": {
+        "score": 5.3,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+      },
+      "cwe": ["CWE-400", "CWE-407"],
+      "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp"
+    },
+    "1123911": {
+      "findings": [
+        {
+          "version": "4.1.1",
+          "paths": [
+            ".>@changesets/cli>@changesets/read>@changesets/parse>js-yaml"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/nodeca/js-yaml/security/advisories/GHSA-52cp-r559-cp3m",
+      "created": "2026-07-20T21:19:09.000Z",
+      "id": 1123911,
+      "npm_advisory_id": null,
+      "overview": "### Impact",
+      "reported_by": null,
+      "title": "js-yaml: YAML merge-key chains can force quadratic CPU consumption",
+      "metadata": null,
+      "cves": ["CVE-2026-59869"],
+      "access": "public",
+      "severity": "high",
+      "module_name": "js-yaml",
+      "vulnerable_versions": ">=4.0.0 <4.3.0",
+      "github_advisory_id": "GHSA-52cp-r559-cp3m",
+      "recommendation": "Upgrade to version 4.3.0 or later",
+      "patched_versions": ">=4.3.0",
+      "updated": "2026-07-20T21:19:10.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": ["CWE-400", "CWE-407"],
+      "url": "https://github.com/advisories/GHSA-52cp-r559-cp3m"
+    },
+    "1124252": {
+      "findings": [
+        {
+          "version": "8.5.10",
+          "paths": [".>vitest>vite>postcss"]
+        },
+        {
+          "version": "8.4.31",
+          "paths": ["examples__website>next>postcss"]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/postcss/postcss/security/advisories/GHSA-6g55-p6wh-862q",
+      "created": "2026-07-23T15:06:16.000Z",
+      "id": 1124252,
+      "npm_advisory_id": null,
+      "overview": "## Summary",
+      "reported_by": null,
+      "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+      "metadata": null,
+      "cves": ["CVE-2026-45623"],
+      "access": "public",
+      "severity": "high",
+      "module_name": "postcss",
+      "vulnerable_versions": "<=8.5.11",
+      "github_advisory_id": "GHSA-6g55-p6wh-862q",
+      "recommendation": "Upgrade to version 8.5.12 or later",
+      "patched_versions": ">=8.5.12",
+      "updated": "2026-07-23T15:06:17.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+      },
+      "cwe": ["CWE-22", "CWE-200"],
+      "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q"
+    }
+  },
+  "muted": [],
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 1,
+      "high": 4,
+      "critical": 0
+    },
+    "dependencies": 870,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 870
+  }
+}
