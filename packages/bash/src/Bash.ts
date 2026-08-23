@@ -1393,13 +1393,40 @@ export class Bash extends EventEmitter {
     };
   }
 
+  /**
+   * Synchronous teardown: tears down the shared state bus and clears the AST
+   * cache. Safe to call repeatedly.
+   *
+   * IMPORTANT: this canNOT flush agent memory to the VFS - persistence is
+   * inherently async, and this method's signature is synchronous. Prefer the
+   * async path (`await using bash = new Bash(...)`, or an explicit
+   * `await bash[Symbol.asyncDispose]()`), which additionally awaits
+   * {@link ServiceContainer.dispose} and therefore persists agent memory.
+   * Calling destroy() alone discards any unflushed agent-memory writes.
+   */
   destroy(): void {
     this.services.sharedBus.destroy();
     this.services.astCache.clear();
   }
 
+  /**
+   * Full async teardown (the `await using` path).
+   *
+   * Runs {@link ServiceContainer.dispose} FIRST - it flushes agent memory to
+   * the VFS and disposes every instantiated disposable service while the shared
+   * bus is still live - then performs the synchronous {@link destroy} teardown.
+   * destroy() runs in a `finally` so a failing flush (e.g. a read-only VFS)
+   * never derails the rest of teardown; the failure is then re-thrown, as an
+   * `AggregateError` when more than one service failed.
+   *
+   * Idempotent: the container's dispose() is a no-op after the first call.
+   */
   async [Symbol.asyncDispose](): Promise<void> {
-    await this.destroy();
+    try {
+      await this.services.dispose();
+    } finally {
+      this.destroy();
+    }
   }
 }
 
