@@ -3,7 +3,7 @@
 
 
 
-export const version = "5.0.0";
+export const version = "6.0.4";
 
 // Command outputs
 export const CMD_ABOUT = `ag-bash v${version}
@@ -34,6 +34,10 @@ export const FILE_README = `# Ag-Bash: The AI-Native Shell Monorepo
 
 [![NPM Version](https://img.shields.io/npm/v/@ag-bash/bash.svg)](https://www.npmjs.com/package/@ag-bash/bash)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/sairam0424/ag-bash/blob/main/LICENSE)
+[![Quality](https://github.com/sairam0424/ag-bash/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/sairam0424/ag-bash/actions/workflows/quality.yml)
+[![Tests](https://github.com/sairam0424/ag-bash/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/sairam0424/ag-bash/actions/workflows/tests.yml)
+[![CodeQL](https://github.com/sairam0424/ag-bash/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/sairam0424/ag-bash/actions/workflows/codeql.yml)
+[![Bench](https://github.com/sairam0424/ag-bash/actions/workflows/bench.yml/badge.svg?branch=main)](https://github.com/sairam0424/ag-bash/actions/workflows/bench.yml)
 
 Ag-Bash is a production-grade, sandboxed Bash environment designed specifically for AI agents. It provides a virtualized Unix-like experience entirely in-process, featuring an in-memory filesystem, integrated runtimes for Python and JavaScript, and full support for modern agentic protocols.
 
@@ -49,23 +53,34 @@ This repository is organized into a modular monorepo to support independent vers
 
 ---
 
-## What's New in v4.1
+## What's New in v6.0.0
 
 | Feature | Description |
 | :--- | :--- |
-| **Agent RunLoop** | Autonomous LLM execution loop — feed a goal, get back a completed task. Supports tool calling, streaming, and configurable termination policies. |
-| **Self-Healing** | Typo correction and auto-retry. When a command fails due to a mistyped name or missing dependency, the engine repairs the environment and retries transparently. |
-| **Discoverability** | Built-in \`commands\`, \`about\`, and \`doctor\` tools let agents introspect the shell's capabilities, health, and configuration without guessing. |
+| **ExecutionPipeline** | The composable 6-stage pipeline (normalize, parse, transform, sandbox, interpret, persist) is now the sole execution engine. The legacy monolith path has been removed. |
+| **Fork-Speculation** | \`bash.fork()\` creates isolated copy-on-write branches; \`bash.speculate()\` runs N candidates in parallel and keeps the winner. Core moat for agentic workflows. |
+| **Observations at Source** | Every command produces typed \`Observation\` objects with \`code\` and \`confidence\` fields, surfacing issues without blocking execution. |
+| **True Streaming** | \`bash.execStream()\` yields stdout/stderr chunks via AsyncGenerator as statements produce output, byte-identical to buffered exec. |
+| **RunLoop v2** | Extended with \`mode\`, \`healer\`, and \`memory\` configuration. AgentMemory now persists across sessions. |
+| **MCP 2025-06-18** | Protocol bumped to latest spec with back-compat preserved for 2024-11-05 clients. Code Mode slice for structured output. |
+| **Destructive Detection** | AST-based gate detects \`rm -rf /\`, fork bombs, and decode-pipe-to-shell patterns structurally. Default policy: WARN. |
+| **OTEL at Exec Level** | Optional \`AgBashTracer\` wraps each \`exec()\` call in an OpenTelemetry span. Zero overhead when \`@opentelemetry/api\` is absent. |
 
 ---
 
-## Installation
+## Installation & Distribution
+
+**Requires Node.js >=20.6.0.** For full ESM-hook security hardening, Node.js >=23.5 is recommended.
+
+Ag-Bash ships across multiple channels (current version **6.0.4**, synchronized across all npm packages):
+
+### npm library
 
 \`\`\`bash
-# Latest (recommended)
-npm install @ag-bash/bash
+# Core engine (recommended)
+npm i @ag-bash/bash
 
-# With MCP server
+# With the standalone MCP server
 npm install @ag-bash/mcp-server
 \`\`\`
 
@@ -76,6 +91,36 @@ import { Bash, createShell } from "@ag-bash/bash";
 import { RunLoop } from "@ag-bash/bash/agent-runtime";
 import { createTestBash } from "@ag-bash/bash/testing";
 \`\`\`
+
+### MCP server (npx / MCP Registry)
+
+The MCP server exposes 70 tools over stdio. Add it to Claude Code in one command (no global install needed):
+
+\`\`\`bash
+claude mcp add ag-bash -- npx -y @ag-bash/mcp-server
+# or run it directly
+npx @ag-bash/mcp-server
+\`\`\`
+
+It is also published to the [MCP Registry](https://registry.modelcontextprotocol.io) as \`io.github.sairam0424/ag-bash\`.
+
+> A submission to the Docker MCP Catalog (\`docker/mcp-registry\`) is currently in review.
+
+### Claude Code plugin
+
+\`\`\`text
+/plugin marketplace add sairam0424/ag-bash
+/plugin install ag-bash@ag-bash
+\`\`\`
+
+### Homebrew (macOS)
+
+\`\`\`bash
+brew tap sairam0424/tap
+brew install ag-bash
+\`\`\`
+
+This also installs the \`ag-shell\` and \`ag-bash-mcp\` binaries.
 
 ---
 
@@ -109,9 +154,11 @@ For human-in-the-loop debugging and interactive use, install the Ag-Bash suite g
 #### Via Homebrew (macOS)
 
 \`\`\`bash
-brew tap ag-bash/homebrew-tap
+brew tap sairam0424/tap
 brew install ag-bash
 \`\`\`
+
+This installs the \`ag-bash\`, \`ag-shell\`, and \`ag-bash-mcp\` binaries.
 
 #### Via NPM (Cross-platform)
 
@@ -123,20 +170,20 @@ npm install -g @ag-bash/bash @ag-bash/mcp-server
 
 ### For AI Agents (MCP)
 
-To provide a bash environment to your agent (e.g., in Claude Desktop or Cursor):
+To provide a bash environment to your agent (e.g., in Claude Code, Claude Desktop, or Cursor), register the MCP server via \`npx\` — no global install required:
 
 \`\`\`bash
-npm install -g @ag-bash/mcp-server
+claude mcp add ag-bash -- npx -y @ag-bash/mcp-server
 \`\`\`
 
-Then, add the server to your MCP configuration:
+Or add the server to your MCP configuration manually:
 
 \`\`\`json
 {
   "mcpServers": {
     "ag-bash": {
-      "command": "ag-bash-mcp",
-      "args": []
+      "command": "npx",
+      "args": ["-y", "@ag-bash/mcp-server"]
     }
   }
 }
@@ -146,8 +193,9 @@ Then, add the server to your MCP configuration:
 
 ## 🛡️ Key Features
 
-- **v4.1 Architecture**: RunLoop execution model, Tagged Template literals for ergonomic shell scripting, and Self-Healing error recovery with automatic retry and environment repair.
-- **v3.0 Architecture** *(Breaking)*: Dependency Injection via \`ServiceContainer\`, restructured \`BashOptions\` API with grouped sub-objects, and zero singletons.
+- **v6.0 Architecture**: ExecutionPipeline as sole engine, fork-speculation, observations-at-source, true streaming, OTEL tracing, destructive-detection gate.
+- **v6.0 RunLoop**: Autonomous LLM execution loop with observation forwarding, AgenticHealer self-correction, AgentMemory persistence, plan-mode write-gating, and BudgetManager stopping conditions.
+- **v3.0 DI** *(Breaking)*: Dependency Injection via \`ServiceContainer\`, restructured \`BashOptions\` API with grouped sub-objects, and zero singletons.
 - **FNV-1a ASTCache**: Non-cryptographic hashing with true LRU eviction for high-frequency script execution.
 - **Pipeline Early Termination**: Static AST analysis detects \`head -N\` patterns and truncates upstream output.
 - **Type-Safe Core**: Eliminated \`any\` types from core services, interpreter, and error hierarchy (\`unknown\` throughout).
@@ -176,7 +224,9 @@ Then, add the server to your MCP configuration:
 
 | Version | Codename | Highlights |
 | :--- | :--- | :--- |
-| **v4.1** | *Runtime* | Agent RunLoop, Trap signals, Self-Healing error recovery, OpenTelemetry spans |
+| **v6.0** | *Pipeline* | ExecutionPipeline default, fork-speculation, streaming, OTEL, destructive gate, Node >=20.6 |
+| **v5.0** | *Hardened* | Lazy ServiceContainer, defense-in-depth default ON, SSRF prevention, ASTCache 64-bit FNV-1a |
+| **v4.1** | *Runtime* | Introduced Agent RunLoop, Trap signal handlers, Self-Healing recovery, and OpenTelemetry spans (default/extended in v6.0) |
 | **v3.0** | *Breaking Redesign* | ServiceContainer DI, new \`BashOptions\` grouped API, zero singletons |
 | **v2.x** | *Nexus Prime* | Agentic tools (\`ag-hover\`, \`ag-explain\`), MCP integration, Planning Mode |
 | **v1.x** | *Genesis* | Initial release, core interpreter, in-memory filesystem, basic builtins |
@@ -395,12 +445,14 @@ limitations under the License.
 
 export const FILE_PACKAGE_JSON = `{
   "name": "@ag-bash/bash",
-  "version": "5.0.0",
-  "description": "Unified Agentic Bash for Ag-Bash",
+  "version": "6.0.4",
+  "description": "AI-native bash interpreter in TypeScript — a sandboxed, in-process POSIX shell engine for AI agents, with 110+ builtins, WASM Python/JS/SQLite runtimes, fork-speculation, an MCP server, and an agent terminal bridge.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sairam0424/ag-bash.git"
+    "url": "https://github.com/sairam0424/ag-bash.git",
+    "directory": "packages/bash"
   },
+  "homepage": "https://github.com/sairam0424/ag-bash/tree/main/packages/bash#readme",
   "type": "module",
   "main": "dist/bundle/index.js",
   "types": "dist/index.d.ts",
@@ -436,16 +488,20 @@ npm install @ag-bash/bash
 \`\`\`
 
 \`\`\`typescript
-import { createBashTool } from "@ag-bash/bash";
+import { Bash, createBashTool } from "@ag-bash/bash";
 import { generateText } from "ai";
 
-const bashTool = createBashTool({
+const bash = new Bash({
   files: { "/data/users.json": '[{"name": "Alice"}, {"name": "Bob"}]' },
 });
 
+// createBashTool takes the sandbox and returns a Vercel AI SDK tool set
+// keyed by tool name ("bash", "read_file", "grep_search", …).
+const { tools } = createBashTool({ sandbox: bash });
+
 const result = await generateText({
   model: "anthropic/claude-sonnet-4",
-  tools: { bash: bashTool },
+  tools,
   prompt: "Count the users in /data/users.json",
 });
 \`\`\`
@@ -474,21 +530,43 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 3. **No network by default**: \`curl\` doesn't exist unless you configure \`network\` options with URL allowlists.
 
-4. **No binaries/WASM**: Only built-in commands work. You cannot run node, python, or other binaries.
+4. **No host binaries**: Only built-in commands work — there is no \`PATH\` lookup, so arbitrary host executables cannot be launched. The \`python3\`/\`python\` and \`js-exec\` built-ins run inside WASM sandboxes (CPython and QuickJS) and are disabled unless you opt in via \`runtimes\`.
 
 5. **ReadWriteFs root separation**: If you use \`ReadWriteFs\`, point it at a workspace directory, not at the installed \`@ag-bash/bash\` package or other trusted runtime code.
 
 ## Available Commands
 
-**Text processing**: \`awk\`, \`cat\`, \`column\`, \`comm\`, \`cut\`, \`egrep\`, \`expand\`, \`fgrep\`, \`fold\`, \`grep\`, \`head\`, \`join\`, \`nl\`, \`paste\`, \`rev\`, \`rg\`, \`sed\`, \`sort\`, \`strings\`, \`tac\`, \`tail\`, \`tr\`, \`unexpand\`, \`uniq\`, \`wc\`, \`xargs\`
+112 built-in commands, plus \`curl\` (network, opt-in) and two WASM runtimes.
 
-**Data processing**: \`jq\` (JSON), \`js-exec\` (JavaScript/TypeScript via QuickJS), \`python3\`/\`python\` (Python via WASM/CPython), \`sqlite3\` (SQLite), \`xan\` (CSV), \`yq\` (YAML/XML/TOML/CSV)
+**Text processing**: \`awk\`, \`cat\`, \`column\`, \`comm\`, \`cut\`, \`egrep\`, \`expand\`, \`fgrep\`, \`fold\`, \`grep\`, \`head\`, \`join\`, \`nl\`, \`paste\`, \`rev\`, \`rg\`, \`sed\`, \`sort\`, \`strings\`, \`tac\`, \`tail\`, \`tee\`, \`tr\`, \`unexpand\`, \`uniq\`, \`wc\`, \`xargs\`
+
+**Data processing**: \`jq\` (JSON), \`yq\` (YAML/XML/TOML/CSV/INI), \`xan\` (CSV), \`sqlite3\` (SQLite), \`js-exec\` (JavaScript/TypeScript via QuickJS), \`python3\` and \`python\` (CPython via WASM)
 
 **File operations**: \`basename\`, \`chmod\`, \`cp\`, \`dirname\`, \`du\`, \`file\`, \`find\`, \`ln\`, \`ls\`, \`mkdir\`, \`mv\`, \`od\`, \`pwd\`, \`readlink\`, \`rm\`, \`rmdir\`, \`split\`, \`stat\`, \`touch\`, \`tree\`
 
-**Utilities**: \`ag-analyze\`, \`ag-diff\`, \`ag-edit\`, \`ag-explain\`, \`ag-find-symbol\`, \`ag-hover\`, \`ag-mcp\`, \`ag-notebook\`, \`ag-plan\`, \`ag-snapshot\`, \`ag-todo\`, \`alias\`, \`base64\`, \`bash\`, \`clear\`, \`curl\`, \`date\`, \`diff\`, \`echo\`, \`env\`, \`expr\`, \`false\`, \`gzip\`, \`gunzip\`, \`hello\`, \`help\`, \`history\`, \`hostname\`, \`html-to-markdown\`, \`md5sum\`, \`printenv\`, \`printf\`, \`seq\`, \`sh\`, \`sha1sum\`, \`sha256sum\`, \`sleep\`, \`tar\`, \`tee\`, \`time\`, \`timeout\`, \`true\`, \`unalias\`, \`which\`, \`whoami\`, \`zcat\`
+**Archives, encoding and hashing**: \`base64\`, \`gunzip\`, \`gzip\`, \`md5sum\`, \`sha1sum\`, \`sha256sum\`, \`tar\`, \`zcat\`
 
-All commands support \`--help\` for usage details.
+**Shell and environment**: \`alias\`, \`bash\`, \`clear\`, \`echo\`, \`env\`, \`expr\`, \`false\`, \`history\`, \`hostname\`, \`printenv\`, \`printf\`, \`seq\`, \`sh\`, \`true\`, \`unalias\`, \`whoami\`
+
+**Time and control**: \`date\`, \`sleep\`, \`time\`, \`timeout\`
+
+**Comparison and conversion**: \`diff\`, \`html-to-markdown\`
+
+**Introspection**: \`about\`, \`commands\`, \`doctor\`, \`hello\`, \`help\`, \`which\`
+
+**Version control**: \`git\` — in-VFS init / add / commit / log tracking
+
+**Network** (opt-in, requires a URL allowlist): \`curl\`
+
+**Code intelligence**: \`ag-analyze\`, \`ag-explain\`, \`ag-find-symbol\`, \`ag-hover\`, \`ag-references\`
+
+**Editing, diffing and conversion**: \`ag-convert\`, \`ag-diff\`, \`ag-edit\`, \`ag-notebook\`, \`ag-snapshot\`
+
+**Agentic search**: \`ag-find-files\`, \`ag-glob\`, \`ag-grep\`
+
+**Agent orchestration**: \`ag-cron\`, \`ag-list-agents\`, \`ag-mcp\`, \`ag-message\`, \`ag-plan\`, \`ag-spawn\`, \`ag-task\`, \`ag-team\`, \`ag-todo\`, \`ag-wait\`, \`ag-worktree\`
+
+All commands support \`--help\` for usage details. \`node\` is accepted as an alias that redirects to \`js-exec\`.
 
 ## Tools by File Format
 
