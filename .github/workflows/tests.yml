@@ -217,12 +217,55 @@ jobs:
           path: packages
       - run: pnpm --filter @ag-bash/mcp-server test
 
+  # Protocol E2E gate — scripts/e2e-verify.sh.
+  #
+  # CLAUDE.md ("E2E First: Always verify changes with `bash scripts/e2e-verify.sh`",
+  # plus the workspace command list) and AGENTS.md ("Run `bash scripts/e2e-verify.sh`
+  # before protocol-affecting commits") both treat this script as mandatory, yet no
+  # workflow in .github/workflows invoked it — the one gate the docs call mandatory
+  # was enforced by contributor memory only. Wired here, on the BLOCKING path,
+  # because that is what those docs already promise.
+  #
+  # It earns the blocking slot: it is the only check that exercises the two
+  # published entrypoints together over real stdio. It runs
+  # packages/bash/dist/bin/ag-bash.js as a process, then speaks JSON-RPC to
+  # packages/mcp-server/dist/index.js and asserts the `initialize` handshake plus
+  # session persistence ACROSS two separate tools/call round-trips. The `mcp` job
+  # above runs the mcp-server suite in-process, so it cannot see a missing/renamed
+  # bundle entrypoint, a broken shebang, or state that fails to survive between
+  # calls — the v6.0.0/v6.0.2-class packaging defects.
+  #
+  # Deliberately a separate job, not a step appended to `mcp`: it must appear under
+  # its own name in the checks list, and it is added to `gate.needs` below. That
+  # second part is the whole point — `gate` is the single required status check, so
+  # a job left out of its `needs` runs but cannot fail the merge, which is the same
+  # advisory-gate defect this job exists to remove.
+  #
+  # No `lfs: true`, unlike its siblings: the script never invokes python3, so it
+  # does not need vendor/cpython-emscripten/python.wasm. The `dist` artifact
+  # carries both entrypoints and the script launches both via `node`, so the
+  # executable bit that upload-artifact drops is irrelevant here.
+  e2e-verify:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: packages
+      - run: bash scripts/e2e-verify.sh
+
   # Single always-run aggregator. Mark THIS as the required status check in the
   # branch ruleset (not the individual matrix legs, whose names change and whose
   # paths-ignore skips would otherwise wedge a "pending" required check forever).
   gate:
     if: always()
-    needs: [build, unit, coverage, wasm, comparison, mcp]
+    needs: [build, unit, coverage, wasm, comparison, mcp, e2e-verify]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

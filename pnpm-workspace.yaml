@@ -22,4 +22,35 @@ overrides:
   brace-expansion@5: ">=5.0.9"
   fast-xml-builder@<1.1.7: ">=1.1.7"
   sanitize-html@2.17.3: ">=2.17.4"
+  # esbuild: belt-and-braces, NOT the mechanism holding the floor.
+  #
+  # An override is the sanctioned remediation for a TRANSITIVE dependency you do
+  # not declare. esbuild is not that: it is a DIRECT devDependency of three
+  # manifests we own — ./package.json, packages/bash/package.json and
+  # packages/mcp-server/package.json — and it bundles the shipped dist/, so it is
+  # a build-time dependency with a path to a poisoned published artifact
+  # (scripts/check-advisories.mjs, "WHAT THIS GATE NO LONGER CATCHES" item 1,
+  # records that a hostile esbuild only WARNs there).
+  #
+  # All three used to DECLARE `^0.27.2`. esbuild is pre-1.0, so a caret pins the
+  # minor: `^0.27.2` means `>=0.27.2 <0.28.0` and can therefore NEVER satisfy the
+  # >=0.28.1 floor — no patch release inside the declared range reaches it. This
+  # override was consequently the only thing supplying a patched esbuild, which
+  # pnpm-lock.yaml showed plainly: all three importers recorded
+  # `specifier: '>=0.28.1'` (the rewritten range) and the declared `^0.27.2`
+  # appeared nowhere. Delete the line and pnpm resolves 0.27.x below the floor,
+  # with no error and no gate failure — `pnpm audit` is non-blocking for root
+  # devDependencies by design (quality.yml `advisories-report`).
+  #
+  # Fixed by raising the DECLARED ranges to `^0.28.1` so the safe version is what
+  # the project actually asks for. This line is now a redundant second lock on
+  # our own declarations rather than the primary one, and it stays because it is
+  # still the only guard for an esbuild arriving transitively. Today none does:
+  # the sole non-importer reference in pnpm-lock.yaml is vite@8.0.8's OPTIONAL
+  # peerDependency `esbuild: '>=0.28.1'`, satisfied by our own instance under
+  # `autoInstallPeers: true` — so it cannot pull a second copy.
+  #
+  # All three declarations are now `^0.28.1` (root, packages/bash,
+  # packages/mcp-server) and the lockfile records `specifier: ^0.28.1` /
+  # `version: 0.28.1` for each, so no importer depends on this line any more.
   esbuild@<0.28.1: ">=0.28.1"

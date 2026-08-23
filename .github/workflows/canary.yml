@@ -52,6 +52,62 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter @ag-bash/bash test:slow
 
+  # From-scratch example-consumer canary — packages/bash's `test:examples`, which
+  # until now was referenced by NO workflow (it existed only as an unused script).
+  #
+  # NIGHTLY + NON-BLOCKING, deliberately, for four reasons:
+  #   1. test:examples is `cd ../../examples/cjs-consumer && pnpm install
+  #      --no-frozen-lockfile && npx tsc --noEmit`. That install is NOT scoped to
+  #      the one example: invoked from a workspace subdirectory pnpm still reports
+  #      `Scope: all 8 workspace projects` (measured), so it re-resolves the whole
+  #      monorepo against the registry and `--no-frozen-lockfile` lets it REWRITE
+  #      pnpm-lock.yaml. A registry-resolving, lockfile-mutating step must not gate
+  #      a PR, and it directly contradicts the `pnpm install --frozen-lockfile`
+  #      that .github/actions/setup just performed in the same job.
+  #   2. Because that resolve is whole-workspace, it reaches examples/website,
+  #      which pins `next: 16.2.0-canary.26`. A canary version can be retagged or
+  #      unpublished at any time, so this lane can go red with zero change of ours
+  #      — the recurring-condition class scripts/check-advisories.mjs was rewritten
+  #      to stop wedging releases on. (examples/cjs-consumer itself depends only on
+  #      `@ag-bash/bash: workspace:*`; the canary exposure is indirect, via the
+  #      workspace-wide install, not via the example's own manifest.)
+  #   3. examples/cjs-consumer declares no typescript of its own. `npx tsc` does
+  #      resolve locally — npm-exec walks ancestor node_modules/.bin and finds the
+  #      ROOT devDependency (measured: TypeScript 5.9.3, no registry fetch) — but
+  #      that means the lane's compiler version is an implicit, undeclared
+  #      coupling to the root manifest. A gate should not silently change compiler
+  #      on someone else's `typescript` bump.
+  #   4. It is KNOWN RED today, measured not assumed: running the lane's own
+  #      `tsc --noEmit` in examples/cjs-consumer exits 2 with
+  #      `index.ts(1,22): error TS1479`, the same CJS-require/ESM export-map gap
+  #      examples.yml records at its 2026-06-03 baseline and runs with
+  #      continue-on-error for. A hard gate here would be permanently red, which
+  #      trains people to ignore it — the failure mode this whole exercise is
+  #      about. Flip to blocking when TS1479 is fixed (that is also the trigger
+  #      for un-continue-on-error'ing examples.yml's cjs-consumer step).
+  #
+  # What it adds over examples.yml's `cjs-consumer-example typecheck`: that job
+  # typechecks against the already-installed frozen tree, whereas this resolves
+  # and installs from scratch — the dimension that catches a published-range or
+  # lockfile-drift break. Nightly is the right home for exactly that.
+  #
+  # No `lfs: true`: neither the build nor a CJS typecheck reads
+  # vendor/cpython-emscripten/python.wasm (packages/bash `build:worker` keeps it
+  # --external, and `postinstall` copies only from node_modules).
+  examples-fresh-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup
+      # The example consumes @ag-bash/bash's built types (dist/index.d.cts), so
+      # the workspace must be built before the consumer typecheck runs.
+      - run: pnpm build
+      - run: pnpm --filter @ag-bash/bash test:examples
+
   audit-drift:
     runs-on: ubuntu-latest
     timeout-minutes: 10
