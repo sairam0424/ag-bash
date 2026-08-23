@@ -264,6 +264,10 @@ const EMPTY_STDIN_PRODUCES_OUTPUT: ReadonlySet<string> = new Set([
   "sha256sum",
   "sha512sum",
   "cksum",
+  // `wc` counts, and a count of nothing is still a number: real bash prints
+  // "0" for `printf '' | wc -c` (and "0 0 0" for bare `wc`). Every wc form
+  // emits output, so it is safe to key by command name here.
+  "wc",
 ]);
 
 /**

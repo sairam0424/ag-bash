@@ -3,14 +3,32 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
+import { InMemoryFs } from "../in-memory-fs/in-memory-fs.js";
+import { MountableFs } from "../mountable-fs/mountable-fs.js";
 import { ReadWriteFs } from "./read-write-fs.js";
 
 /**
  * Test piping with ReadWriteFs (real filesystem)
  * This test suite validates that ag-bash can handle large data through pipes
  * when using ReadWriteFs backed by the real filesystem.
+ *
+ * Topology note: `ReadWriteFs` is host-backed and pure-async — it exposes no
+ * synchronous `mkdirSync`/`writeFileSync`, so it cannot serve as the
+ * `MountableFs` *base*. `Bash` runs `initFilesystem()` in its constructor to
+ * create `/bin`, `/usr/bin`, `/tmp`, `/dev` and `/proc` via sync mkdir; with a
+ * pure-async base that throws before any test body runs. The supported way to
+ * expose a host directory is to MOUNT the `ReadWriteFs` at a subpath over an
+ * `InMemoryFs` base — the pattern documented on `MountableFs` and used by
+ * `Bash.usePersistence()` and the runtime error-forwarding leak probes.
+ *
+ * So: files are written through the raw `ReadWriteFs` (root-relative, i.e.
+ * straight onto the real temp dir) and read back through the shell at
+ * `${MOUNT}/...`, which routes MountableFs -> ReadWriteFs -> real filesystem.
  */
 describe("ReadWriteFs - Piping with large data", () => {
+  /** Virtual path the host-backed ReadWriteFs is mounted at. */
+  const MOUNT = "/work";
+
   let tempDir: string;
   let fs: ReadWriteFs;
   let bash: Bash;
@@ -20,9 +38,15 @@ describe("ReadWriteFs - Piping with large data", () => {
     tempDir = await mkdtemp(join(tmpdir(), "bash-test-"));
     console.log("Created temp dir:", tempDir);
 
-    // Use ReadWriteFs with real filesystem
+    // Use ReadWriteFs with real filesystem, mounted over an in-memory base so
+    // that filesystem init (/bin, /dev, /proc) has a sync-capable root.
     fs = new ReadWriteFs({ root: tempDir, allowSymlinks: true });
-    bash = new Bash({ fs });
+    bash = new Bash({
+      fs: new MountableFs({
+        base: new InMemoryFs(),
+        mounts: [{ mountPoint: MOUNT, filesystem: fs }],
+      }),
+    });
   });
 
   afterAll(async () => {
@@ -47,7 +71,7 @@ describe("ReadWriteFs - Piping with large data", () => {
     await fs.writeFile("/data.txt", largeText);
 
     // Test piping through cat
-    const result = await bash.exec("cat /data.txt | wc -l");
+    const result = await bash.exec(`cat ${MOUNT}/data.txt | wc -l`);
 
     console.log("Result stdout:", result.stdout.trim());
     console.log("Result stderr:", result.stderr);
@@ -66,7 +90,7 @@ describe("ReadWriteFs - Piping with large data", () => {
     await fs.writeFile("/data2.txt", largeText);
 
     // Test direct file access
-    const result = await bash.exec("wc -l /data2.txt");
+    const result = await bash.exec(`wc -l ${MOUNT}/data2.txt`);
 
     console.log("Result stdout:", result.stdout.trim());
     console.log("Result exitCode:", result.exitCode);
@@ -84,7 +108,7 @@ describe("ReadWriteFs - Piping with large data", () => {
     await fs.writeFile("/small.txt", smallText);
 
     // Test piping through cat
-    const result = await bash.exec("cat /small.txt | wc -l");
+    const result = await bash.exec(`cat ${MOUNT}/small.txt | wc -l`);
 
     console.log("Result stdout:", result.stdout.trim());
     console.log("Result exitCode:", result.exitCode);
@@ -106,7 +130,9 @@ describe("ReadWriteFs - Piping with large data", () => {
     await fs.writeFile("/medium.txt", mediumText);
 
     // Test piping through multiple commands
-    const result = await bash.exec("cat /medium.txt | sort | uniq | wc -l");
+    const result = await bash.exec(
+      `cat ${MOUNT}/medium.txt | sort | uniq | wc -l`,
+    );
 
     console.log("Result stdout:", result.stdout.trim());
     console.log("Result exitCode:", result.exitCode);
@@ -130,7 +156,7 @@ describe("ReadWriteFs - Piping with large data", () => {
     await fs.writeFile("/grep-test.txt", largeText);
 
     // Test grep with wc
-    const result = await bash.exec("grep MATCH /grep-test.txt | wc -l");
+    const result = await bash.exec(`grep MATCH ${MOUNT}/grep-test.txt | wc -l`);
 
     console.log("Result stdout:", result.stdout.trim());
     console.log("Result exitCode:", result.exitCode);
@@ -151,7 +177,7 @@ describe("ReadWriteFs - Piping with large data", () => {
     await fs.writeFile("/binary.bin", binaryData);
 
     // Test wc -c (byte count)
-    const result = await bash.exec("wc -c /binary.bin");
+    const result = await bash.exec(`wc -c ${MOUNT}/binary.bin`);
 
     console.log("Result stdout:", result.stdout.trim());
     console.log("Result exitCode:", result.exitCode);
