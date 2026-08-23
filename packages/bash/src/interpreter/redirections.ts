@@ -105,6 +105,75 @@ function parseRwFdContent(fdContent: string): {
 }
 
 /**
+ * Encode read-write file descriptor content (the `exec N<>file` form).
+ * Mirrors `parseRwFdContent` above and the encoder in `builtins/read.ts`.
+ */
+function encodeRwFdContent(
+  path: string,
+  position: number,
+  content: string,
+): string {
+  return `__rw__:${path.length}:${path}:${position}:${content}`;
+}
+
+/**
+ * Resolve what `N>&M` / `N<&M` should store on descriptor N, given source M.
+ *
+ * An explicitly-opened descriptor wins (fd 1 may itself be pointing at a file),
+ * then the implicit std streams, and finally "not open" -> null. Mirrors the
+ * lookup order already used by the `N>&M-` move branch below.
+ */
+function resolveDupSource(
+  ctx: InterpreterContext,
+  sourceFd: number,
+): string | null {
+  const existing = ctx.state.fileDescriptors?.get(sourceFd);
+  if (existing !== undefined) {
+    return existing;
+  }
+  if (sourceFd === 1 || sourceFd === 2) {
+    return `__dupout__:${sourceFd}`;
+  }
+  if (sourceFd === 0) {
+    return "__dupin__:0";
+  }
+  return null;
+}
+
+/**
+ * True when `target` is a bare decimal descriptor number (`"3"`), as opposed to
+ * a filename that merely starts with digits (`"3x"`, `"03"`). `N>&word` where
+ * word is not a descriptor number is a file redirect in bash, so the strict
+ * check keeps those two shapes apart.
+ */
+function asDescriptorNumber(target: string): number | null {
+  const parsed = Number.parseInt(target, 10);
+  if (Number.isNaN(parsed) || String(parsed) !== target) {
+    return null;
+  }
+  return parsed;
+}
+
+/**
+ * Register a numbered descriptor (N >= 3), enforcing `maxFileDescriptors`.
+ * Re-opening an already-open descriptor replaces its target rather than
+ * allocating, so the limit is only checked for genuinely new descriptors.
+ */
+function registerNumberedFd(
+  ctx: InterpreterContext,
+  fd: number,
+  value: string,
+): void {
+  if (!ctx.state.fileDescriptors) {
+    ctx.state.fileDescriptors = new Map();
+  }
+  if (!ctx.state.fileDescriptors.has(fd)) {
+    checkFdLimit(ctx);
+  }
+  ctx.state.fileDescriptors.set(fd, value);
+}
+
+/**
  * Pre-expanded redirect targets, keyed by index into the redirections array.
  * This allows us to expand redirect targets (including side effects) before
  * executing a function body, then apply the redirections after.
@@ -552,6 +621,11 @@ export async function applyRedirections(
           // maxFileDescriptors limit was never enforced for explicit numeric FDs.
           // Register the FD and enforce the limit (checkFdLimit throws an
           // ExecutionLimitError whose message contains "file descriptors").
+          //
+          // KNOWN GAP: registration is unconditional, so a numeric fd opened by a
+          // NON-exec command leaks into the rest of the script (spec case
+          // redirect.test.sh ": 9> fdleak"). Scoping it needs the same missing
+          // signal as the `>&-` close above: whether this is a bare `exec`.
           if (!ctx.state.fileDescriptors) {
             ctx.state.fileDescriptors = new Map();
           }
@@ -651,17 +725,72 @@ export async function applyRedirections(
         break;
       }
 
+      case "<": {
+        // `exec N<file` (N >= 3) opens the file on a numbered descriptor so
+        // later `<&N` reads can find it. fd 0 (`< file`) is plain stdin and is
+        // wired up by executeSimpleCommand, which also reports a missing file.
+        const fd = redir.fd ?? 0;
+        if (fd < 3) {
+          break;
+        }
+        const filePath = ctx.fs.resolvePath(ctx.state.cwd, target);
+        let content: string;
+        try {
+          content = await ctx.fs.readFile(filePath);
+        } catch {
+          stderr += `bash: ${target}: No such file or directory\n`;
+          exitCode = 1;
+          break;
+        }
+        registerNumberedFd(ctx, fd, content);
+        break;
+      }
+
+      case "<>": {
+        // `exec N<>file` (N >= 3) opens the file for read/write WITHOUT
+        // truncating it, creating it when absent. Reads start at offset 0 and
+        // the `read` builtin advances the stored position.
+        const fd = redir.fd ?? 0;
+        if (fd < 3) {
+          break;
+        }
+        const filePath = ctx.fs.resolvePath(ctx.state.cwd, target);
+        let content: string;
+        try {
+          content = await ctx.fs.readFile(filePath);
+        } catch {
+          content = "";
+          try {
+            await ctx.fs.writeFile(filePath, "", "binary");
+          } catch {
+            stderr += `bash: ${target}: No such file or directory\n`;
+            exitCode = 1;
+            break;
+          }
+        }
+        registerNumberedFd(ctx, fd, encodeRwFdContent(filePath, 0, content));
+        break;
+      }
+
       case ">&":
       case "<&": {
         // In bash, <& and >& are essentially the same for FD duplication
-        // 1<&2 and 1>&2 both make fd 1 point to where fd 2 points
-        const fd = redir.fd ?? 1; // Default to stdout (fd 1)
+        // 1<&2 and 1>&2 both make fd 1 point to where fd 2 points.
+        // The implicit descriptor differs though: `>&N` defaults to stdout,
+        // `<&N` defaults to STDIN.
+        const fd = redir.fd ?? (redir.operator === "<&" ? 0 : 1);
         // Handle >&- or <&- close operation
         // NOTE: For command-level redirections, FD close is TEMPORARY - it only
         // affects the command during its execution. By the time applyRedirections
         // is called, the command has already completed, so we should NOT modify
         // the persistent FD state here. The FD will be restored after this command.
-        // Permanent FD closes are handled by `exec N>&-` in executeSimpleCommand.
+        //
+        // KNOWN GAP: `exec N>&-` SHOULD close N permanently, and nothing here or
+        // in executeSimpleCommand does that yet (spec case redirect.test.sh
+        // "1>&- to close file descriptor"). Closing unconditionally is not the
+        // fix: the passing case "3>&- << EOF (OSH regression)" requires
+        // `echo hello 3>&-` to leave fd 3 open. Telling the two apart needs the
+        // caller to say whether the redirections belong to a bare `exec`.
         if (target === "-") {
           // Don't delete the FD - command-level redirections are temporary
           break;
@@ -702,6 +831,28 @@ export async function applyRedirections(
               exitCode = 1;
             }
           }
+          break;
+        }
+        // `<&N` (and explicit `0<&N`) dups N onto STDIN. The stdin wiring
+        // already happened in executeSimpleCommand; there is no stdout/stderr
+        // to divert here. Falling through to the output-dup logic below is what
+        // made valid input descriptors report "Bad file descriptor".
+        if (fd === 0) {
+          break;
+        }
+        // `N>&M` / `N<&M` for a user descriptor (N >= 3): duplicate M onto N.
+        // The fd table is the only place that state can live, so without this
+        // `exec 3>&1` opened nothing and every later `>&3` was a bad fd.
+        const dupSourceFd = fd >= 3 ? asDescriptorNumber(target) : null;
+        if (dupSourceFd !== null) {
+          const sourceInfo = resolveDupSource(ctx, dupSourceFd);
+          if (sourceInfo === null) {
+            stderr += `bash: ${dupSourceFd}: Bad file descriptor\n`;
+            exitCode = 1;
+            stdout = "";
+            break;
+          }
+          registerNumberedFd(ctx, fd, sourceInfo);
           break;
         }
         // >&2, 1>&2, 1<&2: redirect stdout to stderr

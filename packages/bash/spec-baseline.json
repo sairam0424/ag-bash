@@ -29,10 +29,6 @@
     "bash/cases/loop.test.sh::continue in subshell",
     "bash/cases/redirect.test.sh::1>&- to close file descriptor",
     "bash/cases/redirect.test.sh::: 9> fdleak (OSH regression)",
-    "bash/cases/redirect.test.sh::<&",
-    "bash/cases/redirect.test.sh::<> for read/write",
-    "bash/cases/redirect.test.sh::Open descriptor with exec",
-    "bash/cases/redirect.test.sh::Open multiple descriptors with exec",
     "bash/cases/strict-options.test.sh::empty argv WITHOUT strict_argv",
     "bash/cases/strict-options.test.sh::shopt -s strict_binding: Persistent prefix bindings not allowed on special builtins",
     "bash/cases/temp-binding.test.sh::Temp bindings with unset"
