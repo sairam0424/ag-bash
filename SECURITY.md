@@ -156,19 +156,113 @@ node \
 
 ## 5. Supply-chain posture — E3
 
-- **Audit gates the build.** CI runs `pnpm audit --audit-level=high` with **no**
-  `continue-on-error`; a high/critical advisory fails the `Quality` workflow.
-  When a transitive advisory lands, pin the patched version via the
-  `pnpm.overrides` block in the root `package.json` (see the
-  `fast-xml-builder` / `sanitize-html` entries) rather than suppressing the
-  gate.
+### 5.1 The advisory gate is reachability-scoped
+
+`node scripts/check-advisories.mjs` is the blocking supply-chain gate. It is
+enforced in **five** places, none of them with `continue-on-error`:
+`.github/workflows/quality.yml` (every PR and push), `release.yml`,
+`publish.yml`, `canary.yml` (nightly), and `scripts/publish.sh` (the local /
+manual publish path).
+
+It reads `pnpm audit --json` and sorts every finding into one of four
+reachability classes, then blocks on only two of them:
+
+| Class | Meaning | high/critical |
+| --- | --- | --- |
+| `published` | the resolved `name@version` is in the production dependency closure of a non-private `packages/*` package | **fails the run** |
+| `unknown root` | reachability could not be established (no version and no path, or a path root that is not a known workspace package) | **fails the run** (fails closed) |
+| `root devDependency` | build-time only (`vitest`, `vite`, `esbuild`, `changesets`, …) | reported, does **not** fail |
+| `examples/*` | example consumers, never published to npm | reported, does **not** fail |
+
+Reachability is decided by exact installed `name@version` membership in that
+production closure, **not** by the dependency path `pnpm audit` happens to
+print: pnpm collapses `findings` to one representative path per (advisory,
+version), so the printed root is arbitrary when several roots resolve the same
+version. A path root is consulted only when no version is available, and an
+unrecognised root is treated as blocking. The blocking severity threshold
+defaults to `high` (`--level=critical` narrows it).
+
+This replaced a bare workspace-wide `pnpm audit --audit-level=high`. That
+whole-workspace visibility was **not** removed — the original command is
+retained verbatim in two deliberately non-blocking places: the
+`advisories-report` job in `quality.yml` and the "Whole-workspace advisory
+drift (report only)" step in `canary.yml`. A red mark there with a green
+`quality` job is the designed signal: a real advisory exists that no consumer
+of the published packages can reach.
+
+### 5.2 What this gate no longer catches — on the record
+
+Narrowing the gate to what we ship gave up real coverage. Stated plainly, so
+nobody reads the green check as more than it is:
+
+- **A compromised build-time dependency now only warns.** `vitest`, `vite`,
+  `esbuild` and `changesets` run on CI runners that hold publish credentials
+  and on maintainer laptops, and `esbuild` bundles the shipped `dist/`. A
+  hostile version of any of them is a credible path to a poisoned artifact
+  *without* any advisory ever reaching the published closure — and it will not
+  fail a release. This is an accepted gap, not a solved problem. It is covered
+  only by the non-blocking report jobs above, plus `codeql.yml` and
+  `dependency-review.yml` (which does block at the PR boundary, before a new
+  dependency lands).
+- **Advisories in `examples/*` no longer block.** Nothing in CI deploys them
+  today (`examples.yml` is build + typecheck only), but anyone who deploys
+  `examples/website` by hand is outside this gate's coverage.
+- **Anything below `high`** never blocked, and still does not.
+
+### 5.3 Fixing a blocking advisory
+
+Pin the patched version through the `pnpm.overrides` block in the root
+`package.json` (see the `fast-xml-builder` / `sanitize-html` / `esbuild` /
+`brace-expansion` entries). That is the preferred fix, and the only one that
+actually removes the vulnerable code.
+
+Where no patched version exists yet, the gate accepts a **time-boxed**
+exception in `auditConfig.ignoreCves` in the root `package.json`. JSON carries
+no comments, so the shape is documented here instead:
+
+```json
+"auditConfig": {
+  "ignoreCves": [
+    {
+      "id": "GHSA-xxxx-yyyy-zzzz",
+      "reason": "not reachable: the parser never sees untrusted XML",
+      "expires": "2026-11-30"
+    }
+  ]
+}
+```
+
+The table currently ships **empty**: there are no active exceptions, and no
+high/critical advisory reaches a published package. Every entry is validated by
+`scripts/check-advisories.mjs` — that validation is the entire point of routing
+waivers through this table:
+
+- `id` is required, and matches a GHSA id, an npm advisory id, or any CVE listed
+  on the advisory (`cve` and `ghsa` are accepted as aliases for the key).
+- `reason` is required and must be at least 12 characters — a written
+  justification for shipping the finding, not a shrug.
+- `expires` is required and must be a real calendar date as `YYYY-MM-DD`
+  (`2026-02-31` is rejected rather than accepted as a shape match).
+- **The expiry is enforced, not decorative.** Once `expires` is in the past the
+  entry stops suppressing anything, so the run fails twice over: once for the
+  expired-config error, and again because the finding it used to cover
+  reappears as blocking. An ignore list without an enforced expiry is exactly
+  how a permanent exception gets created by accident.
+- An entry that matches no finding is reported as a deletion candidate (a note,
+  not a failure), so waivers do not silently outlive their advisory.
+
+### 5.4 Other supply-chain controls
+
 - **Provenance on publish.** The `Publish` workflow publishes with
   `npm publish --provenance` using GitHub OIDC (`id-token: write`), producing a
   Sigstore attestation that links each published tarball to the exact workflow,
   commit, and repository that built it. Consumers can verify with
   `npm audit signatures`.
 - **Signature verification.** The publish pipeline runs `npm audit signatures`
-  to verify registry signatures of installed dependencies before building.
+  to verify registry signatures of installed dependencies before building. Be
+  aware it is best-effort there: pnpm's store layout can defeat it, so a
+  failure emits a `::warning::` for manual review instead of blocking the
+  publish.
 - **Integrity-locked installs.** All CI installs use
   `pnpm install --frozen-lockfile`, so the resolved dependency graph and its
   integrity hashes cannot drift between lockfile and install.
