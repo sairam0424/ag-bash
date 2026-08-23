@@ -289,7 +289,7 @@
     "modern-tar": "^0.7.3",
     "papaparse": "^5.5.3",
     "quickjs-emscripten": "^0.32.0",
-    "re2js": "^1.2.1",
+    "re2js": "^2.8.6",
     "seek-bzip": "^2.0.0",
     "smol-toml": "^1.6.0",
     "sprintf-js": "^1.1.3",

@@ -27,6 +27,61 @@ describe("UserRegex", () => {
     });
   });
 
+  /**
+   * The reason this module exists: user patterns run on RE2, which has no
+   * backtracking. The guarantee is structural - the constructs that make
+   * catastrophic backtracking possible cannot even compile - so assert the
+   * rejection rather than a wall-clock threshold.
+   *
+   * re2js 2.2.0 added opt-in lookbehind support behind an `RE2JS.LOOKBEHINDS`
+   * flag. convertFlags() deliberately never sets it. If someone does, these
+   * tests fail and the ReDoS boundary gets re-examined on purpose instead of
+   * moving silently.
+   */
+  describe("ReDoS protection", () => {
+    const rejected: readonly [string, string, string][] = [
+      ["lookahead", "a(?=b)", "Lookahead"],
+      ["negative lookahead", "a(?!b)", "Lookahead"],
+      ["lookbehind", "(?<=a)b", "lookbehind"],
+      ["negative lookbehind", "(?<!a)b", "lookbehind"],
+      ["backreference", "(a)\\1", "Backreferences"],
+      ["higher backreference", "(a)(b)\\2", "Backreferences"],
+    ];
+
+    for (const [name, pattern, explains] of rejected) {
+      it(`rejects ${name} and explains why`, () => {
+        expect(() => createUserRegex(pattern)).toThrow(SyntaxError);
+        expect(() => createUserRegex(pattern)).toThrow(/RE2 for ReDoS/);
+        expect(() => createUserRegex(pattern)).toThrow(
+          new ConstantRegex(new RegExp(explains)).native,
+        );
+      });
+    }
+
+    /**
+     * Patterns whose native-RegExp cost is exponential. A backtracking engine
+     * needs ~2^40 steps for these; RE2 needs microseconds. Terminating at all
+     * is the assertion - the time bound is a loose secondary guard so the test
+     * cannot flake on a loaded CI box.
+     */
+    const catastrophic: readonly [string, string][] = [
+      ["(a+)+$", `${"a".repeat(40)}b`],
+      ["(a|aa)+$", `${"a".repeat(40)}b`],
+      ["(x+x+)+y", "x".repeat(60)],
+      ["^(a|a?)+$", `${"a".repeat(2000)}b`],
+      ["(a*)*b", "a".repeat(5000)],
+    ];
+
+    for (const [pattern, input] of catastrophic) {
+      it(`matches /${pattern}/ in linear time instead of backtracking`, () => {
+        const regex = createUserRegex(pattern);
+        const started = Date.now();
+        expect(regex.test(input)).toBe(false);
+        expect(Date.now() - started).toBeLessThan(5000);
+      });
+    }
+  });
+
   describe("test()", () => {
     it("returns true for matching input", () => {
       const regex = new UserRegex("foo");
@@ -139,6 +194,131 @@ describe("UserRegex", () => {
     });
   });
 
+  /**
+   * RegexLike promises String.prototype.replace semantics, and ConstantRegex
+   * delivers them by delegating to the native method. UserRegex must not
+   * diverge: re2js exposes a `javaMode` toggle whose Java branch swallows
+   * literal backslashes, ignores `$&`, refuses to unescape `$$`, and throws on
+   * out-of-range group references. Every case below is pinned to the value
+   * native String.prototype.replace produces for the same inputs.
+   */
+  describe("replace() string-replacement parity with native RegExp", () => {
+    const cases: {
+      readonly name: string;
+      readonly pattern: string;
+      readonly flags: string;
+      readonly input: string;
+      readonly replacement: string;
+      readonly expected: string;
+    }[] = [
+      {
+        name: "$$ unescapes to a single dollar sign",
+        pattern: "(a)(b)",
+        flags: "",
+        input: "ab",
+        replacement: "$$",
+        expected: "$",
+      },
+      {
+        name: "$& inserts the whole match",
+        pattern: "(a)(b)",
+        flags: "",
+        input: "ab",
+        replacement: "[$&]",
+        expected: "[ab]",
+      },
+      {
+        name: "a lone backslash stays literal",
+        pattern: "(a)(b)",
+        flags: "",
+        input: "ab",
+        replacement: "x\\y$1",
+        expected: "x\\ya",
+      },
+      {
+        name: "an out-of-range group reference stays literal",
+        pattern: "(a)(b)",
+        flags: "",
+        input: "ab",
+        replacement: "$3",
+        expected: "$3",
+      },
+      {
+        name: "$0 is not a group reference",
+        pattern: "(a)(b)",
+        flags: "",
+        input: "ab",
+        replacement: "$0",
+        expected: "$0",
+      },
+      {
+        name: "$` inserts the text before the match",
+        pattern: "b",
+        flags: "",
+        input: "abc",
+        replacement: "[$`]",
+        expected: "a[a]c",
+      },
+      {
+        name: "$' inserts the text after the match",
+        pattern: "b",
+        flags: "",
+        input: "abc",
+        replacement: "[$']",
+        expected: "a[c]c",
+      },
+      {
+        name: "$<name> inserts a named group",
+        pattern: "(?<mid>b)",
+        flags: "",
+        input: "abc",
+        replacement: "[$<mid>]",
+        expected: "a[b]c",
+      },
+      {
+        name: "a non-participating group interpolates as empty",
+        pattern: "(a)(x)?(b)",
+        flags: "",
+        input: "ab",
+        replacement: "[$2]",
+        expected: "[]",
+      },
+      {
+        name: "$$ unescapes on every match when global",
+        pattern: "b",
+        flags: "g",
+        input: "abcb",
+        replacement: "$$",
+        expected: "a$c$",
+      },
+      {
+        name: "a lone backslash stays literal on every match when global",
+        pattern: "b",
+        flags: "g",
+        input: "abcb",
+        replacement: "x\\y",
+        expected: "ax\\ycx\\y",
+      },
+    ];
+
+    for (const c of cases) {
+      it(`${c.name} (non-global and global agree with native)`, () => {
+        // Oracle: pin the expectation to what the platform actually does, so
+        // the table can never drift away from real RegExp semantics.
+        const oracle = new ConstantRegex(new RegExp(c.pattern, c.flags));
+        expect(oracle.replace(c.input, c.replacement)).toBe(c.expected);
+
+        expect(
+          createUserRegex(c.pattern, c.flags).replace(c.input, c.replacement),
+        ).toBe(c.expected);
+      });
+    }
+
+    it("does not throw on an out-of-range group reference", () => {
+      expect(() => createUserRegex("(a)(b)").replace("ab", "$3")).not.toThrow();
+    });
+  });
+
   describe("split()", () => {
     it("splits string by pattern", () => {
       const regex = new UserRegex(",\\s*");
@@ -159,6 +339,22 @@ describe("UserRegex", () => {
       const regex = new UserRegex(",");
       expect(regex.split("a,,b")).toEqual(["a", "", "b"]);
     });
+
+    /**
+     * RE2JS.split is Java-flavoured: a positive limit means "at most N-1 splits"
+     * and the unsplit remainder is returned in the last element. JS truncates
+     * instead. UserRegex.split compensates, so pin every limit against
+     * String.prototype.split - re2js ships split fixes regularly (2.8.6 among
+     * them), and a silent change here would corrupt callers rather than throw.
+     */
+    for (const limit of [undefined, 0, 1, 2, 3, 4, 5, 10, -1, -2]) {
+      it(`limit ${String(limit)} agrees with String.prototype.split`, () => {
+        const input = "a,b,c,d";
+        expect(new UserRegex(",").split(input, limit)).toEqual(
+          input.split(",", limit),
+        );
+      });
+    }
   });
 
   describe("search()", () => {

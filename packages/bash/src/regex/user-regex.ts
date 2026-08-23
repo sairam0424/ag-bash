@@ -67,6 +67,28 @@ function translatePattern(pattern: string): string {
 }
 
 /**
+ * Second argument to `Matcher.replaceAll` / `Matcher.replaceFirst`.
+ *
+ * `false` selects native ECMAScript replacement semantics, which is what
+ * `RegexLike.replace` promises and what `ConstantRegex` delivers: `$$` is an
+ * escaped dollar sign, `$&`, `` $` ``, `$'` and `$<name>` are supported, a
+ * lone backslash is literal, and an out-of-range group reference such as `$3`
+ * is left as literal text instead of throwing.
+ *
+ * `true` selects legacy Java semantics, where a backslash escapes instead of
+ * being literal, `$&` and `$$` are not recognised, and an out-of-range group
+ * reference throws `RE2JSGroupException`.
+ *
+ * DO NOT flip this to `true`. The meaning of this boolean was inverted inside
+ * the re2js 1.x line: up to 1.3.x it was `perlMode` (where `true` meant
+ * JS semantics), and from 1.4.0 onwards it is `javaMode` (where `true` means
+ * Java semantics). Because the flip landed in a MINOR release it slipped in
+ * silently under a caret range. `packages/bash/package.json` therefore pins
+ * `re2js` to the `^2.x` line, where `javaMode` is the settled name.
+ */
+const RE2JS_JAVA_MODE = false;
+
+/**
  * A wrapper around RE2JS that provides a RegExp-compatible interface.
  * Uses RE2 for linear-time matching, providing ReDoS protection.
  */
@@ -242,11 +264,11 @@ export class UserRegex implements RegexLike {
 
     if (typeof replacement === "string") {
       const matcher = this._re2.matcher(input);
-      // Use perlMode=true for JavaScript-style replacement ($1, $2, etc.)
+      // javaMode=false gives native String.prototype.replace semantics.
       if (this._global) {
-        return matcher.replaceAll(replacement, true);
+        return matcher.replaceAll(replacement, RE2JS_JAVA_MODE);
       }
-      return matcher.replaceFirst(replacement, true);
+      return matcher.replaceFirst(replacement, RE2JS_JAVA_MODE);
     }
 
     // Callback replacement - we need to do this manually
