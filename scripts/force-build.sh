@@ -1,64 +1,35 @@
 #!/bin/bash
-set -e
+#
+# Force-rebuild every package in the monorepo.
+#
+# This is a thin wrapper over `pnpm -r build` ON PURPOSE. Every package's own
+# `build` script already begins with `rm -rf dist`, so a recursive build IS a
+# force build — there is nothing for this script to add.
+#
+# It used to reimplement the build inline, and had drifted badly: last touched at
+# v1.3.0 (against a 6.0.4 tree) it was missing EIGHT steps that
+# packages/bash's `build` performs, including `cp src/parser/vendor/*
+# dist/parser/vendor/`. Because it also starts by deleting dist, that omission
+# made it unconditionally broken from any starting state:
+#
+#   ✘ [ERROR] Could not resolve "./vendor/web-tree-sitter.js"
+#       dist/parser/tree-sitter-parser.js:2:28
+#
+# It also omitted the ag-convert Python asset copy, the sqlite3 worker, the CJS
+# subpaths, browser-core, build:clean, and the .d.cts generation — and it wrote
+# the python3/js-exec worker bundles into src/ rather than dist/.
+#
+# Keep this a delegation. If the build needs a new step, add it to the relevant
+# package's `build` script, which is the single source of truth.
+#
+# Scoped to packages/* rather than a bare `pnpm -r build`: the workspace also
+# includes examples/*, which is pinned to a Next.js canary and is therefore
+# inherently unstable. A force build of the shipped packages must not fail
+# because an example did.
+set -euo pipefail
 
-ROOT=$(pwd)
+cd "$(dirname "$0")/.."
 
-echo "🚀 Starting Ag-Bash Monorepo Force Build..."
-
-# --- 1. Build @ag-bash/bash ---
-echo "📦 Building @ag-bash/bash..."
-cd "$ROOT/packages/bash"
-
-# Cleanup
-rm -rf dist
-
-# Compile TS
-npx tsc
-
-# Build Workers
-echo "⚙️ Building Workers..."
-npx esbuild src/commands/python3/worker.ts --bundle --platform=node --format=esm --outfile=src/commands/python3/worker.js --external:../../../vendor/cpython-emscripten/*
-npx esbuild src/commands/js-exec/worker.ts --bundle --platform=node --format=esm --outfile=src/commands/js-exec/worker.js --external:quickjs-emscripten
-
-# Copy Workers to dist
-mkdir -p dist/commands/python3 dist/commands/js-exec
-cp src/commands/python3/worker.js dist/commands/python3/worker.js
-cp src/commands/js-exec/worker.js dist/commands/js-exec/worker.js
-
-# Build Libraries
-echo "🏗️ Building Libraries (ESM/CJS/Browser)..."
-npx esbuild dist/index.js --bundle --splitting --platform=node --format=esm --minify --outdir=dist/bundle --chunk-names=chunks/[name]-[hash] --external:diff --external:minimatch --external:sprintf-js --external:turndown --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip
-npx esbuild dist/index.js --bundle --platform=node --format=cjs --minify --outfile=dist/bundle/index.cjs --define:import.meta.url='""' --external:diff --external:minimatch --external:sprintf-js --external:turndown --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip
-npx esbuild dist/browser.js --bundle --platform=browser --format=esm --minify --outfile=dist/bundle/browser.js --external:diff --external:minimatch --external:sprintf-js --external:turndown --external:node:zlib --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip --define:__BROWSER__=true --alias:node:dns=./src/shims/browser-dns.ts
-
-# Build CLI & Shell
-echo "💻 Building CLI & Shell..."
-npx esbuild dist/cli/ag-bash.js --bundle --splitting --platform=node --format=esm --minify --outdir=dist/bin --entry-names=[name] --chunk-names=chunks/[name]-[hash] --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip
-npx esbuild dist/cli/shell.js --bundle --splitting --platform=node --format=esm --minify --outdir=dist/bin/shell --entry-names=[name] --chunk-names=chunks/[name]-[hash] --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip
-
-chmod +x dist/bin/ag-bash.js dist/bin/shell/shell.js
-
-# --- 2. Build @ag-bash/agent-bridge ---
-echo "🌉 Building @ag-bash/agent-bridge..."
-cd "$ROOT/packages/agent-bridge"
-rm -rf dist
-npx tsc
-
-# --- 3. Build @ag-bash/mcp-server ---
-echo "🤖 Building @ag-bash/mcp-server..."
-cd "$ROOT/packages/mcp-server"
-
-# Cleanup
-rm -rf dist
-
-# Compile TS
-npx tsc
-
-# Bundle MCP Server
-echo "🏗️ Bundling Standalone MCP Server..."
-npx esbuild dist/mcp-server/src/index.js --bundle --platform=node --format=esm --minify --outfile=dist/bundle.js --banner:js='#!/usr/bin/env node'
-
-chmod +x dist/bundle.js
-
-cd "$ROOT"
-echo "✅ Monorepo Force Build Complete!"
+echo "🚀 Force-rebuilding packages/* (each package's build cleans its own dist)..."
+pnpm --filter "./packages/*" build
+echo "✅ Monorepo force build complete."
