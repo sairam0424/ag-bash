@@ -68,8 +68,17 @@ export declare const ErrorCode: {
   readonly TIMEOUT: 8;
   readonly NETWORK_ERROR: 9;
   readonly NETWORK_NOT_CONFIGURED: 10;
+  readonly PAYLOAD_TOO_LARGE: 11;
 };
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
+/**
+ * Thrown when a payload exceeds a bridge size ceiling.
+ */
+export declare class PayloadTooLargeError extends Error {
+  readonly size: number;
+  readonly limit: number;
+  constructor(what: string, size: number, limit: number);
+}
 /** Flags for operations */
 export declare const Flags: {
   readonly NONE: 0;

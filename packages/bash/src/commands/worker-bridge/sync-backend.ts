@@ -94,28 +94,33 @@ export class SyncBackend {
   }
 
   /**
-   * Read a file of arbitrary size by draining it from the main thread one
-   * <=MAX_CHUNK_SIZE chunk at a time. The first round-trip returns the total
-   * payload size; subsequent round-trips request the remaining byte ranges.
+   * Drain a result of arbitrary size from the main thread one <=MAX_CHUNK_SIZE
+   * chunk at a time. `firstChunk` is the result of the round-trip that started
+   * the transfer; continuation frames carry only the path and the next byte
+   * offset, which the main thread answers from its snapshot without re-running
+   * the producer (so an HTTP request or a sub-shell exec happens exactly once).
+   *
+   * Draining is gated on the MORE flag, which only the chunked-result framing
+   * sets. A main thread that answered in a single shot leaves it false, so no
+   * continuation frame is ever sent — which is what keeps a newer worker safe
+   * against an older main thread.
    */
-  readFile(path: string): Uint8Array {
-    const first = this.execFrame(OpCode.READ_FILE, { path, offset: 0 });
-    if (!first.success) {
-      throw new Error(first.error || "Failed to read file");
-    }
-    const total = this.protocol.getTotalLength();
-    const firstChunk = first.result ?? new Uint8Array(0);
-    if (firstChunk.length >= total) {
+  private drainResult(
+    opCode: OpCodeType,
+    path: string,
+    firstChunk: Uint8Array,
+  ): Uint8Array {
+    if (!this.protocol.getMore()) {
       return firstChunk;
     }
-
+    const total = this.protocol.getTotalLength();
     const out = new Uint8Array(total);
     out.set(firstChunk, 0);
     let offset = firstChunk.length;
     while (offset < total) {
-      const next = this.execFrame(OpCode.READ_FILE, { path, offset });
+      const next = this.execFrame(opCode, { path, offset });
       if (!next.success) {
-        throw new Error(next.error || "Failed to read file");
+        throw new Error(next.error || "Failed to drain chunked result");
       }
       const chunk = next.result ?? new Uint8Array(0);
       if (chunk.length === 0) {
@@ -126,6 +131,22 @@ export class SyncBackend {
       offset += chunk.length;
     }
     return out;
+  }
+
+  /**
+   * Read a file of arbitrary size by draining it from the main thread one
+   * <=MAX_CHUNK_SIZE chunk at a time.
+   */
+  readFile(path: string): Uint8Array {
+    const first = this.execFrame(OpCode.READ_FILE, { path, offset: 0 });
+    if (!first.success) {
+      throw new Error(first.error || "Failed to read file");
+    }
+    return this.drainResult(
+      OpCode.READ_FILE,
+      path,
+      first.result ?? new Uint8Array(0),
+    );
   }
 
   writeFile(path: string, data: Uint8Array): void {
@@ -198,7 +219,12 @@ export class SyncBackend {
     if (!result.success) {
       throw new Error(result.error || "Failed to readdir");
     }
-    return JSON.parse(this.protocol.getResultAsString());
+    const bytes = this.drainResult(
+      OpCode.READDIR,
+      path,
+      result.result ?? new Uint8Array(0),
+    );
+    return JSON.parse(new TextDecoder().decode(bytes));
   }
 
   mkdir(path: string, recursive = false): void {
@@ -323,8 +349,12 @@ export class SyncBackend {
     if (!result.success) {
       throw new Error(result.error || "HTTP request failed");
     }
-    const responseJson = new TextDecoder().decode(result.result);
-    return JSON.parse(responseJson);
+    const bytes = this.drainResult(
+      OpCode.HTTP_REQUEST,
+      url,
+      result.result ?? new Uint8Array(0),
+    );
+    return JSON.parse(new TextDecoder().decode(bytes));
   }
 
   /**
@@ -346,8 +376,12 @@ export class SyncBackend {
     if (!result.success) {
       throw new Error(result.error || "Command execution failed");
     }
-    const responseJson = new TextDecoder().decode(result.result);
-    return JSON.parse(responseJson);
+    const bytes = this.drainResult(
+      OpCode.EXEC_COMMAND,
+      command,
+      result.result ?? new Uint8Array(0),
+    );
+    return JSON.parse(new TextDecoder().decode(bytes));
   }
 
   /**
@@ -367,7 +401,11 @@ export class SyncBackend {
     if (!result.success) {
       throw new Error(result.error || "Command execution failed");
     }
-    const responseJson = new TextDecoder().decode(result.result);
-    return JSON.parse(responseJson);
+    const bytes = this.drainResult(
+      OpCode.EXEC_COMMAND,
+      command,
+      result.result ?? new Uint8Array(0),
+    );
+    return JSON.parse(new TextDecoder().decode(bytes));
   }
 }

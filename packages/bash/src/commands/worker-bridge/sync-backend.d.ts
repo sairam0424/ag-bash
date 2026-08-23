@@ -13,6 +13,7 @@ export declare class SyncBackend {
   constructor(sharedBuffer: SharedArrayBuffer, operationTimeoutMs?: number);
   private execFrame;
   private execSync;
+  private drainResult;
   readFile(path: string): Uint8Array;
   writeFile(path: string, data: Uint8Array): void;
   private writeChunked;

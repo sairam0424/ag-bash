@@ -18,6 +18,7 @@ import {
   MAX_CHUNK_SIZE,
   OpCode,
   type OpCodeType,
+  PayloadTooLargeError,
   ProtocolBuffer,
   Status,
 } from "./protocol.js";
@@ -45,9 +46,14 @@ interface WriteAccumulator {
   buffer: Uint8Array;
 }
 
-/** Cached file contents for serving a multi-chunk read. */
-interface ReadCacheEntry {
-  path: string;
+/**
+ * Snapshot of a result being served across multiple chunked round-trips, keyed
+ * by the operation and its subject (path / URL / command) so a continuation
+ * frame can be matched to the transfer it belongs to.
+ */
+interface ResultCacheEntry {
+  opCode: OpCodeType;
+  key: string;
   data: Uint8Array;
 }
 
@@ -65,7 +71,7 @@ export class BridgeHandler {
   // time because the worker bridge is strictly synchronous (one round-trip per
   // loop iteration), so a single slot each is sufficient.
   private writeAccumulator: WriteAccumulator | null = null;
-  private readCache: ReadCacheEntry | null = null;
+  private resultCache: ResultCacheEntry | null = null;
 
   constructor(
     sharedBuffer: SharedArrayBuffer,
@@ -244,33 +250,81 @@ export class BridgeHandler {
     return this.fs.resolvePath(this.cwd, path);
   }
 
+  /**
+   * Serve one chunk of a (possibly multi-chunk) result.
+   *
+   * `produce` runs only when a transfer starts (offset 0), and the payload it
+   * returns is snapshotted so continuation frames serve a stable view even if
+   * the underlying source changes mid-transfer. A continuation never re-runs
+   * `produce` — that is what makes this safe for the side-effecting producers
+   * (an HTTP fetch, a sub-shell exec): re-running one to satisfy a stray
+   * continuation would duplicate the request.
+   *
+   * `restartable` is for idempotent producers only (file reads): it lets a
+   * continuation whose transfer was dropped re-snapshot instead of failing,
+   * preserving the pre-existing READ_FILE behaviour.
+   */
+  private async serveChunkedResult(
+    opCode: OpCodeType,
+    key: string,
+    produce: () => Promise<Uint8Array>,
+    restartable = false,
+  ): Promise<void> {
+    const offset = this.protocol.getOffset();
+    let entry = this.resultCache;
+    if (entry !== null && (entry.opCode !== opCode || entry.key !== key)) {
+      entry = null;
+    }
+
+    if (offset === 0 || entry === null) {
+      if (offset !== 0 && !restartable) {
+        throw new Error(
+          "Chunked result continuation has no transfer in flight",
+        );
+      }
+      const data = await produce();
+      if (data.length > MAX_TRANSFER_BYTES) {
+        this.resultCache = null;
+        throw new PayloadTooLargeError(
+          "Transfer",
+          data.length,
+          MAX_TRANSFER_BYTES,
+        );
+      }
+      entry = { opCode, key, data };
+      this.resultCache = entry;
+    }
+
+    const total = entry.data.length;
+    if (offset > total) {
+      throw new Error("Chunked result offset out of range");
+    }
+    const end = Math.min(offset + MAX_CHUNK_SIZE, total);
+    const more = end < total;
+    this.protocol.setResultChunk(
+      entry.data.subarray(offset, end),
+      offset,
+      total,
+      more,
+    );
+    this.protocol.setStatus(Status.SUCCESS);
+    // Free the snapshot once the worker has drained the final chunk.
+    if (!more) {
+      this.resultCache = null;
+    }
+  }
+
   private async handleReadFile(): Promise<void> {
     const path = this.resolvePath(this.protocol.getPath());
-    const offset = this.protocol.getOffset();
     try {
-      // offset === 0 starts a fresh read: load the whole file once and cache it
-      // so that subsequent chunk requests serve a stable snapshot even if the
-      // underlying file changes mid-transfer.
-      if (offset === 0 || !this.readCache || this.readCache.path !== path) {
-        const content = await this.fs.readFileBuffer(path);
-        this.readCache = { path, data: content };
-      }
-      const cached = this.readCache;
-      const total = cached.data.length;
-      if (offset > total) {
-        throw new Error("Chunked read offset out of range");
-      }
-      const end = Math.min(offset + MAX_CHUNK_SIZE, total);
-      const chunk = cached.data.subarray(offset, end);
-      const more = end < total;
-      this.protocol.setResultChunk(chunk, offset, total, more);
-      this.protocol.setStatus(Status.SUCCESS);
-      // Free the cache once the worker has drained the final chunk.
-      if (!more) {
-        this.readCache = null;
-      }
+      await this.serveChunkedResult(
+        OpCode.READ_FILE,
+        path,
+        () => this.fs.readFileBuffer(path),
+        true,
+      );
     } catch (e) {
-      this.readCache = null;
+      this.resultCache = null;
       this.setErrorFromException(e);
     }
   }
@@ -304,7 +358,7 @@ export class BridgeHandler {
     }
 
     if (total < 0 || total > MAX_TRANSFER_BYTES) {
-      throw new Error(`Transfer too large: ${total} > ${MAX_TRANSFER_BYTES}`);
+      throw new PayloadTooLargeError("Transfer", total, MAX_TRANSFER_BYTES);
     }
 
     if (offset === 0) {
@@ -390,10 +444,16 @@ export class BridgeHandler {
   private async handleReaddir(): Promise<void> {
     const path = this.resolvePath(this.protocol.getPath());
     try {
-      const entries = await this.fs.readdir(path);
-      this.protocol.setResultFromString(JSON.stringify(entries));
-      this.protocol.setStatus(Status.SUCCESS);
+      // A directory listing can serialize to more than the 1MB data window, so
+      // it is streamed like a file read rather than rejected. Not restartable:
+      // re-reading the directory mid-drain could splice two different listings
+      // together, and a stray continuation is protocol abuse, not a real case.
+      await this.serveChunkedResult(OpCode.READDIR, path, async () => {
+        const entries = await this.fs.readdir(path);
+        return new TextEncoder().encode(JSON.stringify(entries));
+      });
     } catch (e) {
+      this.resultCache = null;
       this.setErrorFromException(e);
     }
   }
@@ -632,39 +692,51 @@ export class BridgeHandler {
     }
 
     const url = this.protocol.getPath();
-    const requestJson = this.protocol.getDataAsString();
 
     try {
-      // @banned-pattern-ignore: fallback default for HTTP options, accessed only by known keys below
-      const request = requestJson ? JSON.parse(requestJson) : {};
-      // Cap fetch to the remaining execution deadline via raceDeadline
-      // (secureFetch uses AbortController internally for its timeoutMs,
-      // but raceDeadline guarantees we don't hang if it never settles).
-      const remaining = this.remainingMs();
-      const result = await this.raceDeadline(() =>
-        fetchFn(url, {
-          method: request.method,
-          headers: request.headers,
-          body: request.body,
-          timeoutMs: remaining,
-        }),
-      );
+      // A response body larger than the 1MB data window is streamed rather than
+      // rejected — the deliberate bound on response size is the network layer's
+      // `maxResponseSize` (10MB by default), not this framing window. The fetch
+      // runs only on the offset-0 frame, so draining never re-issues it.
+      await this.serveChunkedResult(OpCode.HTTP_REQUEST, url, async () => {
+        const requestJson = this.protocol.getDataAsString();
+        // @banned-pattern-ignore: fallback default for HTTP options, accessed only by known keys below
+        const request = requestJson ? JSON.parse(requestJson) : {};
+        // Cap fetch to the remaining execution deadline via raceDeadline
+        // (secureFetch uses AbortController internally for its timeoutMs,
+        // but raceDeadline guarantees we don't hang if it never settles).
+        const remaining = this.remainingMs();
+        const result = await this.raceDeadline(() =>
+          fetchFn(url, {
+            method: request.method,
+            headers: request.headers,
+            body: request.body,
+            timeoutMs: remaining,
+          }),
+        );
 
-      // Return response as JSON
-      const response = JSON.stringify({
-        status: result.status,
-        statusText: result.statusText,
-        headers: result.headers,
-        body: result.body,
-        url: result.url,
+        // Return response as JSON
+        return new TextEncoder().encode(
+          JSON.stringify({
+            status: result.status,
+            statusText: result.statusText,
+            headers: result.headers,
+            body: result.body,
+            url: result.url,
+          }),
+        );
       });
-      this.protocol.setResultFromString(response);
-      this.protocol.setStatus(Status.SUCCESS);
     } catch (e) {
+      this.resultCache = null;
       const message = sanitizeErrorMessage(
         e instanceof Error ? e.message : String(e),
       );
-      this.protocol.setErrorCode(ErrorCode.NETWORK_ERROR);
+      // A size-ceiling failure is NOT a network failure: reporting it as
+      // NETWORK_ERROR made "your response was too big" indistinguishable from
+      // "the request failed".
+      this.protocol.setErrorCode(
+        this.sizeAwareErrorCode(e, ErrorCode.NETWORK_ERROR),
+      );
       this.protocol.setResultFromString(message);
       this.protocol.setStatus(Status.ERROR);
     }
@@ -681,57 +753,98 @@ export class BridgeHandler {
       return;
     }
 
-    let command = this.protocol.getPath();
-    const dataStr = this.protocol.getDataAsString();
+    const requestedCommand = this.protocol.getPath();
 
     // Cap exec to the remaining execution deadline via AbortSignal + raceDeadline.
     // AbortSignal provides cooperative cancellation; raceDeadline guarantees
     // we don't hang if exec never respects the signal.
     const controller = new AbortController();
     try {
-      const options: CommandExecOptions = {
-        cwd: this.cwd,
-        signal: controller.signal,
-      };
-      if (dataStr) {
-        const parsed = JSON.parse(dataStr);
-        if (parsed.stdin) {
-          options.stdin = parsed.stdin;
-        }
-        // Structured args (spawnSync): compose the command name + every arg into
-        // a single shell-quoted line. Each token (including the command name) is
-        // single-quoted, so args are forwarded as literal argv tokens — no glob,
-        // word-splitting, or metacharacter reparsing — preserving spawnSync
-        // semantics. This works regardless of the underlying exec engine, unlike
-        // the `options.args` injection path which only the (now-removed) monolith
-        // engine honored — the pipeline engine silently drops it (#49).
-        if (parsed.args && Array.isArray(parsed.args)) {
-          const argv = [command, ...parsed.args.map((a: unknown) => String(a))];
-          command = shellJoinArgs(argv);
-        }
-      }
+      // Command output larger than the 1MB data window is streamed rather than
+      // rejected. The command runs only on the offset-0 frame, so draining a
+      // multi-chunk result never re-executes it.
+      await this.serveChunkedResult(
+        OpCode.EXEC_COMMAND,
+        requestedCommand,
+        async () => {
+          let command = requestedCommand;
+          const dataStr = this.protocol.getDataAsString();
+          const options: CommandExecOptions = {
+            cwd: this.cwd,
+            signal: controller.signal,
+          };
+          if (dataStr) {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.stdin) {
+              options.stdin = parsed.stdin;
+            }
+            // Structured args (spawnSync): compose the command name + every arg
+            // into a single shell-quoted line. Each token (including the command
+            // name) is single-quoted, so args are forwarded as literal argv
+            // tokens — no glob, word-splitting, or metacharacter reparsing —
+            // preserving spawnSync semantics. This works regardless of the
+            // underlying exec engine, unlike the `options.args` injection path
+            // which only the (now-removed) monolith engine honored — the
+            // pipeline engine silently drops it (#49).
+            if (parsed.args && Array.isArray(parsed.args)) {
+              const argv = [
+                command,
+                ...parsed.args.map((a: unknown) => String(a)),
+              ];
+              command = shellJoinArgs(argv);
+            }
+          }
 
-      const result = await this.raceDeadline(() => execFn(command, options));
+          const result = await this.raceDeadline(() =>
+            execFn(command, options),
+          );
 
-      const response = JSON.stringify({
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exitCode: result.exitCode,
-      });
-      this.protocol.setResultFromString(response);
-      this.protocol.setStatus(Status.SUCCESS);
+          return new TextEncoder().encode(
+            JSON.stringify({
+              stdout: result.stdout,
+              stderr: result.stderr,
+              exitCode: result.exitCode,
+            }),
+          );
+        },
+      );
     } catch (e) {
+      this.resultCache = null;
       controller.abort();
       const message = e instanceof Error ? e.message : String(e);
-      this.protocol.setErrorCode(ErrorCode.IO_ERROR);
+      this.protocol.setErrorCode(
+        this.sizeAwareErrorCode(e, ErrorCode.IO_ERROR),
+      );
       this.protocol.setResultFromString(sanitizeErrorMessage(message));
       this.protocol.setStatus(Status.ERROR);
     }
   }
 
+  /**
+   * `PAYLOAD_TOO_LARGE` for a size-ceiling failure, otherwise `fallback`.
+   * Typed on the error class rather than sniffed from the message text.
+   */
+  private sizeAwareErrorCode(
+    e: unknown,
+    fallback: ErrorCodeType,
+  ): ErrorCodeType {
+    return e instanceof PayloadTooLargeError
+      ? ErrorCode.PAYLOAD_TOO_LARGE
+      : fallback;
+  }
+
   private setErrorFromException(e: unknown): void {
     const rawMessage = e instanceof Error ? e.message : String(e);
     const message = sanitizeErrorMessage(rawMessage);
+
+    // A size-ceiling failure is typed, so it never has to be recovered from the
+    // message text — and must not be flattened into a generic IO_ERROR.
+    if (e instanceof PayloadTooLargeError) {
+      this.protocol.setErrorCode(ErrorCode.PAYLOAD_TOO_LARGE);
+      this.protocol.setResultFromString(message);
+      this.protocol.setStatus(Status.ERROR);
+      return;
+    }
 
     let errorCode: ErrorCodeType = ErrorCode.IO_ERROR;
     const lowerMsg = rawMessage.toLowerCase();

@@ -72,9 +72,36 @@ export const ErrorCode = {
   TIMEOUT: 8,
   NETWORK_ERROR: 9,
   NETWORK_NOT_CONFIGURED: 10,
+  /**
+   * A payload could not be moved through the bridge because it exceeded a size
+   * ceiling. Distinct from IO_ERROR / NETWORK_ERROR so a caller can tell "your
+   * output was too big" apart from "the bridge (or the network) broke".
+   */
+  PAYLOAD_TOO_LARGE: 11,
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
+
+/**
+ * Thrown when a payload exceeds a bridge size ceiling — either the 1MB data
+ * window (for the operations that are still answered in a single shot) or the
+ * overall per-transfer cap. Carried as a distinct error type so the main-thread
+ * handler can map it to `ErrorCode.PAYLOAD_TOO_LARGE` by type rather than by
+ * sniffing the message text.
+ */
+export class PayloadTooLargeError extends Error {
+  /** Size of the payload that was rejected, in bytes. */
+  readonly size: number;
+  /** Ceiling it exceeded, in bytes. */
+  readonly limit: number;
+
+  constructor(what: string, size: number, limit: number) {
+    super(`${what} too large: ${size} > ${limit}`);
+    this.name = "PayloadTooLargeError";
+    this.size = size;
+    this.limit = limit;
+  }
+}
 
 // Buffer layout offsets.
 //
@@ -111,11 +138,17 @@ const Size = {
   CONTROL_REGION: 32,
   PATH_BUFFER: 4096,
   // The data window is 1MB. Payloads larger than this are NOT truncated:
-  // read/write split them into <=DATA_BUFFER chunks and stream them across
+  // read/write and the result-bearing operations (READDIR, HTTP_REQUEST,
+  // EXEC_COMMAND) split them into <=DATA_BUFFER chunks and stream them across
   // multiple synchronous round-trips via the chunked transfer framing
   // (see Offset.OFFSET / TOTAL_LENGTH / MORE). DATA_BUFFER therefore bounds the
-  // per-round-trip window, not the maximum file size. Kept at 1MB for fast
+  // per-round-trip window, not the maximum payload size. Kept at 1MB for fast
   // tests; raising it trades memory for fewer round-trips on large files.
+  //
+  // The operations that stay single-shot (READLINK, REALPATH, STAT/LSTAT,
+  // EXISTS) all produce results bounded well under the window by construction;
+  // if one ever does overflow it is rejected with ErrorCode.PAYLOAD_TOO_LARGE
+  // rather than a generic IO_ERROR, so the ceiling stays diagnosable.
   DATA_BUFFER: 1048576,
   // Maximum bytes moved in a single chunk (== the data window size).
   MAX_CHUNK: 1048576,
@@ -290,7 +323,7 @@ export class ProtocolBuffer {
 
   setData(data: Uint8Array): void {
     if (data.length > Size.DATA_BUFFER) {
-      throw new Error(`Data too large: ${data.length} > ${Size.DATA_BUFFER}`);
+      throw new PayloadTooLargeError("Data", data.length, Size.DATA_BUFFER);
     }
     this.uint8View.set(data, Offset.DATA_BUFFER);
     this.setDataLength(data.length);
@@ -308,7 +341,7 @@ export class ProtocolBuffer {
     more: boolean,
   ): void {
     if (chunk.length > Size.MAX_CHUNK) {
-      throw new Error(`Chunk too large: ${chunk.length} > ${Size.MAX_CHUNK}`);
+      throw new PayloadTooLargeError("Chunk", chunk.length, Size.MAX_CHUNK);
     }
     this.uint8View.set(chunk, Offset.DATA_BUFFER);
     this.setDataLength(chunk.length);
@@ -337,7 +370,7 @@ export class ProtocolBuffer {
 
   setResult(data: Uint8Array): void {
     if (data.length > Size.DATA_BUFFER) {
-      throw new Error(`Result too large: ${data.length} > ${Size.DATA_BUFFER}`);
+      throw new PayloadTooLargeError("Result", data.length, Size.DATA_BUFFER);
     }
     this.uint8View.set(data, Offset.DATA_BUFFER);
     this.setResultLength(data.length);
@@ -355,7 +388,7 @@ export class ProtocolBuffer {
     more: boolean,
   ): void {
     if (chunk.length > Size.MAX_CHUNK) {
-      throw new Error(`Chunk too large: ${chunk.length} > ${Size.MAX_CHUNK}`);
+      throw new PayloadTooLargeError("Chunk", chunk.length, Size.MAX_CHUNK);
     }
     this.uint8View.set(chunk, Offset.DATA_BUFFER);
     this.setResultLength(chunk.length);
