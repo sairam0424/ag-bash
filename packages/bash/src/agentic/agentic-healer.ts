@@ -1,3 +1,9 @@
+import {
+  getCommandNames,
+  getJavaScriptCommandNames,
+  getNetworkCommandNames,
+  getPythonCommandNames,
+} from "../commands/registry.js";
 import { NounsetError } from "../interpreter/errors.js";
 import { SHELL_BUILTINS } from "../interpreter/helpers/shell-constants.js";
 import type {
@@ -8,6 +14,93 @@ import { levenshtein, SymbolType } from "../lsp/semantic-engine.js";
 import type { ExecResult } from "../types.js";
 import type { BashToolbox } from "./BashToolbox.js";
 import type { AgenticHealerConfig, RetryableFailureType } from "./types.js";
+
+/**
+ * stderr fragments that name a missing PATH rather than a missing COMMAND.
+ * A missing file and a missing command are different failures with different
+ * remedies, so they must never collapse into one classification: renaming the
+ * command cannot fix a bad path, and normalizing a path cannot fix a typo'd
+ * command name.
+ */
+const PATH_FAILURE_SIGNALS: readonly string[] = Object.freeze([
+  "no such file",
+  "no such directory",
+  "cannot open",
+  "cannot access",
+  "cannot stat",
+]);
+
+/**
+ * Words that disambiguate a BARE "not found" (no "command" in the message).
+ * `sh: 1: gerp: not found` is a missing command. Every word here is one this
+ * engine actually emits next to "not found": `File '/x' not found.` and
+ * `Directory '/x' not found.` (interpreter/helpers/result.ts), `Error: File not
+ * found: /x` (commands/ag-convert, commands/ag-notebook), and `Path '/x' not
+ * found, but a case-insensitive match ... exists.` (observability/ag-trace).
+ */
+const PATH_SUBJECT_WORDS: readonly string[] = Object.freeze([
+  "file",
+  "directory",
+  "path",
+]);
+
+/** Correction targets must look like an invocable command name. */
+const COMMAND_NAME_SHAPE = /^[a-z0-9][a-z0-9._-]*$/;
+
+/**
+ * Typo-correction dictionary, DERIVED from the real command registry plus the
+ * shell builtin table.
+ *
+ * WHY DERIVED. This was a hand-written 43-name literal, which was wrong in both
+ * directions against a registry of ~117 commands: it OMITTED most of them
+ * (`git`, `jq`, `python3`, `sqlite3`, every `ag-*` tool), and since `heal()`
+ * gives up when no correction is produced, everything it omitted silently got
+ * no healing at all — while `gti status` matched the literal's `tr` and was
+ * "corrected" to `tr status`. It also INCLUDED four commands this engine does
+ * not implement (`chown`, `wget`, `unzip`, `patch`), so those corrections were
+ * guaranteed to fail again. Deriving from `getCommandNames()` and friends keeps
+ * the dictionary in step with the registry by construction; the two-character
+ * operators (`:`, `.`, `[`) are excluded because they are within one edit of
+ * almost any short token.
+ */
+const TYPO_CORRECTION_CANDIDATES: readonly string[] = Object.freeze(
+  Array.from(
+    new Set<string>([
+      ...getCommandNames(),
+      ...getNetworkCommandNames(),
+      ...getPythonCommandNames(),
+      ...getJavaScriptCommandNames(),
+      ...SHELL_BUILTINS,
+    ]),
+  ).filter((name) => name.length >= 2 && COMMAND_NAME_SHAPE.test(name)),
+);
+
+/**
+ * Finds the registered command closest to `cmdName`, or null when there is no
+ * confident match.
+ *
+ * Returns null when `cmdName` IS a known command (distance 0): the name is then
+ * demonstrably not the problem, and suggesting the next-nearest neighbour would
+ * rewrite a perfectly good command. The edit budget is capped at
+ * `min(2, length - 1)` so a correction can never rewrite the whole token —
+ * without that, a one-character command matches `ls`/`rm`/`cp` at distance 2.
+ */
+function findClosestCommand(cmdName: string): string | null {
+  const maxDistance = Math.min(2, cmdName.length - 1);
+  if (maxDistance < 1) return null;
+
+  let bestMatch: string | null = null;
+  let bestDistance = Infinity;
+  for (const known of TYPO_CORRECTION_CANDIDATES) {
+    const distance = levenshtein(cmdName, known);
+    if (distance === 0) return null;
+    if (distance <= maxDistance && distance < bestDistance) {
+      bestDistance = distance;
+      bestMatch = known;
+    }
+  }
+  return bestMatch;
+}
 
 /**
  * Agentic Healer for Ag-Bash.
@@ -275,25 +368,60 @@ SHELL_STABLE: ${state.options.posix ? "POSIX" : "BASH"}
     execFn: (cmd: string) => Promise<ExecResult>,
     attempt: number = 0,
   ): Promise<ExecResult | null> {
+    // The original command is seeded as already-attempted so no chain of
+    // corrections can loop back and re-run the caller's own command.
+    return this.healAttempt(
+      command,
+      result,
+      execFn,
+      attempt,
+      new Set([command]),
+    );
+  }
+
+  /**
+   * Recursive body of {@link heal}.
+   *
+   * `attempted` carries every command string this heal chain has already run.
+   * Without it the recursion re-derives the SAME correction from the corrected
+   * command (a known command is its own nearest neighbour) and re-executes the
+   * identical command once per remaining retry — so a wrong correction was
+   * applied `maxRetries` times instead of once, side effects included. It is
+   * threaded as a new Set per level rather than mutated, and is per-call rather
+   * than per-instance so a healer shared across commands never refuses a
+   * legitimate later retry of the same command.
+   */
+  private async healAttempt(
+    command: string,
+    result: ExecResult,
+    execFn: (cmd: string) => Promise<ExecResult>,
+    attempt: number,
+    attempted: ReadonlySet<string>,
+  ): Promise<ExecResult | null> {
     const config = this.config?.autoRetry;
     if (!config?.enabled) return null;
 
     const maxRetries = config.maxRetries ?? 3;
     if (attempt >= maxRetries) return null;
 
-    // Determine if this failure type is retryable
+    // If we cannot classify the failure at all, skip healing
     const failureType = this.classifyFailure(result);
+    if (!failureType) return null;
+
+    // Determine if this failure type is retryable
     const retryable: RetryableFailureType[] = config.retryable ?? [
       "command_not_found",
       "file_not_found",
     ];
-    if (failureType && !retryable.includes(failureType)) return null;
-    // If we cannot classify the failure at all, skip healing
-    if (!failureType) return null;
+    if (!retryable.includes(failureType)) return null;
 
     // Try to determine a corrected command
     const correction = this.suggestCorrection(command, result);
     if (!correction) return null;
+
+    // Re-running a command this chain already ran is not progress: it would
+    // reproduce the same failure and re-apply the same side effects.
+    if (attempted.has(correction)) return null;
 
     // Exponential backoff
     const delay = (config.baseDelayMs ?? 100) * 2 ** attempt;
@@ -306,20 +434,40 @@ SHELL_STABLE: ${state.options.posix ? "POSIX" : "BASH"}
     }
 
     // Recursive retry with incremented attempt
-    return this.heal(correction, retryResult, execFn, attempt + 1);
+    return this.healAttempt(
+      correction,
+      retryResult,
+      execFn,
+      attempt + 1,
+      new Set([...attempted, correction]),
+    );
   }
 
   /**
    * Classify a failure result into a known category.
    * Returns null if the failure does not match any recognized pattern.
+   *
+   * A bare "not found" is deliberately checked LAST of the not-found forms: it
+   * used to be tested first, which read every "File not found: /x" and
+   * "Directory '/x' not found." this engine emits as a missing COMMAND, so a
+   * path failure was offered the command-name remedy (and was filtered by the
+   * wrong entry of `autoRetry.retryable`).
    */
   public classifyFailure(result: ExecResult): RetryableFailureType | null {
     const stderr = result.stderr.toLowerCase();
-    if (stderr.includes("command not found") || stderr.includes("not found")) {
+
+    // Unambiguous: the message says the command itself was not found.
+    if (stderr.includes("command not found")) {
       return "command_not_found";
     }
-    if (stderr.includes("no such file") || stderr.includes("cannot open")) {
+    if (PATH_FAILURE_SIGNALS.some((signal) => stderr.includes(signal))) {
       return "file_not_found";
+    }
+    if (stderr.includes("not found")) {
+      // Ambiguous wording: a path noun in the message means a path was missing.
+      return PATH_SUBJECT_WORDS.some((word) => stderr.includes(word))
+        ? "file_not_found"
+        : "command_not_found";
     }
     if (stderr.includes("permission denied")) {
       return "permission_denied";
@@ -333,87 +481,31 @@ SHELL_STABLE: ${state.options.posix ? "POSIX" : "BASH"}
   /**
    * Attempt to produce a corrected command string based on error analysis.
    * Uses Levenshtein distance to find close matches for typo'd commands.
+   *
+   * The remedy is selected by {@link classifyFailure} so the diagnosis and the
+   * mutation cannot disagree: a missing command gets a name correction, a
+   * missing path gets path normalization, and anything else gets nothing.
+   * A "correction" identical to the input is reported as no correction, since
+   * re-running the same string is not a fix.
    */
   public suggestCorrection(command: string, result: ExecResult): string | null {
-    const stderr = result.stderr;
+    const failureType = this.classifyFailure(result);
+    let corrected: string | null = null;
 
-    // Pattern: "command not found" with a close match
-    if (stderr.toLowerCase().includes("command not found")) {
+    if (failureType === "command_not_found") {
       const parts = command.trim().split(/\s+/);
-      const cmd = parts[0];
-      const knownCommands = [
-        "grep",
-        "echo",
-        "cat",
-        "ls",
-        "cd",
-        "pwd",
-        "find",
-        "sed",
-        "awk",
-        "sort",
-        "head",
-        "tail",
-        "wc",
-        "tr",
-        "cut",
-        "mkdir",
-        "rm",
-        "cp",
-        "mv",
-        "touch",
-        "chmod",
-        "chown",
-        "curl",
-        "wget",
-        "tar",
-        "gzip",
-        "gunzip",
-        "unzip",
-        "diff",
-        "patch",
-        "tee",
-        "xargs",
-        "date",
-        "env",
-        "export",
-        "source",
-        "test",
-        "true",
-        "false",
-        "printf",
-        "read",
-        "basename",
-        "dirname",
-      ];
-
-      // Find closest match by edit distance
-      let bestMatch: string | null = null;
-      let bestDist = Infinity;
-      for (const known of knownCommands) {
-        const dist = levenshtein(cmd, known);
-        if (dist < bestDist && dist <= 2) {
-          bestDist = dist;
-          bestMatch = known;
-        }
-      }
-
-      if (bestMatch) {
+      const replacement = findClosestCommand(parts[0]);
+      if (replacement) {
         const correctedParts = [...parts];
-        correctedParts[0] = bestMatch;
-        return correctedParts.join(" ");
+        correctedParts[0] = replacement;
+        corrected = correctedParts.join(" ");
       }
-    }
-
-    // Pattern: "no such file or directory" - try common path corrections
-    if (stderr.toLowerCase().includes("no such file")) {
+    } else if (failureType === "file_not_found") {
       // Attempt to fix double slashes or trailing issues
-      const corrected = command.replace(/\/\//g, "/");
-      if (corrected !== command) {
-        return corrected;
-      }
+      corrected = command.replace(/\/\//g, "/");
     }
 
-    return null;
+    if (!corrected || corrected === command) return null;
+    return corrected;
   }
 }
