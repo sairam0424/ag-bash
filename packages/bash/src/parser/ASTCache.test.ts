@@ -399,6 +399,106 @@ describe("ASTCache", () => {
     });
   });
 
+  describe("verify-on-hit: a key collision must never return the wrong AST", () => {
+    /**
+     * A natural FNV-1a-64 collision is not producible in a test (it needs ~2^32
+     * birthday work against a 64-bit digest, and the length prefix on top), so
+     * these tests exercise the MECHANISM: two distinct sources are forced onto
+     * one cache key by stubbing the key derivation. Correctness must come from
+     * verifying the source on hit, not from the hash being wide enough.
+     */
+    function forceSharedKey(target: ASTCache, key: string): void {
+      // getKey is private to TS but a normal prototype method at runtime.
+      vi.spyOn(
+        target as unknown as { getKey(input: string): string },
+        "getKey",
+      ).mockReturnValue(key);
+    }
+
+    it("should return a miss (not the other script's AST) when two sources share a key", () => {
+      forceSharedKey(cache, "collide");
+      const astAlpha = makeAST(1);
+      cache.set("echo alpha", astAlpha);
+
+      // "echo bravo" was never cached; it merely collides with "echo alpha".
+      // Returning astAlpha here would make the interpreter run the WRONG script.
+      expect(cache.get("echo bravo")).toBeNull();
+    });
+
+    it("should still hit for the source that actually owns the colliding slot", () => {
+      forceSharedKey(cache, "collide");
+      const astAlpha = makeAST(1);
+      cache.set("echo alpha", astAlpha);
+
+      expect(cache.get("echo bravo")).toBeNull();
+      // The rightful owner is untouched by the colliding probe.
+      expect(cache.get("echo alpha")).toBe(astAlpha);
+    });
+
+    it("should count a collision as a miss and report it separately in stats", () => {
+      forceSharedKey(cache, "collide");
+      cache.set("echo alpha", makeAST(1));
+
+      expect(cache.stats().collisions).toBe(0);
+      cache.get("echo bravo");
+      expect(cache.stats().collisions).toBe(1);
+      // A collision is a miss from the caller's perspective.
+      expect(cache.stats().misses).toBe(1);
+      expect(cache.stats().hits).toBe(0);
+    });
+
+    it("should let the colliding source take over the slot after it is re-parsed", () => {
+      forceSharedKey(cache, "collide");
+      const astAlpha = makeAST(1);
+      const astBravo = makeAST(2);
+      cache.set("echo alpha", astAlpha);
+
+      // Mirrors parse-stage: miss -> parse -> set.
+      expect(cache.get("echo bravo")).toBeNull();
+      cache.set("echo bravo", astBravo);
+
+      expect(cache.get("echo bravo")).toBe(astBravo);
+      // Now "echo alpha" is the collider and must also miss rather than get astBravo.
+      expect(cache.get("echo alpha")).toBeNull();
+      // One slot, never two entries under one key.
+      expect(cache.stats().size).toBe(1);
+    });
+
+    it("should compare source by value, so an independently built equal string hits", () => {
+      // Both strings are built at runtime by different means, so the test does
+      // not lean on literal interning — verification must be a value compare.
+      const stored = ["echo", "hello", "world"].join(" ");
+      const probe = `echo hello ${"wor"}${"ld"}`;
+      expect(probe).toEqual(stored);
+      const ast = makeAST();
+      cache.set(stored, ast);
+
+      // Equal content, distinct string instance: must be a real hit, not a collision.
+      expect(cache.get(probe)).toBe(ast);
+      expect(cache.stats().collisions).toBe(0);
+      expect(cache.stats().hits).toBe(1);
+    });
+
+    it("should reset the collision counter on clear()", () => {
+      forceSharedKey(cache, "collide");
+      cache.set("echo alpha", makeAST(1));
+      cache.get("echo bravo");
+      expect(cache.stats().collisions).toBe(1);
+
+      cache.clear();
+      expect(cache.stats().collisions).toBe(0);
+    });
+
+    it("should keep collisions at zero on the ordinary hit/miss paths", () => {
+      cache.set("echo one", makeAST(1));
+      cache.get("echo one"); // hit
+      cache.get("echo two"); // plain miss, no entry at that key
+      expect(cache.stats().hits).toBe(1);
+      expect(cache.stats().misses).toBe(1);
+      expect(cache.stats().collisions).toBe(0);
+    });
+  });
+
   describe("synchronous getKey / hot-path contract", () => {
     it("get returns synchronously (no promise/await) immediately after construction", () => {
       const freshCache = new ASTCache();
