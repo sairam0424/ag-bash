@@ -210,7 +210,8 @@ class VirtualShell {
     Theme.printBrandManifest();
 
     const stats = {
-      commands: 100, // Approximate
+      // `commands` is intentionally omitted: printManifest derives it from the
+      // command registry so this banner cannot drift from ag-bash's.
       filesystems: 2,
       python: "Enabled",
       javascript: "Enabled",

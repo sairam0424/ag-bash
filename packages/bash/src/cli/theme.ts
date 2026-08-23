@@ -3,6 +3,8 @@
  * Rigid, high-fidelity CLI aesthetic with neon highlights.
  */
 
+import { getCommandNames } from "../commands/registry.js";
+
 const TTY = process.stdout.isTTY;
 
 interface ThemeStats {
@@ -249,7 +251,12 @@ export const Theme: {
   printManifest(stats: Partial<ThemeStats> = {}) {
     const c = this.colors;
     const {
-      commands = 100,
+      // Derived from the command registry — the sole source of truth for the
+      // builtin count. Counts BARE builtins only; the runtime-gated extras
+      // (curl / python3 / python / js-exec / node) are reported by the PYTHON
+      // and JAVASCRIPT rows below, so counting them here would double-report
+      // them and would make the number vary by invocation.
+      commands = getCommandNames().length,
       filesystems = 2,
       python = "Available",
       javascript = "Available",

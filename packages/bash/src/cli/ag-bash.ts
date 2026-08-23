@@ -297,7 +297,8 @@ async function main(): Promise<void> {
       Theme.printHeader(VERSION);
       Theme.printBrandManifest();
       Theme.printManifest({
-        commands: 120,
+        // `commands` is intentionally omitted: printManifest derives it from the
+        // command registry so this banner cannot drift from ag-shell's.
         filesystems: 2,
         python: options.python ? "Enabled" : "Available",
         javascript: options.javascript ? "Enabled" : "Available",
