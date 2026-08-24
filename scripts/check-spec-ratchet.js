@@ -24,6 +24,18 @@
  *                       The spec harness already enforces this shape for `## SKIP`
  *                       markers (it fails on UNEXPECTED PASS); this mirrors it.
  *
+ * ...AND ON ANYTHING RED IT CANNOT BUCKET
+ * ---------------------------------------
+ * Not every test under `src/spec-tests/**` is a conformance case: `runner.test.ts`
+ * unit-tests the harness itself, and each suite may carry a suite-level guard
+ * (`it("All test files are currently skipped")`) that has no case file. Those are
+ * NOT spec cases and must stay out of the scorecard — but "not a spec case" must
+ * never collapse into "not checked". This lane is the only place they are
+ * collected at all (`vitest.unit.config.ts` excludes `**\/spec-tests/**`), so a
+ * non-spec test that PASSES is ignored quietly while one that FAILS aborts the
+ * gate. Dropping them wholesale is how a deliberately-failing test sat in
+ * `src/spec-tests/` while this script printed `[OK]` and exited 0.
+ *
  * KEY FORMAT — `<case-file>::<case name>`
  * --------------------------------------
  * Deliberately NOT keyed on line number: upstream re-imports shift every line in
@@ -66,6 +78,28 @@ const SPEC_TESTS_GLOB = "src/spec-tests/";
 
 /** Suites whose case files expose a recoverable `#### <name>` header. */
 const KEYED_SUITES = new Set(["bash"]);
+
+/**
+ * A conformance suite is a DIRECTORY under `src/spec-tests/` holding its cases in
+ * `<suite>/cases/`, so `dirname()` of a suite test file names the suite. It
+ * returns "." for a file sitting directly in the spec-tests root, which is
+ * therefore a colocated unit test (runner.test.ts) and not a suite at all.
+ * Keyed on layout rather than on a filename so a second such unit test needs no
+ * change here.
+ */
+const NOT_A_SUITE = ".";
+
+/**
+ * Assertion statuses that are safe to ignore on a NON-spec test. Anything else —
+ * a failure, or a status this script has never been taught — must reach a human
+ * instead of being skipped as unbucketable.
+ */
+const IGNORABLE_NON_SPEC_STATUSES = new Set([
+  "passed",
+  "skipped",
+  "pending",
+  "todo",
+]);
 
 /** Only these top-level keys are allowed in the baseline file. */
 const BASELINE_KEYS = new Set([
@@ -250,6 +284,7 @@ function resolveCaseName(suite, caseFileRel, title) {
 /** Flatten a vitest JSON report into keyed spec cases. */
 function collectCases(report) {
   const cases = [];
+  const nonSpecFailures = [];
   const unresolved = [];
   const seenKeys = new Map();
 
@@ -263,10 +298,21 @@ function collectCases(report) {
     const suite = dirname(specTestPath);
 
     for (const assertion of fileResult.assertionResults) {
+      // A conformance case needs BOTH a suite directory (its case file lives in
+      // `<suite>/cases/`) and a case-file group title. Anything else is a plain
+      // test that merely sits under src/spec-tests/: a colocated unit test, or a
+      // suite-level guard like "All test files are currently skipped" that has
+      // no case file. Those get no scorecard bucket - but see below: not being a
+      // spec case is not permission to ignore a red one.
       const group = assertion.ancestorTitles[1];
-      if (!group) {
-        // Suite-level guard tests (e.g. "All test files are currently skipped")
-        // have no case file; they are covered by the suite gate itself.
+      if (suite === NOT_A_SUITE || !group) {
+        if (!IGNORABLE_NON_SPEC_STATUSES.has(assertion.status)) {
+          nonSpecFailures.push({
+            location: specTestPath,
+            name: [...assertion.ancestorTitles, assertion.title].join(" > "),
+            status: assertion.status,
+          });
+        }
         continue;
       }
       const caseFileRel = join(suite, "cases", group);
@@ -301,6 +347,26 @@ function collectCases(report) {
         status: assertion.status,
       });
     }
+  }
+
+  if (nonSpecFailures.length > 0) {
+    // No scorecard here on purpose: runner.test.ts covers the very outcome
+    // classification every bucket below is derived from, so while it is red the
+    // pass/skip/fail split is not trustworthy enough to print as a score.
+    fail(
+      `${nonSpecFailures.length} non-conformance test(s) under src/spec-tests/ did not pass:\n` +
+        nonSpecFailures
+          .map(
+            (entry) =>
+              `  ${entry.status.toUpperCase()}  ${entry.location} :: ${entry.name}`,
+          )
+          .join("\n") +
+        "\n\nThese are not spec cases, so they get no scorecard bucket and no\n" +
+        `${BASELINE_REL} entry - the baseline is only for conformance cases.\n` +
+        "Fix the test. This gate is the only one that collects them, so ignoring\n" +
+        "it here means nothing enforces them at all.\n" +
+        "See the failure detail with: node scripts/check-spec-ratchet.js --verbose",
+    );
   }
 
   if (unresolved.length > 0) {
@@ -514,8 +580,9 @@ const HELP = `check-spec-ratchet - shell-compat scorecard + allowed-failures rat
   node scripts/check-spec-ratchet.js --update          rewrite ${BASELINE_REL}
   node scripts/check-spec-ratchet.js --verbose         stream the vitest output
 
-Exits non-zero on a new failure (regression) or a stale baseline entry
-(a case that now passes but is still listed).
+Exits non-zero on a new failure (regression), a stale baseline entry
+(a case that now passes but is still listed), or any non-conformance test
+under src/spec-tests/ that is red - no lane but this one collects those.
 `;
 
 function main() {
