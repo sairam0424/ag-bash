@@ -29,6 +29,14 @@ export interface TestResult {
   skipReason?: string;
   /** Test was expected to fail (## SKIP) but unexpectedly passed */
   unexpectedPass?: boolean;
+  /**
+   * Execution threw instead of producing a result. Categorically distinct from
+   * both a deliberate skip and an output/status mismatch: a real bash never
+   * throws, it exits with a status, so an exception escaping `exec()` is an
+   * ENGINE fault rather than a bash-compat divergence. Always accompanies
+   * `passed: false, skipped: false`.
+   */
+  errored?: boolean;
   actualStdout?: string;
   actualStderr?: string;
   actualStatus?: number;
@@ -242,21 +250,46 @@ export async function runTestCase(
       error: errors.length > 0 ? errors.join("\n") : undefined,
     };
   } catch (e) {
-    // If test was expected to fail and threw an error, that counts as expected failure
+    const detail = e instanceof Error ? e.message : String(e);
+    // An exception escaping exec() is an ENGINE fault, not a bash-compat
+    // divergence: a real bash exits with a status, it never throws. So it is
+    // NOT a skip, even on a `## SKIP` case.
+    //
+    // This used to return `{ passed: true, skipped: true }` here, which made a
+    // crash unable to fail the gate at all: bash/spec.test.ts turns `skipped`
+    // into ctx.skip(), and scripts/check-spec-ratchet.js buckets off that
+    // reporter status - so the case left the "failed" population entirely and
+    // no baseline entry could ever be required for it. Worse, the ratchet
+    // treats a baseline entry whose case became skipped as STALE, so a case
+    // that regressed from "fails on output" to "crashes" would have DELETED
+    // its own allowed-failure entry while reporting green.
+    //
+    // A `## SKIP` marker documents an expected stdout/stderr/status
+    // divergence, which is what the non-throwing path above checks. It does
+    // not license an exception. The plain-failure path below already treated a
+    // throw as a failure, so the old asymmetry meant an identical crash got
+    // the opposite verdict purely because someone had written `## SKIP` on the
+    // case. Both are now failures, and both carry `errored: true` so a
+    // consumer can distinguish an engine crash from a wrong-output failure.
     if (expectedToFail) {
       return {
         testCase,
-        passed: true,
-        skipped: true,
-        skipReason: `## SKIP: ${skipReason}`,
-        error: `Execution error (expected): ${e instanceof Error ? e.message : String(e)}`,
+        passed: false,
+        skipped: false,
+        errored: true,
+        error:
+          `Execution error (crash, NOT a skip) on a case marked ## SKIP (${skipReason}): ${detail}\n` +
+          "A ## SKIP marker documents an expected output/status divergence, not an exception " +
+          "escaping exec(). Fix the crash, or - with a written reason - add this case to " +
+          "packages/bash/spec-baseline.json so it is an acknowledged, ratcheted failure.",
       };
     }
     return {
       testCase,
       passed: false,
       skipped: false,
-      error: `Execution error: ${e instanceof Error ? e.message : String(e)}`,
+      errored: true,
+      error: `Execution error: ${detail}`,
     };
   }
 }
