@@ -554,11 +554,13 @@ describe("plan mode write-path matrix: LAYER_TOOL (agentic toolbox)", () => {
     expect(await control.fs.readFile("/s.txt")).toContain("pwned");
   });
 
-  it("BYPASS (7.0 must block) [LAYER_TOOL]: ag_multi_edit rewrites the file in plan mode", async () => {
-    // MultiReplaceTool.ts:44-47 sets isDestructive: true and then overrides
-    // checkPermissions with an unconditional allow, so Tool.ts:65 never runs.
-    // The write itself is MultiReplaceTool.ts:114-115 bash.fs.mkdir +
-    // bash.writeFileDirect, i.e. LAYER_DIRECT — no command dispatch either.
+  it("BLOCKED [LAYER_TOOL]: ag_multi_edit is denied in plan mode", async () => {
+    // Was a BYPASS: MultiReplaceTool.ts used to set isDestructive: true and then
+    // override checkPermissions with an unconditional allow, so Tool.ts:65 never
+    // ran. The override is gone, so the default isDestructive-keyed gate now
+    // applies, matching ag_edit below. Deny alone proves nothing — a fix that
+    // denied the tool everywhere would be a worse outcome than the bypass — so
+    // this also proves the tool still WORKS in execute mode.
     const bash = new Bash();
     await bash.exec(SEED);
     await bash.readFileDirect("/s.txt"); // satisfies the staleness check
@@ -569,8 +571,19 @@ describe("plan mode write-path matrix: LAYER_TOOL (agentic toolbox)", () => {
         chunks: [{ target: "seed", replacement: "pwned" }],
       }),
     );
-    expect(result).not.toContain("Permission Denied");
-    expect(await bash.fs.readFile("/s.txt")).toBe("pwned\n");
+    expect(result).toContain("Permission Denied");
+    expect(await bash.fs.readFile("/s.txt")).toBe("seed\n");
+
+    const control = new Bash();
+    await control.exec(SEED);
+    const controlResult = String(
+      await control.toolbox.callTool(control, "ag_multi_edit", {
+        path: "/s.txt",
+        chunks: [{ target: "seed", replacement: "pwned" }],
+      }),
+    );
+    expect(controlResult).not.toContain("Permission Denied");
+    expect(await control.fs.readFile("/s.txt")).toBe("pwned\n");
   });
 
   it("BYPASS (7.0 must block) [LAYER_TOOL]: ag_todo writes todos.json in plan mode", async () => {

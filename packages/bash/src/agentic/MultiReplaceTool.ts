@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Bash } from "../Bash.js";
 import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
-import type { ToolboxTool } from "./Tool.js";
+import { buildTool, type ToolboxTool } from "./Tool.js";
 
 interface MultiReplaceArgs {
   path: string;
@@ -32,22 +32,29 @@ type MultiReplaceResult =
  *
  * Supports replacing multiple non-contiguous blocks of text in a single operation.
  * Automatically handles quote normalization and provides detailed error reporting.
+ *
+ * Built through `buildTool` (like EditTool) rather than declared as a bare
+ * object literal, so both defaults from Tool.ts apply:
+ *  - `checkPermissions` -> the plan-mode gate, which keys on `isDestructive`.
+ *    This tool writes via bash.writeFileDirect, so it MUST be denied in plan
+ *    mode. It previously overrode the hook with an unconditional
+ *    `{ behavior: "allow" }` (annotated "in a real system, we'd check write
+ *    permissions here"), which outranked the fallback and let ag_multi_edit
+ *    rewrite files in plan mode while write_file/ag_edit were correctly denied.
+ *  - `validateInput` -> `parameters.safeParse`. The previous
+ *    `async () => ({ result: true })` stub suppressed it, so malformed input
+ *    (e.g. `chunks` as a string) reached execute and died on a raw TypeError.
+ * Do not re-add either override.
  */
 export const MultiReplaceTool: ToolboxTool<
   MultiReplaceArgs,
   MultiReplaceResult
-> = {
+> = buildTool<MultiReplaceArgs, MultiReplaceResult>({
   name: "ag_multi_edit",
   description:
     "Apply multiple non-contiguous text replacements to a file in a single operation.",
   parameters: multiReplaceParameters,
   isDestructive: true,
-  checkPermissions: async (_bash: Bash) => {
-    return { behavior: "allow" }; // In a real system, we'd check write permissions here
-  },
-  validateInput: async (_args: unknown) => {
-    return { result: true };
-  },
   execute: async (bash: Bash, { path, chunks }: MultiReplaceArgs) => {
     try {
       const state = bash.getFileState(path);
@@ -125,4 +132,4 @@ export const MultiReplaceTool: ToolboxTool<
       return `Error in ag_multi_edit for ${path}: ${sanitizeErrorMessage(message)}`;
     }
   },
-};
+});
