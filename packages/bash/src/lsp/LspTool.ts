@@ -1,11 +1,27 @@
 import { z } from "zod";
-import type { ToolboxTool } from "../agentic/Tool.js";
+import { buildTool, type ToolboxTool } from "../agentic/Tool.js";
 import type { Bash } from "../Bash.js";
 
 /**
  * ag_lsp: Unified tool for code intelligence.
+ *
+ * Built through `buildTool` so the Tool.ts defaults apply:
+ *  - `validateInput` -> `parameters.safeParse`. An explicit
+ *    `async () => ({ result: true })` stub used to sit here and suppressed it,
+ *    handing unvalidated model-controlled input straight to execute (a missing
+ *    or non-string `filePath` reached `filePath.split(".")` in
+ *    LSPManager.sendRequest, and `operation` was not held to its enum). This is
+ *    the same anti-pattern already removed from ag_web_search, where it had
+ *    enabled shell injection — see the warning comments in
+ *    commands/ag-web/ag-web-search.ts and ag-web-fetch.ts.
+ *  - `checkPermissions` -> the plan-mode gate keyed on `isDestructive`. This
+ *    tool is read-only, so the gate allows it exactly as the old hardcoded
+ *    `{ behavior: "allow" }` did; deferring to the gate means the day ag_lsp
+ *    gains a write (applyEdit / rename / code actions are the obvious next
+ *    operations), plan mode covers it instead of silently not applying.
+ * Do not re-add either override.
  */
-export const LspTool: ToolboxTool = {
+export const LspTool: ToolboxTool = buildTool<any, any>({
   name: "ag_lsp",
   description:
     "Advanced code intelligence: goToDefinition, findReferences, hover, etc.",
@@ -42,8 +58,6 @@ export const LspTool: ToolboxTool = {
   }),
   isReadOnly: true,
   isDestructive: false,
-  checkPermissions: async (_bash: Bash, _args: any) => ({ behavior: "allow" }),
-  validateInput: async (_args: any) => ({ result: true }),
   execute: async (bash: Bash, args: any) => {
     const manager = bash.services.lspManager;
 
@@ -81,4 +95,4 @@ export const LspTool: ToolboxTool = {
       return `LSP Error: ${error.message}`;
     }
   },
-};
+});
