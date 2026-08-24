@@ -1272,10 +1272,36 @@ export class Bash extends EventEmitter {
 
   /**
    * Restores the shell to a previously captured snapshot.
+   *
+   * Ordering is load-bearing, in three ways:
+   *
+   * 1. `fs.restore` is a MUTATING `IFileSystem` method — the plan-mode guard
+   *    already classifies it as destructive alongside `writeFile`/`rm`/`mkdir`
+   *    (see the `isWriteOp` set in
+   *    `interpreter/defense-aware-command-context.ts`) and reads the mode LIVE
+   *    off this instance. Adopting `snapshot.state` first would publish the
+   *    snapshot's `mode` before the mutator runs, so restoring a `mode: "plan"`
+   *    snapshot made the instance block its own restore — which would break
+   *    every {@link fork} and {@link speculate} in a plan-mode session, since
+   *    both go through `new Bash(...)` + `restore()`.
+   * 2. The same premature assignment DISARMS the guard in the other direction:
+   *    a plan-mode instance restoring an `execute`-mode snapshot would flip
+   *    itself to `execute` and then replace its whole filesystem unchallenged.
+   *    Running the mutator under the OLD mode keeps that refusal intact — no
+   *    mode-exempt path is introduced here.
+   * 3. Failure atomicity: `cloneState` is pure and runs first, so a malformed
+   *    snapshot mutates nothing, and a throwing `fs.restore` leaves this
+   *    instance entirely on its pre-restore state instead of pairing the
+   *    snapshot's state (and mode) with the old filesystem.
+   *
+   * Note: `fs.restore` itself is not transactional, so a backend that fails
+   * midway can still leave the filesystem partially restored. What is
+   * guaranteed here is that the interpreter state moves only if it succeeded.
    */
   async restore(snapshot: BashSnapshot): Promise<void> {
-    this.state = this.cloneState(snapshot.state);
+    const nextState = this.cloneState(snapshot.state);
     await this.fs.restore(snapshot.fs);
+    this.state = nextState;
   }
 
   /**
