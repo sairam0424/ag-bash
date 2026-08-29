@@ -609,7 +609,13 @@ export class Bash extends EventEmitter {
       gid: this.state.virtualGid,
     });
 
-    if (cwd !== "/" && fs instanceof InMemoryFs) {
+    // `fs` is always a MountableFs (see assignment above), so this check
+    // against the raw InMemoryFs class never matched and this cwd-creation
+    // step was dead code. MountableFs.mkdirSync delegates to whichever base
+    // filesystem is mounted at `cwd`, so drop the instanceof guard — the
+    // try/catch below still protects backends that don't support mkdirSync
+    // (e.g. some real-fs mounts) or where cwd already exists.
+    if (cwd !== "/") {
       try {
         fs.mkdirSync(cwd, { recursive: true });
       } catch {
