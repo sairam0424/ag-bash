@@ -1,3 +1,29 @@
 packages:
   - "packages/*"
   - "examples/*"
+
+# Supply-chain gate (E3): `pnpm audit --audit-level=high` in Quality CI MUST
+# fail the build on high/critical advisories. These overrides pin transitive
+# dependencies to patched versions when the vulnerable package isn't a direct
+# dependency we control. Add/update entries here (NOT in package.json's
+# "pnpm.overrides" field — pnpm >=10 no longer reads that location) whenever
+# a new Dependabot advisory lands and can't be closed via a direct bump.
+#
+# Selector syntax `"<pkg>@<major>"` scopes the override to only that major
+# line, so packages with multiple resolved majors in the tree (e.g. a 1.x
+# line pulled in by old eslint deps AND a 5.x line pulled in by newer ones)
+# each get patched independently instead of being forced to a single version.
+overrides:
+  fast-xml-builder: ">=1.1.7"
+  sanitize-html: ">=2.17.5"
+  esbuild: ">=0.28.1"
+  undici: "7.29.0"
+  "brace-expansion@1": "1.1.18"
+  "brace-expansion@5": "5.0.9"
+  "js-yaml@3": "3.15.2"
+  "js-yaml@4": "4.3.2"
+  postcss: "8.5.26"
+  sharp: "0.35.4"
+  vite: "8.2.2"
+  "@babel/core": "7.29.7"
+  ws: "8.21.3"
