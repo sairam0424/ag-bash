@@ -15,7 +15,7 @@
     "geist": "^1.5.1",
     "@ag-bash/bash": "workspace:*",
     "@ag-bash/agent-bridge": "workspace:*",
-    "next": "16.2.0-canary.26",
+    "next": "16.3.1",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
