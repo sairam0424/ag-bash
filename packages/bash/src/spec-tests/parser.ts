@@ -12,6 +12,14 @@ export interface FileHeader {
   oilsFailuresAllowed?: number;
   compareShells?: string[];
   tags?: string[];
+  /**
+   * Oils spec test convention: when "yes", the test file references a
+   * `_tmp/` scratch directory (relative to cwd) that the test *runner* is
+   * expected to create up front, rather than each test case creating it
+   * itself. Without this, `touch _tmp/foo` etc. fail with ENOENT because
+   * the directory never existed.
+   */
+  legacyTmpDir?: boolean;
 }
 
 export interface Assertion {
@@ -267,6 +275,9 @@ function parseHeaderLine(line: string, header: FileHeader): void {
       break;
     case "tags":
       header.tags = value.split(/\s+/);
+      break;
+    case "legacy_tmp_dir":
+      header.legacyTmpDir = value === "yes";
       break;
   }
 }

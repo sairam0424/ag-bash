@@ -41,6 +41,13 @@ export interface RunOptions {
   bashEnvOptions?: ConstructorParameters<typeof Bash>[0];
   /** File path for the test file */
   filePath?: string;
+  /**
+   * Oils spec test convention (`## legacy_tmp_dir: yes` file header): the
+   * test file references a `_tmp/` scratch directory relative to cwd that
+   * must already exist before the script runs (real bash test runners
+   * create it up front rather than each test case creating it itself).
+   */
+  legacyTmpDir?: boolean;
 }
 
 /**
@@ -93,6 +100,9 @@ export async function runTestCase(
       "/dev/zero": "",
       // Set up /bin directory
       "/bin/_keep": "",
+      // Legacy spec tests (`## legacy_tmp_dir: yes`) reference a `_tmp/`
+      // scratch directory relative to cwd, and expect it to already exist.
+      ...(options.legacyTmpDir ? { "/tmp/_tmp/_keep": "" } : {}),
     },
     cwd: "/tmp",
     env: {

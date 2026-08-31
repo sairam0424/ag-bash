@@ -97,6 +97,7 @@ import {
   testResult,
   throwExecutionLimit,
 } from "./helpers/result.js";
+import { POSIX_SPECIAL_BUILTINS } from "./helpers/shell-constants.js";
 import {
   isWordLiteralMatch,
   parseRwFdContent,
@@ -839,6 +840,34 @@ export class Interpreter {
     return bytes;
   }
 
+  /**
+   * Revert prefix/temporary variable assignments (`FOO=bar cmd`) back to
+   * their pre-command values. POSIX (and bash in `set -o posix` mode) keeps
+   * them persistent when the command is a POSIX *special* builtin (`:`,
+   * `.`, `break`, `continue`, `eval`, `exec`, `exit`, `export`, `readonly`,
+   * `return`, `set`, `shift`, `trap`, `unset`) - otherwise (the common
+   * case, and always outside posix mode) they must not leak into the
+   * shell's environment once the command finishes.
+   */
+  private revertTempAssignments(
+    commandName: string,
+    tempAssignments: Map<string, string | undefined>,
+  ): void {
+    if (
+      this.ctx.state.options.posix &&
+      POSIX_SPECIAL_BUILTINS.has(commandName)
+    ) {
+      return;
+    }
+    for (const [name, value] of tempAssignments) {
+      if (value === undefined) {
+        this.ctx.state.env.delete(name);
+      } else {
+        this.ctx.state.env.set(name, value);
+      }
+    }
+  }
+
   private async executeSimpleCommand(
     node: SimpleCommandNode,
     stdin: string,
@@ -914,6 +943,8 @@ export class Interpreter {
         if (redirectError) {
           return redirectError;
         }
+        // Bare redirects (no command) also clear $_, like bare assignments.
+        this.ctx.state.lastArg = "";
         // Apply redirections to empty result (for append, read redirects, etc.)
         const baseResult = createExecResult("", xtraceAssignmentOutput, 0);
         return applyRedirections(this.ctx, baseResult, node.redirections);
@@ -1001,18 +1032,57 @@ export class Interpreter {
       }
 
       if (redir.operator === "<" && redir.target.type === "Word") {
+        const target = await expandWord(this.ctx, redir.target as WordNode);
         try {
-          const target = await expandWord(this.ctx, redir.target as WordNode);
           const filePath = this.ctx.fs.resolvePath(this.ctx.state.cwd, target);
-          stdin = await this.ctx.fs.readFile(filePath);
+          const content = await this.ctx.fs.readFile(filePath);
+          // A non-standard fd (e.g. `exec 6< file`) persists the content for
+          // later use via `<&6`, rather than feeding THIS command's stdin.
+          const fd = redir.fd ?? 0;
+          if (fd !== 0) {
+            if (!this.ctx.state.fileDescriptors) {
+              this.ctx.state.fileDescriptors = new Map();
+            }
+            checkFdLimit(this.ctx);
+            this.ctx.state.fileDescriptors.set(fd, content);
+          } else {
+            stdin = content;
+          }
         } catch {
-          const target = await expandWord(this.ctx, redir.target as WordNode);
           for (const [name, value] of tempAssignments) {
             if (value === undefined) this.ctx.state.env.delete(name);
             else this.ctx.state.env.set(name, value as string);
           }
           return failure(`bash: ${target}: No such file or directory\n`);
         }
+      }
+
+      // Handle `<>` (read/write) with an explicit numeric fd, e.g.
+      // `exec 8<>file`. Stored in the __rw__: format so the read builtin and
+      // the <& handler below can track the read position across uses.
+      // (Implicit-fd `<>`, i.e. plain `cmd <>file`, is handled elsewhere and
+      // is intentionally left untouched here.)
+      if (
+        redir.operator === "<>" &&
+        redir.target.type === "Word" &&
+        redir.fd != null
+      ) {
+        const target = await expandWord(this.ctx, redir.target as WordNode);
+        const filePath = this.ctx.fs.resolvePath(this.ctx.state.cwd, target);
+        let content = "";
+        try {
+          content = await this.ctx.fs.readFile(filePath);
+        } catch {
+          // `<>` creates the file if it doesn't exist yet.
+        }
+        if (!this.ctx.state.fileDescriptors) {
+          this.ctx.state.fileDescriptors = new Map();
+        }
+        checkFdLimit(this.ctx);
+        this.ctx.state.fileDescriptors.set(
+          redir.fd,
+          `__rw__:${filePath.length}:${filePath}:0:${content}`,
+        );
       }
 
       // Handle <& input redirection from file descriptor
@@ -1045,10 +1115,57 @@ export class Interpreter {
       }
     }
 
-    const commandName = await expandWord(this.ctx, node.name);
+    // Use word-splitting-aware expansion for the command name itself, not
+    // just its arguments. Real bash subjects the command-name word to the
+    // exact same expansion rules as any other word:
+    //   - An unquoted expansion that yields nothing (e.g. `` `true` ``,
+    //     which outputs no stdout) contributes ZERO words. If the WHOLE
+    //     command line vanishes this way, bash runs nothing and leaves $?
+    //     as whatever the last command substitution set it to - it does
+    //     NOT try to run a literal empty-string command (which would be
+    //     "command not found", exit 127).
+    //   - An unquoted expansion that yields multiple words (e.g.
+    //     `x="echo hi"; $x there`) uses the FIRST word as the command name
+    //     and folds the rest into the argument list.
+    const nameExpansion = await expandWordWithGlob(this.ctx, node.name);
+    const nameExpansionWasEmpty = nameExpansion.values.length === 0;
+    let commandName = nameExpansion.values[0] ?? "";
+    const leadingArgsFromName = nameExpansion.values.slice(1);
 
-    const args: string[] = [];
-    const quotedArgs: boolean[] = [];
+    // `exec N>&-` / `exec N<&-` (bare exec, no command to run) PERMANENTLY
+    // closes fd N in the current shell. A regular command's `N>&-` is only
+    // scoped to that command's own execution (applyRedirections deliberately
+    // leaves the fd map untouched for that case), so this only applies to
+    // the bare `exec` form.
+    if (commandName === "exec") {
+      for (const redir of node.redirections) {
+        if (
+          (redir.operator === ">&" || redir.operator === "<&") &&
+          redir.target.type === "Word" &&
+          redir.fd != null &&
+          redir.fd >= 3
+        ) {
+          const closeTarget = await expandWord(
+            this.ctx,
+            redir.target as WordNode,
+          );
+          if (closeTarget === "-") {
+            this.ctx.state.fileDescriptors?.delete(redir.fd);
+          }
+        }
+      }
+    }
+
+    const args: string[] = [...leadingArgsFromName];
+    const quotedArgs: boolean[] = leadingArgsFromName.map(
+      () => nameExpansion.quoted,
+    );
+    // Parallel to `args`: for array-literal assignment arguments (e.g.
+    // `declare a=(1 2)`), bash sets $_ to just the variable name ("a")
+    // rather than the full "a=(1 2)" text pushed into `args`. This tracks
+    // that override per-arg so we can compute the correct $_ value below.
+    const lastArgNameOverrides: (string | undefined)[] =
+      leadingArgsFromName.map(() => undefined);
 
     // Handle local/declare/export/readonly arguments specially:
     // - For array assignments like `local a=(1 "2 3")`, preserve quote structure
@@ -1084,6 +1201,10 @@ export class Interpreter {
         if (arrayAssignResult) {
           args.push(arrayAssignResult);
           quotedArgs.push(true);
+          const nameMatch = arrayAssignResult.match(
+            /^([A-Za-z_][A-Za-z0-9_]*)=\(/,
+          );
+          lastArgNameOverrides.push(nameMatch ? nameMatch[1] : undefined);
         } else {
           // Check if this looks like a scalar assignment (name=value)
           // For assignments, we should NOT glob-expand the value part
@@ -1094,12 +1215,14 @@ export class Interpreter {
           if (scalarAssignResult !== null) {
             args.push(scalarAssignResult);
             quotedArgs.push(true);
+            lastArgNameOverrides.push(undefined);
           } else {
             // Not an assignment - use normal glob expansion
             const expanded = await expandWordWithGlob(this.ctx, arg);
             for (const value of expanded.values) {
               args.push(value);
               quotedArgs.push(expanded.quoted);
+              lastArgNameOverrides.push(undefined);
             }
           }
         }
@@ -1111,6 +1234,7 @@ export class Interpreter {
         for (const value of expanded.values) {
           args.push(value);
           quotedArgs.push(expanded.quoted);
+          lastArgNameOverrides.push(undefined);
         }
       }
     }
@@ -1124,8 +1248,37 @@ export class Interpreter {
       for (const extra of extraArgs) {
         args.push(extra);
         quotedArgs.push(true);
+        lastArgNameOverrides.push(undefined);
       }
       this.ctx.state.extraArgs = undefined;
+    }
+
+    if (nameExpansionWasEmpty) {
+      if (args.length === 0) {
+        // The ENTIRE command line vanished (e.g. `` `true` ``, `$(exit 42)`):
+        // bash runs nothing here. $? is left as whatever the command
+        // substitution(s) evaluated during expansion already set via
+        // ctx.state.lastExitCode - it is NOT reset to 0 and NOT treated as
+        // "command not found". $_ is still cleared, and any of this bare
+        // command's own redirections still take effect (bash still opens
+        // them even though nothing runs), matching the `!node.name` bare
+        // case above.
+        this.ctx.state.lastArg = "";
+        const stderrOutput =
+          (this.ctx.state.expansionStderr || "") + xtraceAssignmentOutput;
+        this.ctx.state.expansionStderr = "";
+        const baseResult = createExecResult(
+          "",
+          stderrOutput,
+          this.ctx.state.lastExitCode,
+        );
+        return applyRedirections(this.ctx, baseResult, node.redirections);
+      }
+      // Shift: the first remaining word becomes the effective command name
+      // (e.g. `` `true` echo hi `` runs `echo hi`, not a literal "" command).
+      commandName = args.shift() as string;
+      quotedArgs.shift();
+      lastArgNameOverrides.shift();
     }
 
     // Generate xtrace output (set -x) BEFORE running the command, matching
@@ -1136,7 +1289,20 @@ export class Interpreter {
       commandName,
       args,
     );
-    const xtracePrefix = xtraceAssignmentOutput + xtraceCommandOutput;
+    // Command substitutions evaluated while expanding this command's own
+    // assignments/arguments (e.g. `readonly x=$(cmd)` or `echo $(cmd)`)
+    // write their stderr to the shell's real stderr AT EXPANSION TIME, per
+    // real bash: `cmd $(other) 2>/dev/null` does NOT suppress `other`'s
+    // stderr, because argument expansion happens before the command's own
+    // redirections are set up. Snapshot it now (before running the command,
+    // which may recurse and reuse/clear this same accumulator for its own
+    // nested expansions) so it bypasses applyRedirections below, just like
+    // xtrace output does.
+    const preExecExpansionStderr = this.ctx.state.expansionStderr || "";
+    this.ctx.state.expansionStderr = "";
+
+    const xtracePrefix =
+      preExecExpansionStderr + xtraceAssignmentOutput + xtraceCommandOutput;
 
     // Built-in commands are registered with CommandRegistry.
     // External commands are handled by the shell path lookup.
@@ -1154,22 +1320,33 @@ export class Interpreter {
     } catch (error: any) {
       // Re-throw control flow and fatal errors to be handled by the top-level Bash
       const errorName = error instanceof Error ? error.name : "";
+      // break/continue/return/exit are ordinary builtins syntactically: bash
+      // sets up their command's redirections BEFORE performing the jump, so
+      // e.g. `break > file` in real bash still creates/truncates `file`.
+      // Since these throw instead of returning an ExecResult, they'd
+      // otherwise skip the applyRedirections step entirely below.
       if (
-        error instanceof SecurityViolationError ||
-        error instanceof ExecutionLimitError ||
         error instanceof ExitError ||
         error instanceof ReturnError ||
         error instanceof BreakError ||
         error instanceof ContinueError ||
+        errorName === "ExitError" ||
+        errorName === "ReturnError" ||
+        errorName === "BreakError" ||
+        errorName === "ContinueError"
+      ) {
+        await preOpenOutputRedirects(this.ctx, node.redirections);
+        this.revertTempAssignments(commandName, tempAssignments);
+        throw error;
+      }
+      if (
+        error instanceof SecurityViolationError ||
+        error instanceof ExecutionLimitError ||
         error instanceof ErrexitError ||
         error instanceof ArithmeticError ||
         error instanceof PosixFatalError ||
         errorName === "SecurityViolationError" ||
         errorName === "ExecutionLimitError" ||
-        errorName === "ExitError" ||
-        errorName === "ReturnError" ||
-        errorName === "BreakError" ||
-        errorName === "ContinueError" ||
         errorName === "ErrexitError" ||
         errorName === "ArithmeticError" ||
         errorName === "PosixFatalError"
@@ -1182,12 +1359,29 @@ export class Interpreter {
       );
     }
 
+    // $_ special variable: after a simple command runs, bash sets $_ to its
+    // last argument (after expansion). With no arguments, $_ becomes the
+    // command name itself. This must be set AFTER the command has fully
+    // executed (including running a function body) so that a function call's
+    // own arguments win over whatever its body last set $_ to - matching
+    // bash's post-execution assignment in execute_simple_command().
+    this.ctx.state.lastArg =
+      args.length > 0
+        ? (lastArgNameOverrides[args.length - 1] ?? args[args.length - 1])
+        : commandName;
+
     // Apply redirections if command succeeded (or even if it failed, bash applies them)
     const redirectedResult = await applyRedirections(
       this.ctx,
       execResult,
       node.redirections,
     );
+
+    // Prefix/temporary assignments (`FOO=bar cmd`) are scoped to just this
+    // command and must be reverted afterward - done AFTER applyRedirections
+    // so this command's own redirect targets (e.g. `FOO=bar cmd > $FOO`)
+    // still see the temporary value while being expanded.
+    this.revertTempAssignments(commandName, tempAssignments);
 
     // Prepend xtrace (set -x) trace lines to stderr. Bash writes the trace to
     // the shell's stderr (fd 2), which is NOT affected by the command's own
