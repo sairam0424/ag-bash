@@ -43,6 +43,112 @@ import { RunLoop } from "@ag-bash/bash/agent-runtime";
 | `@ag-bash/bash/slim` | Minimal API surface for bundle-sensitive environments |
 | `@ag-bash/bash/advanced` | Full internal surface for power users |
 
+## Custom Commands
+
+Extend the shell with your own TypeScript commands via `defineCommand`:
+
+```typescript
+import { Bash, defineCommand } from "@ag-bash/bash";
+
+const hello = defineCommand("hello", async (args, ctx) => {
+  const name = args[0] || "world";
+  return { stdout: `Hello, ${name}!\n`, stderr: "", exitCode: 0 };
+});
+
+const bash = new Bash({ customCommands: [hello] });
+await bash.exec("hello Alice"); // "Hello, Alice!\n"
+```
+
+## Filesystems
+
+Mount a real directory read-only with `OverlayFs` — writes stay in-memory (copy-on-write) and never touch disk:
+
+```typescript
+import { Bash } from "@ag-bash/bash";
+import { OverlayFs } from "@ag-bash/bash/fs/overlay-fs";
+
+const fs = new OverlayFs({ root: "/path/to/project" });
+const bash = new Bash({ fs });
+
+await bash.exec("cat package.json"); // reads the real file
+await bash.exec("echo 'test' > notes.txt"); // written to memory only
+```
+
+## Agent RunLoop
+
+Pair an LLM with the shell for autonomous, budgeted execution via `@ag-bash/bash/agent-runtime`:
+
+```typescript
+import { Bash } from "@ag-bash/bash";
+import { RunLoop, type LLMProvider } from "@ag-bash/bash/agent-runtime";
+
+const myLLMProvider = {} as LLMProvider; // supply your own provider implementation
+
+const bash = new Bash({ agentic: { enabled: true } });
+const loop = new RunLoop(bash, {
+  llm: myLLMProvider,
+  systemPrompt: "You are a code repair agent.",
+  budget: { maxTurns: 20, maxTokens: 100_000 },
+});
+
+const result = await loop.run("Fix the failing test in src/parser.ts");
+console.log(result.status, result.turns, result.finalOutput);
+```
+
+## AI SDK Integration
+
+Expose the shell as a tool for OpenAI, Anthropic, Vercel AI SDK, or LangChain agents via `@ag-bash/bash/ai`:
+
+```typescript
+import { Bash } from "@ag-bash/bash";
+import { createBashTool } from "@ag-bash/bash/ai";
+
+const bash = new Bash({ files: { "/data/users.json": "[]" } });
+const tool = createBashTool({ sandbox: bash });
+
+const vercelTool = tool.forVercel();
+```
+
+## Supported Commands
+
+### File Operations
+
+`cat`, `chmod`, `cp`, `du`, `file`, `ln`, `ls`, `mkdir`, `mv`, `readlink`, `rm`, `rmdir`, `split`, `stat`, `touch`, `tree`
+
+### Text Processing
+
+`awk`, `base64`, `column`, `comm`, `cut`, `diff`, `expand`, `fold`, `grep`, `egrep`, `fgrep`, `rg`, `head`, `join`, `md5sum`, `nl`, `od`, `paste`, `printf`, `rev`, `sed`, `sha1sum`, `sha256sum`, `sort`, `strings`, `tac`, `tail`, `tr`, `unexpand`, `uniq`, `wc`, `xargs`
+
+### Data & Format Processing
+
+`git`, `jq`, `sqlite3`, `xan`, `yq`
+
+### Optional Runtimes
+
+`js-exec`, `python3`, `python`
+
+### Compression & Archives
+
+`gzip`, `gunzip`, `zcat`, `tar`
+
+### Navigation & Environment
+
+`basename`, `dirname`, `echo`, `env`, `find`, `hostname`, `printenv`, `pwd`, `tee`
+
+### Shell & Discovery Utilities
+
+`about`, `alias`, `bash`, `clear`, `commands`, `date`, `doctor`, `expr`, `false`, `hello`, `help`, `history`, `seq`, `sh`, `sleep`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`
+
+### Network
+
+`curl`, `html-to-markdown`
+
+### Agentic Tooling
+
+`ag-analyze`, `ag-convert`, `ag-cron`, `ag-diff`, `ag-edit`, `ag-explain`, `ag-find-files`, `ag-find-symbol`, `ag-glob`, `ag-grep`, `ag-hover`, `ag-list-agents`, `ag-mcp`, `ag-message`, `ag-notebook`, `ag-plan`, `ag-references`, `ag-snapshot`, `ag-spawn`, `ag-task`, `ag-team`, `ag-todo`, `ag-wait`, `ag-worktree`
+
+All commands support `--help` for usage information. See the [Command Registry](../../docs/COMMAND_REGISTRY.md) for the full flag-by-flag reference.
+
 ## Key Features
 
 - **100+ built-in commands** — `grep`, `sed`, `awk`, `jq`, `find`, `xargs`, and more
