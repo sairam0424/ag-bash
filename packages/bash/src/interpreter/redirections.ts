@@ -709,6 +709,14 @@ export async function applyRedirections(
           if (fd === 1) {
             stderr += stdout;
             stdout = "";
+          } else if (fd >= 3) {
+            // e.g. `exec 3>&2`: register fd as a dup of stderr for later
+            // use (this is FD *setup*, not a merge of THIS command's own
+            // stdout/stderr - there's nothing to merge here).
+            if (!ctx.state.fileDescriptors) {
+              ctx.state.fileDescriptors = new Map();
+            }
+            ctx.state.fileDescriptors.set(fd, "__dupout__:2");
           }
         }
         // 2>&1, 2<&1: redirect stderr to stdout
@@ -716,11 +724,18 @@ export async function applyRedirections(
           if (fd === 2) {
             stdout += stderr;
             stderr = "";
-          } else {
-            // 1>&1 is a no-op, but other fds redirect to stdout
-            stdout += stderr;
-            stderr = "";
+          } else if (fd >= 3) {
+            // e.g. `exec 3>&1`: register fd as a dup of stdout for later
+            // use via `>&3`. Previously this fell into the same "merge"
+            // branch as 2>&1, which happened to be silent (no stderr to
+            // merge yet) but never recorded the fd, so a later `>&3` failed
+            // with "Bad file descriptor".
+            if (!ctx.state.fileDescriptors) {
+              ctx.state.fileDescriptors = new Map();
+            }
+            ctx.state.fileDescriptors.set(fd, "__dupout__:1");
           }
+          // fd === 1 (i.e. `1>&1`) is a no-op.
         }
         // Handle writing to a user-allocated FD (>&$fd)
         else {

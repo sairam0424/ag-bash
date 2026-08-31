@@ -134,6 +134,13 @@ function getMatchLimit(command: CommandNode): number | null {
 function isLineCountOnly(command: CommandNode): boolean {
   if (command.type !== "SimpleCommand" || !command.name) return false;
 
+  // If the command has its own redirections (e.g. `wc -l >/dev/null`), the
+  // synthetic `{stdout: "<count>\n", ...}` result built by this fast path
+  // bypasses applyRedirections entirely, so the redirection would silently
+  // be dropped and the count would leak to the real pipeline output. Fall
+  // through to full execution so redirections are honored correctly.
+  if (command.redirections.length !== 0) return false;
+
   const name = getLiteralValue(command.name);
   if (name !== "wc") return false;
 
@@ -352,19 +359,12 @@ export async function executePipeline(
     const isLast = i === node.commands.length - 1;
     const isFirst = i === 0;
 
-    // In a multi-command pipeline, each command runs in a subshell context
-    // where $_ starts empty (subshells don't inherit $_ from parent in same way)
-    if (isMultiCommandPipeline) {
-      // Clear $_ for each pipeline command - they each get fresh subshell context
-      ctx.state.lastArg = "";
-
-      // After the first command, clear groupStdin so subsequent commands
-      // only see stdin from the pipeline (even if empty), not the original groupStdin
-      // This prevents commands like head from incorrectly falling back to groupStdin
-      // when they receive empty output from a previous command (e.g., grep with no matches)
-      if (!isFirst) {
-        ctx.state.groupStdin = undefined;
-      }
+    // After the first command, clear groupStdin so subsequent commands
+    // only see stdin from the pipeline (even if empty), not the original groupStdin
+    // This prevents commands like head from incorrectly falling back to groupStdin
+    // when they receive empty output from a previous command (e.g., grep with no matches)
+    if (isMultiCommandPipeline && !isFirst) {
+      ctx.state.groupStdin = undefined;
     }
 
     // Determine if this command runs in a subshell context
@@ -376,6 +376,13 @@ export async function executePipeline(
     // Save environment for commands running in subshell context
     // This prevents variable assignments (e.g., ${cmd=echo}) from leaking to parent
     const savedEnv = runsInSubshell ? new Map(ctx.state.env) : null;
+
+    // Save $_ for commands running in a subshell context. Real bash forks a
+    // subshell per non-last pipeline stage (and for the last stage too,
+    // unless `lastpipe` is set): each stage INHERITS the current $_ when it
+    // starts (not an empty value), but any $_ mutation made while running in
+    // that subshell must not leak back out, since it's a separate process.
+    const savedStageLastArg = runsInSubshell ? ctx.state.lastArg : undefined;
 
     let result: ExecResult;
 
@@ -405,6 +412,10 @@ export async function executePipeline(
         !isFirst &&
         stdin === "" &&
         command.type === "SimpleCommand" &&
+        // A command with its own redirections (e.g. `grep x >file`) must
+        // still open/truncate/write that target even on empty input - the
+        // synthetic result below bypasses applyRedirections entirely.
+        command.redirections.length === 0 &&
         !isStdinIndependent(command) &&
         // Hash/checksum filters emit a defined non-empty value for empty input,
         // so they must actually run rather than be short-circuited to "".
@@ -456,6 +467,9 @@ export async function executePipeline(
             if (savedEnv) {
               ctx.state.env = savedEnv;
             }
+            if (runsInSubshell) {
+              ctx.state.lastArg = savedStageLastArg as string;
+            }
             throw error;
           }
         }
@@ -465,6 +479,11 @@ export async function executePipeline(
     // Restore environment for subshell commands to prevent variable assignment leakage
     if (savedEnv) {
       ctx.state.env = savedEnv;
+    }
+    // Restore $_ for subshell-stage commands: their $_ mutations are local
+    // to that forked stage and must not leak to sibling stages or the parent.
+    if (runsInSubshell) {
+      ctx.state.lastArg = savedStageLastArg as string;
     }
 
     // Track exit code for PIPESTATUS
