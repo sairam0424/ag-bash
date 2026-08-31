@@ -12,6 +12,7 @@ import {
 } from "./output-schema.js";
 import { LEGACY_PROTOCOL_VERSION, negotiateProtocol } from "./protocol.js";
 import { RateLimiter } from "./rate-limiter.js";
+import { SANITIZE_OUTPUT_DEFAULT, sanitizeOutput } from "./sanitize-output.js";
 import { validateDelta, validateSnapshot } from "./schemas.js";
 import { runSearchTools } from "./search-tools.js";
 import { McpToolBridge } from "./tool-bridge.js";
@@ -71,8 +72,16 @@ class AgBashServer {
    * Defaults to false so we emit legacy text-only responses until proven otherwise.
    */
   private supportsStructured = false;
+  /**
+   * Whether to scrub terminal escapes / control bytes / invisible Unicode from
+   * tool output before it reaches the LLM (defense against output-borne prompt
+   * injection and Trojan-Source). On by default; a hardened wrapper can opt out.
+   */
+  private readonly sanitizeOutput: boolean;
 
-  constructor() {
+  constructor(options: { sanitizeOutput?: boolean } = {}) {
+    this.sanitizeOutput = options.sanitizeOutput ?? SANITIZE_OUTPUT_DEFAULT;
+
     // Initialize the persistent Bash engine
     this.bash = new Bash({
       network: {
@@ -88,6 +97,37 @@ class AgBashServer {
 
     // Initialize rate limiter (60 requests per minute)
     this.rateLimiter = new RateLimiter(60, 60_000);
+  }
+
+  /**
+   * Apply output sanitization to a text block when enabled. Centralized so both
+   * the native ({@link buildToolResult}) and delegated ({@link decorateToolResult})
+   * result paths scrub through one place — no tool can bypass it by construction.
+   */
+  private scrub(text: string): string {
+    return this.sanitizeOutput ? sanitizeOutput(text) : text;
+  }
+
+  /**
+   * Deep-scrub every string in a structured value destined for
+   * `structuredContent`. A 2025-06-18 client surfaces structuredContent to the
+   * model directly (e.g. `run_bash`'s raw `stdout` field), so the structured
+   * rendering is its own injection surface alongside the text block.
+   *
+   * Pure: returns new objects/arrays, never mutates the input (immutability rule).
+   */
+  private scrubDeep(value: unknown): unknown {
+    if (!this.sanitizeOutput) return value;
+    if (typeof value === "string") return sanitizeOutput(value);
+    if (Array.isArray(value)) return value.map((v) => this.scrubDeep(v));
+    if (value !== null && typeof value === "object") {
+      const out: Record<string, unknown> = Object.create(null);
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = this.scrubDeep(v);
+      }
+      return out;
+    }
+    return value;
   }
 
   // biome-ignore lint/suspicious/noExplicitAny: JSON-RPC result or error object
@@ -117,13 +157,13 @@ class AgBashServer {
     isError?: boolean,
     extraContent?: McpContentItem[],
   ): ToolCallPayload {
-    const content: McpContentItem[] = [{ type: "text", text }];
+    const content: McpContentItem[] = [{ type: "text", text: this.scrub(text) }];
     if (extraContent && extraContent.length > 0) {
       content.push(...extraContent);
     }
     const payload: ToolCallPayload = { content };
     if (this.supportsStructured) {
-      payload.structuredContent = structured;
+      payload.structuredContent = this.scrubDeep(structured);
     }
     if (isError) payload.isError = true;
     return payload;
@@ -155,7 +195,7 @@ class AgBashServer {
   ): ToolCallPayload {
     const content: McpContentItem[] = result.content.map((c) => ({
       type: "text" as const,
-      text: c.text,
+      text: this.scrub(c.text),
     }));
     if (resourceLinks && resourceLinks.length > 0) {
       content.push(...resourceLinks);
@@ -164,11 +204,18 @@ class AgBashServer {
     const payload: ToolCallPayload = { content };
     if (result.isError) payload.isError = true;
 
-    if (this.supportsStructured && result.content.length > 0) {
-      const firstText = result.content[0].text;
+    if (this.supportsStructured && content.length > 0) {
+      // Parse from the SCRUBBED text so structuredContent and the human text
+      // block stay consistent. JSON has no place for the stripped control /
+      // escape / invisible classes, so scrubbing never breaks valid JSON.
+      const firstText = (content[0] as { type: "text"; text: string }).text;
       const parsed = this.tryParseJson(firstText);
       if (parsed !== undefined) {
-        payload.structuredContent = parsed;
+        // JSON-escaped control bytes (the six chars backslash-u-0-0-1-b
+        // as literal text) survive text-scrubbing, but JSON.parse revives them
+        // into raw bytes — deep-scrub the revived value so structuredContent
+        // matches the text guarantee.
+        payload.structuredContent = this.scrubDeep(parsed);
       }
     }
     return payload;
@@ -731,7 +778,9 @@ class AgBashServer {
             const content = await this.bash.fs.readFile(path);
             return this.sendResponse(id, {
               result: {
-                contents: [{ uri, text: content }],
+                // VFS files can be written by executed bash, so their contents
+                // are part of the same output-borne injection surface.
+                contents: [{ uri, text: this.scrub(content) }],
               },
             });
           } catch (_e) {
@@ -877,6 +926,9 @@ export { AgBashServer };
 // startup banner). The production esbuild bundle has VITEST unset, so this
 // still fires when the binary is executed.
 if (!process.env.VITEST) {
-  const server = new AgBashServer();
+  const server = new AgBashServer({
+    // Opt-out hatch for hardened wrappers that sanitize downstream.
+    sanitizeOutput: process.env.AG_BASH_MCP_NO_SANITIZE !== "1",
+  });
   server.run();
 }
