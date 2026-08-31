@@ -257,6 +257,14 @@ const STDIN_INDEPENDENT: ReadonlySet<string> = new Set([
  * so they must NOT be short-circuited when upstream produced nothing. Hash/checksum
  * filters have a defined value for the empty string (e.g. MD5 of "" is
  * d41d8cd98f00b204e9800998ecf8427e), so `echo -n '' | md5sum` must actually run.
+ *
+ * `wc` belongs here too: it always prints a count line (0 for empty input,
+ * e.g. `wc -c` -> "0\n"), never nothing. Without this, a blocked/empty
+ * upstream stage (e.g. a network-denied `curl` in `curl ... | wc -c | tr -d
+ * ' '`) was short-circuited to genuinely empty output instead of "0", and
+ * that wrong emptiness then propagated through the rest of the pipe. Plain
+ * `wc -l` is unaffected — it has its own newline-counting fast path above
+ * that already runs unconditionally.
  */
 const EMPTY_STDIN_PRODUCES_OUTPUT: ReadonlySet<string> = new Set([
   "md5sum",
@@ -264,6 +272,7 @@ const EMPTY_STDIN_PRODUCES_OUTPUT: ReadonlySet<string> = new Set([
   "sha256sum",
   "sha512sum",
   "cksum",
+  "wc",
 ]);
 
 /**
