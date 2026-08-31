@@ -18,14 +18,28 @@ export { normalizePath, validatePath } from "./path-utils.js";
 
 /**
  * Check whether `resolved` is equal to, or a child of, `canonicalRoot`.
- * Uses a boundary-safe prefix check (appends `/`) so that `/data` does not
- * match `/datastore`.
+ * Uses a boundary-safe prefix check (appends the platform path separator) so
+ * that `/data` does not match `/datastore`.
+ *
+ * Both arguments are REAL filesystem paths produced by `fs.realpathSync` /
+ * `nodePath.resolve`, so on Windows they are backslash-separated
+ * (`C:\root\child`), not POSIX forward-slash paths. Appending a hardcoded
+ * `/` here made every child path fail this check on Windows (only an exact
+ * root match ever passed), so `resolveCanonicalPath`/`resolveRealPath_`
+ * treated every file inside an OverlayFs/ReadWriteFs root as "outside the
+ * sandbox" — `exists()`/`readFile()` silently failed for real files, e.g.
+ * sqlite3 loading a fixture .db would see it as missing and open a fresh
+ * empty database instead ("no such table"). Use `nodePath.sep`, which is
+ * "/" on POSIX (no behavior change there) and "\\" on Windows.
  */
 export function isPathWithinRoot(
   resolved: string,
   canonicalRoot: string,
 ): boolean {
-  return resolved === canonicalRoot || resolved.startsWith(`${canonicalRoot}/`);
+  return (
+    resolved === canonicalRoot ||
+    resolved.startsWith(`${canonicalRoot}${nodePath.sep}`)
+  );
 }
 
 /**
