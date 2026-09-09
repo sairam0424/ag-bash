@@ -354,7 +354,17 @@ export class McpClient {
 
     const transport = new StdioTransport(command, args, options);
     await transport.init();
-    await this.handshake(transport);
+    try {
+      await this.handshake(transport);
+    } catch (err) {
+      // The child process spawned by transport.init() is not reachable by
+      // any caller until the connection is registered below. If the
+      // handshake fails (JSON-RPC error, or a timeout per
+      // `requestTimeoutMs`), we must close the transport ourselves here —
+      // otherwise the process is orphaned until this Node process exits.
+      transport.close();
+      throw err;
+    }
 
     const connection: McpServerConnection = {
       id,
@@ -384,7 +394,15 @@ export class McpClient {
 
     const transport = new HttpTransport(url, securityConfig);
     await transport.init();
-    await this.handshake(transport);
+    try {
+      await this.handshake(transport);
+    } catch (err) {
+      // Mirrors the stdio cleanup above: nothing else holds a reference to
+      // this transport until the connection is registered below, so a
+      // failed handshake must close it here to avoid leaking resources.
+      transport.close();
+      throw err;
+    }
 
     const connection: McpServerConnection = {
       id,

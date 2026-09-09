@@ -7,8 +7,22 @@
  * Gates tools/list and tools/call on having seen "initialize" first,
  * mirroring a real MCP server (e.g. browser-harness-mcp) so the test can
  * assert on handshake ordering, not just method-name spelling.
+ *
+ * Two env vars support the "handshake failure must not orphan the child
+ * process" regression test:
+ * - `FAKE_MCP_HANG_INIT=1`: never respond to `initialize`, simulating a
+ *   server that hangs during the handshake so the client's request times
+ *   out (`requestTimeoutMs`) and `handshake()` rejects.
+ * - `FAKE_MCP_PID_FILE=<path>`: write this process's pid to the given file
+ *   on startup, so a test can poll whether the process is still alive after
+ *   the client is expected to have closed the transport.
  */
+import { writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
+
+if (process.env.FAKE_MCP_PID_FILE) {
+  writeFileSync(process.env.FAKE_MCP_PID_FILE, String(process.pid));
+}
 
 const rl = createInterface({ input: process.stdin });
 let initialized = false;
@@ -46,6 +60,10 @@ rl.on("line", (line) => {
   const { id, method, params } = msg;
 
   if (method === "initialize") {
+    if (process.env.FAKE_MCP_HANG_INIT) {
+      // Deliberately never respond, so the client's request times out.
+      return;
+    }
     initialized = true;
     respond(id, {
       protocolVersion: params?.protocolVersion ?? "2025-06-18",
