@@ -51,7 +51,21 @@ export async function ensureBrowserHarnessConnection(
         cmdCtx,
         { requestTimeoutMs: 60_000 },
       )
-      .then(() => undefined);
+      .then(
+        () => undefined,
+        (error: unknown) => {
+          // A failed attempt must not be cached forever: clear the
+          // in-flight entry so the NEXT call retries (spawns a fresh
+          // connectStdio) instead of permanently re-throwing this same
+          // stale rejection for the rest of the Bash instance's
+          // lifetime. Concurrent callers that were already awaiting
+          // this same `pending` promise still observe the rejection
+          // (that's the correct dedupe behavior for a shared in-flight
+          // attempt) — only *future* calls get a fresh attempt.
+          connecting.delete(bash);
+          throw error;
+        },
+      );
     connecting.set(bash, pending);
   }
   await pending;

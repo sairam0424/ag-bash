@@ -72,4 +72,40 @@ describe("ensureBrowserHarnessConnection", () => {
 
     expect(connectStdio).toHaveBeenCalledTimes(1);
   });
+
+  it("retries on the next call after a failed connect attempt", async () => {
+    const bash = new Bash();
+    vi.spyOn(bash.services.mcpClient, "listConnections").mockReturnValue([]);
+    const connectStdio = vi
+      .spyOn(bash.services.mcpClient, "connectStdio")
+      .mockRejectedValueOnce(new Error("uvx cold-start timeout"))
+      .mockResolvedValueOnce(fakeConnection());
+
+    await expect(ensureBrowserHarnessConnection(bash)).rejects.toThrow(
+      "uvx cold-start timeout",
+    );
+
+    // A second call must not replay the cached rejection forever — it
+    // should attempt a fresh connectStdio and succeed.
+    await expect(ensureBrowserHarnessConnection(bash)).resolves.toBeUndefined();
+    expect(connectStdio).toHaveBeenCalledTimes(2);
+  });
+
+  it("propagates a connect failure to all concurrent callers sharing the in-flight attempt", async () => {
+    const bash = new Bash();
+    vi.spyOn(bash.services.mcpClient, "listConnections").mockReturnValue([]);
+    let rejectConnect: (error: unknown) => void = () => {};
+    vi.spyOn(bash.services.mcpClient, "connectStdio").mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectConnect = reject;
+      }),
+    );
+
+    const first = ensureBrowserHarnessConnection(bash);
+    const second = ensureBrowserHarnessConnection(bash);
+    rejectConnect(new Error("network hiccup"));
+
+    await expect(first).rejects.toThrow("network hiccup");
+    await expect(second).rejects.toThrow("network hiccup");
+  });
 });
