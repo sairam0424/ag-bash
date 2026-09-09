@@ -1,5 +1,10 @@
 // AST types (for plugin authors)
 
+export {
+  buildTool,
+  type ToolboxTool,
+  type ToolMetadata,
+} from "./agentic/Tool.js";
 export type { SearchResult } from "./agentic/ToolSearchEngine.js";
 export { ToolSearchEngine } from "./agentic/ToolSearchEngine.js";
 // AI Tool integration
