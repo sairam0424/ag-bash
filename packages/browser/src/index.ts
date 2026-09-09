@@ -27,18 +27,6 @@ export {
   BrowserWaitForElementTool,
 };
 
-const BROWSER_TOOLS = [
-  BrowserGotoTool,
-  BrowserClickTool,
-  BrowserTypeTool,
-  BrowserPressTool,
-  BrowserScreenshotTool,
-  BrowserJsTool,
-  BrowserCdpTool,
-  BrowserWaitForElementTool,
-  BrowserPageInfoTool,
-] as const;
-
 /**
  * Register the curated `ag_browser_*` tool suite onto a Bash instance's
  * toolbox. Once registered, the tools are usable both from bash scripts
@@ -47,9 +35,22 @@ const BROWSER_TOOLS = [
  * @ag-bash/mcp-server's `McpToolBridge`), automatically surfaced as MCP
  * tools too — no MCP-server-side protocol code needed beyond calling this
  * function once at startup.
+ *
+ * Registered via nine explicit calls rather than a loop over an array: each
+ * tool has a distinct `ToolboxTool<TArgs, TResult>` shape, and iterating a
+ * heterogeneous `as const` tuple widens the loop variable to a union type
+ * that defeats `registerTool<TArgs>`'s per-call generic inference (tsc
+ * unifies against the wrong arm of the union). Explicit calls keep each
+ * tool's own concrete type intact with no cast.
  */
 export function registerBrowserTools(bash: Bash): void {
-  for (const tool of BROWSER_TOOLS) {
-    bash.toolbox.registerTool(tool);
-  }
+  bash.toolbox.registerTool(BrowserGotoTool);
+  bash.toolbox.registerTool(BrowserClickTool);
+  bash.toolbox.registerTool(BrowserTypeTool);
+  bash.toolbox.registerTool(BrowserPressTool);
+  bash.toolbox.registerTool(BrowserScreenshotTool);
+  bash.toolbox.registerTool(BrowserJsTool);
+  bash.toolbox.registerTool(BrowserCdpTool);
+  bash.toolbox.registerTool(BrowserWaitForElementTool);
+  bash.toolbox.registerTool(BrowserPageInfoTool);
 }
