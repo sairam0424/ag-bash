@@ -95,7 +95,6 @@ class AgBashServer {
     this.rateLimiter = new RateLimiter(60, 60_000);
 
     // Store the import function for optional browser package loading
-    // biome-ignore lint/suspicious/noExplicitAny: optional package import
     this.importBrowserPackage =
       importBrowserPackage ??
       (async () => {
