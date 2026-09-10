@@ -6,6 +6,7 @@ import type { ChildProcess } from "node:child_process";
 import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
 import type { ExecutionLimits } from "../limits.js";
 import type { CommandContext } from "../types.js";
+import { VERSION } from "../version.js";
 
 /**
  * Minimal structural interface describing what McpClient needs from a Bash
@@ -46,6 +47,14 @@ export interface McpServerConnection {
 export interface McpTransport {
   init(): Promise<void>;
   send(message: unknown): Promise<unknown>;
+  /**
+   * Send a JSON-RPC notification (no `id`, no response expected). Separate
+   * from {@link send} because notifications must never be registered in a
+   * pending-request map: a server that legitimately never replies to
+   * `notifications/initialized` would otherwise hang that call until its
+   * request-timeout fires.
+   */
+  notify(message: unknown): void;
   close(): void;
 }
 
@@ -173,6 +182,12 @@ class HttpTransport implements McpTransport {
     return await response.json();
   }
 
+  notify(message: unknown): void {
+    // HTTP has no persistent pending-request map to leak: a POST whose
+    // response is discarded is a safe fire-and-forget notification frame.
+    void this.send(message).catch(() => {});
+  }
+
   close(): void {}
 }
 
@@ -266,6 +281,18 @@ class StdioTransport implements McpTransport {
     });
   }
 
+  notify(message: unknown): void {
+    if (!this.process) return;
+    // Deliberately omits `id`: this is what makes it a JSON-RPC
+    // notification rather than a request. `send()` always assigns one,
+    // which is why a notification cannot be sent through it without
+    // hanging.
+    const envelope = Object.assign(Object.create(null), message as object, {
+      jsonrpc: "2.0",
+    });
+    this.process.stdin?.write(`${JSON.stringify(envelope)}\n`);
+  }
+
   close(): void {
     for (const timeout of this.pendingTimeouts.values()) {
       clearTimeout(timeout);
@@ -286,6 +313,31 @@ class StdioTransport implements McpTransport {
 export class McpClient {
   private connections: Map<string, McpServerConnection> = new Map();
 
+  /** MCP protocol revision this client requests during `initialize`. */
+  private static readonly PROTOCOL_VERSION = "2025-06-18";
+
+  /**
+   * Perform the MCP `initialize` request followed by the
+   * `notifications/initialized` notice. The spec requires this exchange
+   * before any `tools/list` or `tools/call` request is legal; a real
+   * server (unlike the untested mock transports this client was
+   * previously only exercised against) rejects those requests otherwise.
+   */
+  private async handshake(transport: McpTransport): Promise<void> {
+    await transport.send({
+      method: "initialize",
+      params: {
+        protocolVersion: McpClient.PROTOCOL_VERSION,
+        capabilities: Object.create(null),
+        clientInfo: { name: "ag-bash", version: VERSION },
+      },
+    });
+    transport.notify({
+      method: "notifications/initialized",
+      params: Object.create(null),
+    });
+  }
+
   async connectStdio(
     id: string,
     command: string,
@@ -302,6 +354,17 @@ export class McpClient {
 
     const transport = new StdioTransport(command, args, options);
     await transport.init();
+    try {
+      await this.handshake(transport);
+    } catch (err) {
+      // The child process spawned by transport.init() is not reachable by
+      // any caller until the connection is registered below. If the
+      // handshake fails (JSON-RPC error, or a timeout per
+      // `requestTimeoutMs`), we must close the transport ourselves here —
+      // otherwise the process is orphaned until this Node process exits.
+      transport.close();
+      throw err;
+    }
 
     const connection: McpServerConnection = {
       id,
@@ -331,6 +394,15 @@ export class McpClient {
 
     const transport = new HttpTransport(url, securityConfig);
     await transport.init();
+    try {
+      await this.handshake(transport);
+    } catch (err) {
+      // Mirrors the stdio cleanup above: nothing else holds a reference to
+      // this transport until the connection is registered below, so a
+      // failed handshake must close it here to avoid leaking resources.
+      transport.close();
+      throw err;
+    }
 
     const connection: McpServerConnection = {
       id,
@@ -351,7 +423,7 @@ export class McpClient {
     if (!conn) return;
 
     const response = (await conn.transport.send({
-      method: "list_tools",
+      method: "tools/list",
       params: Object.create(null),
     })) as JsonRpcResponse;
 
@@ -387,7 +459,7 @@ export class McpClient {
     }
 
     const response = (await conn.transport.send({
-      method: "call_tool",
+      method: "tools/call",
       params: { name: toolName, arguments: args },
     })) as JsonRpcResponse;
 
