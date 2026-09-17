@@ -36,7 +36,7 @@ jobs:
       # gitleaks-action comments on the PR when it finds a leak.
       pull-requests: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Full history: gitleaks scans commit-by-commit for secrets that
           # were ever committed, not just the current working tree.
