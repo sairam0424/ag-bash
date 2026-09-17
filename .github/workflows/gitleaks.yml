@@ -1,0 +1,46 @@
+# Secret Scanning (Gitleaks) — always-on, redundant secret-scanning gate.
+#
+# GitHub's native secret scanning is currently disabled for this repo (see
+# Settings > Code security), and while .coderabbit.yaml declares
+# `gitleaks: enabled`, CodeRabbit's automated review does not fire here in
+# practice: this repo has 0 stars, so its free-tier star gate requires a
+# manual `@coderabbitai review` comment on every PR before review runs at
+# all. This workflow runs unconditionally on every push/PR — no manual
+# trigger needed — closing that gap independently of CodeRabbit's state.
+#
+# sairam0424 is a personal (not organization) GitHub account, so no
+# GITLEAKS_LICENSE secret is required — see
+# https://github.com/gitleaks/gitleaks-action#do-i-need-a-free-license-key.
+name: Secret Scanning (Gitleaks)
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: gitleaks-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege default: jobs that need more must opt in explicitly.
+permissions: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # gitleaks-action comments on the PR when it finds a leak.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Full history: gitleaks scans commit-by-commit for secrets that
+          # were ever committed, not just the current working tree.
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
