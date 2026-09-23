@@ -74,8 +74,13 @@ describe("Information Disclosure Prevention", () => {
       const result = await bash.exec(`
         whoami 2>&1 || echo "whoami handled"
       `);
-      // Should not return actual system username
-      expect(result.stdout).not.toContain(process.env.USER || "");
+      // Should not return actual system username. Skip (rather than
+      // trivially pass) when no real username is available to test
+      // against — e.g. Windows CI runners set $USERNAME, not POSIX $USER.
+      const realUser = process.env.USER || process.env.USERNAME;
+      if (realUser) {
+        expect(result.stdout).not.toContain(realUser);
+      }
     });
 
     it("should handle uname command safely", async () => {
