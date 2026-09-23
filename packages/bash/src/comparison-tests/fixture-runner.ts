@@ -12,6 +12,17 @@ const execAsync: (
 ) => Promise<{ stdout: string; stderr: string }> = promisify(exec);
 
 /**
+ * Shell used to run "real bash" for comparison. GitHub's windows-latest
+ * runners have no `/bin/bash` (no WSL on the hosted image) but do ship Git
+ * for Windows, whose bash.exe is added to PATH specifically so `shell: bash`
+ * works in Actions workflows - resolve by bare name there, keep the
+ * absolute path on POSIX (matches every prior invocation exactly, zero risk
+ * of picking up a different bash than before).
+ */
+export const REAL_BASH_SHELL: string =
+  process.platform === "win32" ? "bash" : "/bin/bash";
+
+/**
  * Check if we're in record mode (recording bash outputs to fixtures)
  * - "1" = record mode, but skip locked fixtures
  * - "force" = record mode, overwrite even locked fixtures
@@ -321,7 +332,7 @@ export async function runRealBash(
   try {
     const { stdout, stderr } = await execAsync(command, {
       cwd,
-      shell: "/bin/bash",
+      shell: REAL_BASH_SHELL,
     });
     return { stdout, stderr, exitCode: 0 };
   } catch (error: unknown) {
