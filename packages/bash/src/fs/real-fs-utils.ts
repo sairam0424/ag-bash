@@ -63,11 +63,15 @@ export function toVirtualPath(resolved: string, canonicalRoot: string): string {
 
 /**
  * Characters that are structurally significant to a host-native Windows
- * path/filename operation (separator, drive-designator/ADS colon, and the
- * other characters NTFS/Win32 rejects outright: `< > " | ? *`), plus `%`
- * itself so the encoding below stays reversible/collision-free.
+ * path/filename operation: the separator, the drive-designator/ADS colon,
+ * and the other characters NTFS/Win32 rejects outright (`< > " | ? *`) -
+ * plus a bare `%` ONLY when it's immediately followed by 2 hex digits
+ * (i.e. only when it could be confused with this function's own `%XX`
+ * output - see sanitizeForHostJoin's doc comment). An ordinary `%` in a
+ * real filename (e.g. "50% off.txt") is NOT touched, since `%` itself is
+ * not actually reserved on Windows.
  */
-const WIN32_HAZARD_CHARS = /[\\:<>"|?*%]/g;
+const WIN32_HAZARD_CHARS = /[\\:<>"|?*]|%(?=[0-9A-Fa-f]{2})/g;
 
 /**
  * Neutralize a normalized virtual path segment before it is joined onto a
@@ -100,8 +104,14 @@ const WIN32_HAZARD_CHARS = /[\\:<>"|?*%]/g;
  * substitute would let two DISTINCT virtual paths collide onto the SAME
  * real filename (e.g. "/foo:bar" and "/foo_bar" would both become
  * "foo_bar"), silently aliasing one path's read/write onto the other's
- * file. Percent-encoding `%` itself first guarantees no encoded sequence
- * can be produced by, or confused with, literal input text.
+ * file. A literal "%XY" (X,Y hex digits) already present in the input is
+ * ALSO escaped (its "%" becomes "%25", XY pass through unchanged) so it
+ * can never be misread as one of this function's own encoded sequences -
+ * without that, "/foo\bar" (real backslash, encoded to "/foo%5Cbar") and
+ * "/foo%5Cbar" (a virtual path that already literally contains that text)
+ * would collide on the same output. An ordinary "%" NOT followed by 2 hex
+ * digits (the vast majority of real-world "%"-containing filenames, e.g.
+ * "50% off.txt") is left completely untouched.
  *
  * This must NOT live inside `normalizePath` itself (that was tried and
  * reverted - it unconditionally corrupted legitimate backslash-containing
@@ -112,10 +122,10 @@ const WIN32_HAZARD_CHARS = /[\\:<>"|?*%]/g;
  */
 export function sanitizeForHostJoin(normalized: string): string {
   return process.platform === "win32"
-    ? normalized.replace(
-        WIN32_HAZARD_CHARS,
-        (c) =>
-          `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
+    ? normalized.replace(WIN32_HAZARD_CHARS, (c) =>
+        c === "%"
+          ? "%25"
+          : `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
       )
     : normalized;
 }
