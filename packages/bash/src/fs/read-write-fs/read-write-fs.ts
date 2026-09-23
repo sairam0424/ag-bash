@@ -37,6 +37,7 @@ import {
   resolveCanonicalPath,
   resolveCanonicalPathNoSymlinks,
   sanitizeFsError,
+  toVirtualPath,
   validatePath,
   validateRootDirectory,
 } from "../real-fs-utils.js";
@@ -822,15 +823,22 @@ export class ReadWriteFs implements IFileSystem {
 
       if (isPathWithinRoot(canonicalTarget, this.canonicalRoot)) {
         // Within root - compute virtual target path and return as relative
-        const virtualTarget =
-          canonicalTarget.slice(this.canonicalRoot.length) || "/";
-        // Return as relative path from the link's virtual directory
+        const virtualTarget = toVirtualPath(
+          canonicalTarget,
+          this.canonicalRoot,
+        );
+        // Return as relative path from the link's virtual directory. Both
+        // linkDir and virtualTarget are POSIX-style virtual paths
+        // regardless of host OS, so use nodePath.posix.relative -
+        // nodePath.relative (host-native) mis-splits forward-slash-only
+        // paths on win32 (e.g. path.win32.relative("/dir1", "/target.txt")
+        // returns "\target.txt" instead of the correct "../target.txt").
         if (linkDir === "/") {
           return virtualTarget.startsWith("/")
             ? virtualTarget.slice(1) || "."
             : virtualTarget;
         }
-        return nodePath.relative(linkDir, virtualTarget);
+        return nodePath.posix.relative(linkDir, virtualTarget);
       }
 
       // Outside root - the symlink target points outside the sandbox.
@@ -896,8 +904,7 @@ export class ReadWriteFs implements IFileSystem {
     // with resolveAndValidate. Use boundary-safe prefix check to prevent
     // /data matching /datastore.
     if (isPathWithinRoot(resolved, this.canonicalRoot)) {
-      const relative = resolved.slice(this.canonicalRoot.length);
-      return relative || "/";
+      return toVirtualPath(resolved, this.canonicalRoot);
     }
     // Resolved path is outside root - reject it to prevent sandbox escape
     throw new Error(`ENOENT: no such file or directory, realpath '${path}'`);
