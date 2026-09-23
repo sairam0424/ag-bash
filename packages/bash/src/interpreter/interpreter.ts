@@ -1137,20 +1137,40 @@ export class Interpreter {
     // scoped to that command's own execution (applyRedirections deliberately
     // leaves the fd map untouched for that case), so this only applies to
     // the bare `exec` form.
+    //
+    // Similarly, `exec >&2` / `exec 1>&2` / `exec 2>&1` PERMANENTLY dups
+    // fd 1 <-> fd 2 in the current shell (real bash: subsequent commands'
+    // stdout/stderr stay merged for the rest of the script). A regular
+    // command's `1>&2` only merges that command's own output (handled
+    // inline in applyRedirections) and must not persist. We record the
+    // same `__dupout__:N` marker applyRedirections' fd1Info/fd2Info check
+    // already understands for fd >= 3 dups, so later commands merge too.
     if (commandName === "exec") {
       for (const redir of node.redirections) {
         if (
           (redir.operator === ">&" || redir.operator === "<&") &&
-          redir.target.type === "Word" &&
-          redir.fd != null &&
-          redir.fd >= 3
+          redir.target.type === "Word"
         ) {
-          const closeTarget = await expandWord(
-            this.ctx,
-            redir.target as WordNode,
-          );
-          if (closeTarget === "-") {
-            this.ctx.state.fileDescriptors?.delete(redir.fd);
+          const effectiveFd = redir.fd ?? 1;
+          const target = await expandWord(this.ctx, redir.target as WordNode);
+
+          if (effectiveFd >= 3) {
+            if (target === "-") {
+              this.ctx.state.fileDescriptors?.delete(effectiveFd);
+            }
+            continue;
+          }
+
+          if (effectiveFd === 1 && (target === "2" || target === "&2")) {
+            if (!this.ctx.state.fileDescriptors) {
+              this.ctx.state.fileDescriptors = new Map();
+            }
+            this.ctx.state.fileDescriptors.set(1, "__dupout__:2");
+          } else if (effectiveFd === 2 && (target === "1" || target === "&1")) {
+            if (!this.ctx.state.fileDescriptors) {
+              this.ctx.state.fileDescriptors = new Map();
+            }
+            this.ctx.state.fileDescriptors.set(2, "__dupout__:1");
           }
         }
       }
