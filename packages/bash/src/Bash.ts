@@ -451,6 +451,18 @@ export class Bash extends EventEmitter {
     );
     this.toolbox = new BashToolbox();
     this.initLsp();
+    // Capture whether the caller's own fs (before MountableFs wrapping,
+    // which every this.fs ends up as below) is backed by a real host
+    // filesystem — used to skip virtual /dev, /proc, /bin scaffolding in
+    // initFilesystem() below, which would otherwise write literal files
+    // into the caller's real directory. Only meaningful for the common
+    // "bare backing fs" case; a caller who passes an already-built
+    // MountableFs is responsible for its own scaffolding.
+    const isRealFilesystemBacked =
+      !(options.fs instanceof MountableFs) &&
+      (options.fs as { isRealFilesystem?: boolean } | undefined)
+        ?.isRealFilesystem === true;
+
     this.fs =
       options.fs instanceof MountableFs
         ? options.fs
@@ -600,14 +612,20 @@ export class Bash extends EventEmitter {
     // Initialize BASHOPTS to reflect current shopt options
     this.state.env.set("BASHOPTS", buildBashopts(this.state.shoptOptions));
 
-    // Initialize filesystem with standard directories and device files
-    // Only applies to InMemoryFs - other filesystems use real directories
-    initFilesystem(fs, this.useDefaultLayout, {
-      pid: this.state.virtualPid,
-      ppid: this.state.virtualPpid,
-      uid: this.state.virtualUid,
-      gid: this.state.virtualGid,
-    });
+    // Initialize filesystem with standard directories and device files.
+    // Skipped entirely when backed by a real filesystem (e.g. ReadWriteFs)
+    // — see the isRealFilesystemBacked comment above.
+    initFilesystem(
+      fs,
+      this.useDefaultLayout,
+      {
+        pid: this.state.virtualPid,
+        ppid: this.state.virtualPpid,
+        uid: this.state.virtualUid,
+        gid: this.state.virtualGid,
+      },
+      isRealFilesystemBacked,
+    );
 
     // `fs` is always a MountableFs (see assignment above), so this check
     // against the raw InMemoryFs class never matched and this cwd-creation

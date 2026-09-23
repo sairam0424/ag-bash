@@ -67,6 +67,13 @@ export interface ReadWriteFsOptions {
 }
 
 export class ReadWriteFs implements IFileSystem {
+  /**
+   * Marks this as backed by a real host filesystem (as opposed to
+   * InMemoryFs/OverlayFs, which are virtual). Bash's constructor checks
+   * this to skip writing virtual /dev, /proc, and /bin scaffolding into
+   * the real backing directory — see fs/init.ts's initFilesystem().
+   */
+  readonly isRealFilesystem = true as const;
   private readonly root: string;
   private readonly canonicalRoot: string;
   private readonly maxFileReadSize: number;
