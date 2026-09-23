@@ -43,6 +43,25 @@ export function isPathWithinRoot(
 }
 
 /**
+ * Convert a real filesystem path already confirmed to be within
+ * `canonicalRoot` (via `isPathWithinRoot`) into the POSIX-style virtual path
+ * callers/tests expect (e.g. "/foo/bar"), regardless of host OS.
+ *
+ * `IFileSystem`'s whole contract is a Unix-like virtual address space, so a
+ * caller-facing "virtual path" must always use "/" - but the naive
+ * `resolved.slice(canonicalRoot.length)` this replaces inherits whatever
+ * separator the REAL path used, which is "\\" on Windows (e.g.
+ * "\\allowed.txt" instead of "/allowed.txt"). The security boundary check
+ * itself (`isPathWithinRoot`) is unaffected by this - only the string
+ * *returned* to the caller was wrong.
+ */
+export function toVirtualPath(resolved: string, canonicalRoot: string): string {
+  const relative = resolved.slice(canonicalRoot.length);
+  const posixRelative = relative.split(nodePath.sep).join("/");
+  return posixRelative || "/";
+}
+
+/**
  * Validate that a real filesystem path stays within the sandbox root after
  * resolving all OS-level symlinks (including in parent components).
  *
@@ -227,7 +246,7 @@ export function sanitizeSymlinkTarget(
   }
 
   if (isPathWithinRoot(resolved, canonicalRoot)) {
-    const relativePath = resolved.slice(canonicalRoot.length) || "/";
+    const relativePath = toVirtualPath(resolved, canonicalRoot);
     return { withinRoot: true, relativePath };
   }
 

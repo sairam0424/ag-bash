@@ -37,6 +37,7 @@ import {
   resolveCanonicalPath,
   resolveCanonicalPathNoSymlinks,
   sanitizeFsError,
+  toVirtualPath,
   validatePath,
   validateRootDirectory,
 } from "../real-fs-utils.js";
@@ -822,15 +823,22 @@ export class ReadWriteFs implements IFileSystem {
 
       if (isPathWithinRoot(canonicalTarget, this.canonicalRoot)) {
         // Within root - compute virtual target path and return as relative
-        const virtualTarget =
-          canonicalTarget.slice(this.canonicalRoot.length) || "/";
-        // Return as relative path from the link's virtual directory
+        const virtualTarget = toVirtualPath(
+          canonicalTarget,
+          this.canonicalRoot,
+        );
+        // Return as relative path from the link's virtual directory. Both
+        // linkDir and virtualTarget are POSIX-style virtual paths
+        // regardless of host OS, so use nodePath.posix.relative -
+        // nodePath.relative (host-native) mis-splits forward-slash-only
+        // paths on win32 (e.g. path.win32.relative("/dir1", "/target.txt")
+        // returns "\target.txt" instead of the correct "../target.txt").
         if (linkDir === "/") {
           return virtualTarget.startsWith("/")
             ? virtualTarget.slice(1) || "."
             : virtualTarget;
         }
-        return nodePath.relative(linkDir, virtualTarget);
+        return nodePath.posix.relative(linkDir, virtualTarget);
       }
 
       // Outside root - the symlink target points outside the sandbox.
@@ -862,45 +870,38 @@ export class ReadWriteFs implements IFileSystem {
     validatePath(path, "realpath");
     const realPath = this.getInternalRealPath(path);
 
-    // Validate the path respects the symlink policy before resolving.
-    // Without this, realpath() would follow symlinks that other methods
-    // (readFile, stat, etc.) correctly reject via resolveAndValidate().
-    // Convert EACCES to ENOENT because realpath semantically "doesn't find"
-    // the canonical path rather than "denies access".
+    // Resolve and validate in one step, then reuse that canonical value
+    // directly instead of making a second, independent fs.promises.realpath()
+    // call. The two are NOT interchangeable on Windows: fs.realpathSync
+    // (used inside resolveAndValidate, and to compute this.canonicalRoot at
+    // construction) preserves 8.3 short path segments (e.g. "RUNNER~1"),
+    // while fs.promises.realpath resolves them to their long form (e.g.
+    // "runneradmin") via GetFinalPathNameByHandleW. On GitHub's
+    // windows-latest runners, whose profile path is short-named, comparing
+    // an fs.promises.realpath() result against this.canonicalRoot rejected
+    // every legitimate in-sandbox file as ENOENT. Convert EACCES to ENOENT
+    // because realpath semantically "doesn't find" the canonical path
+    // rather than "denies access".
+    let canonical: string;
     try {
-      this.resolveAndValidate(realPath, path);
+      canonical = this.resolveAndValidate(realPath, path);
     } catch {
       throw new Error(`ENOENT: no such file or directory, realpath '${path}'`);
     }
 
-    let resolved: string;
+    // resolveCanonicalPath's ENOENT walk-up returns a canonical location for
+    // a leaf that doesn't exist yet (needed by write-type callers that
+    // validate a soon-to-be-created path). realpath() semantics require the
+    // target to actually exist, so confirm that separately - via lstat, not
+    // another realpath call, since lstat's result isn't a path string and so
+    // can't reintroduce the short/long-name mismatch above.
     try {
-      resolved = await fs.promises.realpath(realPath);
-    } catch (e) {
-      const err = e as NodeJS.ErrnoException;
-      if (err.code === "ENOENT") {
-        throw new Error(
-          `ENOENT: no such file or directory, realpath '${path}'`,
-        );
-      }
-      if (err.code === "ELOOP") {
-        throw new Error(
-          `ELOOP: too many levels of symbolic links, realpath '${path}'`,
-        );
-      }
-      this.sanitizeError(e, path, "realpath");
+      await fs.promises.lstat(canonical);
+    } catch {
+      throw new Error(`ENOENT: no such file or directory, realpath '${path}'`);
     }
 
-    // Convert back to virtual path (relative to root)
-    // Use canonicalRoot (computed at construction) for consistent comparison
-    // with resolveAndValidate. Use boundary-safe prefix check to prevent
-    // /data matching /datastore.
-    if (isPathWithinRoot(resolved, this.canonicalRoot)) {
-      const relative = resolved.slice(this.canonicalRoot.length);
-      return relative || "/";
-    }
-    // Resolved path is outside root - reject it to prevent sandbox escape
-    throw new Error(`ENOENT: no such file or directory, realpath '${path}'`);
+    return toVirtualPath(canonical, this.canonicalRoot);
   }
 
   /**
