@@ -62,6 +62,14 @@ export function toVirtualPath(resolved: string, canonicalRoot: string): string {
 }
 
 /**
+ * Characters that are structurally significant to a host-native Windows
+ * path/filename operation (separator, drive-designator/ADS colon, and the
+ * other characters NTFS/Win32 rejects outright: `< > " | ? *`), plus `%`
+ * itself so the encoding below stays reversible/collision-free.
+ */
+const WIN32_HAZARD_CHARS = /[\\:<>"|?*%]/g;
+
+/**
  * Neutralize a normalized virtual path segment before it is joined onto a
  * real root via a HOST-NATIVE `nodePath.join`/`dirname` call (as done by
  * `ReadWriteFs`/`OverlayFs`'s `toRealPath`/`getInternalRealPath`, and the
@@ -85,10 +93,15 @@ export function toVirtualPath(resolved: string, canonicalRoot: string): string {
  *    survives as a literal character WITHIN a single filename component.
  *    NTFS treats any ":" in a filename as the start of an Alternate Data
  *    Stream name (`file.txt:streamname`), not a normal character - so a
- *    colon anywhere but the drive-designator position is still rejected
- *    (observed as a real path's own realpath/rename call failing, since
- *    the whole point of the mangled segment is that colon is no longer at
- *    the drive-designator position after being nested under root).
+ *    colon anywhere but the drive-designator position is still rejected.
+ *
+ * This encodes each hazard character to a `%XX` percent-escape (not a fixed
+ * substitute like "_") specifically so the mapping stays INJECTIVE: a fixed
+ * substitute would let two DISTINCT virtual paths collide onto the SAME
+ * real filename (e.g. "/foo:bar" and "/foo_bar" would both become
+ * "foo_bar"), silently aliasing one path's read/write onto the other's
+ * file. Percent-encoding `%` itself first guarantees no encoded sequence
+ * can be produced by, or confused with, literal input text.
  *
  * This must NOT live inside `normalizePath` itself (that was tried and
  * reverted - it unconditionally corrupted legitimate backslash-containing
@@ -99,7 +112,11 @@ export function toVirtualPath(resolved: string, canonicalRoot: string): string {
  */
 export function sanitizeForHostJoin(normalized: string): string {
   return process.platform === "win32"
-    ? normalized.replace(/[\\:]/g, "_")
+    ? normalized.replace(
+        WIN32_HAZARD_CHARS,
+        (c) =>
+          `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
+      )
     : normalized;
 }
 

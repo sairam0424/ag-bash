@@ -77,8 +77,13 @@ describe("Information Disclosure Prevention", () => {
       // Should not return actual system username. Skip (rather than
       // trivially pass) when no real username is available to test
       // against — e.g. Windows CI runners set $USERNAME, not POSIX $USER.
+      // Also skip when the real username happens to literally be "user"
+      // (whoami.ts's own sandboxed placeholder, e.g. a minimal Docker/CI
+      // default account) — in that exact coincidence the check can't tell
+      // a real leak apart from the intentional placeholder, so asserting
+      // either way would be meaningless.
       const realUser = process.env.USER || process.env.USERNAME;
-      if (realUser) {
+      if (realUser && realUser !== "user") {
         expect(result.stdout).not.toContain(realUser);
       }
     });

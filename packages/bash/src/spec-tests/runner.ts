@@ -115,10 +115,12 @@ export async function runTestCase(
     ...options.bashEnvOptions,
   });
 
-  // Set up /tmp with sticky bit (mode 1777) for tests that check it
-  await env.fs.chmod("/tmp", 0o1777);
-
   try {
+    // Set up /tmp with sticky bit (mode 1777) for tests that check it.
+    // Inside the try (not before it) so a failure here still reaches the
+    // finally below and disposes env, instead of leaking it.
+    await env.fs.chmod("/tmp", 0o1777);
+
     // Use rawScript to preserve leading whitespace for here-docs
     const result = await env.exec(testCase.script, { rawScript: true });
 

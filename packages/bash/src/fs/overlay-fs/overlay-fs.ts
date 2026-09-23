@@ -268,17 +268,24 @@ export class OverlayFs implements IFileSystem {
    * Returns null if the path is not under the mount point or would escape the root.
    */
   toRealPath(virtualPath: string): string | null {
-    const normalized = sanitizeForHostJoin(normalizePath(virtualPath));
+    const normalized = normalizePath(virtualPath);
 
-    // Check if path is under the mount point
+    // Check if path is under the mount point BEFORE sanitizing for the
+    // host-native join below - this.mountPoint is itself an unsanitized
+    // virtual path, so matching against the sanitized string first could
+    // miss a legitimate match if the mount point ever contained one of the
+    // hazard characters sanitizeForHostJoin encodes.
     const relativePath = this.getRelativeToMount(normalized);
     if (relativePath === null) {
       return null;
     }
+    const sanitizedRelative = sanitizeForHostJoin(relativePath);
 
     const realPath = nodePath.join(
       this.root,
-      relativePath.startsWith("/") ? relativePath.slice(1) : relativePath,
+      sanitizedRelative.startsWith("/")
+        ? sanitizedRelative.slice(1)
+        : sanitizedRelative,
     );
 
     // Security check: ensure path doesn't escape root
