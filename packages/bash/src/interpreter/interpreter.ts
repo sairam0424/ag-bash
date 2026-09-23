@@ -81,6 +81,7 @@ import {
   NounsetError,
   PosixFatalError,
   ReturnError,
+  SubshellExitError,
 } from "./errors.js";
 import {
   expandHereDocContent,
@@ -848,11 +849,25 @@ export class Interpreter {
    * `return`, `set`, `shift`, `trap`, `unset`) - otherwise (the common
    * case, and always outside posix mode) they must not leak into the
    * shell's environment once the command finishes.
+   *
+   * `hadTempEnvFrame` mirrors whether the caller pushed `tempAssignments`
+   * onto `ctx.state.tempEnvBindings` before running the command; when true,
+   * that same frame is popped here. `unset`/`local` may have already
+   * mutated (even fully drained) the map in place while the command ran -
+   * that's expected, since they share the exact same Map reference so their
+   * tempenv-reveal and this revert never disagree about the underlying value.
    */
   private revertTempAssignments(
     commandName: string,
     tempAssignments: Map<string, string | undefined>,
+    hadTempEnvFrame: boolean,
   ): void {
+    if (hadTempEnvFrame) {
+      const bindings = this.ctx.state.tempEnvBindings;
+      if (bindings && bindings[bindings.length - 1] === tempAssignments) {
+        bindings.pop();
+      }
+    }
     if (
       this.ctx.state.options.posix &&
       POSIX_SPECIAL_BUILTINS.has(commandName)
@@ -1324,6 +1339,22 @@ export class Interpreter {
     const xtracePrefix =
       preExecExpansionStderr + xtraceAssignmentOutput + xtraceCommandOutput;
 
+    // Push this command's prefix/temp assignments (`FOO=bar cmd`) onto the
+    // tempenv-binding stack for the FULL duration of the command (including
+    // any function call it triggers). `local`, `unset`, and parameter
+    // expansion consult this stack to implement bash's tempenv-revealing
+    // semantics: unsetting a tempenv-bound variable (with no local shadowing
+    // it) reveals the underlying value instead of fully deleting it, and a
+    // bare `local v` inherits an active tempenv binding rather than starting
+    // unset. The frame is the SAME Map used by revertTempAssignments below,
+    // so `unset`'s in-place `bindings.delete()` and this command's own
+    // prefix-revert never fight over the underlying value.
+    const hadTempEnvFrame = tempAssignments.size > 0;
+    if (hadTempEnvFrame) {
+      this.ctx.state.tempEnvBindings = this.ctx.state.tempEnvBindings || [];
+      this.ctx.state.tempEnvBindings.push(tempAssignments);
+    }
+
     // Built-in commands are registered with CommandRegistry.
     // External commands are handled by the shell path lookup.
     let execResult: ExecResult;
@@ -1345,18 +1376,31 @@ export class Interpreter {
       // e.g. `break > file` in real bash still creates/truncates `file`.
       // Since these throw instead of returning an ExecResult, they'd
       // otherwise skip the applyRedirections step entirely below.
+      // SubshellExitError is the same jump, just raised by break/continue
+      // when they're invoked directly inside a subshell that was spawned
+      // from a loop context (the subshell can't see the parent loop, so
+      // bash treats it as an error that unwinds the whole subshell - see
+      // executeSubshell's SubshellExitError handling). It MUST be re-thrown
+      // here rather than falling into the generic "unexpected error"
+      // fallback below, or the subshell keeps running past the jump.
       if (
         error instanceof ExitError ||
         error instanceof ReturnError ||
         error instanceof BreakError ||
         error instanceof ContinueError ||
+        error instanceof SubshellExitError ||
         errorName === "ExitError" ||
         errorName === "ReturnError" ||
         errorName === "BreakError" ||
-        errorName === "ContinueError"
+        errorName === "ContinueError" ||
+        errorName === "SubshellExitError"
       ) {
         await preOpenOutputRedirects(this.ctx, node.redirections);
-        this.revertTempAssignments(commandName, tempAssignments);
+        this.revertTempAssignments(
+          commandName,
+          tempAssignments,
+          hadTempEnvFrame,
+        );
         throw error;
       }
       if (
@@ -1390,6 +1434,37 @@ export class Interpreter {
         ? (lastArgNameOverrides[args.length - 1] ?? args[args.length - 1])
         : commandName;
 
+    // Custom (fd >= 3) redirects like `9> file` or `9>&1` are scoped to just
+    // THIS ONE command's execution in real bash: the fd is opened before the
+    // command runs and closed again the moment it returns, well before any
+    // later statement - including a later subshell - can see it (e.g.
+    // `true 9> file; ( echo hi >&9 )` must NOT let the subshell write
+    // through fd 9). `exec N> file` is the one form that mutates the
+    // shell's fd table permanently (see the `commandName === "exec"` block
+    // above, which already special-cases the >&/<& close+merge cases for
+    // it). applyRedirections doesn't know which case it's in, so it always
+    // writes fd>=3 mappings into the persistent `ctx.state.fileDescriptors`
+    // map; snapshot those entries here (for every fd this command's own
+    // redirections mention) and restore them right after, unless the
+    // command actually is `exec`.
+    const isExecBuiltin = commandName === "exec";
+    let customFdSnapshot: Map<number, string | undefined> | undefined;
+    if (!isExecBuiltin) {
+      for (const redir of node.redirections) {
+        if (
+          redir.fd != null &&
+          redir.fd >= 3 &&
+          !customFdSnapshot?.has(redir.fd)
+        ) {
+          customFdSnapshot ??= new Map();
+          customFdSnapshot.set(
+            redir.fd,
+            this.ctx.state.fileDescriptors?.get(redir.fd),
+          );
+        }
+      }
+    }
+
     // Apply redirections if command succeeded (or even if it failed, bash applies them)
     const redirectedResult = await applyRedirections(
       this.ctx,
@@ -1397,11 +1472,21 @@ export class Interpreter {
       node.redirections,
     );
 
+    if (customFdSnapshot) {
+      for (const [fd, previousValue] of customFdSnapshot) {
+        if (previousValue === undefined) {
+          this.ctx.state.fileDescriptors?.delete(fd);
+        } else {
+          this.ctx.state.fileDescriptors?.set(fd, previousValue);
+        }
+      }
+    }
+
     // Prefix/temporary assignments (`FOO=bar cmd`) are scoped to just this
     // command and must be reverted afterward - done AFTER applyRedirections
     // so this command's own redirect targets (e.g. `FOO=bar cmd > $FOO`)
     // still see the temporary value while being expanded.
-    this.revertTempAssignments(commandName, tempAssignments);
+    this.revertTempAssignments(commandName, tempAssignments, hadTempEnvFrame);
 
     // Prepend xtrace (set -x) trace lines to stderr. Bash writes the trace to
     // the shell's stderr (fd 2), which is NOT affected by the command's own
