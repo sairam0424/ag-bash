@@ -1,1 +1,12 @@
+# Force LF checkout for all text files regardless of the runner's git
+# core.autocrlf setting. GitHub-hosted windows-latest runners default to
+# core.autocrlf=true, which rewrites every tracked text file (README.md,
+# AGENTS.npm.md, test fixtures, source) to CRLF on checkout. Several
+# regexes across the test suite hardcode a literal "\n" (e.g. matching
+# ```typescript\n code fences), which then fail to match at all under
+# CRLF, and any test that compares checked-out fixture content byte-for-
+# byte against freshly-generated (LF) output mismatches purely on line
+# endings - neither is a real cross-platform behavior difference.
+* text=auto eol=lf
+
 vendor/cpython-emscripten/python.wasm filter=lfs diff=lfs merge=lfs -text

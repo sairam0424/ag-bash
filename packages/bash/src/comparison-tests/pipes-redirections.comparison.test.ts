@@ -7,6 +7,7 @@ import {
   path,
   runRealBash,
   setupFiles,
+  virtualPath,
 } from "./fixture-runner.js";
 
 describe("Pipes - Real Bash Comparison", () => {
@@ -142,7 +143,7 @@ describe("Output Redirections - Real Bash Comparison", () => {
       await runRealBash('echo "hello world" > output.txt', testDir);
 
       const bashEnvContent = await env.readFile(
-        path.join(testDir, "output.txt"),
+        virtualPath(testDir, "output.txt"),
       );
       const realContent = await fs.readFile(
         path.join(testDir, "output.txt"),
@@ -160,7 +161,7 @@ describe("Output Redirections - Real Bash Comparison", () => {
       await runRealBash('echo "new content" > output.txt', testDir);
 
       const bashEnvContent = await env.readFile(
-        path.join(testDir, "output.txt"),
+        virtualPath(testDir, "output.txt"),
       );
       const realContent = await fs.readFile(
         path.join(testDir, "output.txt"),
@@ -178,7 +179,7 @@ describe("Output Redirections - Real Bash Comparison", () => {
       await runRealBash("grep hello input.txt > output.txt", testDir);
 
       const bashEnvContent = await env.readFile(
-        path.join(testDir, "output.txt"),
+        virtualPath(testDir, "output.txt"),
       );
       const realContent = await fs.readFile(
         path.join(testDir, "output.txt"),
@@ -198,7 +199,7 @@ describe("Output Redirections - Real Bash Comparison", () => {
       await runRealBash('echo "line 2" >> output.txt', testDir);
 
       const bashEnvContent = await env.readFile(
-        path.join(testDir, "output.txt"),
+        virtualPath(testDir, "output.txt"),
       );
       const realContent = await fs.readFile(
         path.join(testDir, "output.txt"),
@@ -214,7 +215,7 @@ describe("Output Redirections - Real Bash Comparison", () => {
       await runRealBash('echo "new line" >> output.txt', testDir);
 
       const bashEnvContent = await env.readFile(
-        path.join(testDir, "output.txt"),
+        virtualPath(testDir, "output.txt"),
       );
       const realContent = await fs.readFile(
         path.join(testDir, "output.txt"),
@@ -234,7 +235,7 @@ describe("Output Redirections - Real Bash Comparison", () => {
       );
 
       const bashEnvContent = await env.readFile(
-        path.join(testDir, "output.txt"),
+        virtualPath(testDir, "output.txt"),
       );
       const realContent = await fs.readFile(
         path.join(testDir, "output.txt"),
@@ -254,7 +255,7 @@ describe("Output Redirections - Real Bash Comparison", () => {
       await runRealBash("cat input.txt | sort > output.txt", testDir);
 
       const bashEnvContent = await env.readFile(
-        path.join(testDir, "output.txt"),
+        virtualPath(testDir, "output.txt"),
       );
       const realContent = await fs.readFile(
         path.join(testDir, "output.txt"),
@@ -407,7 +408,7 @@ describe("Input Redirection (<) - Real Bash Comparison", () => {
       await runRealBash("sort < input.txt > output.txt", testDir);
 
       const bashEnvContent = await env.readFile(
-        path.join(testDir, "output.txt"),
+        virtualPath(testDir, "output.txt"),
       );
       const realContent = await fs.readFile(
         path.join(testDir, "output.txt"),

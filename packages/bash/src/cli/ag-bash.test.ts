@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -7,14 +7,23 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 const CLI_PATH = path.resolve(__dirname, "../../dist/cli/ag-bash.js");
 
 /**
- * Helper to run ag-bash CLI and capture output
+ * Helper to run ag-bash CLI and capture output.
+ *
+ * Uses execFileSync with an argv array (no shell) rather than execSync with
+ * a joined command string. Every call site used to wrap its -c script in
+ * single quotes (e.g. "'echo hello'") relying on a POSIX shell to strip
+ * them - execSync defaults to /bin/sh on POSIX but cmd.exe on Windows, and
+ * cmd.exe does not strip single quotes, so the CLI received a literal
+ * leading "'" on every Windows CI run. execFileSync passes each array
+ * element straight through as one argv value on every platform, so no
+ * quoting is needed (or correct) at any call site.
  */
 function runCli(
   args: string[],
   options?: { cwd?: string; input?: string },
 ): { stdout: string; stderr: string; exitCode: number } {
   try {
-    const result = execSync(`node ${CLI_PATH} ${args.join(" ")}`, {
+    const result = execFileSync(process.execPath, [CLI_PATH, ...args], {
       cwd: options?.cwd,
       input: options?.input,
       encoding: "utf-8",
@@ -76,13 +85,13 @@ describe("ag-bash CLI", () => {
   describe("script execution with -c", () => {
     it("should execute inline script", () => {
       fs.writeFileSync(path.join(tempDir, "test.txt"), "hello world");
-      const result = runCli(["-c", "'cat test.txt'", "--root", tempDir]);
+      const result = runCli(["-c", "cat test.txt", "--root", tempDir]);
       expect(result.stdout).toBe("hello world");
       expect(result.exitCode).toBe(0);
     });
 
     it("should execute echo command", () => {
-      const result = runCli(["-c", "'echo hello'", "--root", tempDir]);
+      const result = runCli(["-c", "echo hello", "--root", tempDir]);
       expect(result.stdout).toBe("hello\n");
       expect(result.exitCode).toBe(0);
     });
@@ -91,7 +100,7 @@ describe("ag-bash CLI", () => {
       fs.writeFileSync(path.join(tempDir, "data.txt"), "apple\nbanana\ncherry");
       const result = runCli([
         "-c",
-        "'cat data.txt | grep banana'",
+        "cat data.txt | grep banana",
         "--root",
         tempDir,
       ]);
@@ -102,7 +111,7 @@ describe("ag-bash CLI", () => {
     it("should list files with ls", () => {
       fs.writeFileSync(path.join(tempDir, "file1.txt"), "a");
       fs.writeFileSync(path.join(tempDir, "file2.txt"), "b");
-      const result = runCli(["-c", "'ls'", "--root", tempDir]);
+      const result = runCli(["-c", "ls", "--root", tempDir]);
       expect(result.stdout).toContain("file1.txt");
       expect(result.stdout).toContain("file2.txt");
       expect(result.exitCode).toBe(0);
@@ -113,7 +122,7 @@ describe("ag-bash CLI", () => {
     it("should block writes by default", () => {
       const result = runCli([
         "-c",
-        "'echo test > newfile.txt'",
+        "echo test > newfile.txt",
         "--root",
         tempDir,
       ]);
@@ -122,21 +131,21 @@ describe("ag-bash CLI", () => {
     });
 
     it("should block mkdir by default", () => {
-      const result = runCli(["-c", "'mkdir newdir'", "--root", tempDir]);
+      const result = runCli(["-c", "mkdir newdir", "--root", tempDir]);
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("EROFS");
     });
 
     it("should block rm by default", () => {
       fs.writeFileSync(path.join(tempDir, "file.txt"), "content");
-      const result = runCli(["-c", "'rm file.txt'", "--root", tempDir]);
+      const result = runCli(["-c", "rm file.txt", "--root", tempDir]);
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("EROFS");
     });
 
     it("should allow reads in readOnly mode", () => {
       fs.writeFileSync(path.join(tempDir, "readable.txt"), "can read this");
-      const result = runCli(["-c", "'cat readable.txt'", "--root", tempDir]);
+      const result = runCli(["-c", "cat readable.txt", "--root", tempDir]);
       expect(result.stdout).toBe("can read this");
       expect(result.exitCode).toBe(0);
     });
@@ -146,7 +155,7 @@ describe("ag-bash CLI", () => {
     it("should allow writes when --allow-write is specified", () => {
       const result = runCli([
         "-c",
-        "'echo test > newfile.txt && cat newfile.txt'",
+        "echo test > newfile.txt && cat newfile.txt",
         "--root",
         tempDir,
         "--allow-write",
@@ -158,7 +167,7 @@ describe("ag-bash CLI", () => {
     it("should allow mkdir when --allow-write is specified", () => {
       const result = runCli([
         "-c",
-        "'mkdir newdir && ls'",
+        "mkdir newdir && ls",
         "--root",
         tempDir,
         "--allow-write",
@@ -170,7 +179,7 @@ describe("ag-bash CLI", () => {
     it("should not persist writes to real filesystem", () => {
       runCli([
         "-c",
-        "'echo test > newfile.txt'",
+        "echo test > newfile.txt",
         "--root",
         tempDir,
         "--allow-write",
@@ -186,14 +195,14 @@ describe("ag-bash CLI", () => {
       fs.mkdirSync(subdir);
       fs.writeFileSync(path.join(subdir, "nested.txt"), "nested content");
 
-      const result = runCli(["-c", "'cat nested.txt'", "--root", subdir]);
+      const result = runCli(["-c", "cat nested.txt", "--root", subdir]);
       expect(result.stdout).toBe("nested content");
       expect(result.exitCode).toBe(0);
     });
 
     it("should default to current directory", () => {
       fs.writeFileSync(path.join(tempDir, "cwd.txt"), "in cwd");
-      const result = runCli(["-c", "'cat cwd.txt'"], { cwd: tempDir });
+      const result = runCli(["-c", "cat cwd.txt"], { cwd: tempDir });
       expect(result.stdout).toBe("in cwd");
       expect(result.exitCode).toBe(0);
     });
@@ -204,7 +213,7 @@ describe("ag-bash CLI", () => {
       fs.writeFileSync(path.join(tempDir, "test.txt"), "content");
       const result = runCli([
         "-c",
-        "'cat test.txt'",
+        "cat test.txt",
         "--root",
         tempDir,
         "--json",
@@ -218,7 +227,7 @@ describe("ag-bash CLI", () => {
     it("should include stderr in JSON output", () => {
       const result = runCli([
         "-c",
-        "'cat nonexistent.txt'",
+        "cat nonexistent.txt",
         "--root",
         tempDir,
         "--json",
@@ -234,7 +243,7 @@ describe("ag-bash CLI", () => {
       const result = runCli([
         "-e",
         "-c",
-        "'false; echo should-not-print'",
+        "false; echo should-not-print",
         "--root",
         tempDir,
       ]);
@@ -246,7 +255,7 @@ describe("ag-bash CLI", () => {
       const result = runCli([
         "--errexit",
         "-c",
-        "'false; echo should-not-print'",
+        "false; echo should-not-print",
         "--root",
         tempDir,
       ]);
@@ -257,7 +266,7 @@ describe("ag-bash CLI", () => {
     it("should continue without errexit", () => {
       const result = runCli([
         "-c",
-        "'false; echo should-print'",
+        "false; echo should-print",
         "--root",
         tempDir,
       ]);
@@ -267,7 +276,7 @@ describe("ag-bash CLI", () => {
 
   describe("combined flags", () => {
     it("should handle -ec combined flags", () => {
-      const result = runCli(["-ec", "'false; echo no'", "--root", tempDir]);
+      const result = runCli(["-ec", "false; echo no", "--root", tempDir]);
       expect(result.stdout).not.toContain("no");
       expect(result.exitCode).not.toBe(0);
     });
@@ -296,7 +305,7 @@ describe("ag-bash CLI", () => {
       fs.writeFileSync(path.join(tempDir, "test.txt"), "mounted");
       const result = runCli([
         "-c",
-        "'cat /home/user/project/test.txt'",
+        "cat /home/user/project/test.txt",
         "--root",
         tempDir,
       ]);
@@ -305,19 +314,12 @@ describe("ag-bash CLI", () => {
     });
 
     it("should set cwd to mount point by default", () => {
-      const result = runCli(["-c", "'pwd'", "--root", tempDir]);
+      const result = runCli(["-c", "pwd", "--root", tempDir]);
       expect(result.stdout.trim()).toBe("/home/user/project");
     });
 
     it("should allow --cwd to override working directory", () => {
-      const result = runCli([
-        "-c",
-        "'pwd'",
-        "--root",
-        tempDir,
-        "--cwd",
-        "/tmp",
-      ]);
+      const result = runCli(["-c", "pwd", "--root", tempDir, "--cwd", "/tmp"]);
       expect(result.stdout.trim()).toBe("/tmp");
     });
 
@@ -325,7 +327,7 @@ describe("ag-bash CLI", () => {
       // --cwd with .. should be normalized so it can't escape
       const result = runCli([
         "-c",
-        "'pwd'",
+        "pwd",
         "--root",
         tempDir,
         "--cwd",
@@ -338,7 +340,7 @@ describe("ag-bash CLI", () => {
     it("should normalize --cwd with relative-style path", () => {
       const result = runCli([
         "-c",
-        "'pwd'",
+        "pwd",
         "--root",
         tempDir,
         "--cwd",
@@ -364,7 +366,7 @@ describe("ag-bash CLI", () => {
     it("should error for non-existent root", () => {
       const result = runCli([
         "-c",
-        "'echo test'",
+        "echo test",
         "--root",
         "/nonexistent/path/12345",
       ]);

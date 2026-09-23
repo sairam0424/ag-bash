@@ -5,6 +5,7 @@ import {
   path,
   runRealBash,
   setupFiles,
+  virtualPath,
 } from "./fixture-runner.js";
 
 describe("mkdir command - Real Bash Comparison", () => {
@@ -127,8 +128,10 @@ describe("cp command - Real Bash Comparison", () => {
 
     await env.exec("cp source.txt dest.txt");
 
-    const sourceContent = await env.readFile(path.join(testDir, "source.txt"));
-    const destContent = await env.readFile(path.join(testDir, "dest.txt"));
+    const sourceContent = await env.readFile(
+      virtualPath(testDir, "source.txt"),
+    );
+    const destContent = await env.readFile(virtualPath(testDir, "dest.txt"));
     expect(destContent).toBe(sourceContent);
   });
 
@@ -140,7 +143,7 @@ describe("cp command - Real Bash Comparison", () => {
 
     await env.exec("cp file.txt dir/");
 
-    const content = await env.readFile(path.join(testDir, "dir/file.txt"));
+    const content = await env.readFile(virtualPath(testDir, "dir/file.txt"));
     expect(content).toBe("content\n");
   });
 
@@ -258,7 +261,7 @@ describe("touch command - Real Bash Comparison", () => {
     const result = await env.exec("ls");
     expect(result.stdout).toContain("newfile.txt");
 
-    const content = await env.readFile(path.join(testDir, "newfile.txt"));
+    const content = await env.readFile(virtualPath(testDir, "newfile.txt"));
     expect(content).toBe("");
   });
 
@@ -280,7 +283,7 @@ describe("touch command - Real Bash Comparison", () => {
 
     await env.exec("touch existing.txt");
 
-    const content = await env.readFile(path.join(testDir, "existing.txt"));
+    const content = await env.readFile(virtualPath(testDir, "existing.txt"));
     expect(content).toBe("original content\n");
   });
 });

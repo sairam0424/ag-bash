@@ -245,6 +245,41 @@ export interface CompareOptions {
 }
 
 /**
+ * Convert a real testDir into the virtual (POSIX-style, "/"-rooted) path the
+ * Bash instance returned by setupFiles() actually uses internally as its
+ * cwd/file-key namespace.
+ *
+ * The virtual InMemoryFs is always POSIX-style and splits paths on "/" -
+ * on Windows, testDir/path.join produce backslash-separated paths (e.g.
+ * "C:\Users\...\bashenv-test-xxx"), which have no "/" to split on and so
+ * get treated as one opaque path segment instead of a directory hierarchy.
+ *
+ * Converting backslashes to forward slashes alone isn't enough: the result
+ * ("C:/Users/...") still doesn't START with "/", so ag-bash's own path
+ * resolver treats it as a RELATIVE path and joins it onto cwd again -
+ * producing a doubled "/C:/Users/.../C:/Users/..." path. A real POSIX
+ * testDir already starts with "/", so this only changes behavior on
+ * Windows; prepending "/" here (once, idempotently) makes the virtual path
+ * genuinely absolute on every platform.
+ */
+function toVirtualTestDir(testDir: string): string {
+  const normalized = testDir.split(path.sep).join("/");
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+/**
+ * Convert a real testDir-relative path into the forward-slash virtual path
+ * the Bash instance returned by setupFiles() actually uses internally.
+ * Callers that need to `env.readFile()`/`env.writeFile()` a path derived
+ * from testDir (as opposed to a real `fs.readFile()`, which should keep
+ * using plain `path.join(testDir, ...)`) must go through this helper
+ * instead of reconstructing the join themselves.
+ */
+export function virtualPath(testDir: string, filePath: string): string {
+  return path.posix.join(toVirtualTestDir(testDir), filePath);
+}
+
+/**
  * Sets up test files in both real FS and creates a Bash
  */
 export async function setupFiles(
@@ -261,15 +296,18 @@ export async function setupFiles(
     await fs.writeFile(fullPath, content);
   }
 
-  // Create equivalent Bash with normalized paths
+  // Create equivalent Bash with normalized (virtual) paths - see
+  // toVirtualTestDir()'s doc comment for why this can't just be
+  // path.join(testDir, filePath).
+  const virtualTestDir = toVirtualTestDir(testDir);
   const bashEnvFiles: Record<string, string> = Object.create(null);
   for (const [filePath, content] of Object.entries(files)) {
-    bashEnvFiles[path.join(testDir, filePath)] = content;
+    bashEnvFiles[path.posix.join(virtualTestDir, filePath)] = content;
   }
 
   return new Bash({
     files: bashEnvFiles,
-    cwd: testDir,
+    cwd: virtualTestDir,
   });
 }
 
@@ -332,19 +370,23 @@ function getCallingTestFile(): string {
   // - "at func (file:///path/to/file.ts:line:col)"
   // - "at func (/path/to/file.ts:line:col)"
   // - "at file:///path/to/file.ts:line:col"
+  // On Windows these paths contain a drive-letter colon (e.g.
+  // "C:\Users\...\file.ts" or "file:///C:/Users/.../file.ts"), so the
+  // captured group must NOT exclude ":" - anchor on the known ".test.ts"
+  // suffix instead, matched lazily so it stops at the first occurrence.
   for (const line of lines) {
     // Match file:// URLs
-    let match = line.match(/file:\/\/([^):]+\.comparison\.test\.ts)/);
+    let match = line.match(/file:\/\/(.+?\.comparison\.test\.ts)/);
     if (match) {
       return match[1];
     }
     // Match regular paths in parentheses
-    match = line.match(/\(([^):]+\.comparison\.test\.ts)/);
+    match = line.match(/\((.+?\.comparison\.test\.ts)/);
     if (match) {
       return match[1];
     }
     // Match paths without parentheses (at path:line:col)
-    match = line.match(/at\s+([^():]+\.comparison\.test\.ts)/);
+    match = line.match(/at\s+(.+?\.comparison\.test\.ts)/);
     if (match) {
       return match[1].trim();
     }
@@ -352,11 +394,11 @@ function getCallingTestFile(): string {
 
   // If no comparison test found, fall back to any test file
   for (const line of lines) {
-    let match = line.match(/file:\/\/([^):]+\.test\.ts)/);
+    let match = line.match(/file:\/\/(.+?\.test\.ts)/);
     if (match) {
       return match[1];
     }
-    match = line.match(/\(([^):]+\.test\.ts)/);
+    match = line.match(/\((.+?\.test\.ts)/);
     if (match) {
       return match[1];
     }
