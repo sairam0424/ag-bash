@@ -62,6 +62,75 @@ export function toVirtualPath(resolved: string, canonicalRoot: string): string {
 }
 
 /**
+ * Characters that are structurally significant to a host-native Windows
+ * path/filename operation: the separator, the drive-designator/ADS colon,
+ * and the other characters NTFS/Win32 rejects outright (`< > " | ? *`) -
+ * plus a bare `%` ONLY when it's immediately followed by 2 hex digits
+ * (i.e. only when it could be confused with this function's own `%XX`
+ * output - see sanitizeForHostJoin's doc comment). An ordinary `%` in a
+ * real filename (e.g. "50% off.txt") is NOT touched, since `%` itself is
+ * not actually reserved on Windows.
+ */
+const WIN32_HAZARD_CHARS = /[\\:<>"|?*]|%(?=[0-9A-Fa-f]{2})/g;
+
+/**
+ * Neutralize a normalized virtual path segment before it is joined onto a
+ * real root via a HOST-NATIVE `nodePath.join`/`dirname` call (as done by
+ * `ReadWriteFs`/`OverlayFs`'s `toRealPath`/`getInternalRealPath`, and the
+ * `resolveCanonicalPath` ENOENT walk-up that recurses through it).
+ *
+ * `normalizePath` (path-utils.ts) is a shared, platform-unconditional
+ * utility used by every VFS backend (including purely virtual ones like
+ * InMemoryFs/CowFs that never touch a real path) - it only ever splits on
+ * "/", by design, so a Windows-native absolute path passed in as a virtual
+ * argument (e.g. "C:\Users\x\pwned.txt") survives it as ONE opaque segment.
+ * On POSIX that's harmless: backslash and colon are legal filename
+ * characters there, so the segment stays intact as a single real file
+ * nested safely inside root. On *Windows*, two separate hazards apply:
+ *
+ * 1. Host-native `path.win32.join`/`dirname` DOES treat "\" as a separator
+ *    and re-splits this "unsplittable" segment, producing a real path with
+ *    an embedded, non-leading "C:" component - Windows rejects a bare
+ *    colon outside the drive-designator position with ERROR_INVALID_NAME
+ *    (libuv maps this to ENOENT).
+ * 2. Even after neutralizing "\", the drive-letter colon itself ("C:")
+ *    survives as a literal character WITHIN a single filename component.
+ *    NTFS treats any ":" in a filename as the start of an Alternate Data
+ *    Stream name (`file.txt:streamname`), not a normal character - so a
+ *    colon anywhere but the drive-designator position is still rejected.
+ *
+ * This encodes each hazard character to a `%XX` percent-escape (not a fixed
+ * substitute like "_") specifically so the mapping stays INJECTIVE: a fixed
+ * substitute would let two DISTINCT virtual paths collide onto the SAME
+ * real filename (e.g. "/foo:bar" and "/foo_bar" would both become
+ * "foo_bar"), silently aliasing one path's read/write onto the other's
+ * file. A literal "%XY" (X,Y hex digits) already present in the input is
+ * ALSO escaped (its "%" becomes "%25", XY pass through unchanged) so it
+ * can never be misread as one of this function's own encoded sequences -
+ * without that, "/foo\bar" (real backslash, encoded to "/foo%5Cbar") and
+ * "/foo%5Cbar" (a virtual path that already literally contains that text)
+ * would collide on the same output. An ordinary "%" NOT followed by 2 hex
+ * digits (the vast majority of real-world "%"-containing filenames, e.g.
+ * "50% off.txt") is left completely untouched.
+ *
+ * This must NOT live inside `normalizePath` itself (that was tried and
+ * reverted - it unconditionally corrupted legitimate backslash-containing
+ * filenames on every platform and every backend, including two real
+ * bash-parity spec-test failures on POSIX where a literal "\" in a filename
+ * is expected to survive). Call this ONLY at the specific real-path-join
+ * boundary, and ONLY on win32, where the actual hazards exist.
+ */
+export function sanitizeForHostJoin(normalized: string): string {
+  return process.platform === "win32"
+    ? normalized.replace(WIN32_HAZARD_CHARS, (c) =>
+        c === "%"
+          ? "%25"
+          : `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
+      )
+    : normalized;
+}
+
+/**
  * Validate that a real filesystem path stays within the sandbox root after
  * resolving all OS-level symlinks (including in parent components).
  *

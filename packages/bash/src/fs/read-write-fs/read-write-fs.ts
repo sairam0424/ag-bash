@@ -36,6 +36,7 @@ import {
   normalizePath,
   resolveCanonicalPath,
   resolveCanonicalPathNoSymlinks,
+  sanitizeForHostJoin,
   sanitizeFsError,
   toVirtualPath,
   validatePath,
@@ -147,7 +148,7 @@ export class ReadWriteFs implements IFileSystem {
    * Public implementation for IFileSystem interface.
    */
   public toRealPath(virtualPath: string): string | null {
-    const normalized = normalizePath(virtualPath);
+    const normalized = sanitizeForHostJoin(normalizePath(virtualPath));
     const realPath = nodePath.join(this.root, normalized);
     const resolved = nodePath.resolve(realPath);
 
@@ -166,7 +167,7 @@ export class ReadWriteFs implements IFileSystem {
    * Always returns a string, but the path MUST be validated before use.
    */
   private getInternalRealPath(virtualPath: string): string {
-    const normalized = normalizePath(virtualPath);
+    const normalized = sanitizeForHostJoin(normalizePath(virtualPath));
     const realPath = nodePath.join(this.root, normalized);
     return nodePath.resolve(realPath);
   }
@@ -497,14 +498,20 @@ export class ReadWriteFs implements IFileSystem {
         },
       });
     } catch (e) {
+      // The underlying fs.promises.cp() failure could originate from either
+      // side (src missing, or dest an invalid location) — include both
+      // virtual paths rather than hardcoding src, which was misleading when
+      // the actual failure was on the destination side.
       const err = e as NodeJS.ErrnoException;
       if (err.code === "ENOENT") {
-        throw new Error(`ENOENT: no such file or directory, cp '${src}'`);
+        throw new Error(
+          `ENOENT: no such file or directory, cp '${src}' -> '${dest}'`,
+        );
       }
       if (err.code === "EISDIR") {
-        throw new Error(`EISDIR: is a directory, cp '${src}'`);
+        throw new Error(`EISDIR: is a directory, cp '${src}' -> '${dest}'`);
       }
-      this.sanitizeError(e, src, "cp");
+      this.sanitizeError(e, `${src}' -> '${dest}`, "cp");
     }
   }
 
@@ -530,10 +537,29 @@ export class ReadWriteFs implements IFileSystem {
           nodePath.dirname(destCanonical),
           target,
         );
-        const canonicalTarget = await fs.promises
-          .realpath(resolvedTarget)
-          .catch(() => resolvedTarget);
-        if (!isPathWithinRoot(canonicalTarget, this.canonicalRoot)) {
+        // Use resolveCanonicalPath (SYNC fs.realpathSync internally), not
+        // fs.promises.realpath, to stay consistent with this.canonicalRoot
+        // (computed via realpathSync at construction) and with the
+        // identical pattern already used by findEscapingSymlinks() below.
+        // fs.realpathSync and fs.promises.realpath are NOT interchangeable
+        // on Windows: the sync version preserves 8.3 short path segments
+        // (e.g. "RUNNER~1") while the async version resolves them to long
+        // form (e.g. "runneradmin") via GetFinalPathNameByHandleW.
+        // Comparing an async-resolved long-form path against the
+        // sync-resolved this.canonicalRoot via isPathWithinRoot's plain
+        // string-prefix check would fail even when both refer to the
+        // identical directory - wrongly concluding the symlink escapes the
+        // sandbox (see #149). resolveCanonicalPath also correctly handles a
+        // not-yet-existing target by walking up to the nearest existing
+        // parent and validating THAT, instead of falling back to the raw
+        // unresolved path (which would skip validation of any symlink in
+        // an intermediate parent component - a real, if narrow, escape gap
+        // when the target doesn't exist yet).
+        const canonicalTarget = resolveCanonicalPath(
+          resolvedTarget,
+          this.canonicalRoot,
+        );
+        if (canonicalTarget === null) {
           throw new Error(
             `EACCES: permission denied, mv '${src}' -> '${dest}' would create symlink escaping sandbox`,
           );
@@ -637,13 +663,15 @@ export class ReadWriteFs implements IFileSystem {
           if (stat.isSymbolicLink()) {
             const target = fs.readlinkSync(entryPath);
             const resolvedTarget = nodePath.resolve(dir, target);
-            let canonicalTarget: string;
-            try {
-              canonicalTarget = fs.realpathSync(resolvedTarget);
-            } catch {
-              canonicalTarget = resolvedTarget;
-            }
-            if (!isPathWithinRoot(canonicalTarget, this.canonicalRoot)) {
+            // See the identical resolveCanonicalPath rationale in mv()
+            // above: a not-yet-existing target must still be validated via
+            // its nearest existing parent, not by falling back to the raw
+            // unresolved path.
+            const canonicalTarget = resolveCanonicalPath(
+              resolvedTarget,
+              this.canonicalRoot,
+            );
+            if (canonicalTarget === null) {
               escaping.push(entryPath);
             }
           } else if (stat.isDirectory()) {
@@ -747,7 +775,7 @@ export class ReadWriteFs implements IFileSystem {
     // consistent with the canonical link directory (avoids /tmp vs /private/tmp mismatch).
     const resolvedRealTarget = nodePath.join(
       this.canonicalRoot,
-      resolvedVirtualTarget,
+      sanitizeForHostJoin(resolvedVirtualTarget),
     );
 
     // For relative symlinks, compute the correct relative path from link to target within root
