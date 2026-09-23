@@ -93,11 +93,18 @@ describe("isPathWithinRoot", () => {
   });
 
   it("returns true for child path", () => {
-    expect(isPathWithinRoot("/sandbox/file.txt", "/sandbox")).toBe(true);
+    expect(isPathWithinRoot(`/sandbox${path.sep}file.txt`, "/sandbox")).toBe(
+      true,
+    );
   });
 
   it("returns true for deeply nested child", () => {
-    expect(isPathWithinRoot("/sandbox/a/b/c/d", "/sandbox")).toBe(true);
+    expect(
+      isPathWithinRoot(
+        `/sandbox${path.sep}a${path.sep}b${path.sep}c${path.sep}d`,
+        "/sandbox",
+      ),
+    ).toBe(true);
   });
 
   it("returns false for sibling with same prefix (boundary attack)", () => {
@@ -130,7 +137,9 @@ describe("isPathWithinRoot", () => {
   it("handles root with trailing component match", () => {
     // /tmp/data should not match path /tmp/datastore
     expect(isPathWithinRoot("/tmp/datastore", "/tmp/data")).toBe(false);
-    expect(isPathWithinRoot("/tmp/data/file", "/tmp/data")).toBe(true);
+    expect(isPathWithinRoot(`/tmp/data${path.sep}file`, "/tmp/data")).toBe(
+      true,
+    );
   });
 });
 
