@@ -179,6 +179,8 @@ export async function runJqTestCase(
       skipped: false,
       error: `Execution error: ${e instanceof Error ? e.message : String(e)}`,
     };
+  } finally {
+    env.destroy();
   }
 }
 
