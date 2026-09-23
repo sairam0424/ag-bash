@@ -72,25 +72,34 @@ export function toVirtualPath(resolved: string, canonicalRoot: string): string {
  * InMemoryFs/CowFs that never touch a real path) - it only ever splits on
  * "/", by design, so a Windows-native absolute path passed in as a virtual
  * argument (e.g. "C:\Users\x\pwned.txt") survives it as ONE opaque segment.
- * On POSIX that's harmless: backslash is a legal filename character, so
- * host-native `path.posix.join` never treats it as a separator and the
- * segment stays intact as a single real file nested safely inside root. On
- * *Windows*, however, host-native `path.win32.join`/`dirname` DOES treat
- * "\" as a separator and re-splits this "unsplittable" segment, producing a
- * real path with an embedded, non-leading "C:" component - Windows rejects
- * a bare colon outside the drive-designator position with
- * ERROR_INVALID_NAME, which libuv maps to ENOENT.
+ * On POSIX that's harmless: backslash and colon are legal filename
+ * characters there, so the segment stays intact as a single real file
+ * nested safely inside root. On *Windows*, two separate hazards apply:
+ *
+ * 1. Host-native `path.win32.join`/`dirname` DOES treat "\" as a separator
+ *    and re-splits this "unsplittable" segment, producing a real path with
+ *    an embedded, non-leading "C:" component - Windows rejects a bare
+ *    colon outside the drive-designator position with ERROR_INVALID_NAME
+ *    (libuv maps this to ENOENT).
+ * 2. Even after neutralizing "\", the drive-letter colon itself ("C:")
+ *    survives as a literal character WITHIN a single filename component.
+ *    NTFS treats any ":" in a filename as the start of an Alternate Data
+ *    Stream name (`file.txt:streamname`), not a normal character - so a
+ *    colon anywhere but the drive-designator position is still rejected
+ *    (observed as a real path's own realpath/rename call failing, since
+ *    the whole point of the mangled segment is that colon is no longer at
+ *    the drive-designator position after being nested under root).
  *
  * This must NOT live inside `normalizePath` itself (that was tried and
  * reverted - it unconditionally corrupted legitimate backslash-containing
  * filenames on every platform and every backend, including two real
  * bash-parity spec-test failures on POSIX where a literal "\" in a filename
  * is expected to survive). Call this ONLY at the specific real-path-join
- * boundary, and ONLY on win32, where the actual re-splitting hazard exists.
+ * boundary, and ONLY on win32, where the actual hazards exist.
  */
 export function sanitizeForHostJoin(normalized: string): string {
   return process.platform === "win32"
-    ? normalized.replace(/\\/g, "_")
+    ? normalized.replace(/[\\:]/g, "_")
     : normalized;
 }
 
