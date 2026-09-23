@@ -332,19 +332,23 @@ function getCallingTestFile(): string {
   // - "at func (file:///path/to/file.ts:line:col)"
   // - "at func (/path/to/file.ts:line:col)"
   // - "at file:///path/to/file.ts:line:col"
+  // On Windows these paths contain a drive-letter colon (e.g.
+  // "C:\Users\...\file.ts" or "file:///C:/Users/.../file.ts"), so the
+  // captured group must NOT exclude ":" - anchor on the known ".test.ts"
+  // suffix instead, matched lazily so it stops at the first occurrence.
   for (const line of lines) {
     // Match file:// URLs
-    let match = line.match(/file:\/\/([^):]+\.comparison\.test\.ts)/);
+    let match = line.match(/file:\/\/(.+?\.comparison\.test\.ts)/);
     if (match) {
       return match[1];
     }
     // Match regular paths in parentheses
-    match = line.match(/\(([^):]+\.comparison\.test\.ts)/);
+    match = line.match(/\((.+?\.comparison\.test\.ts)/);
     if (match) {
       return match[1];
     }
     // Match paths without parentheses (at path:line:col)
-    match = line.match(/at\s+([^():]+\.comparison\.test\.ts)/);
+    match = line.match(/at\s+(.+?\.comparison\.test\.ts)/);
     if (match) {
       return match[1].trim();
     }
@@ -352,11 +356,11 @@ function getCallingTestFile(): string {
 
   // If no comparison test found, fall back to any test file
   for (const line of lines) {
-    let match = line.match(/file:\/\/([^):]+\.test\.ts)/);
+    let match = line.match(/file:\/\/(.+?\.test\.ts)/);
     if (match) {
       return match[1];
     }
-    match = line.match(/\(([^):]+\.test\.ts)/);
+    match = line.match(/\((.+?\.test\.ts)/);
     if (match) {
       return match[1];
     }
