@@ -877,7 +877,17 @@ export class ReadWriteFs implements IFileSystem {
     // the canonical path rather than "denies access".
     try {
       this.resolveAndValidate(realPath, path);
-    } catch {
+    } catch (diagErr) {
+      if (true) {
+        console.error("[DIAG realpath/site1]", {
+          path,
+          realPath,
+          root: this.root,
+          canonicalRoot: this.canonicalRoot,
+          allowSymlinks: this.allowSymlinks,
+          err: (diagErr as Error).message,
+        });
+      }
       throw new Error(`ENOENT: no such file or directory, realpath '${path}'`);
     }
 
@@ -886,6 +896,16 @@ export class ReadWriteFs implements IFileSystem {
       resolved = await fs.promises.realpath(realPath);
     } catch (e) {
       const err = e as NodeJS.ErrnoException;
+      if (true) {
+        console.error("[DIAG realpath/site2]", {
+          path,
+          realPath,
+          root: this.root,
+          canonicalRoot: this.canonicalRoot,
+          code: err.code,
+          message: err.message,
+        });
+      }
       if (err.code === "ENOENT") {
         throw new Error(
           `ENOENT: no such file or directory, realpath '${path}'`,
@@ -905,6 +925,15 @@ export class ReadWriteFs implements IFileSystem {
     // /data matching /datastore.
     if (isPathWithinRoot(resolved, this.canonicalRoot)) {
       return toVirtualPath(resolved, this.canonicalRoot);
+    }
+    if (true) {
+      console.error("[DIAG realpath/site3]", {
+        path,
+        realPath,
+        resolved,
+        root: this.root,
+        canonicalRoot: this.canonicalRoot,
+      });
     }
     // Resolved path is outside root - reject it to prevent sandbox escape
     throw new Error(`ENOENT: no such file or directory, realpath '${path}'`);
