@@ -261,15 +261,26 @@ export async function setupFiles(
     await fs.writeFile(fullPath, content);
   }
 
-  // Create equivalent Bash with normalized paths
+  // Create equivalent Bash with normalized paths.
+  //
+  // The virtual InMemoryFs is always POSIX-style and splits paths on "/" -
+  // on Windows, testDir/path.join produce backslash-separated paths (e.g.
+  // "C:\Users\...\bashenv-test-xxx"), which have no "/" to split on and so
+  // get treated as one opaque path segment instead of a directory
+  // hierarchy. Every file lookup and cwd-relative resolution then silently
+  // fails to find anything (commands like `cut test.txt` return empty
+  // output rather than an error). Normalize to forward slashes for the
+  // virtual side only - the real testDir used above (real fs writes) and
+  // by runRealBash elsewhere is untouched.
+  const virtualTestDir = testDir.split(path.sep).join("/");
   const bashEnvFiles: Record<string, string> = Object.create(null);
   for (const [filePath, content] of Object.entries(files)) {
-    bashEnvFiles[path.join(testDir, filePath)] = content;
+    bashEnvFiles[path.posix.join(virtualTestDir, filePath)] = content;
   }
 
   return new Bash({
     files: bashEnvFiles,
-    cwd: testDir,
+    cwd: virtualTestDir,
   });
 }
 
