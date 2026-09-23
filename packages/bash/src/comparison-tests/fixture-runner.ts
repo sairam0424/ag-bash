@@ -245,26 +245,43 @@ export interface CompareOptions {
 }
 
 /**
- * Sets up test files in both real FS and creates a Bash
- */
-/**
- * Convert a real testDir-relative path into the forward-slash virtual path
- * the Bash instance returned by setupFiles() actually uses internally.
+ * Convert a real testDir into the virtual (POSIX-style, "/"-rooted) path the
+ * Bash instance returned by setupFiles() actually uses internally as its
+ * cwd/file-key namespace.
  *
  * The virtual InMemoryFs is always POSIX-style and splits paths on "/" -
  * on Windows, testDir/path.join produce backslash-separated paths (e.g.
  * "C:\Users\...\bashenv-test-xxx"), which have no "/" to split on and so
  * get treated as one opaque path segment instead of a directory hierarchy.
+ *
+ * Converting backslashes to forward slashes alone isn't enough: the result
+ * ("C:/Users/...") still doesn't START with "/", so ag-bash's own path
+ * resolver treats it as a RELATIVE path and joins it onto cwd again -
+ * producing a doubled "/C:/Users/.../C:/Users/..." path. A real POSIX
+ * testDir already starts with "/", so this only changes behavior on
+ * Windows; prepending "/" here (once, idempotently) makes the virtual path
+ * genuinely absolute on every platform.
+ */
+function toVirtualTestDir(testDir: string): string {
+  const normalized = testDir.split(path.sep).join("/");
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+/**
+ * Convert a real testDir-relative path into the forward-slash virtual path
+ * the Bash instance returned by setupFiles() actually uses internally.
  * Callers that need to `env.readFile()`/`env.writeFile()` a path derived
  * from testDir (as opposed to a real `fs.readFile()`, which should keep
  * using plain `path.join(testDir, ...)`) must go through this helper
  * instead of reconstructing the join themselves.
  */
 export function virtualPath(testDir: string, filePath: string): string {
-  const virtualTestDir = testDir.split(path.sep).join("/");
-  return path.posix.join(virtualTestDir, filePath);
+  return path.posix.join(toVirtualTestDir(testDir), filePath);
 }
 
+/**
+ * Sets up test files in both real FS and creates a Bash
+ */
 export async function setupFiles(
   testDir: string,
   files: Record<string, string>,
@@ -280,9 +297,9 @@ export async function setupFiles(
   }
 
   // Create equivalent Bash with normalized (virtual) paths - see
-  // virtualPath()'s doc comment for why this can't just be
+  // toVirtualTestDir()'s doc comment for why this can't just be
   // path.join(testDir, filePath).
-  const virtualTestDir = testDir.split(path.sep).join("/");
+  const virtualTestDir = toVirtualTestDir(testDir);
   const bashEnvFiles: Record<string, string> = Object.create(null);
   for (const [filePath, content] of Object.entries(files)) {
     bashEnvFiles[path.posix.join(virtualTestDir, filePath)] = content;
