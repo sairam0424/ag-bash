@@ -926,17 +926,10 @@ export class ReadWriteFs implements IFileSystem {
     if (isPathWithinRoot(resolved, this.canonicalRoot)) {
       return toVirtualPath(resolved, this.canonicalRoot);
     }
-    if (true) {
-      console.error("[DIAG realpath/site3]", {
-        path,
-        realPath,
-        resolved,
-        root: this.root,
-        canonicalRoot: this.canonicalRoot,
-      });
-    }
     // Resolved path is outside root - reject it to prevent sandbox escape
-    throw new Error(`ENOENT: no such file or directory, realpath '${path}'`);
+    throw new Error(
+      `ENOENT: no such file or directory, realpath '${path}' [DIAG resolved=${JSON.stringify(resolved)} root=${JSON.stringify(this.root)} canonicalRoot=${JSON.stringify(this.canonicalRoot)}]`,
+    );
   }
 
   /**
