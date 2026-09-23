@@ -361,6 +361,34 @@ Commands implemented as test helpers:
 ### Test Data Directory (29 tests)
 Tests requiring `$REPO_ROOT/spec/testdata/` files.
 
+### Unset $REPO_ROOT (1 test)
+Our test harness (`runSpecFile`/`runTestCase` in `../runner.ts`) never sets a
+`REPO_ROOT` environment variable — it only sets `HOME`/`TMP`/`TMPDIR`/`SH` and
+starts the shell at `cwd: "/tmp"`. Upstream Oils runs these specs from a real
+checkout with `REPO_ROOT` pointing at the repo root and a writable scratch
+tree beneath it.
+
+`glob.test.sh` `#### set -o noglob` opens with `cd $REPO_ROOT`. Since
+`REPO_ROOT` is unset, the unquoted expansion produces zero words (correct
+bash behavior — this is not a bug), so the line is equivalent to a bare `cd`,
+which correctly goes to `$HOME` (`/tmp` in this harness — also correct,
+verified in `cd.ts`). The test then does
+`touch _tmp/spec-tmp/a.zz _tmp/spec-tmp/b.zz`, but `_tmp/spec-tmp/` was never
+created under `/tmp` (it would have been created under the real
+`$REPO_ROOT` upstream), so `touch` fails with ENOENT and the glob on the next
+line has nothing to expand.
+
+This is a test-harness/fixture-provisioning gap, not an interpreter bug —
+`cd` and `touch` both behave correctly given the harness's actual
+environment. Faking a `REPO_ROOT` value or pre-creating `_tmp/spec-tmp/` in
+the harness purely to satisfy this one case would mask real `cd`/`touch`
+behavior for every other test, so the case is marked `## SKIP
+(unimplementable)` instead of "fixed". The two other `cd $REPO_ROOT` cases in
+the same file (`glob can expand to command and arg`, already `## SKIP`; and
+`Splitting/Globbing doesn't happen on local assignment`) are unaffected
+because they either already skip or don't depend on files under the
+now-wrong cwd.
+
 ---
 
 ## Skipped Test Files
