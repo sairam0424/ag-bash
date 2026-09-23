@@ -19,8 +19,8 @@ permissions: {}
 
 jobs:
   # Perf-regression gate (C2): runs the package benchmarks and fails the build
-  # if any benchmark's mean time regresses >15% vs the committed
-  # packages/bash/bench-baseline.json (see scripts/bench-check.js).
+  # if any benchmark's mean time regresses >25% (and >0.15ms absolute) vs the
+  # committed packages/bash/bench-baseline.json (see scripts/bench-check.js).
   #
   # `bench:check` = `bench:ci` (vitest bench --outputJson bench-results.json)
   # then `node scripts/bench-check.js` to apply the threshold. The bench config
