@@ -57,6 +57,13 @@ jobs:
           - os: macos-latest
             node-version: 22
             cross-os: true
+            # macos-latest hosted runners have less RAM than ubuntu-latest;
+            # the spec-test runners (jq/sed/awk/grep/main Oils) create one
+            # Bash instance per test case, and even with proper disposal
+            # (see spec-tests/*/runner.ts) GC can't always keep pace with
+            # allocation rate in a tight per-case loop. Give this leg more
+            # headroom rather than tune allocation further blind.
+            node-options: "--max-old-space-size=6144"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -83,6 +90,8 @@ jobs:
       - if: steps.gate.outputs.skip != 'true'
         run: pnpm --filter @ag-bash/bash test:unit --reporter=github-actions --reporter=junit --outputFile=junit-unit.xml
         shell: bash
+        env:
+          NODE_OPTIONS: ${{ matrix.node-options }}
       - if: steps.gate.outputs.skip != 'true'
         run: pnpm --filter @ag-bash/bash test:dist
         shell: bash
