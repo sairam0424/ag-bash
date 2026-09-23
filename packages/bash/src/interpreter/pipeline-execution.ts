@@ -377,12 +377,30 @@ export async function executePipeline(
     // This prevents variable assignments (e.g., ${cmd=echo}) from leaking to parent
     const savedEnv = runsInSubshell ? new Map(ctx.state.env) : null;
 
-    // Save $_ for commands running in a subshell context. Real bash forks a
-    // subshell per non-last pipeline stage (and for the last stage too,
-    // unless `lastpipe` is set): each stage INHERITS the current $_ when it
-    // starts (not an empty value), but any $_ mutation made while running in
-    // that subshell must not leak back out, since it's a separate process.
+    // Save $_ for commands running in a subshell context, so their own
+    // mutation of it can be reverted once they finish (see restore below).
     const savedStageLastArg = runsInSubshell ? ctx.state.lastArg : undefined;
+
+    // Every pipeline stage's own word expansion sees $_ as EMPTY, never the
+    // value the shell had before the pipeline started - confirmed against
+    // real bash with `shopt -s lastpipe; seq 3 | echo last=$_` (vars-special
+    // test "$_ with pipeline and subshell"): even though the immediately
+    // preceding `shopt -s lastpipe` sets $_ to "lastpipe", the pipeline's
+    // OWN last stage still expands `$_` to "" (`last=`), not "last=lastpipe".
+    // This holds for every stage, INCLUDING the lastpipe-optimized last
+    // stage that runs directly in the current shell process (no fork) -
+    // $_ visibility during a stage's expansion is governed by pipeline
+    // membership, not by whether that particular stage happens to fork.
+    // What DOES differ by fork/lastpipe is only what happens to $_ AFTER
+    // the stage runs: a forked stage's own update (bound post-execution in
+    // interpreter.ts, from ITS OWN last arg) is discarded below via
+    // `savedStageLastArg`; the lastpipe-optimized last stage's update is
+    // not discarded, so it propagates out to the rest of the script (this
+    // is exactly how lastpipe is supposed to work for `cmd | read x`-style
+    // variable propagation, just applied to $_ instead of a user variable).
+    if (isMultiCommandPipeline) {
+      ctx.state.lastArg = "";
+    }
 
     let result: ExecResult;
 
