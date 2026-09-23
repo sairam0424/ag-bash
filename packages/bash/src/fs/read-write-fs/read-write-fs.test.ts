@@ -364,15 +364,23 @@ describe("ReadWriteFs", () => {
   });
 
   describe("chmod", () => {
-    it("should change file permissions", async () => {
-      fs.writeFileSync(path.join(tempDir, "file.txt"), "content");
-      const rwfs = new ReadWriteFs({ root: tempDir, allowSymlinks: true });
+    // Windows/NTFS has no POSIX permission-bit granularity below the write
+    // bit, so full rwxrwxrwx mode bits can't round-trip through libuv's
+    // fchmod there — see Node's fs docs "File modes": "On Windows, only the
+    // write permission can be changed, and the distinction among the
+    // permissions of group, owner, or others is not implemented."
+    it.skipIf(process.platform === "win32")(
+      "should change file permissions",
+      async () => {
+        fs.writeFileSync(path.join(tempDir, "file.txt"), "content");
+        const rwfs = new ReadWriteFs({ root: tempDir, allowSymlinks: true });
 
-      await rwfs.chmod("/file.txt", 0o755);
+        await rwfs.chmod("/file.txt", 0o755);
 
-      const stat = fs.statSync(path.join(tempDir, "file.txt"));
-      expect(stat.mode & 0o777).toBe(0o755);
-    });
+        const stat = fs.statSync(path.join(tempDir, "file.txt"));
+        expect(stat.mode & 0o777).toBe(0o755);
+      },
+    );
 
     it("should throw ENOENT for non-existent file", async () => {
       const rwfs = new ReadWriteFs({ root: tempDir, allowSymlinks: true });
