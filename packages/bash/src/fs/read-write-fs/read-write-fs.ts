@@ -36,6 +36,7 @@ import {
   normalizePath,
   resolveCanonicalPath,
   resolveCanonicalPathNoSymlinks,
+  sanitizeForHostJoin,
   sanitizeFsError,
   toVirtualPath,
   validatePath,
@@ -147,7 +148,7 @@ export class ReadWriteFs implements IFileSystem {
    * Public implementation for IFileSystem interface.
    */
   public toRealPath(virtualPath: string): string | null {
-    const normalized = normalizePath(virtualPath);
+    const normalized = sanitizeForHostJoin(normalizePath(virtualPath));
     const realPath = nodePath.join(this.root, normalized);
     const resolved = nodePath.resolve(realPath);
 
@@ -166,7 +167,7 @@ export class ReadWriteFs implements IFileSystem {
    * Always returns a string, but the path MUST be validated before use.
    */
   private getInternalRealPath(virtualPath: string): string {
-    const normalized = normalizePath(virtualPath);
+    const normalized = sanitizeForHostJoin(normalizePath(virtualPath));
     const realPath = nodePath.join(this.root, normalized);
     return nodePath.resolve(realPath);
   }
@@ -497,14 +498,20 @@ export class ReadWriteFs implements IFileSystem {
         },
       });
     } catch (e) {
+      // The underlying fs.promises.cp() failure could originate from either
+      // side (src missing, or dest an invalid location) — include both
+      // virtual paths rather than hardcoding src, which was misleading when
+      // the actual failure was on the destination side.
       const err = e as NodeJS.ErrnoException;
       if (err.code === "ENOENT") {
-        throw new Error(`ENOENT: no such file or directory, cp '${src}'`);
+        throw new Error(
+          `ENOENT: no such file or directory, cp '${src}' -> '${dest}'`,
+        );
       }
       if (err.code === "EISDIR") {
-        throw new Error(`EISDIR: is a directory, cp '${src}'`);
+        throw new Error(`EISDIR: is a directory, cp '${src}' -> '${dest}'`);
       }
-      this.sanitizeError(e, src, "cp");
+      this.sanitizeError(e, `${src}' -> '${dest}`, "cp");
     }
   }
 
@@ -747,7 +754,7 @@ export class ReadWriteFs implements IFileSystem {
     // consistent with the canonical link directory (avoids /tmp vs /private/tmp mismatch).
     const resolvedRealTarget = nodePath.join(
       this.canonicalRoot,
-      resolvedVirtualTarget,
+      sanitizeForHostJoin(resolvedVirtualTarget),
     );
 
     // For relative symlinks, compute the correct relative path from link to target within root

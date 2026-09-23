@@ -44,6 +44,7 @@ import {
   normalizePath,
   resolveCanonicalPath,
   resolveCanonicalPathNoSymlinks,
+  sanitizeForHostJoin,
   sanitizeFsError,
   sanitizeSymlinkTarget,
   validatePath,
@@ -267,7 +268,7 @@ export class OverlayFs implements IFileSystem {
    * Returns null if the path is not under the mount point or would escape the root.
    */
   toRealPath(virtualPath: string): string | null {
-    const normalized = normalizePath(virtualPath);
+    const normalized = sanitizeForHostJoin(normalizePath(virtualPath));
 
     // Check if path is under the mount point
     const relativePath = this.getRelativeToMount(normalized);
