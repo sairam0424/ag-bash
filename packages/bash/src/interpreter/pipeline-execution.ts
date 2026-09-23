@@ -415,6 +415,12 @@ export async function executePipeline(
         stderr: "",
         exitCode: 0,
       };
+      // This shortcut bypasses the normal command-execution path (which
+      // would otherwise set $_ to the command's own last argument once it
+      // finishes - see interpreter.ts). isLineCountOnly only matches the
+      // exact literal `wc -l` (single arg, no redirections), so replicate
+      // that same post-execution assignment here: $_ becomes "-l".
+      ctx.state.lastArg = "-l";
     } else {
       // Optimization D: Empty stdin short-circuit — when upstream produced
       // nothing and the command is a pure stdin-reading filter, skip execution
@@ -434,6 +440,14 @@ export async function executePipeline(
         // still open/truncate/write that target even on empty input - the
         // synthetic result below bypasses applyRedirections entirely.
         command.redirections.length === 0 &&
+        // This shortcut bypasses executeCommand entirely, so it never sets
+        // $_ to this command's own last argument the way real execution
+        // would - computing that correctly here would need full expansion,
+        // defeating the point of the shortcut. Only safe when this stage's
+        // $_ update is discarded anyway (runsInSubshell); on the
+        // lastpipe-optimized last stage, whose $_ propagates out, fall
+        // through to full execution so $_ ends up correct.
+        runsInSubshell &&
         !isStdinIndependent(command) &&
         // Hash/checksum filters emit a defined non-empty value for empty input,
         // so they must actually run rather than be short-circuited to "".

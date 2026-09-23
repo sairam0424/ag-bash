@@ -1016,6 +1016,36 @@ export class Interpreter {
       return fdVarError;
     }
 
+    // Custom (fd >= 3) redirects like `9> file`, `9< file`, `9<> file`, or a
+    // heredoc targeting fd 9 are scoped to just THIS ONE command's execution
+    // in real bash - opened before the command runs, closed again the
+    // moment it returns, well before any later statement (including a
+    // later subshell) can see it. `exec N> file` (and friends) is the one
+    // form that mutates the shell's fd table permanently.
+    //
+    // Snapshot the pre-command value of every such fd HERE, before the
+    // input-redirection loop below (which itself writes into
+    // ctx.state.fileDescriptors for `<`, `<<`, `<>`, `<&` targeting fd >= 3)
+    // has a chance to mutate it - not later, right before applyRedirections,
+    // which would capture the input-loop's OWN mutation as if it were the
+    // "prior" value and fail to revert it. Whether to actually use this
+    // snapshot to restore (vs. leave the mutation persisted, for real
+    // `exec`) is decided further down, once `commandName` is known.
+    let customFdSnapshot: Map<number, string | undefined> | undefined;
+    for (const redir of node.redirections) {
+      if (
+        redir.fd != null &&
+        redir.fd >= 3 &&
+        !customFdSnapshot?.has(redir.fd)
+      ) {
+        customFdSnapshot ??= new Map();
+        customFdSnapshot.set(
+          redir.fd,
+          this.ctx.state.fileDescriptors?.get(redir.fd),
+        );
+      }
+    }
+
     // Track source FD for stdin from read-write file descriptors
     // This allows the read builtin to update the FD's position after reading
     let stdinSourceFd = -1;
@@ -1434,37 +1464,6 @@ export class Interpreter {
         ? (lastArgNameOverrides[args.length - 1] ?? args[args.length - 1])
         : commandName;
 
-    // Custom (fd >= 3) redirects like `9> file` or `9>&1` are scoped to just
-    // THIS ONE command's execution in real bash: the fd is opened before the
-    // command runs and closed again the moment it returns, well before any
-    // later statement - including a later subshell - can see it (e.g.
-    // `true 9> file; ( echo hi >&9 )` must NOT let the subshell write
-    // through fd 9). `exec N> file` is the one form that mutates the
-    // shell's fd table permanently (see the `commandName === "exec"` block
-    // above, which already special-cases the >&/<& close+merge cases for
-    // it). applyRedirections doesn't know which case it's in, so it always
-    // writes fd>=3 mappings into the persistent `ctx.state.fileDescriptors`
-    // map; snapshot those entries here (for every fd this command's own
-    // redirections mention) and restore them right after, unless the
-    // command actually is `exec`.
-    const isExecBuiltin = commandName === "exec";
-    let customFdSnapshot: Map<number, string | undefined> | undefined;
-    if (!isExecBuiltin) {
-      for (const redir of node.redirections) {
-        if (
-          redir.fd != null &&
-          redir.fd >= 3 &&
-          !customFdSnapshot?.has(redir.fd)
-        ) {
-          customFdSnapshot ??= new Map();
-          customFdSnapshot.set(
-            redir.fd,
-            this.ctx.state.fileDescriptors?.get(redir.fd),
-          );
-        }
-      }
-    }
-
     // Apply redirections if command succeeded (or even if it failed, bash applies them)
     const redirectedResult = await applyRedirections(
       this.ctx,
@@ -1472,7 +1471,15 @@ export class Interpreter {
       node.redirections,
     );
 
-    if (customFdSnapshot) {
+    // Restore the fd>=3 snapshot taken above (before the input-redirection
+    // loop), UNLESS this command actually is the real `exec` builtin (whose
+    // fd mutations are meant to persist for the rest of the script) - a
+    // user function or alias literally named "exec" (allowed in non-posix
+    // mode, see POSIX_SPECIAL_BUILTINS's usage in functions.ts) is NOT the
+    // builtin, so its own fd redirects must still be scoped normally.
+    const isExecBuiltin =
+      commandName === "exec" && !this.ctx.state.functions.has("exec");
+    if (customFdSnapshot && !isExecBuiltin) {
       for (const [fd, previousValue] of customFdSnapshot) {
         if (previousValue === undefined) {
           this.ctx.state.fileDescriptors?.delete(fd);
