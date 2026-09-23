@@ -537,9 +537,24 @@ export class ReadWriteFs implements IFileSystem {
           nodePath.dirname(destCanonical),
           target,
         );
-        const canonicalTarget = await fs.promises
-          .realpath(resolvedTarget)
-          .catch(() => resolvedTarget);
+        // Use the SYNC realpathSync, not fs.promises.realpath, to stay
+        // consistent with this.canonicalRoot (computed via realpathSync at
+        // construction) and with the identical pattern already used by
+        // findEscapingSymlinks() below. fs.realpathSync and
+        // fs.promises.realpath are NOT interchangeable on Windows: the sync
+        // version preserves 8.3 short path segments (e.g. "RUNNER~1") while
+        // the async version resolves them to long form (e.g.
+        // "runneradmin") via GetFinalPathNameByHandleW. Comparing an
+        // async-resolved long-form path against the sync-resolved
+        // this.canonicalRoot via isPathWithinRoot's plain string-prefix
+        // check would fail even when both refer to the identical directory
+        // - wrongly concluding the symlink escapes the sandbox (see #149).
+        let canonicalTarget: string;
+        try {
+          canonicalTarget = fs.realpathSync(resolvedTarget);
+        } catch {
+          canonicalTarget = resolvedTarget;
+        }
         if (!isPathWithinRoot(canonicalTarget, this.canonicalRoot)) {
           throw new Error(
             `EACCES: permission denied, mv '${src}' -> '${dest}' would create symlink escaping sandbox`,
