@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
+import { REAL_BASH_SHELL } from "./fixture-runner.js";
 
 /**
  * Comparison tests for parse errors
@@ -19,7 +20,7 @@ describe("Parse Errors - Comparison Tests", () => {
     try {
       const stdout = execSync(command, {
         cwd: tempDir,
-        shell: "/bin/bash",
+        shell: REAL_BASH_SHELL,
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
       });
