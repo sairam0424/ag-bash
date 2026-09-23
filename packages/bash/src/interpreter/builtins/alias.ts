@@ -17,7 +17,12 @@ export function handleAlias(
     return success(ALIAS_HELP);
   }
 
-  if (args.length === 0) {
+  // "--" marks the end of options (GNU/POSIX convention). alias has no
+  // other options, so a single leading "--" is simply skipped before the
+  // NAME[=VALUE] arguments are parsed.
+  const processArgs = args[0] === "--" ? args.slice(1) : args;
+
+  if (processArgs.length === 0) {
     let stdout = "";
     for (const [key, value] of ctx.state.env) {
       if (key.startsWith(ALIAS_PREFIX)) {
@@ -32,7 +37,7 @@ export function handleAlias(
   let stdout = "";
   let stderr = "";
 
-  for (const arg of args) {
+  for (const arg of processArgs) {
     const eqIndex = arg.indexOf("=");
     if (eqIndex === -1) {
       const value = ctx.state.env.get(`${ALIAS_PREFIX}${arg}`);
@@ -70,6 +75,8 @@ export function handleUnalias(
     return failure("bash: unalias: usage: unalias [-a] name [name ...]\n", 2);
   }
 
+  // "-a" is the only option and must precede "--"; matches bash, which
+  // stops recognizing options once "--" is seen.
   if (args[0] === "-a") {
     const keysToDelete: string[] = [];
     for (const key of ctx.state.env.keys()) {
@@ -83,10 +90,19 @@ export function handleUnalias(
     return OK;
   }
 
+  // "--" marks the end of options; skip a single leading occurrence before
+  // parsing the NAME arguments (a "-a" appearing after "--" is a literal
+  // alias name, not the flag).
+  const processArgs = args[0] === "--" ? args.slice(1) : args;
+
+  if (processArgs.length === 0) {
+    return failure("bash: unalias: usage: unalias [-a] name [name ...]\n", 2);
+  }
+
   let exitCode = 0;
   let stderr = "";
 
-  for (const name of args) {
+  for (const name of processArgs) {
     const key = `${ALIAS_PREFIX}${name}`;
     if (!ctx.state.env.has(key)) {
       stderr += `bash: unalias: ${name}: not found\n`;
