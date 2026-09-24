@@ -1,5 +1,13 @@
 # website
 
+## 1.3.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @ag-bash/bash@6.0.5
+  - @ag-bash/agent-bridge@6.0.5
+
 ## 1.3.2
 
 ### Patch Changes
