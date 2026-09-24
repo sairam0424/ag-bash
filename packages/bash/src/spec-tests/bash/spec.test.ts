@@ -194,7 +194,10 @@ describe("Oils Spec Tests", () => {
         const testName = `[L${testCase.lineNumber}] ${testCase.name}: ${scriptPreview}`;
 
         it(testName, async () => {
-          const result = await runTestCase(testCase, { filePath });
+          const result = await runTestCase(testCase, {
+            filePath,
+            legacyTmpDir: specFile.header.legacyTmpDir,
+          });
 
           if (result.skipped) {
             return;

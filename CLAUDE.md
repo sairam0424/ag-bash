@@ -9,7 +9,30 @@ Ag-Bash is an AI-native bash interpreter written in TypeScript. It is organized 
 - **`@ag-bash/bash`**: The core shell engine, filesystem, and sandboxed runtimes.
 - **`@ag-bash/agent-bridge`**: Terminal UI bridge for AI agent communication.
 - **`@ag-bash/mcp-server`**: Standalone Model Context Protocol server.
-- **Version Baseline**: `v6.0.0` (Major Release)
+- **Version Baseline**: `6.0.4` (fixed-mode synchronized across all packages)
+
+## Distribution
+
+Ag-Bash ships across multiple channels, all at the current `6.0.4` baseline (owner `sairam0424`, Apache-2.0):
+
+```bash
+# npm (library + servers, synchronized at 6.0.4)
+npm i @ag-bash/bash                                 # core engine library
+npx @ag-bash/mcp-server                             # standalone MCP server (70 tools, stdio)
+
+# MCP server in Claude Code
+claude mcp add ag-bash -- npx -y @ag-bash/mcp-server
+
+# Claude Code plugin
+/plugin marketplace add sairam0424/ag-bash
+/plugin install ag-bash@ag-bash
+
+# Homebrew (installs ag-bash, ag-shell, ag-bash-mcp bins)
+brew tap sairam0424/tap && brew install ag-bash
+```
+
+- **MCP Registry**: `io.github.sairam0424/ag-bash` @ `6.0.4` (active, isLatest) at registry.modelcontextprotocol.io.
+- **Docker MCP Catalog**: submission PR open at `docker/mcp-registry` (in review; not yet merged).
 
 ## Commands
 
@@ -77,6 +100,6 @@ Input Script → ExecutionPipeline [Normalize → Parse (src/parser/lexer/) → 
 - **Security Gates**: All filesystem access MUST go through `resolveAndValidate` security gates in the respective FS implementation.
 - **Sandbox Pure**: No Node.js native dependencies allowed in the core package (except optional WASM runtimes).
 - **Defense-in-Depth Defaults**: `defenseInDepth` defaults to enabled — all sandbox contexts automatically block `Function`, `eval`, `setTimeout`, and `process.*` unless explicitly opted out.
-- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently v6.0.0).
+- **Synchronized versioning**: Maintain synchronized versioning across monorepo packages (currently `6.0.4`, fixed-mode synchronized).
 - **Nexus Suite**: Integrated surgical editing (`ag-edit`), semantic diffing (`ag-diff`), and snapshots (`ag-snapshot`).
 - **E2E First**: Always verify changes with `bash scripts/e2e-verify.sh` to ensure protocol and persistence stability.

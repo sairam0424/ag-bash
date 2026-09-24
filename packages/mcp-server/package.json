@@ -13,7 +13,9 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc --noEmit && pnpm build:bundle && chmod +x dist/index.js",
-    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --minify --outfile=dist/index.js --banner:js='#!/usr/bin/env node' --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --minify --outfile=dist/index.js --banner:js='#!/usr/bin/env node' --external:@ag-bash/browser --external:sql.js --external:quickjs-emscripten --external:@mongodb-js/zstd --external:node-liblzma --external:seek-bzip",
+    "lint": "biome check . && pnpm lint:banned",
+    "lint:banned": "node ../../scripts/check-banned-patterns.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -43,6 +45,7 @@
     "zod": "^4.3.6"
   },
   "optionalDependencies": {
+    "@ag-bash/browser": "workspace:*",
     "@mongodb-js/zstd": "^7.0.0",
     "node-liblzma": "^2.0.3"
   },

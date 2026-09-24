@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
 import { Bash } from "@ag-bash/bash";
-import { McpToolBridge } from "./tool-bridge.js";
+import { beforeEach, describe, expect, it } from "vitest";
 import { RateLimiter } from "./rate-limiter.js";
+import { McpToolBridge } from "./tool-bridge.js";
 
 /**
  * MCP Contract Tests
@@ -78,8 +78,8 @@ describe("MCP Contract Tests", () => {
         // If required is present, it must be a non-empty array of strings
         if (tool.inputSchema.required !== undefined) {
           expect(Array.isArray(tool.inputSchema.required)).toBe(true);
-          expect(tool.inputSchema.required!.length).toBeGreaterThan(0);
-          for (const req of tool.inputSchema.required!) {
+          expect(tool.inputSchema.required?.length).toBeGreaterThan(0);
+          for (const req of tool.inputSchema.required) {
             expect(typeof req).toBe("string");
             // Required fields must exist in properties
             expect(tool.inputSchema.properties).toHaveProperty(req);
@@ -160,7 +160,9 @@ describe("MCP Contract Tests", () => {
       expect(encoded.length).toBeGreaterThan(0);
 
       // Should be valid base64 that round-trips
-      const decoded = JSON.parse(Buffer.from(encoded, "base64").toString("utf-8"));
+      const decoded = JSON.parse(
+        Buffer.from(encoded, "base64").toString("utf-8"),
+      );
       expect(decoded).toHaveProperty("state");
       expect(decoded).toHaveProperty("fs");
     });
@@ -217,7 +219,9 @@ describe("MCP Contract Tests", () => {
       // Simulate MCP transport: snapshot -> base64 -> parse -> restore
       const snapshot = await bash.snapshot();
       const encoded = Buffer.from(JSON.stringify(snapshot)).toString("base64");
-      const decoded = JSON.parse(Buffer.from(encoded, "base64").toString("utf-8"));
+      const decoded = JSON.parse(
+        Buffer.from(encoded, "base64").toString("utf-8"),
+      );
 
       // Verify the encoded form is valid and decodable
       expect(decoded).toHaveProperty("state");
@@ -350,7 +354,9 @@ describe("MCP Contract Tests", () => {
       const tools = bridge.listTools();
 
       // At least some tools should have annotations
-      const toolsWithAnnotations = tools.filter((t) => t.annotations !== undefined);
+      const toolsWithAnnotations = tools.filter(
+        (t) => t.annotations !== undefined,
+      );
       expect(toolsWithAnnotations.length).toBeGreaterThan(0);
     });
 
@@ -359,9 +365,9 @@ describe("MCP Contract Tests", () => {
       const readFile = tools.find((t) => t.name === "read_file");
 
       expect(readFile).toBeDefined();
-      expect(readFile!.annotations).toBeDefined();
-      expect(readFile!.annotations!.readOnlyHint).toBe(true);
-      expect(readFile!.annotations!.destructiveHint).toBe(false);
+      expect(readFile?.annotations).toBeDefined();
+      expect(readFile?.annotations?.readOnlyHint).toBe(true);
+      expect(readFile?.annotations?.destructiveHint).toBe(false);
     });
 
     it("should mark write_file as destructiveHint=true", () => {
@@ -369,8 +375,8 @@ describe("MCP Contract Tests", () => {
       const writeFile = tools.find((t) => t.name === "write_file");
 
       expect(writeFile).toBeDefined();
-      expect(writeFile!.annotations).toBeDefined();
-      expect(writeFile!.annotations!.destructiveHint).toBe(true);
+      expect(writeFile?.annotations).toBeDefined();
+      expect(writeFile?.annotations?.destructiveHint).toBe(true);
     });
 
     it("should mark list_dir as readOnlyHint=true", () => {
@@ -378,8 +384,8 @@ describe("MCP Contract Tests", () => {
       const listDir = tools.find((t) => t.name === "list_dir");
 
       expect(listDir).toBeDefined();
-      expect(listDir!.annotations).toBeDefined();
-      expect(listDir!.annotations!.readOnlyHint).toBe(true);
+      expect(listDir?.annotations).toBeDefined();
+      expect(listDir?.annotations?.readOnlyHint).toBe(true);
     });
 
     it("should have boolean annotation values (not undefined)", () => {

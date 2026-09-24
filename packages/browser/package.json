@@ -1,0 +1,61 @@
+{
+  "name": "@ag-bash/browser",
+  "version": "6.0.4",
+  "description": "Optional ag_browser_* MCP tool suite for Ag-Bash — scripted, deterministic Chrome DevTools Protocol automation (navigate, click, type, screenshot, evaluate JS, raw CDP) backed by browser-harness-mcp. Not an autonomous browser-use.Agent integration.",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc && find dist -name '*.test.js' -delete && find dist -name '*.test.d.ts' -delete && find dist -name '*.test.js.map' -delete",
+    "lint": "biome check . && pnpm lint:banned",
+    "lint:banned": "node ../../scripts/check-banned-patterns.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "ag-bash",
+    "agentic",
+    "browser",
+    "cdp",
+    "mcp"
+  ],
+  "homepage": "https://github.com/sairam0424/ag-bash/tree/main/packages/browser#readme",
+  "bugs": {
+    "url": "https://github.com/sairam0424/ag-bash/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sairam0424/ag-bash.git",
+    "directory": "packages/browser"
+  },
+  "author": "Ag-Bash",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@ag-bash/bash": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

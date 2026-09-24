@@ -36,15 +36,19 @@ This repository is organized into a modular monorepo to support independent vers
 
 ---
 
-## Installation
+## Installation & Distribution
 
 **Requires Node.js >=20.6.0.** For full ESM-hook security hardening, Node.js >=23.5 is recommended.
 
-```bash
-# Latest (recommended)
-npm install @ag-bash/bash
+Ag-Bash ships across multiple channels (current version **6.0.4**, synchronized across all npm packages):
 
-# With MCP server
+### npm library
+
+```bash
+# Core engine (recommended)
+npm i @ag-bash/bash
+
+# With the standalone MCP server
 npm install @ag-bash/mcp-server
 ```
 
@@ -55,6 +59,36 @@ import { Bash, createShell } from "@ag-bash/bash";
 import { RunLoop } from "@ag-bash/bash/agent-runtime";
 import { createTestBash } from "@ag-bash/bash/testing";
 ```
+
+### MCP server (npx / MCP Registry)
+
+The MCP server exposes 70 tools over stdio. Add it to Claude Code in one command (no global install needed):
+
+```bash
+claude mcp add ag-bash -- npx -y @ag-bash/mcp-server
+# or run it directly
+npx @ag-bash/mcp-server
+```
+
+It is also published to the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.sairam0424/ag-bash`.
+
+> A submission to the Docker MCP Catalog (`docker/mcp-registry`) is currently in review.
+
+### Claude Code plugin
+
+```text
+/plugin marketplace add sairam0424/ag-bash
+/plugin install ag-bash@ag-bash
+```
+
+### Homebrew (macOS)
+
+```bash
+brew tap sairam0424/tap
+brew install ag-bash
+```
+
+This also installs the `ag-shell` and `ag-bash-mcp` binaries.
 
 ---
 
@@ -88,9 +122,11 @@ For human-in-the-loop debugging and interactive use, install the Ag-Bash suite g
 #### Via Homebrew (macOS)
 
 ```bash
-brew tap ag-bash/homebrew-tap
+brew tap sairam0424/tap
 brew install ag-bash
 ```
+
+This installs the `ag-bash`, `ag-shell`, and `ag-bash-mcp` binaries.
 
 #### Via NPM (Cross-platform)
 
@@ -102,20 +138,20 @@ npm install -g @ag-bash/bash @ag-bash/mcp-server
 
 ### For AI Agents (MCP)
 
-To provide a bash environment to your agent (e.g., in Claude Desktop or Cursor):
+To provide a bash environment to your agent (e.g., in Claude Code, Claude Desktop, or Cursor), register the MCP server via `npx` — no global install required:
 
 ```bash
-npm install -g @ag-bash/mcp-server
+claude mcp add ag-bash -- npx -y @ag-bash/mcp-server
 ```
 
-Then, add the server to your MCP configuration:
+Or add the server to your MCP configuration manually:
 
 ```json
 {
   "mcpServers": {
     "ag-bash": {
-      "command": "ag-bash-mcp",
-      "args": []
+      "command": "npx",
+      "args": ["-y", "@ag-bash/mcp-server"]
     }
   }
 }

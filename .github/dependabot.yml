@@ -57,3 +57,23 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "chore(agent-bridge)"
+
+  # --- Docker: base-image bumps for the Docker MCP Catalog image ---
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(docker)"
+
+  # --- git submodule: mcp-registry is a fork pinned to a specific branch
+  # (add-ag-bash-mindforge), not upstream's default branch. Dependabot can
+  # only propose bumping the pinned commit on that same branch/fork — it
+  # will NOT switch branches or repos — so this just gives visibility into
+  # upstream commits landing on our pinned branch instead of silent staleness.
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(submodule)"

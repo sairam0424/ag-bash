@@ -41,6 +41,13 @@ export interface RunOptions {
   bashEnvOptions?: ConstructorParameters<typeof Bash>[0];
   /** File path for the test file */
   filePath?: string;
+  /**
+   * Oils spec test convention (`## legacy_tmp_dir: yes` file header): the
+   * test file references a `_tmp/` scratch directory relative to cwd that
+   * must already exist before the script runs (real bash test runners
+   * create it up front rather than each test case creating it itself).
+   */
+  legacyTmpDir?: boolean;
 }
 
 /**
@@ -93,6 +100,9 @@ export async function runTestCase(
       "/dev/zero": "",
       // Set up /bin directory
       "/bin/_keep": "",
+      // Legacy spec tests (`## legacy_tmp_dir: yes`) reference a `_tmp/`
+      // scratch directory relative to cwd, and expect it to already exist.
+      ...(options.legacyTmpDir ? { "/tmp/_tmp/_keep": "" } : {}),
     },
     cwd: "/tmp",
     env: {
@@ -105,10 +115,12 @@ export async function runTestCase(
     ...options.bashEnvOptions,
   });
 
-  // Set up /tmp with sticky bit (mode 1777) for tests that check it
-  await env.fs.chmod("/tmp", 0o1777);
-
   try {
+    // Set up /tmp with sticky bit (mode 1777) for tests that check it.
+    // Inside the try (not before it) so a failure here still reaches the
+    // finally below and disposes env, instead of leaking it.
+    await env.fs.chmod("/tmp", 0o1777);
+
     // Use rawScript to preserve leading whitespace for here-docs
     const result = await env.exec(testCase.script, { rawScript: true });
 
@@ -243,6 +255,8 @@ export async function runTestCase(
       skipped: false,
       error: `Execution error: ${e instanceof Error ? e.message : String(e)}`,
     };
+  } finally {
+    env.destroy();
   }
 }
 

@@ -87,6 +87,7 @@ jobs:
           # the NPM_TOKEN secret is deleted. With OIDC active and no token, npm
           # uses the minted id-token and provenance is automatic.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
 
       # Dry-run path: prove `changeset publish` mints OIDC (or would publish)
       # WITHOUT uploading, before the maintainer deletes NPM_TOKEN.

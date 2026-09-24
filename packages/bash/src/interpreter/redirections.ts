@@ -11,6 +11,7 @@
  */
 
 import type { RedirectionNode, WordNode } from "../ast/types.js";
+import { dirname } from "../fs/path-utils.js";
 import type { ExecResult } from "../types.js";
 import {
   expandRedirectTarget,
@@ -44,7 +45,24 @@ async function checkOutputRedirectTarget(
       return `bash: ${target}: cannot overwrite existing file\n`;
     }
   } catch {
-    // File doesn't exist, that's ok - we'll create it
+    // The target itself doesn't exist yet - normally fine, the write below
+    // will create it. But that assumption breaks if the PARENT directory
+    // doesn't exist either (or is itself a file, not a directory): the
+    // write call throws an uncaught ENOENT/ENOTDIR that propagates all the
+    // way out of bash.exec() as a rejected promise, instead of the graceful
+    // "bash: <path>: No such file or directory" failure real bash (and this
+    // interpreter's own INPUT-redirect path, e.g. `cat < /missing`) already
+    // produce for the equivalent case. Every one of this function's 9 call
+    // sites (>, >>, 2>, 2>>, &>, &>>, {fd}>, >&word, 2>&word) shares this
+    // one check, so fixing it here covers all of them.
+    try {
+      const parentStat = await ctx.fs.stat(dirname(filePath));
+      if (!parentStat.isDirectory) {
+        return `bash: ${target}: Not a directory\n`;
+      }
+    } catch {
+      return `bash: ${target}: No such file or directory\n`;
+    }
   }
   return null;
 }
@@ -709,6 +727,14 @@ export async function applyRedirections(
           if (fd === 1) {
             stderr += stdout;
             stdout = "";
+          } else if (fd >= 3) {
+            // e.g. `exec 3>&2`: register fd as a dup of stderr for later
+            // use (this is FD *setup*, not a merge of THIS command's own
+            // stdout/stderr - there's nothing to merge here).
+            if (!ctx.state.fileDescriptors) {
+              ctx.state.fileDescriptors = new Map();
+            }
+            ctx.state.fileDescriptors.set(fd, "__dupout__:2");
           }
         }
         // 2>&1, 2<&1: redirect stderr to stdout
@@ -716,11 +742,18 @@ export async function applyRedirections(
           if (fd === 2) {
             stdout += stderr;
             stderr = "";
-          } else {
-            // 1>&1 is a no-op, but other fds redirect to stdout
-            stdout += stderr;
-            stderr = "";
+          } else if (fd >= 3) {
+            // e.g. `exec 3>&1`: register fd as a dup of stdout for later
+            // use via `>&3`. Previously this fell into the same "merge"
+            // branch as 2>&1, which happened to be silent (no stderr to
+            // merge yet) but never recorded the fd, so a later `>&3` failed
+            // with "Bad file descriptor".
+            if (!ctx.state.fileDescriptors) {
+              ctx.state.fileDescriptors = new Map();
+            }
+            ctx.state.fileDescriptors.set(fd, "__dupout__:1");
           }
+          // fd === 1 (i.e. `1>&1`) is a no-op.
         }
         // Handle writing to a user-allocated FD (>&$fd)
         else {

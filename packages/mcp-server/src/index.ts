@@ -71,8 +71,13 @@ class AgBashServer {
    * Defaults to false so we emit legacy text-only responses until proven otherwise.
    */
   private supportsStructured = false;
+  // biome-ignore lint/suspicious/noExplicitAny: optional package type
+  private readonly importBrowserPackage: () => Promise<any>;
 
-  constructor() {
+  constructor(
+    // biome-ignore lint/suspicious/noExplicitAny: optional package type
+    importBrowserPackage?: () => Promise<any>,
+  ) {
     // Initialize the persistent Bash engine
     this.bash = new Bash({
       network: {
@@ -88,6 +93,31 @@ class AgBashServer {
 
     // Initialize rate limiter (60 requests per minute)
     this.rateLimiter = new RateLimiter(60, 60_000);
+
+    // Store the import function for optional browser package loading
+    this.importBrowserPackage =
+      importBrowserPackage ??
+      (async () => {
+        // biome-ignore lint/suspicious/noExplicitAny: optional package import
+        return import("@ag-bash/browser" as any);
+      });
+  }
+
+  /**
+   * Load @ag-bash/browser if it is installed and register its ag_browser_*
+   * tools onto this server's toolbox. It is an optionalDependency
+   * (mirrors the @mongodb-js/zstd / node-liblzma pattern in
+   * packages/bash/src/commands/tar/archive.ts, applied at package
+   * granularity): absence is expected and not an error.
+   */
+  async loadOptionalPackages(): Promise<void> {
+    try {
+      const browserPkg = await this.importBrowserPackage();
+      browserPkg.registerBrowserTools(this.bash);
+    } catch {
+      // @ag-bash/browser not installed — browser tools are simply
+      // unavailable; the rest of the server still starts normally.
+    }
   }
 
   // biome-ignore lint/suspicious/noExplicitAny: JSON-RPC result or error object
@@ -878,5 +908,6 @@ export { AgBashServer };
 // still fires when the binary is executed.
 if (!process.env.VITEST) {
   const server = new AgBashServer();
+  await server.loadOptionalPackages();
   server.run();
 }

@@ -1,0 +1,69 @@
+# OSSF Scorecard — a public 0-10 supply-chain security health score,
+# published to https://api.scorecard.dev and viewable at
+# https://scorecard.dev/viewer/?uri=github.com/sairam0424/ag-bash. This repo
+# already SHA-pins 100% of its third-party actions, declares explicit
+# least-privilege `permissions:` on every workflow, runs actionlint, and gates
+# merges on dependency-review — a near-zero-cost way to surface that posture
+# externally, useful given the pending Docker MCP Catalog submission and the
+# live MCP Registry listing (both audiences that increasingly check for this
+# badge).
+#
+# Scorecard's own results-publishing API imposes hard restrictions on this
+# workflow (see https://github.com/ossf/scorecard-action#workflow-restrictions):
+# no top-level env/defaults, no workflow-level WRITE permissions, and the job
+# running `ossf/scorecard-action` may use ONLY the steps on their approved
+# list (checkout, upload-artifact, codeql-action/upload-sarif,
+# scorecard-action, harden-runner). Do not add other steps to the `analysis`
+# job, and do not add top-level `env:`/`defaults:` blocks to this file.
+name: Scorecard analysis
+
+on:
+  push:
+    # Scorecard only supports scanning the default branch.
+    branches: [develop]
+  schedule:
+    # Weekly, Mondays 05:45 UTC — offset from codeql.yml's Monday 04:23 scan.
+    - cron: '45 5 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege default: also satisfies Scorecard's "no workflow-level
+# write permissions" restriction as strictly as possible.
+permissions: {}
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Needed for the SARIF code-scanning upload.
+      security-events: write
+      # Needed for the GitHub OIDC token that `publish_results` uses to
+      # verify the authenticity of the published result.
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      # Uploaded for 5 days for debugging; findings are also visible on the
+      # Security tab via the upload-sarif step below.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      - uses: github/codeql-action/upload-sarif@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
+        with:
+          sarif_file: results.sarif

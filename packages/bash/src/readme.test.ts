@@ -280,6 +280,47 @@ declare module "@ag-bash/bash" {
   export class ReadWriteFs { constructor(options?: any); }
   export class OverlayFs { constructor(options?: any); }
   export class MountableFs { constructor(options?: any); mount(path: string, fs: any): void; }
+  export interface TaggedShell {
+    (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ stdout: string; stderr: string; exitCode: number; metadata?: any }>;
+    readonly bash: Bash;
+    cd(path: string): Promise<void>;
+  }
+  export function createShell(options?: BashOptions): TaggedShell;
+}
+
+declare module "@ag-bash/bash/agent-runtime" {
+  import type { Bash } from "@ag-bash/bash";
+  export interface LLMProvider {
+    generate(request: any): Promise<any>;
+  }
+  export interface RunLoopConfig {
+    llm: LLMProvider;
+    systemPrompt: string;
+    budget?: { maxTokens?: number; maxTurns?: number; maxWallClockMs?: number };
+    [key: string]: any;
+  }
+  export interface RunLoopResult {
+    status: string;
+    turns: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    finalOutput?: string;
+    error?: string;
+  }
+  export class RunLoop {
+    constructor(bash: Bash, config: RunLoopConfig);
+    run(goal: string): Promise<RunLoopResult>;
+  }
+  export class BudgetManager { constructor(config?: any); }
+}
+
+declare module "@ag-bash/bash/testing" {
+  export { Bash } from "@ag-bash/bash";
+  export const createTestBash: any;
+}
+
+declare module "@ag-bash/bash/ai" {
+  export { createBashTool, type CreateBashToolOptions } from "@ag-bash/bash";
 }
 
 declare module "@ag/bash" {

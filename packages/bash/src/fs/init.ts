@@ -104,12 +104,24 @@ function initProcFiles(fs: SyncInitFs, processInfo: VirtualProcessInfo): void {
 /**
  * Initialize the filesystem with standard directories and files
  * Works with both InMemoryFs and OverlayFs (both write to memory)
+ *
+ * @param isRealFilesystemBacked - true when the Bash instance's base
+ * filesystem is a real host filesystem (e.g. ReadWriteFs), which already
+ * has its own real /bin, /tmp etc. and must never have virtual /dev, /proc
+ * scaffolding written into it as literal files on disk. `fs` is always a
+ * MountableFs wrapper (see Bash.ts) that structurally satisfies
+ * isSyncInitFs() regardless of what's mounted underneath, so this can't be
+ * detected by duck-typing `fs` itself — the caller must tell us.
  */
 export function initFilesystem(
   fs: IFileSystem,
   useDefaultLayout: boolean,
   processInfo: VirtualProcessInfo = { pid: 1, ppid: 0, uid: 1000, gid: 1000 },
+  isRealFilesystemBacked = false,
 ): void {
+  if (isRealFilesystemBacked) {
+    return;
+  }
   // Initialize for filesystems that support sync methods (InMemoryFs and OverlayFs)
   if (isSyncInitFs(fs)) {
     initCommonDirectories(fs, useDefaultLayout);

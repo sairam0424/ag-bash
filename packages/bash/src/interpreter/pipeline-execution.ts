@@ -134,6 +134,13 @@ function getMatchLimit(command: CommandNode): number | null {
 function isLineCountOnly(command: CommandNode): boolean {
   if (command.type !== "SimpleCommand" || !command.name) return false;
 
+  // If the command has its own redirections (e.g. `wc -l >/dev/null`), the
+  // synthetic `{stdout: "<count>\n", ...}` result built by this fast path
+  // bypasses applyRedirections entirely, so the redirection would silently
+  // be dropped and the count would leak to the real pipeline output. Fall
+  // through to full execution so redirections are honored correctly.
+  if (command.redirections.length !== 0) return false;
+
   const name = getLiteralValue(command.name);
   if (name !== "wc") return false;
 
@@ -257,6 +264,14 @@ const STDIN_INDEPENDENT: ReadonlySet<string> = new Set([
  * so they must NOT be short-circuited when upstream produced nothing. Hash/checksum
  * filters have a defined value for the empty string (e.g. MD5 of "" is
  * d41d8cd98f00b204e9800998ecf8427e), so `echo -n '' | md5sum` must actually run.
+ *
+ * `wc` belongs here too: it always prints a count line (0 for empty input,
+ * e.g. `wc -c` -> "0\n"), never nothing. Without this, a blocked/empty
+ * upstream stage (e.g. a network-denied `curl` in `curl ... | wc -c | tr -d
+ * ' '`) was short-circuited to genuinely empty output instead of "0", and
+ * that wrong emptiness then propagated through the rest of the pipe. Plain
+ * `wc -l` is unaffected — it has its own newline-counting fast path above
+ * that already runs unconditionally.
  */
 const EMPTY_STDIN_PRODUCES_OUTPUT: ReadonlySet<string> = new Set([
   "md5sum",
@@ -264,6 +279,7 @@ const EMPTY_STDIN_PRODUCES_OUTPUT: ReadonlySet<string> = new Set([
   "sha256sum",
   "sha512sum",
   "cksum",
+  "wc",
 ]);
 
 /**
@@ -343,19 +359,12 @@ export async function executePipeline(
     const isLast = i === node.commands.length - 1;
     const isFirst = i === 0;
 
-    // In a multi-command pipeline, each command runs in a subshell context
-    // where $_ starts empty (subshells don't inherit $_ from parent in same way)
-    if (isMultiCommandPipeline) {
-      // Clear $_ for each pipeline command - they each get fresh subshell context
-      ctx.state.lastArg = "";
-
-      // After the first command, clear groupStdin so subsequent commands
-      // only see stdin from the pipeline (even if empty), not the original groupStdin
-      // This prevents commands like head from incorrectly falling back to groupStdin
-      // when they receive empty output from a previous command (e.g., grep with no matches)
-      if (!isFirst) {
-        ctx.state.groupStdin = undefined;
-      }
+    // After the first command, clear groupStdin so subsequent commands
+    // only see stdin from the pipeline (even if empty), not the original groupStdin
+    // This prevents commands like head from incorrectly falling back to groupStdin
+    // when they receive empty output from a previous command (e.g., grep with no matches)
+    if (isMultiCommandPipeline && !isFirst) {
+      ctx.state.groupStdin = undefined;
     }
 
     // Determine if this command runs in a subshell context
@@ -367,6 +376,31 @@ export async function executePipeline(
     // Save environment for commands running in subshell context
     // This prevents variable assignments (e.g., ${cmd=echo}) from leaking to parent
     const savedEnv = runsInSubshell ? new Map(ctx.state.env) : null;
+
+    // Save $_ for commands running in a subshell context, so their own
+    // mutation of it can be reverted once they finish (see restore below).
+    const savedStageLastArg = runsInSubshell ? ctx.state.lastArg : undefined;
+
+    // Every pipeline stage's own word expansion sees $_ as EMPTY, never the
+    // value the shell had before the pipeline started - confirmed against
+    // real bash with `shopt -s lastpipe; seq 3 | echo last=$_` (vars-special
+    // test "$_ with pipeline and subshell"): even though the immediately
+    // preceding `shopt -s lastpipe` sets $_ to "lastpipe", the pipeline's
+    // OWN last stage still expands `$_` to "" (`last=`), not "last=lastpipe".
+    // This holds for every stage, INCLUDING the lastpipe-optimized last
+    // stage that runs directly in the current shell process (no fork) -
+    // $_ visibility during a stage's expansion is governed by pipeline
+    // membership, not by whether that particular stage happens to fork.
+    // What DOES differ by fork/lastpipe is only what happens to $_ AFTER
+    // the stage runs: a forked stage's own update (bound post-execution in
+    // interpreter.ts, from ITS OWN last arg) is discarded below via
+    // `savedStageLastArg`; the lastpipe-optimized last stage's update is
+    // not discarded, so it propagates out to the rest of the script (this
+    // is exactly how lastpipe is supposed to work for `cmd | read x`-style
+    // variable propagation, just applied to $_ instead of a user variable).
+    if (isMultiCommandPipeline) {
+      ctx.state.lastArg = "";
+    }
 
     let result: ExecResult;
 
@@ -381,6 +415,12 @@ export async function executePipeline(
         stderr: "",
         exitCode: 0,
       };
+      // This shortcut bypasses the normal command-execution path (which
+      // would otherwise set $_ to the command's own last argument once it
+      // finishes - see interpreter.ts). isLineCountOnly only matches the
+      // exact literal `wc -l` (single arg, no redirections), so replicate
+      // that same post-execution assignment here: $_ becomes "-l".
+      ctx.state.lastArg = "-l";
     } else {
       // Optimization D: Empty stdin short-circuit — when upstream produced
       // nothing and the command is a pure stdin-reading filter, skip execution
@@ -396,6 +436,18 @@ export async function executePipeline(
         !isFirst &&
         stdin === "" &&
         command.type === "SimpleCommand" &&
+        // A command with its own redirections (e.g. `grep x >file`) must
+        // still open/truncate/write that target even on empty input - the
+        // synthetic result below bypasses applyRedirections entirely.
+        command.redirections.length === 0 &&
+        // This shortcut bypasses executeCommand entirely, so it never sets
+        // $_ to this command's own last argument the way real execution
+        // would - computing that correctly here would need full expansion,
+        // defeating the point of the shortcut. Only safe when this stage's
+        // $_ update is discarded anyway (runsInSubshell); on the
+        // lastpipe-optimized last stage, whose $_ propagates out, fall
+        // through to full execution so $_ ends up correct.
+        runsInSubshell &&
         !isStdinIndependent(command) &&
         // Hash/checksum filters emit a defined non-empty value for empty input,
         // so they must actually run rather than be short-circuited to "".
@@ -447,6 +499,9 @@ export async function executePipeline(
             if (savedEnv) {
               ctx.state.env = savedEnv;
             }
+            if (runsInSubshell) {
+              ctx.state.lastArg = savedStageLastArg as string;
+            }
             throw error;
           }
         }
@@ -456,6 +511,11 @@ export async function executePipeline(
     // Restore environment for subshell commands to prevent variable assignment leakage
     if (savedEnv) {
       ctx.state.env = savedEnv;
+    }
+    // Restore $_ for subshell-stage commands: their $_ mutations are local
+    // to that forked stage and must not leak to sibling stages or the parent.
+    if (runsInSubshell) {
+      ctx.state.lastArg = savedStageLastArg as string;
     }
 
     // Track exit code for PIPESTATUS

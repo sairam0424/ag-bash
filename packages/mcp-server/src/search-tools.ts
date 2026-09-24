@@ -47,7 +47,10 @@ export async function runSearchTools(
   bash: Bash,
   args: unknown,
 ): Promise<McpToolResult> {
-  const a = (args ?? Object.create(null)) as { query?: unknown; limit?: unknown };
+  const a = (args ?? Object.create(null)) as {
+    query?: unknown;
+    limit?: unknown;
+  };
   const query = typeof a.query === "string" ? a.query.trim() : "";
 
   if (query.length === 0) {

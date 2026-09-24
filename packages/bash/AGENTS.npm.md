@@ -72,11 +72,11 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 **Text processing**: `awk`, `cat`, `column`, `comm`, `cut`, `egrep`, `expand`, `fgrep`, `fold`, `grep`, `head`, `join`, `nl`, `paste`, `rev`, `rg`, `sed`, `sort`, `strings`, `tac`, `tail`, `tr`, `unexpand`, `uniq`, `wc`, `xargs`
 
-**Data processing**: `jq` (JSON), `js-exec` (JavaScript/TypeScript via QuickJS), `python3`/`python` (Python via WASM/CPython), `sqlite3` (SQLite), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
+**Data processing**: `git`, `jq` (JSON), `js-exec` (JavaScript/TypeScript via QuickJS), `python3`/`python` (Python via WASM/CPython), `sqlite3` (SQLite), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
 
 **File operations**: `basename`, `chmod`, `cp`, `dirname`, `du`, `file`, `find`, `ln`, `ls`, `mkdir`, `mv`, `od`, `pwd`, `readlink`, `rm`, `rmdir`, `split`, `stat`, `touch`, `tree`
 
-**Utilities**: `ag-analyze`, `ag-diff`, `ag-edit`, `ag-explain`, `ag-find-symbol`, `ag-hover`, `ag-mcp`, `ag-notebook`, `ag-plan`, `ag-snapshot`, `ag-todo`, `alias`, `base64`, `bash`, `clear`, `curl`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `hello`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `zcat`
+**Utilities**: `about`, `ag-analyze`, `ag-convert`, `ag-cron`, `ag-diff`, `ag-edit`, `ag-explain`, `ag-find-files`, `ag-find-symbol`, `ag-glob`, `ag-grep`, `ag-hover`, `ag-list-agents`, `ag-mcp`, `ag-message`, `ag-notebook`, `ag-plan`, `ag-references`, `ag-snapshot`, `ag-spawn`, `ag-task`, `ag-team`, `ag-todo`, `ag-wait`, `ag-worktree`, `alias`, `base64`, `bash`, `clear`, `commands`, `curl`, `date`, `diff`, `doctor`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `hello`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `zcat`
 
 All commands support `--help` for usage details.
 
