@@ -157,6 +157,18 @@ describe("Bash Syntax - Parse Errors", () => {
       expect(result.stderr).toMatch(/no such file or directory/i);
     });
 
+    it("should error redirecting when the parent path is a file, not a directory (matches bash)", async () => {
+      const env = new Bash();
+      // Verified against real bash: `echo test > /tmp/somefile/child.txt`
+      // where /tmp/somefile is a regular file prints
+      // `bash: line 1: /tmp/somefile/child.txt: Not a directory`, exit=1 -
+      // a distinct error from the missing-parent case above.
+      await env.exec("echo existing > /afile.txt");
+      const result = await env.exec("echo test > /afile.txt/child.txt");
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toMatch(/not a directory/i);
+    });
+
     it("should error on redirect without target", async () => {
       const env = new Bash();
       const result = await env.exec("echo test >");
