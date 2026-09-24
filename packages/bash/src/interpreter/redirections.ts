@@ -11,6 +11,7 @@
  */
 
 import type { RedirectionNode, WordNode } from "../ast/types.js";
+import { dirname } from "../fs/path-utils.js";
 import type { ExecResult } from "../types.js";
 import {
   expandRedirectTarget,
@@ -44,7 +45,24 @@ async function checkOutputRedirectTarget(
       return `bash: ${target}: cannot overwrite existing file\n`;
     }
   } catch {
-    // File doesn't exist, that's ok - we'll create it
+    // The target itself doesn't exist yet - normally fine, the write below
+    // will create it. But that assumption breaks if the PARENT directory
+    // doesn't exist either (or is itself a file, not a directory): the
+    // write call throws an uncaught ENOENT/ENOTDIR that propagates all the
+    // way out of bash.exec() as a rejected promise, instead of the graceful
+    // "bash: <path>: No such file or directory" failure real bash (and this
+    // interpreter's own INPUT-redirect path, e.g. `cat < /missing`) already
+    // produce for the equivalent case. Every one of this function's 9 call
+    // sites (>, >>, 2>, 2>>, &>, &>>, {fd}>, >&word, 2>&word) shares this
+    // one check, so fixing it here covers all of them.
+    try {
+      const parentStat = await ctx.fs.stat(dirname(filePath));
+      if (!parentStat.isDirectory) {
+        return `bash: ${target}: Not a directory\n`;
+      }
+    } catch {
+      return `bash: ${target}: No such file or directory\n`;
+    }
   }
   return null;
 }

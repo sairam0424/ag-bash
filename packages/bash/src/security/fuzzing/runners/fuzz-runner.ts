@@ -227,6 +227,12 @@ export class FuzzRunner {
       if (timerId !== undefined) {
         clearTimeout(timerId);
       }
+      // A fresh Bash instance is created per run() call above; without
+      // disposing it here, sharedBus/astCache accumulate across every
+      // fuzz iteration (numRuns per category, 8 categories) in one
+      // process, the same undisposed-instance leak already found and
+      // fixed in the spec-test runners (jq/sed/awk/grep/main Oils).
+      bash.destroy();
     }
 
     // Capture coverage snapshot if enabled
