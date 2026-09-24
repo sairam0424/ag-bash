@@ -75,25 +75,27 @@ jobs:
       # to build + publish. On workflow_dispatch dry-run: prove the OIDC path.
       - name: Changesets release
         if: ${{ github.event_name == 'push' }}
-        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        # PINNED to v1.x, deliberately NOT the v2.x dependabot bumped this to
+        # in #141/#160: v2 hard-requires Changesets CLI v3 ("This version of
+        # the Changesets action is designed to work with Changesets CLI v3.
+        # Changesets CLI v2 is not supported; use Changesets action v1
+        # instead" - the action's own error, hit on a live release attempt).
+        # This repo pins @changesets/cli to ^2.31.0 (root package.json) -
+        # upgrading that to v3 is a separate, bigger, riskier change than
+        # fixing a stuck release, so stay on the CLI-v2-compatible action
+        # major until that's done deliberately. v1.9.0 (latest v1.x, purely
+        # additive over the v1.8.0 this repo ran before #141) is dereferenced
+        # via `git ls-remote ...^{}`, not the annotated tag's own object SHA.
+        # Add an ignore rule for this action in .github/dependabot.yml so the
+        # next dependency-bump cycle doesn't reintroduce the same break.
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
-          # changesets/action v2 (bumped from v1.8.0 by dependabot #141)
-          # renamed every one of these inputs and REMOVED support for passing
-          # the GitHub token via the GITHUB_TOKEN env var entirely - it must
-          # be a `with:` input now. The old names below (version/publish/
-          # commit/title/env:GITHUB_TOKEN) still parse as valid YAML but are
-          # silently ignored by v2, which would have made this step no-op on
-          # its actual job (open the Version Packages PR / run the publish
-          # script) while still reporting success - caught this by tracing
-          # why a PR's Tests run for the develop branch went action_required
-          # right after the dependabot bump landed, before ever letting a
-          # release run against the new action version.
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-script: pnpm version-packages
-          publish-script: pnpm release
-          commit-message: "chore(release): version packages"
-          pr-title: "chore(release): version packages"
+          version: pnpm version-packages
+          publish: pnpm release
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Fallback only — remove once OIDC Trusted Publishing is verified and
           # the NPM_TOKEN secret is deleted.
           #

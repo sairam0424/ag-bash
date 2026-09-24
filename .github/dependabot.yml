@@ -1,8 +1,14 @@
 # Dependabot keeps the SHA-pinned GitHub Actions and the npm dependency tree
 # current. Updates land as weekly, grouped PRs (one per ecosystem/scope) to keep
-# review load low. Action-version bumps are NEVER auto-merged — a SHA pin is a
-# trust decision and must be reviewed. setup-vendor.js (the npm postinstall) is
-# fully offline/deterministic, so npm update PRs build cleanly in CI.
+# review load low. github-actions bumps of ANY update type (including majors)
+# ARE auto-merged by .github/workflows/dependabot-auto-merge.yml, on the theory
+# that a SHA pin makes the *supply chain* trustworthy - that does NOT guarantee
+# *functional* compatibility with how this repo actually invokes the action.
+# Confirmed the hard way: #141 auto-merged changesets/action 1.8.0 -> 2.1.2
+# (grouped with 12 unrelated, actually-safe bumps) and broke every release
+# attempt until pinned back via the `ignore:` rule below. setup-vendor.js (the
+# npm postinstall) is fully offline/deterministic, so npm update PRs build
+# cleanly in CI.
 version: 2
 updates:
   # --- GitHub Actions used by all workflows + the composite action ---
@@ -15,6 +21,16 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "ci"
+    ignore:
+      # v2 hard-requires Changesets CLI v3 ("This version of the Changesets
+      # action is designed to work with Changesets CLI v3. Changesets CLI v2
+      # is not supported" - the action's own runtime error) - this repo pins
+      # @changesets/cli to ^2.31.0. #141 auto-merged this exact major bump
+      # (grouped with 12 other, unrelated, actually-safe action bumps) and
+      # broke every release attempt until reverted back to v1.9.0. Remove
+      # this ignore only alongside a deliberate @changesets/cli v3 upgrade.
+      - dependency-name: "changesets/action"
+        versions: [">=2.0.0"]
 
   # --- npm: root workspace tooling (biome, typescript, vitest, esbuild) ---
   - package-ecosystem: "npm"
