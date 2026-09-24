@@ -77,12 +77,23 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          version: pnpm version-packages
-          publish: pnpm release
-          commit: "chore(release): version packages"
-          title: "chore(release): version packages"
+          # changesets/action v2 (bumped from v1.8.0 by dependabot #141)
+          # renamed every one of these inputs and REMOVED support for passing
+          # the GitHub token via the GITHUB_TOKEN env var entirely - it must
+          # be a `with:` input now. The old names below (version/publish/
+          # commit/title/env:GITHUB_TOKEN) still parse as valid YAML but are
+          # silently ignored by v2, which would have made this step no-op on
+          # its actual job (open the Version Packages PR / run the publish
+          # script) while still reporting success - caught this by tracing
+          # why a PR's Tests run for the develop branch went action_required
+          # right after the dependabot bump landed, before ever letting a
+          # release run against the new action version.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm version-packages
+          publish-script: pnpm release
+          commit-message: "chore(release): version packages"
+          pr-title: "chore(release): version packages"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Fallback only — remove once OIDC Trusted Publishing is verified and
           # the NPM_TOKEN secret is deleted.
           #
