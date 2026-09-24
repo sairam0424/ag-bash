@@ -1,6 +1,6 @@
 {
   "name": "@ag-bash/browser",
-  "version": "6.0.4",
+  "version": "6.1.0",
   "description": "Optional ag_browser_* MCP tool suite for Ag-Bash — scripted, deterministic Chrome DevTools Protocol automation (navigate, click, type, screenshot, evaluate JS, raw CDP) backed by browser-harness-mcp. Not an autonomous browser-use.Agent integration.",
   "type": "module",
   "main": "dist/index.js",
