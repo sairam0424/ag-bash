@@ -96,24 +96,15 @@ jobs:
           title: "chore(release): version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Fallback only — remove once OIDC Trusted Publishing is verified and
-          # the NPM_TOKEN secret is deleted.
-          #
-          # BOTH names are required, not just one: NODE_AUTH_TOKEN is what
-          # actions/setup-node's registry-url option wires into .npmrc for
-          # classic token auth, but npm >=11.5.1's own publish command checks
-          # a *literally-named* NPM_TOKEN env var first to decide auth
-          # strategy — if that's absent, it unconditionally prefers OIDC
-          # Trusted Publishing whenever id-token: write is granted (this repo
-          # always grants it, for provenance), regardless of whether a valid
-          # NODE_AUTH_TOKEN/.npmrc token also exists. Without NPM_TOKEN set
-          # here too, every push-to-main release attempt silently skips the
-          # token fallback and fails outright the moment OIDC hits a package
-          # with no Trusted Publisher configured on npmjs.com yet (confirmed
-          # via a live failed release: "No NPM_TOKEN found, but OIDC is
-          # available - using npm trusted publishing", then a 404 on publish).
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # OIDC Trusted Publishing is now verified for all 7 packages (see
+          # #167/#168 - a live dry-run against every package individually
+          # reached only the expected "already published" version-conflict
+          # rejection, never an auth error, with no NPM_TOKEN in this env at
+          # all). The classic-token fallback (NODE_AUTH_TOKEN/NPM_TOKEN) that
+          # lived here is removed; publish auth now comes exclusively from
+          # OIDC via id-token: write. The NPM_TOKEN GitHub secret itself
+          # should be deleted once this real (non-dry-run) push confirms the
+          # publish path still works end-to-end without it.
           NPM_CONFIG_PROVENANCE: "true"
 
       # Dry-run path: prove OIDC Trusted Publishing actually authenticates,
