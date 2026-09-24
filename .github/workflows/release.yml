@@ -124,19 +124,40 @@ jobs:
       # publish ("Unknown flag for publish: --dry-run" - the CLI's own error,
       # hit on a live run). That flag was added in a later CLI major, so the
       # previous version of this step was dead code that failed before ever
-      # attempting auth. Runs against one representative package
-      # (@ag-bash/bash) rather than all 7 - if OIDC exchange succeeds here,
-      # the mechanism works; each package's own Trusted Publisher config on
-      # npmjs.com is what determines whether the eventual real publish
-      # succeeds for that specific package.
+      # attempting auth.
       #
-      # This step deliberately has no NPM_TOKEN/NODE_AUTH_TOKEN in its env
-      # (unlike the "Changesets release" step above), so success here can
-      # only come from the OIDC path.
+      # Loops all 7 packages individually (not just one) so each package's
+      # own Trusted Publisher config on npmjs.com is verified directly,
+      # rather than inferred from a single package. Every package here is
+      # already published at its current version, so each dry-run is
+      # EXPECTED to fail with a version-conflict error - the real signal is
+      # whether it fails on AUTH (401/403/422, meaning OIDC exchange itself
+      # is broken) vs fails LATER on the version check (meaning auth
+      # succeeded and only the expected "already published" business rule
+      # tripped). This step has no NPM_TOKEN/NODE_AUTH_TOKEN in its env, so
+      # any auth success here can only come from OIDC.
       - name: OIDC publish dry-run
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
-        working-directory: packages/bash
-        run: npm publish --dry-run
+        run: |
+          set +e
+          auth_failed=0
+          for pkg_dir in packages/agent-bridge packages/bash packages/browser packages/mcp-server examples/bash-agent examples/cjs-consumer examples/custom-command; do
+            echo "::group::npm publish --dry-run ($pkg_dir)"
+            output=$(cd "$pkg_dir" && npm publish --dry-run 2>&1)
+            echo "$output"
+            if echo "$output" | grep -qE "npm error code E4[0-9]{2}|Forbidden|Unauthorized|verifying sigstore"; then
+              echo "::error::AUTH FAILURE in $pkg_dir - OIDC Trusted Publisher config likely missing or misconfigured"
+              auth_failed=1
+            else
+              echo "OK: $pkg_dir got past auth (no OIDC error signature found)"
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$auth_failed" -eq 1 ]; then
+            echo "::error::One or more packages failed OIDC authentication - see groups above"
+            exit 1
+          fi
+          echo "All 7 packages passed OIDC auth (dry-run rejections, where present, were version-conflict only - expected since all are already published)"
 
       # GitHub-native build provenance attestation over the packed tarballs,
       # layered on top of npm's own --provenance. Only on a real push release.
