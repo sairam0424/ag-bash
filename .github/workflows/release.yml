@@ -84,9 +84,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Fallback only — remove once OIDC Trusted Publishing is verified and
-          # the NPM_TOKEN secret is deleted. With OIDC active and no token, npm
-          # uses the minted id-token and provenance is automatic.
+          # the NPM_TOKEN secret is deleted.
+          #
+          # BOTH names are required, not just one: NODE_AUTH_TOKEN is what
+          # actions/setup-node's registry-url option wires into .npmrc for
+          # classic token auth, but npm >=11.5.1's own publish command checks
+          # a *literally-named* NPM_TOKEN env var first to decide auth
+          # strategy — if that's absent, it unconditionally prefers OIDC
+          # Trusted Publishing whenever id-token: write is granted (this repo
+          # always grants it, for provenance), regardless of whether a valid
+          # NODE_AUTH_TOKEN/.npmrc token also exists. Without NPM_TOKEN set
+          # here too, every push-to-main release attempt silently skips the
+          # token fallback and fails outright the moment OIDC hits a package
+          # with no Trusted Publisher configured on npmjs.com yet (confirmed
+          # via a live failed release: "No NPM_TOKEN found, but OIDC is
+          # available - using npm trusted publishing", then a 404 on publish).
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
 
       # Dry-run path: prove `changeset publish` mints OIDC (or would publish)
