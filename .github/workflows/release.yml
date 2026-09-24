@@ -116,11 +116,27 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
 
-      # Dry-run path: prove `changeset publish` mints OIDC (or would publish)
+      # Dry-run path: prove OIDC Trusted Publishing actually authenticates,
       # WITHOUT uploading, before the maintainer deletes NPM_TOKEN.
+      #
+      # Uses npm's own --dry-run, not `changeset publish --dry-run`: this
+      # repo's pinned Changesets CLI (^2.31.0) doesn't support that flag on
+      # publish ("Unknown flag for publish: --dry-run" - the CLI's own error,
+      # hit on a live run). That flag was added in a later CLI major, so the
+      # previous version of this step was dead code that failed before ever
+      # attempting auth. Runs against one representative package
+      # (@ag-bash/bash) rather than all 7 - if OIDC exchange succeeds here,
+      # the mechanism works; each package's own Trusted Publisher config on
+      # npmjs.com is what determines whether the eventual real publish
+      # succeeds for that specific package.
+      #
+      # This step deliberately has no NPM_TOKEN/NODE_AUTH_TOKEN in its env
+      # (unlike the "Changesets release" step above), so success here can
+      # only come from the OIDC path.
       - name: OIDC publish dry-run
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
-        run: pnpm build && pnpm changeset publish --dry-run
+        working-directory: packages/bash
+        run: npm publish --dry-run
 
       # GitHub-native build provenance attestation over the packed tarballs,
       # layered on top of npm's own --provenance. Only on a real push release.
