@@ -95,7 +95,7 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 
 **TB2 — Interpreter → Filesystem**: The interpreter issues filesystem operations. The FS layer must confine all access to the sandbox root, block symlink traversal, and prevent writes to the real filesystem.
 
-**TB3 — Interpreter → Network**: Network access disabled by default. When enabled, URLs must pass the allow-list.
+**TB3 — Interpreter → Network**: Network access disabled by default. When a `NetworkConfig` is provided, URLs must pass the allow-list (an omitted or empty `allowedUrlPrefixes` denies every URL) unless the config opts into `dangerouslyAllowFullInternetAccess`. **Exception**: the standalone `@ag-bash/mcp-server` binary (`packages/mcp-server/src/index.ts`) deliberately constructs its `Bash` instance with `dangerouslyAllowFullInternetAccess: true` — full internet access, no allow-list — while keeping `denyPrivateRanges: true` for SSRF protection against internal/metadata IPs. This was an intentional hardening-era decision (a general-purpose MCP shell tool needs `curl`/`fetch` to work against arbitrary URLs out of the box, unlike an embedder that knows its own fixed set of allowed origins), not an oversight — but it means the MCP binary's actual network posture is *SSRF-guarded, not allow-list-gated*, which differs from the allow-list model this section otherwise describes.
 
 **TB4 — Interpreter → Host Process**: The interpreter must never spawn child processes, access host environment variables, or reach Node.js internals (process.binding, require, import()).
 
@@ -154,7 +154,7 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 
 | Vector | Description | Defense | Files |
 |--------|-------------|---------|-------|
-| Arbitrary access | `curl evil.com` | Network disabled by default; curl only registered when NetworkConfig provided | `src/commands/registry.ts` |
+| Arbitrary access | `curl evil.com` | Network disabled by default; curl only registered when NetworkConfig provided. **Exception**: `@ag-bash/mcp-server` ships with `dangerouslyAllowFullInternetAccess: true` (see TB3) — SSRF-guarded but not allow-list-gated for that specific binary. | `src/commands/registry.ts`, `packages/mcp-server/src/index.ts` |
 | SSRF via redirects | Redirect to internal service | Each redirect validated against allow-list; manual redirect handling | `src/network/fetch.ts` |
 | Response bomb | Huge response body | maxResponseSize (10MB) enforced via Content-Length and streaming | `src/network/fetch.ts` |
 | Protocol restriction | Only http/https allowed | Allow-list rejects all other protocols | `src/network/allow-list.ts` |
