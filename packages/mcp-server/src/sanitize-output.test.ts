@@ -23,6 +23,10 @@ const WJ = "\u2060"; // word joiner
 const ALM = "\u061C"; // arabic letter mark
 const LRM = "\u200E"; // left-to-right mark
 const LRE = "\u202A"; // left-to-right embedding
+const TAG_LATIN_SMALL_A = "\u{E0061}"; // Unicode Tags block (deprecated language-tag mechanism)
+const TAG_CANCEL = "\u{E007F}"; // Tags block terminator
+const VS_SUPPLEMENT_17 = "\u{E0100}"; // Variation Selectors Supplement (VS17)
+const EMOJI_VARIATION_SELECTOR = "\uFE0F"; // ordinary emoji-presentation selector
 
 describe("sanitizeOutput", () => {
   it("defaults to enabled", () => {
@@ -84,6 +88,23 @@ describe("sanitizeOutput", () => {
     });
   });
 
+  describe("steganographic supplementary-plane Unicode", () => {
+    it("strips Unicode Tags block characters (deprecated language-tag mechanism)", () => {
+      expect(sanitizeOutput(`a${TAG_LATIN_SMALL_A}b${TAG_CANCEL}c`)).toBe(
+        "abc",
+      );
+    });
+
+    it("strips Variation Selectors Supplement (VS17-VS256, the ASCII-smuggling range)", () => {
+      expect(sanitizeOutput(`a${VS_SUPPLEMENT_17}b`)).toBe("ab");
+    });
+
+    it("neutralizes a Tags-block smuggled payload attached to visible text", () => {
+      const payload = `hello${TAG_LATIN_SMALL_A}${TAG_LATIN_SMALL_A}${TAG_CANCEL}world`;
+      expect(sanitizeOutput(payload)).toBe("helloworld");
+    });
+  });
+
   describe("false-positive guarantees (legitimate output is preserved)", () => {
     it("preserves printable ASCII verbatim", () => {
       const s = "error: command not found: frobnicate\n";
@@ -97,6 +118,17 @@ describe("sanitizeOutput", () => {
     it("preserves emoji and common box-drawing glyphs", () => {
       const s = "✅ done ┌──┐ │x│ └──┘";
       expect(sanitizeOutput(s)).toBe(s);
+    });
+
+    it("does NOT strip the ordinary emoji-presentation variation selector (U+FE0F)", () => {
+      // "❤️" = U+2764 (text-presentation heart by default) + U+FE0F (emoji
+      // presentation selector) — extremely common in real tool output.
+      // Stripping U+FE0F would silently change how this renders, which is
+      // exactly the false positive this module's design principle forbids.
+      // (This is distinct from the Variation Selectors SUPPLEMENT block
+      // above, which has no legitimate rendering use and is stripped.)
+      const heart = `❤${EMOJI_VARIATION_SELECTOR}`;
+      expect(sanitizeOutput(heart)).toBe(heart);
     });
 
     it("does NOT escape angle brackets (legitimate XML/HTML output)", () => {

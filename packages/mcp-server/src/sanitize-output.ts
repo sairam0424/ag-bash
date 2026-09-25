@@ -4,10 +4,11 @@
  * ag-bash executes (untrusted) bash on behalf of an LLM agent and streams the
  * resulting stdout/stderr straight back into the model's context. Raw command
  * output is an injection surface: ANSI/OSC terminal escapes, C0/C1 control
- * bytes, zero-width characters, and Unicode bidi overrides (Trojan-Source) can
- * all smuggle instructions or hide content from a human reviewer while the
- * model still "sees" them. This module neutralizes those classes before the
- * text reaches the model.
+ * bytes, zero-width characters, Unicode bidi overrides (Trojan-Source), and
+ * steganographic encodings in the Unicode Tags block / Variation Selectors
+ * Supplement can all smuggle instructions or hide content from a human
+ * reviewer while the model still "sees" them. This module neutralizes those
+ * classes before the text reaches the model.
  *
  * Design tension (read before editing): bash output is legitimately arbitrary
  * bytes, so we cannot escape or delete printable content without corrupting
@@ -70,6 +71,26 @@ const INVISIBLE =
   /[\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\u061C\uFEFF]/g;
 
 /**
+ * Supplementary-plane steganographic ranges, used ONLY for smuggling \u2014 never
+ * for legitimate rendering \u2014 so unlike the base Variation Selectors block
+ * (U+FE00-U+FE0F, deliberately NOT stripped here: U+FE0F is the ordinary
+ * emoji-presentation selector and appears in huge amounts of real text, e.g.
+ * "\u2764\uFE0F" = U+2764 U+FE0F; stripping it would silently corrupt legitimate emoji
+ * output, which is exactly the false-positive this module's design principle
+ * rules out), these have no typographic use in modern text:
+ *  - U+E0000-U+E007F Tags block (the deprecated Unicode 3.1 "language tag"
+ *    mechanism \u2014 formally deprecated, effectively unused for anything except
+ *    invisible payload encoding today).
+ *  - U+E0100-U+E01EF Variation Selectors Supplement (VS17-VS256) \u2014 this is
+ *    the range the documented "ASCII smuggling via variation selectors"
+ *    technique actually abuses to encode arbitrary hidden bytes per-character;
+ *    it has no assigned typographic meaning outside that encoding scheme.
+ * Requires the `u` flag: both ranges are outside the BMP.
+ */
+const STEGANOGRAPHIC_SUPPLEMENTARY =
+  /[\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
+
+/**
  * Strip terminal-interpretable escapes, control bytes, and invisible/bidi
  * Unicode from text destined for an LLM. Order matters: OSC and CSI are removed
  * before the generic ESC pass so their leading ESC isn't consumed first.
@@ -86,5 +107,6 @@ export function sanitizeOutput(text: string): string {
     .replace(CSI, "")
     .replace(ESC_REMAINDER, "")
     .replace(CONTROL, "")
-    .replace(INVISIBLE, "");
+    .replace(INVISIBLE, "")
+    .replace(STEGANOGRAPHIC_SUPPLEMENTARY, "");
 }
