@@ -88,7 +88,7 @@ const INVISIBLE =
  * Requires the `u` flag: both ranges are outside the BMP.
  */
 const STEGANOGRAPHIC_SUPPLEMENTARY =
-  /[\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
+  /(?:[\u{E0000}-\u{E007F}]|[\u{E0100}-\u{E01EF}])/gu;
 
 /**
  * Strip terminal-interpretable escapes, control bytes, and invisible/bidi

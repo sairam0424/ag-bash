@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  SANITIZE_OUTPUT_DEFAULT,
-  sanitizeOutput,
-} from "./sanitize-output.js";
+import { SANITIZE_OUTPUT_DEFAULT, sanitizeOutput } from "./sanitize-output.js";
 
 // Control/escape and invisible bytes are built from explicit escapes so this
 // test file itself stays free of literal (invisible) characters — auditable
@@ -78,9 +75,9 @@ describe("sanitizeOutput", () => {
     });
 
     it("strips bidi overrides (RLO/LRO), embeddings and isolates", () => {
-      expect(sanitizeOutput(`a${RLO}b${LRO}c${LRE}d${PDF}e${LRI}f${PDI}g`)).toBe(
-        "abcdefg",
-      );
+      expect(
+        sanitizeOutput(`a${RLO}b${LRO}c${LRE}d${PDF}e${LRI}f${PDI}g`),
+      ).toBe("abcdefg");
     });
 
     it("strips BOM, word-joiner, marks, and the arabic letter mark", () => {

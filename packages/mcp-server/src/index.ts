@@ -188,7 +188,9 @@ class AgBashServer {
     isError?: boolean,
     extraContent?: McpContentItem[],
   ): ToolCallPayload {
-    const content: McpContentItem[] = [{ type: "text", text: this.scrub(text) }];
+    const content: McpContentItem[] = [
+      { type: "text", text: this.scrub(text) },
+    ];
     if (extraContent && extraContent.length > 0) {
       content.push(...extraContent);
     }
