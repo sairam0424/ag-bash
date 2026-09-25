@@ -1,41 +1,41 @@
 {
-  "generatedAt": "2026-06-04T06:54:34.048Z",
+  "generatedAt": "2026-09-25T12:24:22.379Z",
   "benchmarks": {
     "src/Bash.exec.bench.ts > Bash.exec (pipeline) :: cold — new instance + small pipeline": {
-      "mean": 12.308605840490845,
-      "hz": 81.24396970373063
+      "mean": 12.94170413548389,
+      "hz": 85.1634166812626
     },
     "src/Bash.exec.bench.ts > Bash.exec (pipeline) :: warm — reused instance, ASTCache hot": {
-      "mean": 0.1831782758241778,
-      "hz": 5459.162640879107
+      "mean": 0.663472738726813,
+      "hz": 1603.0427380416386
     },
     "src/Bash.exec.bench.ts > Bash.exec (pipeline) :: warm — simple echo": {
-      "mean": 0.10728619729643046,
-      "hz": 9320.863495953838
+      "mean": 0.33627670141224286,
+      "hz": 3203.8274469112202
     },
     "src/parser/ASTCache.bench.ts > ASTCache :: get (hit) — cached AST returned": {
-      "mean": 0.002010914198613002,
-      "hz": 497286.25949816016
+      "mean": 0.0009342802923921345,
+      "hz": 1114859.4610701343
     },
     "src/parser/ASTCache.bench.ts > ASTCache :: get (miss) — key hash, no entry": {
-      "mean": 0.00043522157983627243,
-      "hz": 2297680.184829515
+      "mean": 0.00028275512027011086,
+      "hz": 3594145.1239928156
     },
     "src/parser/ASTCache.bench.ts > ASTCache :: miss + reparse — realized cost of a cold key": {
-      "mean": 0.04032012636076784,
-      "hz": 24801.509574955522
+      "mean": 0.07828465171442099,
+      "hz": 12970.306197411835
     },
     "src/parser/ASTCache.bench.ts > ASTCache :: set — hash + insert + LRU eviction check": {
-      "mean": 0.03819479802918267,
-      "hz": 26181.5758061072
+      "mean": 0.07711292496915231,
+      "hz": 13146.886314087316
     },
     "src/parser/parser.bench.ts > parser :: parse representative script": {
-      "mean": 0.13398691184351955,
-      "hz": 7463.415539928845
+      "mean": 0.4787729444710167,
+      "hz": 2144.164974523817
     },
     "src/parser/parser.bench.ts > parser :: parse small one-liner": {
-      "mean": 0.011390797749228772,
-      "hz": 87790.1637809087
+      "mean": 0.04248387352906007,
+      "hz": 24380.180324329398
     }
   }
 }

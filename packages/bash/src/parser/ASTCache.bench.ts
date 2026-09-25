@@ -7,7 +7,7 @@
  *
  * Run: pnpm exec vitest bench --run src/parser/ASTCache.bench.ts
  */
-import { bench, describe } from "vitest";
+import { describe, it } from "vitest";
 import { ASTCache } from "./ASTCache.js";
 import { parse } from "./parser.js";
 
@@ -20,29 +20,43 @@ cat data.txt | grep foo | sort | uniq -c | head`;
 const warmCache = new ASTCache();
 warmCache.set(SCRIPT, parse(SCRIPT));
 
+// Vitest 5 moved `bench` from a top-level describe-block function to a
+// TestContext fixture: each benchmark is its own `it(...)` receiving
+// `{ bench }`, which is itself the registration factory (`bench(name, fn)`)
+// - calling `.run()` on the returned registration is what actually executes
+// and reports it. Keeping one `it` per former `bench` call preserves the
+// same benchmark names or the historical bench-results.json entries.
 describe("ASTCache", () => {
-  bench("get (hit) — cached AST returned", () => {
-    warmCache.get(SCRIPT);
+  it("get (hit) — cached AST returned", async ({ bench }) => {
+    await bench("get (hit) — cached AST returned", () => {
+      warmCache.get(SCRIPT);
+    }).run();
   });
 
-  bench("get (miss) — key hash, no entry", () => {
-    // A distinct key each call would defeat the point; use a fixed
-    // never-inserted key so we measure the steady-state miss cost.
-    warmCache.get("##never-inserted-key##");
+  it("get (miss) — key hash, no entry", async ({ bench }) => {
+    await bench("get (miss) — key hash, no entry", () => {
+      // A distinct key each call would defeat the point; use a fixed
+      // never-inserted key so we measure the steady-state miss cost.
+      warmCache.get("##never-inserted-key##");
+    }).run();
   });
 
-  bench("miss + reparse — realized cost of a cold key", () => {
-    const cache = new ASTCache();
-    let ast = cache.get(SCRIPT);
-    if (ast === null) {
-      ast = parse(SCRIPT);
-      cache.set(SCRIPT, ast);
-    }
+  it("miss + reparse — realized cost of a cold key", async ({ bench }) => {
+    await bench("miss + reparse — realized cost of a cold key", () => {
+      const cache = new ASTCache();
+      let ast = cache.get(SCRIPT);
+      if (ast === null) {
+        ast = parse(SCRIPT);
+        cache.set(SCRIPT, ast);
+      }
+    }).run();
   });
 
-  bench("set — hash + insert + LRU eviction check", () => {
-    const cache = new ASTCache();
-    cache.configure({ maxEntries: 4 });
-    cache.set(SCRIPT, parse(SCRIPT));
+  it("set — hash + insert + LRU eviction check", async ({ bench }) => {
+    await bench("set — hash + insert + LRU eviction check", () => {
+      const cache = new ASTCache();
+      cache.configure({ maxEntries: 4 });
+      cache.set(SCRIPT, parse(SCRIPT));
+    }).run();
   });
 });

@@ -12,7 +12,7 @@
  * matches only `*.{test,spec}.ts`, so `*.bench.ts` runs only under
  * `vitest bench`.
  */
-import { bench, describe } from "vitest";
+import { describe, it } from "vitest";
 import { parse } from "./parser.js";
 
 const REPRESENTATIVE_SCRIPT = `#!/bin/bash
@@ -39,12 +39,22 @@ echo "done: $count files processed"
 
 const SMALL_SCRIPT = `echo hello | grep h | wc -c`;
 
+// Vitest 5 moved `bench` from a top-level describe-block function to a
+// TestContext fixture: each benchmark is its own `it(...)` receiving
+// `{ bench }`, which is itself the registration factory (`bench(name, fn)`)
+// - calling `.run()` on the returned registration is what actually executes
+// and reports it. Keeping one `it` per former `bench` call preserves the
+// same benchmark names for the historical bench-results.json entries.
 describe("parser", () => {
-  bench("parse representative script", () => {
-    parse(REPRESENTATIVE_SCRIPT);
+  it("parse representative script", async ({ bench }) => {
+    await bench("parse representative script", () => {
+      parse(REPRESENTATIVE_SCRIPT);
+    }).run();
   });
 
-  bench("parse small one-liner", () => {
-    parse(SMALL_SCRIPT);
+  it("parse small one-liner", async ({ bench }) => {
+    await bench("parse small one-liner", () => {
+      parse(SMALL_SCRIPT);
+    }).run();
   });
 });
