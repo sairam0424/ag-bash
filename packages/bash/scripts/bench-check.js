@@ -219,9 +219,10 @@ function flatten(report) {
           if (typeof task?.name !== "string" || typeof mean !== "number") {
             continue;
           }
-          const hz = typeof task?.throughput?.mean === "number"
-            ? task.throughput.mean
-            : 0;
+          const hz =
+            typeof task?.throughput?.mean === "number"
+              ? task.throughput.mean
+              : 0;
           const key = `${groupName} :: ${task.name}`;
           map[key] = { mean, hz };
         }
