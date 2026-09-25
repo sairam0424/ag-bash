@@ -162,8 +162,8 @@
     "shell": "npx tsx src/cli/shell.ts",
     "dev:exec": "npx tsx src/cli/exec.ts",
     "bench": "vitest bench --run --config vitest.bench.config.ts",
-    "bench:ci": "vitest bench --run --config vitest.bench.config.ts --outputJson bench-results.json",
-    "bench:ci:multi": "vitest bench --run --config vitest.bench.config.ts --outputJson bench-results.1.json && vitest bench --run --config vitest.bench.config.ts --outputJson bench-results.2.json && vitest bench --run --config vitest.bench.config.ts --outputJson bench-results.3.json",
+    "bench:ci": "vitest bench --run --config vitest.bench.config.ts --reporter=json --outputFile=bench-results.json",
+    "bench:ci:multi": "vitest bench --run --config vitest.bench.config.ts --reporter=json --outputFile=bench-results.1.json && vitest bench --run --config vitest.bench.config.ts --reporter=json --outputFile=bench-results.2.json && vitest bench --run --config vitest.bench.config.ts --reporter=json --outputFile=bench-results.3.json",
     "bench:check": "pnpm bench:ci:multi && node scripts/bench-check.js --current bench-results.1.json --current bench-results.2.json --current bench-results.3.json",
     "bench:update": "pnpm bench:ci:multi && node scripts/bench-check.js --update --current bench-results.1.json --current bench-results.2.json --current bench-results.3.json",
     "fuzz": "node scripts/differential-fuzz.js",
@@ -184,14 +184,14 @@
     "@types/sprintf-js": "^1.1.4",
     "@types/sql.js": "^1.4.9",
     "@types/turndown": "^5.0.6",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/coverage-v8": "^5.0.2",
     "esbuild": "^0.27.2",
     "fast-check": "^3.23.2",
     "knip": "^5.41.1",
     "publint": "^0.3.21",
     "size-limit": "^12.1.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^5.0.2"
   },
   "dependencies": {
     "diff": "^8.0.2",

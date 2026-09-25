@@ -15,7 +15,12 @@
  *
  * Run: pnpm exec vitest bench --run src/Bash.exec.bench.ts
  */
-import { type BenchOptions, bench, describe } from "vitest";
+// `BenchCompareOptions` is vitest's re-export of tinybench's OWN `BenchOptions`
+// (time/iterations/warmupTime/warmupIterations) - vitest's own same-named
+// `BenchOptions` type is a different, narrower alias for tinybench's
+// `FnOptions` (per-function hooks only), so the sampling-window fields below
+// must use this re-export, not the naturally-reached-for `BenchOptions` name.
+import { type BenchCompareOptions, describe, it } from "vitest";
 import { Bash } from "./Bash.js";
 
 const SCRIPT = "cat /app/data.txt | grep foo | wc -l";
@@ -39,7 +44,7 @@ const warmBash = new Bash({ cwd: "/app", files: FILES });
  * code speed instead of setup jitter. This changes ONLY how the harness samples
  * Bash.exec — never what it executes.
  */
-const COLD_OPTS: BenchOptions = {
+const COLD_OPTS: BenchCompareOptions = {
   // Longer window + a higher iteration floor => the minimum mean settles.
   time: 2000,
   iterations: 50,
@@ -55,35 +60,39 @@ const COLD_OPTS: BenchOptions = {
  * minimum mean is rock-stable for the gate. Sub-ms per iteration, so the cost
  * of the extra window is negligible.
  */
-const WARM_OPTS: BenchOptions = {
+const WARM_OPTS: BenchCompareOptions = {
   time: 1000,
   warmupTime: 200,
   warmupIterations: 100,
 };
 
+// Vitest 5 moved `bench` from a top-level describe-block function to a
+// TestContext fixture: each benchmark is its own `it(...)` receiving
+// `{ bench }`, which is itself the registration factory (`bench(name, fn)`).
+// The sampling-window options (time/iterations/warmup*) that the old
+// `bench(name, fn, options)` form took as its 3rd argument now go to
+// `.run(options)` instead — the factory's own optional middle argument is a
+// DIFFERENT, narrower options type (per-function hooks only, see the
+// BenchCompareOptions import comment above). Keeping one `it` per former
+// `bench` call preserves the same benchmark names for the historical
+// bench-results.json entries.
 describe("Bash.exec (pipeline)", () => {
-  bench(
-    "cold — new instance + small pipeline",
-    async () => {
+  it("cold — new instance + small pipeline", async ({ bench }) => {
+    await bench("cold — new instance + small pipeline", async () => {
       const bash = new Bash({ cwd: "/app", files: FILES });
       await bash.exec(SCRIPT, { execMode: "pipeline" });
-    },
-    COLD_OPTS,
-  );
+    }).run(COLD_OPTS);
+  });
 
-  bench(
-    "warm — reused instance, ASTCache hot",
-    async () => {
+  it("warm — reused instance, ASTCache hot", async ({ bench }) => {
+    await bench("warm — reused instance, ASTCache hot", async () => {
       await warmBash.exec(SCRIPT, { execMode: "pipeline" });
-    },
-    WARM_OPTS,
-  );
+    }).run(WARM_OPTS);
+  });
 
-  bench(
-    "warm — simple echo",
-    async () => {
+  it("warm — simple echo", async ({ bench }) => {
+    await bench("warm — simple echo", async () => {
       await warmBash.exec("echo hello world", { execMode: "pipeline" });
-    },
-    WARM_OPTS,
-  );
+    }).run(WARM_OPTS);
+  });
 });
