@@ -16,10 +16,22 @@
  *   --threshold 0.15                         (15% slower = fail)
  *   --update    rewrite the baseline from the current report(s) and exit 0
  *
- * The report shape (vitest 4 `--outputJson`):
- *   { files: [ { groups: [ { fullName, benchmarks: [ { name, mean, hz, rme } ] } ] } ] }
+ * The report shape (vitest 5 `--reporter=json --outputFile=<path>` — vitest 4's
+ * dedicated `--outputJson` flag was removed; benchmarks now ride inside the
+ * standard JSON test-reporter payload instead of a bench-specific one):
+ *   { testResults: [ { name: <absolute file path>, assertionResults: [
+ *       { ancestorTitles: [...], benchmarks: [ { tasks: [ { name, latency: { mean } } ] } ] }
+ *   ] } ] }
+ * Each vitest 5 benchmark is registered inside its own `it(...)` (the `bench`
+ * fixture replaced the old top-level `bench()` describe-block function), so
+ * one assertionResult == one former top-level `bench()` call, and its
+ * `ancestorTitles` is the enclosing `describe(...)` chain — reconstructed
+ * below into the same "<relative file> > <describe titles> :: <task name>"
+ * key shape the vitest 4 report produced, so REPORT_ONLY / baseline keys
+ * below and any existing bench-baseline.json don't need to change.
  *
- * Benchmarks are keyed by "<group.fullName> :: <benchmark.name>". A benchmark
+ * Benchmarks are keyed by "<relative file> > <describe titles> :: <task name>".
+ * A benchmark
  * present in the baseline but missing from the current report is reported as
  * an error (the bench was removed/renamed — the gate should be updated
  * deliberately, not silently). New benchmarks not in the baseline are noted
@@ -44,7 +56,7 @@
  * Pure Node, no deps, ESM (package is "type": "module").
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -172,23 +184,48 @@ function readJson(path) {
 }
 
 /**
- * Flatten a vitest bench report into a null-prototype map of
- * "<group> :: <bench>" -> { mean, hz }.
+ * Flatten a vitest 5 JSON test-reporter report (produced by
+ * `--reporter=json --outputFile=<path>`) into a null-prototype map of
+ * "<relative file> > <describe titles> :: <task name>" -> { mean, hz }.
  */
 function flatten(report) {
   const map = Object.create(null);
-  const files = Array.isArray(report?.files) ? report.files : [];
-  for (const file of files) {
-    const groups = Array.isArray(file?.groups) ? file.groups : [];
-    for (const group of groups) {
-      const groupName = group?.fullName ?? "(unnamed group)";
-      const benches = Array.isArray(group?.benchmarks) ? group.benchmarks : [];
-      for (const b of benches) {
-        if (typeof b?.name !== "string" || typeof b?.mean !== "number") {
-          continue;
+  // Baseline files may still be the old, already-trimmed { benchmarks } shape
+  // (see the `baseline.benchmarks` check at the call site) - only raw vitest
+  // reports reach this function, and those always have `testResults`.
+  const testResults = Array.isArray(report?.testResults)
+    ? report.testResults
+    : [];
+  for (const file of testResults) {
+    const relFile =
+      typeof file?.name === "string"
+        ? relative(PKG_ROOT, file.name).split("\\").join("/")
+        : "(unknown file)";
+    const assertions = Array.isArray(file?.assertionResults)
+      ? file.assertionResults
+      : [];
+    for (const assertion of assertions) {
+      const titles = Array.isArray(assertion?.ancestorTitles)
+        ? assertion.ancestorTitles
+        : [];
+      const groupName = [relFile, ...titles].join(" > ");
+      const benchmarks = Array.isArray(assertion?.benchmarks)
+        ? assertion.benchmarks
+        : [];
+      for (const benchmark of benchmarks) {
+        const tasks = Array.isArray(benchmark?.tasks) ? benchmark.tasks : [];
+        for (const task of tasks) {
+          const mean = task?.latency?.mean;
+          if (typeof task?.name !== "string" || typeof mean !== "number") {
+            continue;
+          }
+          const hz =
+            typeof task?.throughput?.mean === "number"
+              ? task.throughput.mean
+              : 0;
+          const key = `${groupName} :: ${task.name}`;
+          map[key] = { mean, hz };
         }
-        const key = `${groupName} :: ${b.name}`;
-        map[key] = { mean: b.mean, hz: typeof b.hz === "number" ? b.hz : 0 };
       }
     }
   }

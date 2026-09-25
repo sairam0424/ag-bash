@@ -19,7 +19,8 @@ export default defineConfig({
     setupFiles: [resolve(__dirname, "packages/bash/src/vitest-setup.ts")],
     // Tests that spawn workers (sqlite3, python) need process-level isolation
     // because defense-in-depth patches globalThis which is shared across threads.
-    // In Vitest 4, this is handled via workspaces in vitest.workspace.ts.
+    // Handled via workspaces in vitest.workspace.ts (verified still
+    // functional under Vitest 5.0.2).
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "json-summary"],
