@@ -253,9 +253,9 @@ export interface BashOptions {
    * a pipeline stage that runs after parse / before interpret and analyzes the
    * parsed AST so obfuscations (command substitution, $IFS, fork bombs,
    * decode-pipe-to-shell) are caught structurally.
-   * - "warn" (DEFAULT): attach a typed Observation + stderr warning, then STILL
-   *   execute (non-blocking — never breaks commands that ran before).
-   * - "block": short-circuit with a non-zero result WITHOUT interpreting.
+   * - "block" (DEFAULT): short-circuit with exit code 126 WITHOUT interpreting.
+   * - "warn": attach a typed Observation + stderr warning, then STILL execute
+   *   (non-blocking).
    * - "prompt": no in-process interactive prompt; falls back to block + a note.
    * - "allow": disable the gate.
    * Per-call `ExecOptions.destructivePolicy` overrides this.
@@ -414,8 +414,9 @@ export class Bash extends EventEmitter {
   private readonly defaultExecMode: "monolith" | "pipeline";
   /**
    * Instance-level default policy for the AST destructive-command gate (E2).
-   * Defaults to "warn" (non-blocking). Per-call `ExecOptions.destructivePolicy`
-   * overrides this inside the DestructiveStage.
+   * Defaults to "block" (short-circuits with exit code 126, does not reach
+   * interpret). Per-call `ExecOptions.destructivePolicy` overrides this inside
+   * the DestructiveStage.
    */
   private readonly defaultDestructivePolicy: DestructivePolicy;
   /** Lazily-built pipeline for the "pipeline" execMode (cached per instance). */
@@ -703,7 +704,7 @@ export class Bash extends EventEmitter {
         ? (process.env.AG_BASH_EXEC_MODE as "monolith" | "pipeline")
         : undefined;
     this.defaultExecMode = options.execMode ?? envExecMode ?? "pipeline";
-    this.defaultDestructivePolicy = options.destructivePolicy ?? "warn";
+    this.defaultDestructivePolicy = options.destructivePolicy ?? "block";
     this.parserEngine = options.parser?.engine ?? "legacy";
     this.treeSitterConfig = options.parser?.treeSitterConfig;
     this.debugger = options.debug?.debugger;
@@ -1042,8 +1043,8 @@ export class Bash extends EventEmitter {
     // analyzes the parsed AST) and BEFORE interpret (so BLOCK can short-circuit
     // without executing, and WARN can stash a typed observation that the
     // pipeline runner merges onto the interpreter result). The instance default
-    // policy is "warn" (non-blocking); ExecOptions.destructivePolicy overrides
-    // per-call inside the stage.
+    // policy is "block" (short-circuits with exit code 126); ExecOptions.destructivePolicy
+    // overrides per-call inside the stage.
     pipeline.addStage(new DestructiveStage(this.defaultDestructivePolicy));
     pipeline.addStage(
       new InterpretStage({

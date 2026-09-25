@@ -75,27 +75,43 @@ jobs:
       # to build + publish. On workflow_dispatch dry-run: prove the OIDC path.
       - name: Changesets release
         if: ${{ github.event_name == 'push' }}
-        # PINNED to v1.x, deliberately NOT the v2.x dependabot bumped this to
-        # in #141/#160: v2 hard-requires Changesets CLI v3 ("This version of
-        # the Changesets action is designed to work with Changesets CLI v3.
-        # Changesets CLI v2 is not supported; use Changesets action v1
-        # instead" - the action's own error, hit on a live release attempt).
-        # This repo pins @changesets/cli to ^2.31.0 (root package.json) -
-        # upgrading that to v3 is a separate, bigger, riskier change than
-        # fixing a stuck release, so stay on the CLI-v2-compatible action
-        # major until that's done deliberately. v1.9.0 (latest v1.x, purely
-        # additive over the v1.8.0 this repo ran before #141) is dereferenced
-        # via `git ls-remote ...^{}`, not the annotated tag's own object SHA.
-        # Add an ignore rule for this action in .github/dependabot.yml so the
-        # next dependency-bump cycle doesn't reintroduce the same break.
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        # BUMPED to v2.1.2 together with @changesets/cli v3 (root
+        # package.json) IN THE SAME PR — this pairing is not optional.
+        # changesets/action's own runtime error states it plainly:
+        # "This version of the Changesets action is designed to work with
+        # Changesets CLI v3. Changesets CLI v2 is not supported; use
+        # Changesets action v1 instead." The two majors are coupled by the
+        # action itself, so action-major and CLI-major must always move
+        # together, never independently.
+        #
+        # History: #141 auto-merged changesets/action 1.8.0 -> 2.1.2 alone
+        # (grouped with 12 unrelated, actually-safe bumps) while the CLI was
+        # still pinned to v2, breaking every release attempt until #160
+        # reverted the action back to v1.9.0 and added the dependabot ignore
+        # rule (.github/dependabot.yml) to stop it recurring by accident.
+        # This PR is the deliberate, paired bump that ignore rule was
+        # guarding for: @changesets/cli -> ^3.0.3 lands in the same commit
+        # as this action bump.
+        #
+        # v2.1.2's dereferenced commit SHA (via
+        # `git ls-remote https://github.com/changesets/action refs/tags/v2.1.2^{}`)
+        # is ae32849d5ba541f9ae29e40e22a623bc13562f51 — NOT
+        # 66d7d1ddafddf1ef45f98ee51a7496f9cdadb2f4, which is the annotated
+        # tag object's own SHA, not the commit it points to.
+        #
+        # v2's action.yml renamed every input from v1 (confirmed by reading
+        # the real schema, not guessed): version -> version-script,
+        # publish -> publish-script, commit -> commit-message,
+        # title -> pr-title. It also replaced the GITHUB_TOKEN env var with a
+        # github-token input (defaults to `${{ github.token }}` if omitted).
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          version: pnpm version-packages
-          publish: pnpm release
-          commit: "chore(release): version packages"
-          title: "chore(release): version packages"
+          version-script: pnpm version-packages
+          publish-script: pnpm release
+          commit-message: "chore(release): version packages"
+          pr-title: "chore(release): version packages"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # OIDC Trusted Publishing is now verified for all 7 packages (see
           # #167/#168 - a live dry-run against every package individually
           # reached only the expected "already published" version-conflict

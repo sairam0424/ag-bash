@@ -9,6 +9,14 @@
 # attempt until pinned back via the `ignore:` rule below. setup-vendor.js (the
 # npm postinstall) is fully offline/deterministic, so npm update PRs build
 # cleanly in CI.
+#
+# The changesets/action ignore rule below was narrowed (not removed) when
+# this repo deliberately bumped to action v2.1.2 + @changesets/cli v3.0.3
+# together: the action's own error message ties its major version directly
+# to the Changesets CLI major it expects, so any FUTURE auto-merged
+# github-actions bump to changesets/action v3+ would silently repeat the
+# #141 incident unless the CLI is bumped in lockstep by a human in the same
+# PR. Auto-merge here has no way to know about that CLI coupling.
 version: 2
 updates:
   # --- GitHub Actions used by all workflows + the composite action ---
@@ -22,15 +30,21 @@ updates:
     commit-message:
       prefix: "ci"
     ignore:
-      # v2 hard-requires Changesets CLI v3 ("This version of the Changesets
-      # action is designed to work with Changesets CLI v3. Changesets CLI v2
-      # is not supported" - the action's own runtime error) - this repo pins
-      # @changesets/cli to ^2.31.0. #141 auto-merged this exact major bump
-      # (grouped with 12 other, unrelated, actually-safe action bumps) and
-      # broke every release attempt until reverted back to v1.9.0. Remove
-      # this ignore only alongside a deliberate @changesets/cli v3 upgrade.
+      # This repo now runs changesets/action v2.1.2 paired with
+      # @changesets/cli ^3.0.3 (bumped together, deliberately, in the same
+      # PR that narrowed this rule). v2.1.2's own error message says it
+      # plainly: "This version of the Changesets action is designed to work
+      # with Changesets CLI v3. Changesets CLI v2 is not supported" - the
+      # action's major version is HARD-COUPLED to the CLI's major version.
+      # #141 already proved auto-merge cannot see that coupling: it bumped
+      # this action alone (grouped with 12 unrelated, actually-safe bumps)
+      # while the CLI stayed on v2, breaking every release until #160
+      # reverted it. Ignoring only ">=3.0.0" (not ">=2.0.0") lets routine
+      # v2.x patch/minor bumps through auto-merge as before, while still
+      # blocking the next major (which would again require a paired,
+      # human-reviewed @changesets/cli bump) from auto-merging alone.
       - dependency-name: "changesets/action"
-        versions: [">=2.0.0"]
+        versions: [">=3.0.0"]
 
   # --- npm: root workspace tooling (biome, typescript, vitest, esbuild) ---
   - package-ecosystem: "npm"

@@ -6,10 +6,12 @@
  * buildExecutionPipeline() forgets to add the stage, the gate silently never
  * fires — a destructive command executes with NO observation and NO warning.
  *
- * These tests run a destructive command through `new Bash().exec(...)` and
- * assert the typed destructive Observation + stderr warning are present on the
- * result. Under the default WARN policy the command STILL executes in the
- * sandbox VFS (non-breaking) — only the typed warning rides along.
+ * As of the Phase 7 default-flip, `new Bash()` with no explicit
+ * `destructivePolicy` option now BLOCKS destructive commands by default
+ * (short-circuits with exit code 126, never reaches interpret). The WARN
+ * behavior (typed Observation + stderr warning, command still executes) is
+ * still fully supported — it just now requires opting in explicitly via
+ * `{ destructivePolicy: "warn" }`.
  *
  * Without the `addStage(new DestructiveStage(...))` wiring in Bash.ts these
  * assertions FAIL (no destructive observation is produced), which is exactly
@@ -20,9 +22,24 @@ import { describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
 
 describe("DestructiveStage — live exec-path wiring (R1)", () => {
-  it("emits a destructive Observation + stderr warning under default WARN policy", async () => {
+  it("BLOCKS by default (no explicit destructivePolicy) with exit code 126", async () => {
     const bash = new Bash();
     const result = await bash.exec("rm -rf /");
+
+    expect(result.exitCode).toBe(126);
+    expect(result.stderr).toContain("destructive command refused");
+    const destructive = (result.observations ?? []).filter(
+      (o) => o.type === "destructive",
+    );
+    expect(destructive.length).toBeGreaterThan(0);
+    expect(destructive[0]?.command).toBe("rm");
+    expect(destructive[0]?.code).toBeTruthy();
+    expect(destructive[0]?.confidence).toBe(1);
+  });
+
+  it("emits a destructive Observation + stderr warning under explicit WARN policy", async () => {
+    const bash = new Bash();
+    const result = await bash.exec("rm -rf /", { destructivePolicy: "warn" });
 
     const destructive = (result.observations ?? []).filter(
       (o) => o.type === "destructive",
@@ -36,9 +53,11 @@ describe("DestructiveStage — live exec-path wiring (R1)", () => {
     expect(result.stderr).toContain("destructive command detected");
   });
 
-  it("catches structural obfuscation via command substitution under WARN", async () => {
+  it("catches structural obfuscation via command substitution under explicit WARN", async () => {
     const bash = new Bash();
-    const result = await bash.exec("rm -rf $(echo /)");
+    const result = await bash.exec("rm -rf $(echo /)", {
+      destructivePolicy: "warn",
+    });
 
     const destructive = (result.observations ?? []).filter(
       (o) => o.type === "destructive",

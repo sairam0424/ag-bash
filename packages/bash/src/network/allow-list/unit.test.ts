@@ -8,6 +8,7 @@ import {
   validateAllowList,
 } from "../allow-list.js";
 import { createSecureFetch } from "../fetch.js";
+import { NetworkAccessDeniedError } from "../types.js";
 
 describe("parseUrl", () => {
   it("parses a simple URL", () => {
@@ -904,6 +905,17 @@ describe("createSecureFetch allow-list validation", () => {
         allowedUrlPrefixes: ["not-a-url"],
       }),
     ).not.toThrow();
+  });
+
+  // A NetworkConfig with no allowedUrlPrefixes at all (as opposed to an
+  // explicit []) is the one case the isUrlAllowed unit tests above don't
+  // exercise end-to-end: this confirms createSecureFetch's real chokepoint
+  // denies by default too, not just the isUrlAllowed helper in isolation.
+  it("denies every URL when allowedUrlPrefixes is omitted from the config", async () => {
+    const secureFetch = createSecureFetch({});
+    await expect(secureFetch("https://example.com")).rejects.toThrow(
+      NetworkAccessDeniedError,
+    );
   });
 });
 
