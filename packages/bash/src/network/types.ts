@@ -82,6 +82,9 @@ export interface NetworkConfig {
    * - URLs that rely on ambiguous encoded separators like %2f or %5c
    *
    * Invalid entries (missing scheme, missing host, relative paths) will throw an error.
+   *
+   * If omitted (or empty), every URL is denied — a `NetworkConfig` alone does not
+   * grant blanket access; use `dangerouslyAllowFullInternetAccess` for that instead.
    */
   allowedUrlPrefixes?: AllowedUrlEntry[];
 
