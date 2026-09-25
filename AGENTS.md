@@ -129,7 +129,7 @@ describe("Feature", () => {
 - **Filesystem gates**: All FS access through `resolveAndValidate()` — closes TOCTOU gap, validates sandbox containment
 - **Sandbox purity**: No Node.js natives in core (WASM runtimes opt-in)
 - **Regex safety**: `re2js` linear-time engine prevents ReDoS from user patterns
-- **Resource accounting**: Memory (50MB default), CPU (30s), Network (100MB), Agent nesting (max 3)
+- **Resource accounting**: Memory (50MB default), CPU (30s), Network (50MB), Agent nesting (max 3)
 - **Defense-in-depth**: AsyncLocalStorage monkey-patching blocks Function, eval, setTimeout, process.* in sandbox context. **Defaults to enabled** in v5.0.0 (fail-closed).
 - **SharedStateBus limits**: Event queue bounded at 10,000 entries; subscribers capped at 256 per topic to prevent resource exhaustion.
 - **E2E verification**: Run `bash scripts/e2e-verify.sh` before protocol-affecting commits
