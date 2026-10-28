@@ -42,7 +42,7 @@
     "quickjs-emscripten": "^0.32.0",
     "seek-bzip": "^2.0.0",
     "sql.js": "^1.13.0",
-    "zod": "^4.3.6"
+    "zod": "^4.6.6"
   },
   "optionalDependencies": {
     "@ag-bash/browser": "workspace:*",
