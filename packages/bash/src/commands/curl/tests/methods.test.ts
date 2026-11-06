@@ -7,6 +7,7 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Bash } from "../../../Bash.js";
+import { publicResolver } from "../../../network/allow-list/shared.js";
 
 // Mock fetch for these tests
 const originalFetch = global.fetch;
@@ -153,6 +154,7 @@ describe("curl HTTP method restrictions", () => {
         network: {
           allowedUrlPrefixes: ["https://api.example.com"],
           allowedMethods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+          _dnsResolve: publicResolver(),
         },
       });
 
@@ -185,7 +187,10 @@ describe("curl HTTP method restrictions", () => {
     it("allows all methods with dangerous flag", async () => {
       mockFetch.mockClear();
       const env = new Bash({
-        network: { dangerouslyAllowFullInternetAccess: true },
+        network: {
+          dangerouslyAllowFullInternetAccess: true,
+          _dnsResolve: publicResolver(),
+        },
       });
 
       const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"];
