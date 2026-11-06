@@ -22,6 +22,25 @@ import { checkFdLimit, result as makeResult } from "./helpers/result.js";
 import type { InterpreterContext } from "./types.js";
 
 /**
+ * Output targets that applyRedirections() answers itself (a no-op, a swap of
+ * stdout and stderr, a discard, or ENOSPC) instead of opening a file. They need
+ * no up-front check or pre-truncation, and must work on a filesystem that has
+ * no /dev directory.
+ */
+function isVirtualOutputDevice(target: string): boolean {
+  return (
+    target === "/dev/null" ||
+    target === "/dev/stdout" ||
+    target === "/dev/stderr" ||
+    target === "/dev/full"
+  );
+}
+
+/** Resolved paths of device files, which noclobber does not protect. */
+const DEVICE_FILE =
+  /^\/dev\/(?:null|zero|full|stdin|stdout|stderr|tty|random|urandom)$/;
+
+/**
  * Check if a redirect target is valid for output (not a directory, respects noclobber).
  * Returns an error message string if invalid, null if valid.
  */
@@ -36,11 +55,14 @@ async function checkOutputRedirectTarget(
     if (stat.isDirectory) {
       return `bash: ${target}: Is a directory\n`;
     }
+    // noclobber only protects regular files. The filesystem models devices
+    // (/dev/null, /dev/zero, ...) as ordinary files, so the device names are
+    // exempt; a regular file under /dev keeps its protection.
     if (
       options.checkNoclobber &&
       ctx.state.options.noclobber &&
       !options.isClobber &&
-      target !== "/dev/null"
+      !DEVICE_FILE.test(filePath)
     ) {
       return `bash: ${target}: cannot overwrite existing file\n`;
     }
@@ -65,6 +87,78 @@ async function checkOutputRedirectTarget(
     }
   }
   return null;
+}
+
+/**
+ * Text bash prints for the errno codes a filesystem can raise while an output
+ * redirection opens or writes its target, or null for any other code.
+ *
+ * EROFS is deliberately not listed: the read-only mode of the CLI reports a
+ * refused write as the raised `EROFS` error, and its tests pin that text.
+ */
+function errnoMessage(code: string | undefined): string | null {
+  switch (code) {
+    case "ENOENT":
+      return "No such file or directory";
+    case "ENOTDIR":
+      return "Not a directory";
+    case "EISDIR":
+      return "Is a directory";
+    case "EACCES":
+      return "Permission denied";
+    case "EPERM":
+      return "Operation not permitted";
+    case "ENOSPC":
+      return "No space left on device";
+    case "EFBIG":
+      return "File too large";
+    case "ELOOP":
+      return "Too many levels of symbolic links";
+    case "ENAMETOOLONG":
+      return "File name too long";
+    case "EEXIST":
+      return "File exists";
+    case "EBUSY":
+      return "Device or resource busy";
+    case "EMFILE":
+      return "Too many open files";
+    case "EIO":
+      return "Input/output error";
+    default:
+      return null;
+  }
+}
+
+/**
+ * The errno code of a filesystem error: its `code` property, else the
+ * `EXXX:` prefix Node puts on the message.
+ */
+function errnoCode(error: unknown): string | undefined {
+  if (!(error instanceof Error)) {
+    return undefined;
+  }
+  const { code } = error as { code?: unknown };
+  return typeof code === "string"
+    ? code
+    : /^(E[A-Z]+):/.exec(error.message)?.[1];
+}
+
+/**
+ * The message bash prints when opening or writing a redirect target fails.
+ *
+ * checkOutputRedirectTarget() catches what can be seen up front, but a write
+ * can still fail afterwards (permission denied on a real filesystem, a
+ * descriptor whose directory has since been removed). Filesystem errors that
+ * carry one of the errno codes listed above become an ordinary command failure
+ * instead of escaping exec(); anything else (EROFS, a code that is not listed,
+ * execution limits, security violations, errors without a code) is rethrown.
+ */
+function redirectFailureMessage(target: string, error: unknown): string {
+  const reason = errnoMessage(errnoCode(error));
+  if (reason === null) {
+    throw error;
+  }
+  return `bash: ${target}: ${reason}\n`;
 }
 
 /**
@@ -233,6 +327,7 @@ export async function processFdVariableRedirections(
     const fd = allocateFd(ctx);
 
     // Set the variable to the allocated FD number
+    const previousFdValue = ctx.state.env.get(redir.fdVariable);
     ctx.state.env.set(redir.fdVariable, String(fd));
 
     // For file redirections, store the file path mapping
@@ -265,13 +360,37 @@ export async function processFdVariableRedirections(
         // Mark this FD as pointing to a file (store file path for later use)
         // Use a special format to distinguish from content
         const filePath = ctx.fs.resolvePath(ctx.state.cwd, target);
-        // For truncating operators (>, >|, &>), create/truncate the file now
-        if (
+        const truncates =
           redir.operator === ">" ||
           redir.operator === ">|" ||
-          redir.operator === "&>"
-        ) {
-          await ctx.fs.writeFile(filePath, "", "binary");
+          redir.operator === "&>";
+        // bash opens the file before it assigns the variable, so a target that
+        // cannot be opened (missing parent, parent is a file, a directory,
+        // noclobber) leaves the variable as it was and keeps no descriptor.
+        // Virtual devices are never opened, so there is nothing to check.
+        const isDevice = isVirtualOutputDevice(target);
+        let openError = isDevice
+          ? null
+          : await checkOutputRedirectTarget(ctx, filePath, target, {
+              checkNoclobber: truncates,
+              isClobber: redir.operator === ">|",
+            });
+        // For truncating operators (>, >|, &>), create/truncate the file now
+        if (openError === null && truncates && !isDevice) {
+          try {
+            await ctx.fs.writeFile(filePath, "", "binary");
+          } catch (error) {
+            openError = redirectFailureMessage(target, error);
+          }
+        }
+        if (openError !== null) {
+          if (previousFdValue === undefined) {
+            ctx.state.env.delete(redir.fdVariable);
+          } else {
+            ctx.state.env.set(redir.fdVariable, previousFdValue);
+          }
+          ctx.state.nextFd = fd;
+          return makeResult("", openError, 1);
         }
         checkFdLimit(ctx);
         ctx.state.fileDescriptors.set(fd, `__file__:${filePath}`);
@@ -312,13 +431,22 @@ export async function processFdVariableRedirections(
  *
  * Returns an error result if there's an issue (like directory or noclobber),
  * or null if pre-opening succeeded.
+ *
+ * `forJump` is set by the break/continue/return/exit handler, which runs after
+ * the command's `{fd}` redirections were opened (they are not opened again)
+ * and for builtins that write nothing, so `/dev/full` opens fine.
  */
 export async function preOpenOutputRedirects(
   ctx: InterpreterContext,
   redirections: RedirectionNode[],
+  options: { forJump?: boolean } = {},
 ): Promise<ExecResult | null> {
   for (const redir of redirections) {
     if (redir.target.type === "HereDoc") {
+      continue;
+    }
+    // {fd} redirections were already opened by processFdVariableRedirections()
+    if (options.forJump && redir.fdVariable) {
       continue;
     }
 
@@ -369,46 +497,39 @@ export async function preOpenOutputRedirects(
       return makeResult("", `bash: ${target}: No such file or directory\n`, 1);
     }
 
-    // Check if target is a directory or noclobber prevents overwrite
-    try {
-      const stat = await ctx.fs.stat(filePath);
-      if (stat.isDirectory) {
-        return makeResult("", `bash: ${target}: Is a directory\n`, 1);
+    // /dev/full always returns ENOSPC when written to
+    if (target === "/dev/full") {
+      if (options.forJump) {
+        continue; // opening /dev/full succeeds, only writing to it fails
       }
-      // Check noclobber: if file exists and noclobber is set, refuse to overwrite
-      // unless using >| (clobber operator) or writing to /dev/null
-      if (
-        ctx.state.options.noclobber &&
-        !isClobber &&
-        !stat.isDirectory &&
-        target !== "/dev/null"
-      ) {
-        return makeResult(
-          "",
-          `bash: ${target}: cannot overwrite existing file\n`,
-          1,
-        );
-      }
-    } catch {
-      // File doesn't exist, that's ok - we'll create it
+      return makeResult("", `bash: /dev/full: No space left on device\n`, 1);
+    }
+
+    // The other virtual devices need no checking and no pre-truncation
+    if (isVirtualOutputDevice(target)) {
+      continue;
+    }
+
+    // Check the target can be opened: it is not a directory, noclobber does not
+    // forbid overwriting it (unless using >|), and its parent directory
+    // exists. A target that does not exist yet is fine, we create it below -
+    // but not when the parent is missing as well, where the write would
+    // otherwise throw ENOENT straight out of exec().
+    const targetError = await checkOutputRedirectTarget(ctx, filePath, target, {
+      checkNoclobber: true,
+      isClobber,
+    });
+    if (targetError) {
+      return makeResult("", targetError, 1);
     }
 
     // Pre-truncate the file (create empty file)
     // This makes the file empty before any command substitutions in the
     // compound command body are evaluated
-    // Skip special device files that don't need pre-truncation
-    if (
-      target !== "/dev/null" &&
-      target !== "/dev/stdout" &&
-      target !== "/dev/stderr" &&
-      target !== "/dev/full"
-    ) {
+    try {
       await ctx.fs.writeFile(filePath, "", "binary");
-    }
-
-    // /dev/full always returns ENOSPC when written to
-    if (target === "/dev/full") {
-      return makeResult("", `bash: /dev/full: No space left on device\n`, 1);
+    } catch (error) {
+      return makeResult("", redirectFailureMessage(target, error), 1);
     }
   }
 
@@ -420,6 +541,38 @@ export async function applyRedirections(
   result: ExecResult,
   redirections: RedirectionNode[],
   preExpandedTargets?: ExpandedRedirectTargets,
+): Promise<ExecResult> {
+  // The redirect being applied, named in the message if its write fails.
+  const progress = { target: "write error" };
+  try {
+    return await writeRedirectedOutput(
+      ctx,
+      result,
+      redirections,
+      preExpandedTargets,
+      progress,
+    );
+  } catch (error) {
+    // The up-front checks cannot foresee every failure (permission denied on a
+    // real filesystem, a descriptor whose directory was removed after it was
+    // opened). The command fails like it does in bash, which also stops at the
+    // first redirection that cannot be applied; its stdout is dropped because
+    // it was meant for the file.
+    return makeResult(
+      "",
+      `${result.stderr}${redirectFailureMessage(progress.target, error)}`,
+      1,
+      result.observations,
+    );
+  }
+}
+
+async function writeRedirectedOutput(
+  ctx: InterpreterContext,
+  result: ExecResult,
+  redirections: RedirectionNode[],
+  preExpandedTargets: ExpandedRedirectTargets | undefined,
+  progress: { target: string },
 ): Promise<ExecResult> {
   let { stdout, stderr, exitCode } = result;
 
@@ -479,6 +632,8 @@ export async function applyRedirections(
     if (redir.fdVariable) {
       continue;
     }
+
+    progress.target = target;
 
     // Reject paths containing null bytes - these cause filesystem errors
     if (target.includes("\0")) {
@@ -958,6 +1113,7 @@ export async function applyRedirections(
   }
 
   // Apply persistent FD redirections (from exec)
+  progress.target = "write error";
   // Check if fd 1 (stdout) is redirected to fd 2 (stderr) via exec 1>&2
   const fd1Info = ctx.state.fileDescriptors?.get(1);
   if (fd1Info) {

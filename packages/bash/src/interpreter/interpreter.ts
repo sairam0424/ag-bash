@@ -1425,12 +1425,21 @@ export class Interpreter {
         errorName === "ContinueError" ||
         errorName === "SubshellExitError"
       ) {
-        await preOpenOutputRedirects(this.ctx, node.redirections);
+        const redirectError = await preOpenOutputRedirects(
+          this.ctx,
+          node.redirections,
+          { forJump: true },
+        );
         this.revertTempAssignments(
           commandName,
           tempAssignments,
           hadTempEnvFrame,
         );
+        // A redirection that cannot be opened fails the command before it
+        // runs, so (as in bash) the jump never happens.
+        if (redirectError) {
+          return redirectError;
+        }
         throw error;
       }
       if (
