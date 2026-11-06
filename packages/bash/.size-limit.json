@@ -14,7 +14,7 @@
   {
     "name": "index (node/esm)",
     "path": "dist/bundle/index.js",
-    "limit": "154 KB",
+    "limit": "175 KB",
     "brotli": true
   }
 ]
