@@ -12,15 +12,17 @@ export class LSPConnection extends EventEmitter {
     { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }
   >();
   private buffer = Buffer.alloc(0);
+  private closed = false;
+  private failure: Error | undefined;
 
   constructor(command: string, args: string[]) {
     super();
     this.process = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
-    this.process.on("error", (err: any) => {
-      // If the language server isn't installed (ENOENT), silence the warning
-      // as it's expected in many environments. For other errors, log it.
-      // Silently swallow — ENOENT is expected; other errors are non-fatal
-      void err;
+    this.process.on("error", (err: unknown) => {
+      // A language server that isn't installed (ENOENT) is expected in many
+      // environments, so the error is never printed. It is recorded so that
+      // requests waiting on this connection are released instead of hanging.
+      this.fail(err instanceof Error ? err : new Error(String(err)));
     });
 
     this.process.stdout?.on("data", (data) => this.handleData(data));
@@ -33,7 +35,15 @@ export class LSPConnection extends EventEmitter {
     });
   }
 
+  /** False once the server failed to start or the connection was closed. */
+  public get isAvailable(): boolean {
+    return !this.closed && this.failure === undefined;
+  }
+
   public async sendRequest(method: string, params: any): Promise<any> {
+    if (!this.isAvailable) {
+      throw this.failure ?? new Error("LSP connection is closed");
+    }
     const id = this.idCounter++;
     const message = {
       jsonrpc: "2.0",
@@ -58,6 +68,7 @@ export class LSPConnection extends EventEmitter {
   }
 
   private writeMessage(message: any): void {
+    if (this.closed) return;
     const json = JSON.stringify(message);
     const contentLength = Buffer.byteLength(json, "utf-8");
     const header = `Content-Length: ${contentLength}\r\n\r\n`;
@@ -110,7 +121,32 @@ export class LSPConnection extends EventEmitter {
     }
   }
 
+  /**
+   * Close the connection and release everything it holds: requests still
+   * waiting for a reply are rejected (no caller is left waiting on an answer
+   * that can no longer arrive), the stdio pipes are destroyed and the server is
+   * sent SIGTERM. Safe to call more than once.
+   */
   public terminate(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.rejectPending(new Error("LSP connection is closed"));
+    this.process.stdin?.destroy();
+    this.process.stdout?.destroy();
+    this.process.stderr?.destroy();
     this.process.kill();
+  }
+
+  private fail(error: Error): void {
+    this.failure ??= error;
+    this.rejectPending(error);
+  }
+
+  private rejectPending(reason: Error): void {
+    const waiting = [...this.pendingRequests.values()];
+    this.pendingRequests.clear();
+    for (const request of waiting) {
+      request.reject(reason);
+    }
   }
 }
