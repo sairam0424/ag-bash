@@ -451,7 +451,7 @@ export class Bash extends EventEmitter {
       options.agentic?.permissionHandler,
     );
     this.toolbox = new BashToolbox();
-    this.initLsp();
+    this.declareLspServers();
     // Capture whether the caller's own fs (before MountableFs wrapping,
     // which every this.fs ends up as below) is backed by a real host
     // filesystem — used to skip virtual /dev, /proc, /bin scaffolding in
@@ -767,11 +767,15 @@ export class Bash extends EventEmitter {
     return this.services.lspManager;
   }
 
-  private async initLsp(): Promise<void> {
+  /**
+   * Declares the TS/JS language servers without starting them. Each is spawned
+   * on first use (see LSPManager.sendRequest) and closed again by destroy(), so
+   * a Bash that never uses LSP never owns a process, pipe or pending request.
+   */
+  private declareLspServers(): void {
     const lsp = this.services.lspManager;
-    // Initialize TS server if available
-    await lsp.initServer("ts", "typescript-language-server", ["--stdio"]);
-    await lsp.initServer("js", "typescript-language-server", ["--stdio"]);
+    lsp.registerServer("ts", "typescript-language-server", ["--stdio"]);
+    lsp.registerServer("js", "typescript-language-server", ["--stdio"]);
   }
 
   /**
@@ -1421,6 +1425,8 @@ export class Bash extends EventEmitter {
   destroy(): void {
     this.services.sharedBus.destroy();
     this.services.astCache.clear();
+    // Close any language server this instance started (no-op if none was).
+    this.services.lspManager.dispose();
   }
 
   async [Symbol.asyncDispose](): Promise<void> {

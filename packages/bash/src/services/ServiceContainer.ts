@@ -179,7 +179,7 @@ export function createDefaultServices(
     {
       key: "lspManager",
       isBusAware: false,
-      isDisposable: false,
+      isDisposable: true,
       getInstance: (): object | null => _lspManager,
     },
     {

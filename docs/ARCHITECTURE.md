@@ -83,6 +83,7 @@ In v3.0.0, all previously-global singletons (`AgentManager`, `McpClient`, `Sessi
 - **Access**: `bash.services` exposes `astCache`, `sharedBus`, `sessionManager`, `agentManager`, `mcpClient`, `orchestrator`, and `lspManager`.
 - **Isolation**: Multiple `Bash` instances can coexist in the same process without shared mutable state. The only remaining process-wide singleton is `DefenseInDepthBox`, which patches `AsyncLocalStorage` globally by necessity.
 - **Testability**: Integration tests can inject mock services at construction time without monkey-patching globals.
+- **Language servers**: `lspManager` declares the TypeScript/JavaScript language servers when a `Bash` is constructed but spawns nothing. A server starts on the first LSP request that needs it (concurrent first requests share one start, and the request waits for the server's `initialize` reply), and `Bash.destroy()` closes any server the instance started and settles requests still in flight; the next request starts a fresh server. An instance that never uses LSP owns no process, pipe, or pending request. Instances that share one injected `lspManager` share its servers, so destroying one affects the others' in-flight requests.
 
 ---
 

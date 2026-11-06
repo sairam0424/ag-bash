@@ -7,11 +7,38 @@ export interface LSPRequest {
   filePath: string;
 }
 
+/** How to start the language server for a file extension. */
+interface LSPServerSpec {
+  command: string;
+  args: string[];
+}
+
 /**
  * LSPManager - Manages external language servers for advanced code intelligence.
+ *
+ * Servers are started on demand. {@link registerServer} only declares one; it
+ * is spawned the first time a request needs it (concurrent first requests share
+ * a single start) and is closed again by {@link dispose}. Until then a manager
+ * holds no process, pipe or pending request.
  */
 export class LSPManager {
   private connections: Map<string, LSPConnection> = new Map(); // extension -> connection
+  private declared: Map<string, LSPServerSpec> = new Map(); // extension -> server to start on first use
+  private starts: Map<string, Promise<void>> = new Map(); // extension -> start still waiting for its initialize reply
+  private generation = 0; // bumped by dispose(): a request that began in an older generation was cancelled
+
+  /**
+   * Declare the language server for a file extension without starting it.
+   * Like {@link initServer}, the first declaration for an extension wins.
+   */
+  public registerServer(
+    extension: string,
+    command: string,
+    args: string[],
+  ): void {
+    if (this.declared.has(extension)) return;
+    this.declared.set(extension, { command, args });
+  }
 
   /**
    * Initialize a language server for a specific file extension.
@@ -44,9 +71,16 @@ export class LSPManager {
    */
   public async sendRequest(bash: Bash, request: LSPRequest): Promise<unknown> {
     const ext = request.filePath.split(".").pop() || "";
-    const connection = this.connections.get(ext);
+    const generation = this.generation;
+    await this.ensureServer(ext);
+    // If dispose() ran while this request was waiting for the start, the
+    // request was cancelled. The map may by now hold a newer server that was
+    // started for callers who arrived after dispose(); it is still mid-handshake
+    // and is not ours to use, so a cancelled request falls back instead.
+    const connection =
+      generation === this.generation ? this.connections.get(ext) : undefined;
 
-    if (!connection) {
+    if (!connection?.isAvailable) {
       // Fallback to internal SemanticEngine if no LSP server is available
       return this.fallbackToSemanticEngine(bash, request);
     }
@@ -85,6 +119,44 @@ export class LSPManager {
       },
       contentChanges: [{ text: content }],
     });
+  }
+
+  /**
+   * Close every language server this manager started, and cancel starts that
+   * are still waiting for their initialize reply (their callers are released
+   * with the semantic-engine fallback). Declarations are kept, so a later
+   * request starts a fresh server. Safe to call repeatedly.
+   */
+  public dispose(): void {
+    const open = [...this.connections.values()];
+    this.generation++;
+    this.connections.clear();
+    this.starts.clear();
+    for (const connection of open) {
+      connection.terminate();
+    }
+  }
+
+  /**
+   * Make sure the server declared for `extension` is running. Resolves once its
+   * initialize handshake has finished; every caller that arrives while it is
+   * still in flight waits on the same start. Resolves immediately when nothing
+   * is declared for the extension or its server is already up.
+   */
+  private ensureServer(extension: string): Promise<void> | undefined {
+    if (this.connections.has(extension)) return this.starts.get(extension);
+
+    const server = this.declared.get(extension);
+    if (!server) return undefined;
+
+    const start = this.initServer(extension, server.command, server.args);
+    this.starts.set(extension, start);
+    const finished = (): void => {
+      // A dispose() followed by a new start may have replaced this entry.
+      if (this.starts.get(extension) === start) this.starts.delete(extension);
+    };
+    void start.then(finished, finished);
+    return start;
   }
 
   private async fallbackToSemanticEngine(
