@@ -13,9 +13,9 @@
     "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^3.0.2",
+    "@ag-bash/bash": "workspace:*",
+    "@ai-sdk/gateway": "^3.0.226",
     "@steipete/summarize-core": "^0.21.0",
-    "ai": "^6.0.66",
-    "@ag-bash/bash": "workspace:*"
+    "ai": "^6.0.320"
   }
 }
