@@ -91,42 +91,38 @@ async function checkOutputRedirectTarget(
 
 /**
  * Text bash prints for the errno codes a filesystem can raise while an output
- * redirection opens or writes its target, or null for any other code.
+ * redirection opens or writes its target. A code that is not listed has no
+ * entry.
  *
  * EROFS is deliberately not listed: the read-only mode of the CLI reports a
  * refused write as the raised `EROFS` error, and its tests pin that text.
+ *
+ * The table has no prototype, so a `code` such as `constructor`, `toString` or
+ * `__proto__` finds nothing instead of a member inherited from
+ * Object.prototype.
  */
+const ERRNO_MESSAGES: Readonly<Record<string, string | undefined>> =
+  Object.freeze(
+    Object.assign(Object.create(null), {
+      ENOENT: "No such file or directory",
+      ENOTDIR: "Not a directory",
+      EISDIR: "Is a directory",
+      EACCES: "Permission denied",
+      EPERM: "Operation not permitted",
+      ENOSPC: "No space left on device",
+      EFBIG: "File too large",
+      ELOOP: "Too many levels of symbolic links",
+      ENAMETOOLONG: "File name too long",
+      EEXIST: "File exists",
+      EBUSY: "Device or resource busy",
+      EMFILE: "Too many open files",
+      EIO: "Input/output error",
+    }),
+  );
+
+/** The text for an errno code, or null for any code the table does not list. */
 function errnoMessage(code: string | undefined): string | null {
-  switch (code) {
-    case "ENOENT":
-      return "No such file or directory";
-    case "ENOTDIR":
-      return "Not a directory";
-    case "EISDIR":
-      return "Is a directory";
-    case "EACCES":
-      return "Permission denied";
-    case "EPERM":
-      return "Operation not permitted";
-    case "ENOSPC":
-      return "No space left on device";
-    case "EFBIG":
-      return "File too large";
-    case "ELOOP":
-      return "Too many levels of symbolic links";
-    case "ENAMETOOLONG":
-      return "File name too long";
-    case "EEXIST":
-      return "File exists";
-    case "EBUSY":
-      return "Device or resource busy";
-    case "EMFILE":
-      return "Too many open files";
-    case "EIO":
-      return "Input/output error";
-    default:
-      return null;
-  }
+  return code === undefined ? null : (ERRNO_MESSAGES[code] ?? null);
 }
 
 /**
