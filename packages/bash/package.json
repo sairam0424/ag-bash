@@ -198,7 +198,7 @@
     "fast-xml-parser": "^5.11.0",
     "file-type": "^21.2.0",
     "ini": "^6.0.0",
-    "isomorphic-git": "^1.25.10",
+    "isomorphic-git": "^1.38.6",
     "minimatch": "^11.0.1",
     "modern-tar": "^0.7.3",
     "papaparse": "^5.5.3",
