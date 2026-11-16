@@ -15,7 +15,7 @@
     "@ag-bash/bash": "workspace:*",
     "ai": "^6.0.320",
     "geist": "^1.5.1",
-    "next": "16.4.1",
+    "next": "16.4.5",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
