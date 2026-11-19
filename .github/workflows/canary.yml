@@ -25,6 +25,10 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm --filter @ag-bash/bash test:fuzz:long
+        env:
+          # The long fuzz run hits Node's default ~4 GB heap and dies (`JavaScript heap out of
+          # memory`) about six minutes in.
+          NODE_OPTIONS: --max-old-space-size=6144
       - run: pnpm --filter @ag-bash/bash fuzz:diff
       - name: Upload divergence report
         if: failure()
