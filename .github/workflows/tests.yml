@@ -91,7 +91,10 @@ jobs:
         run: pnpm --filter @ag-bash/bash test:unit --reporter=github-actions --reporter=junit --outputFile=junit-unit.xml
         shell: bash
         env:
-          NODE_OPTIONS: ${{ matrix.node-options }}
+          # Every leg gets a 6 GB heap unless the matrix sets its own. Node's default (~4 GB) is
+          # not enough for the unit run: the ubuntu-latest Node 22 leg died at 4,062 MB on
+          # 2026-11-13 (`JavaScript heap out of memory`). The macOS leg sets the same value above.
+          NODE_OPTIONS: ${{ matrix.node-options || '--max-old-space-size=6144' }}
       - if: steps.gate.outputs.skip != 'true'
         run: pnpm --filter @ag-bash/bash test:dist
         shell: bash
